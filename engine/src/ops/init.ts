@@ -15,6 +15,7 @@ This project uses the \`loop\` plugin. Execution state lives in \`.loop/\`.
 
 - \`/loop:edit <request>\` — small, well-scoped change (one cycle)
 - \`/loop:build <goal>\` — multi-cycle build with findings carried forward
+- \`/loop:fix <problem>\` — reproduce a defect, find the root cause, fix it
 - \`/loop:status\` — current track, cycle, and latest evidence
 
 \`.loop/state.json\` is owned by the loop MCP server. Never edit it by hand.

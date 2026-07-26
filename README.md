@@ -9,9 +9,8 @@ server, so no agent can corrupt it by hand.
 
 ## Status
 
-Milestone 2 — the engine, the `edit` track, and the `build` track with its stagnation
-guard. `fix` and `plan` land in following milestones. See
-`docs/superpowers/specs/2026-07-26-loop-plugin-design.md`.
+Milestone 3 — the engine, and the `edit`, `build`, and `fix` tracks. `plan` lands in the
+next milestone. See `docs/superpowers/specs/2026-07-26-loop-plugin-design.md`.
 
 ## Install
 
@@ -27,6 +26,7 @@ Then add this repository as a plugin marketplace or local plugin in Claude Code.
 /loop:init                          provision .loop/ and detect verify commands
 /loop:edit <what to change>         one-cycle scoped change
 /loop:build <what to build>         multi-cycle build with findings carried forward
+/loop:fix <what is broken>          reproduce first, then fix the root cause
 /loop:status                        where the current run stands
 /loop:stop [reason]                 halt the run and write a report
 ```

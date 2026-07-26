@@ -38,6 +38,41 @@ Read `.loop/config.yaml` for the track's `required` and `available` sets.
 Call `loop_roster_set`. **If it rejects your roster, fix the roster.** Do not work around
 it — the rejection is the invariant doing its job.
 
+### 3b. Respect the track's gate
+
+Some tracks declare a gate in `.loop/config.yaml`:
+
+```yaml
+gate: { proven_by: reproducer, blocks: [fixer] }
+```
+
+It means what it says: `loop_run_log` rejects any result from a blocked agent until
+`proven_by` has returned `status: "pass"` carrying command or test evidence. The
+rejection is the engine's, not a preference of yours, and there is no tool that opens the
+gate by assertion.
+
+Order the cycle around it. Dispatch `proven_by` first and wait for its result. Only
+dispatch a blocked agent after `loop_run_log` reports `gateOpened: true` — sending it
+early wastes an agent on a result the engine will refuse.
+
+If `proven_by` returns `blocked`, the defect did not reproduce. Halt and report what was
+attempted. Do not dispatch the blocked agents anyway to see what happens, and do not
+reword the goal until something fails.
+
+### 3c. Fan out hypotheses
+
+When `investigator` returns ranked hypotheses and the cause is still not obvious,
+dispatch one `hypothesis-tester` per hypothesis, in parallel, up to
+`limits.max_parallel_agents`.
+
+Each one gets exactly one hypothesis and a distinct `instance` on `loop_run_log` — a
+short slug derived from the hypothesis, like `stale-cache`. Without it every tester
+writes the same file and the cycle records one verdict where it produced several.
+
+Merge the verdicts before dispatching `fixer`. A hypothesis every tester refuted is not
+the fixer's task list; hand it what survived. If everything was refuted, say so — that is
+a real finding, and the next cycle needs a new investigation rather than a fix.
+
 ### 4. Dispatch
 
 Send each agent the brief from **loop-contract**. Independent agents may run in
@@ -122,3 +157,7 @@ says what the cycle achieved, not that a loop ran.
 - Never let `builder` commit its own work — the verdict comes first, then the commit.
 - Never restart a run to clear the strike count. A stagnation halt is information, not an
   obstacle.
+- Never dispatch a gated agent before the gate is open, and never treat a `blocked`
+  reproduction as something to work around.
+- Never accept a fix whose evidence does not include the reproducing command passing. A
+  green suite that never ran the failing test is not a verdict on this defect.
