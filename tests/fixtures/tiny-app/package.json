@@ -1,0 +1,9 @@
+{
+  "name": "tiny-app",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "lint": "node --check src/button.js"
+  }
+}
