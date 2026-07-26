@@ -55,7 +55,9 @@ recorded, and a rejected result costs the cycle a corrective round trip.
   not `"refuted"`, not `"confirmed"`, not `"done"`.
   - `pass` — the evidence **supports** the hypothesis; you tried to refute it and could not.
   - `fail` — the hypothesis is **refuted**, or the evidence was ambiguous. Say which in
-    `summary`; they are different for the reader even though the verdict is the same.
+    `summary`, in those words: the leader keys on it. An explicit refutation is dropped
+    from the fixer's list; an ambiguous verdict refutes nothing and survives into it. A
+    hypothesis you could not test must not be recorded as one you disproved.
   - `blocked` — the hypothesis cannot be tested with read-only observation.
 - `evidence`, `findings`, and `files_touched` are required keys; omitting one fails the
   call. Never return a verdict with an empty `evidence` array — an untested hypothesis

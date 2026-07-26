@@ -35,8 +35,9 @@ Then add this repository as a plugin marketplace or local plugin in Claude Code.
 
 Each track declares a `required` set the leader cannot drop and an `available` set it
 draws from as the task warrants. Before running, the leader writes `roster.json` naming
-what it chose and why each omission was safe. `verifier` is the one hard invariant: no
-success is declared without its evidence.
+what it chose and why each omission was safe. Every agent a track marks `required` is a
+hard invariant — on the shipped tracks that includes `verifier`, and no success is
+declared without its evidence.
 
 Change a track, cap, or forced specialist in `.loop/config.yaml`. Tracks are data — a
 new one needs no code.

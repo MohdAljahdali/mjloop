@@ -3,13 +3,15 @@ import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   CycleClosedError,
+  GateClosedError,
   InvalidAgentNameError,
   InvalidAgentResultError,
-  ReproductionGateError,
+  RunReplacedError,
+  UnknownAgentError,
   runLog,
 } from '../../src/ops/log.js'
 import { initLoop } from '../../src/ops/init.js'
-import { cycleAdvance, runDirPath, runStart } from '../../src/ops/run.js'
+import { UnknownTrackError, cycleAdvance, runDirPath, runStart } from '../../src/ops/run.js'
 import { loadConfig, writeConfig } from '../../src/store/config-store.js'
 import { StateStore } from '../../src/store/state-store.js'
 import { makeTmpProject, type TmpProject } from '../helpers/tmp-project.js'
@@ -96,8 +98,55 @@ describe('runLog agent names', () => {
   })
 
   it('accepts the ordinary agent names', async () => {
+    const config = await loadConfig(project.dir)
+    config.tracks.edit = { required: ['editor', 'verifier'], available: ['ui-critic_2'], max_cycles: 1 }
+    await writeConfig(project.dir, config)
+
     await expect(runLog(project.dir, { agent: 'verifier', result: RESULT }, clock)).resolves.toBeDefined()
     await expect(runLog(project.dir, { agent: 'ui-critic_2', result: RESULT }, clock)).resolves.toBeDefined()
+  })
+
+  it('refuses a name whose "--" would collide with an instance', async () => {
+    // `a` with instance `b` and the agent `a--b` would both write `a--b.json`,
+    // and the second write would discard the first verdict.
+    await expect(runLog(project.dir, { agent: 'editor--verifier', result: RESULT }, clock)).rejects.toBeInstanceOf(
+      InvalidAgentNameError,
+    )
+    await expect(
+      runLog(project.dir, { agent: 'editor', instance: 'a--b', result: RESULT }, clock),
+    ).rejects.toBeInstanceOf(InvalidAgentNameError)
+  })
+})
+
+describe('runLog against the track roster', () => {
+  it('refuses an agent the track does not define', async () => {
+    await expect(runLog(project.dir, { agent: 'fixer', result: RESULT }, clock)).rejects.toBeInstanceOf(
+      UnknownAgentError,
+    )
+
+    const state = await new StateStore(project.dir).get()
+    expect(state.findings).toEqual([])
+    expect(await fs.readdir(path.join(runDirPath(project.dir, state), 'cycle-01')).catch(() => [])).toEqual([])
+  })
+
+  it('accepts a specialist the config forces into every cycle', async () => {
+    const config = await loadConfig(project.dir)
+    config.specialists.security = 'always'
+    await writeConfig(project.dir, config)
+
+    await expect(runLog(project.dir, { agent: 'security', result: RESULT }, clock)).resolves.toBeDefined()
+  })
+
+  it('refuses the log when the running track has gone missing from config', async () => {
+    // rosterSet and cycleAdvance both fail closed on a missing track; a gate
+    // that cannot be found must refuse the log rather than vanish.
+    const config = await loadConfig(project.dir)
+    delete config.tracks.edit
+    await writeConfig(project.dir, config)
+
+    await expect(runLog(project.dir, { agent: 'verifier', result: RESULT }, clock)).rejects.toBeInstanceOf(
+      UnknownTrackError,
+    )
   })
 })
 
@@ -110,6 +159,12 @@ describe('runLog instances', () => {
     files_touched: [],
     next_hint: null,
   }
+
+  // Both agents belong to the `fix` track, and `runLog` accepts only agents the
+  // running track defines.
+  beforeEach(async () => {
+    await runStart(project.dir, { track: 'fix', goal: 'Stale cache entry' }, clock)
+  })
 
   it('keeps two runs of the same agent side by side', async () => {
     const first = await runLog(project.dir, { agent: 'hypothesis-tester', instance: 'stale-cache', result: verdict }, clock)
@@ -208,8 +263,33 @@ describe('the reproduction gate', () => {
 
   it('rejects a blocked agent while the gate is shut', async () => {
     await expect(runLog(project.dir, { agent: 'fixer', result: fix }, clock)).rejects.toBeInstanceOf(
-      ReproductionGateError,
+      GateClosedError,
     )
+  })
+
+  it('rejects a spelling variant of a blocked agent', async () => {
+    // On a case-insensitive filesystem `Fixer.json` *is* `fixer.json`, so a
+    // gate keyed on an exact string would let the blocked work through under
+    // the blocked agent's own path.
+    const config = await loadConfig(project.dir)
+    config.tracks.fix = {
+      required: ['reproducer', 'fixer', 'verifier'],
+      available: ['Fixer'],
+      max_cycles: 5,
+      gate: { proven_by: 'reproducer', blocks: ['fixer'] },
+    }
+    await writeConfig(project.dir, config)
+
+    await expect(runLog(project.dir, { agent: 'Fixer', result: fix }, clock)).rejects.toBeInstanceOf(GateClosedError)
+  })
+
+  it('rejects an agent no track defines rather than letting it record the blocked work', async () => {
+    await expect(runLog(project.dir, { agent: 'fixer2', result: fix }, clock)).rejects.toBeInstanceOf(
+      UnknownAgentError,
+    )
+
+    const state = await new StateStore(project.dir).get()
+    await expect(fs.access(path.join(runDirPath(project.dir, state), 'cycle-01', 'fixer2.json'))).rejects.toThrow()
   })
 
   it('names the agent that would open it', async () => {
@@ -278,8 +358,29 @@ describe('the reproduction gate', () => {
 
   it('blocks nothing on a track with no gate', async () => {
     await runStart(project.dir, { track: 'edit', goal: 'Rename' }, clock)
-    const { path: file, gateOpened } = await runLog(project.dir, { agent: 'fixer', result: fix }, clock)
-    expect(path.basename(file)).toBe('fixer.json')
+    const { path: file, gateOpened } = await runLog(project.dir, { agent: 'editor', result: fix }, clock)
+    expect(path.basename(file)).toBe('editor.json')
     expect(gateOpened).toBe(false)
+  })
+
+  it('never opens the gate of a run that proved nothing', async () => {
+    // The leader can issue both calls in one turn. `runStart` resets to cycle
+    // 1, so cycle equality alone would read as the same run and file this
+    // reproduction against a defect the new run has not demonstrated.
+    const [logged] = await Promise.allSettled([
+      runLog(project.dir, { agent: 'reproducer', result: proof }, clock),
+      runStart(project.dir, { track: 'fix', goal: 'A different defect' }, clock),
+    ])
+
+    const state = await new StateStore(project.dir).get()
+    if (logged.status === 'rejected') {
+      expect(logged.reason).toBeInstanceOf(RunReplacedError)
+      expect(state.reproduction).toBeNull()
+    } else {
+      // The log won the lock: its proof belongs to the run it was logged
+      // against, and runStart cleared it on the way in.
+      expect(state.goal).toBe('A different defect')
+      expect(state.reproduction).toBeNull()
+    }
   })
 })

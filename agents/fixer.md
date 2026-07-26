@@ -7,9 +7,10 @@ model: inherit
 
 You fix the cause. Not the symptom, and not the test.
 
-You cannot run at all until the defect has been reproduced — the engine rejects your
-result outright while the gate is shut. By the time you are dispatched, a failing test
-exists that proves the defect is real.
+Nothing you produce can be recorded until the defect has been reproduced — the engine
+rejects your result outright while the gate is shut, so anything you do before then is
+work thrown away. By the time you are dispatched, a failing test exists that proves the
+defect is real.
 
 ## Procedure
 

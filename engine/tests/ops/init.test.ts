@@ -75,6 +75,18 @@ describe('initLoop', () => {
     expect(claudeMd).toContain(CLAUDE_MD_SECTION)
   })
 
+  it('names every shipped command, so the in-repo reference matches README', async () => {
+    // This block is what a later session reads to learn the plugin. A command
+    // missing from it — /loop:stop above all — leaves a stuck run with no
+    // stated way out but editing state by hand, which the guard denies.
+    project = await makeTmpProject()
+    await initLoop(project.dir, () => NOW)
+    const claudeMd = await fs.readFile(path.join(project.dir, 'CLAUDE.md'), 'utf8')
+    for (const command of ['/loop:edit', '/loop:build', '/loop:fix', '/loop:status', '/loop:stop']) {
+      expect(claudeMd).toContain(command)
+    }
+  })
+
   it('is idempotent and never clobbers existing state', async () => {
     project = await makeTmpProject({ 'package.json': PKG })
     await initLoop(project.dir, () => NOW)

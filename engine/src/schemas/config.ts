@@ -30,12 +30,15 @@ export const TrackSchema = z
   .superRefine((track, ctx) => {
     if (track.gate === undefined) return
     const known = new Set([...track.required, ...track.available])
+    // The remedy travels with the message: an error that names only the
+    // consequence leaves a one-character typo invisible.
+    const remedy = `add it to required or available first (this track has: ${[...known].join(', ')})`
 
     if (!known.has(track.gate.proven_by)) {
       ctx.addIssue({
         code: 'custom',
         path: ['gate', 'proven_by'],
-        message: `"${track.gate.proven_by}" is not in this track — a gate proven by an agent the leader can never draft would shut the track permanently, and silently`,
+        message: `"${track.gate.proven_by}" is not in this track — a gate proven by an agent the leader can never draft would shut the track permanently, and silently. Check the spelling, or ${remedy}`,
       })
     }
     for (const [index, agent] of track.gate.blocks.entries()) {
@@ -43,9 +46,19 @@ export const TrackSchema = z
         ctx.addIssue({
           code: 'custom',
           path: ['gate', 'blocks', index],
-          message: `"${agent}" is not in this track — blocking an agent it never runs has no effect`,
+          message: `"${agent}" is not in this track — blocking an agent it never runs has no effect. Check the spelling, or ${remedy}`,
         })
       }
+    }
+    // A gate that blocks its own prover is the same permanent, silent shutdown
+    // the checks above exist to prevent: the one result that would open it is
+    // the one it refuses.
+    if (track.gate.blocks.includes(track.gate.proven_by)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['gate', 'blocks'],
+        message: `"${track.gate.proven_by}" proves this gate and cannot also be blocked by it — the result that would open the gate could never be logged. Drop it from blocks`,
+      })
     }
   })
 
@@ -86,6 +99,31 @@ export type Gate = z.infer<typeof GateSchema>
 export type Track = z.infer<typeof TrackSchema>
 export type Verify = z.infer<typeof VerifySchema>
 export type Config = z.infer<typeof ConfigSchema>
+
+/**
+ * Own-property lookup. Track names arrive from the leader model and from
+ * state, and `tracks.toString` inherits a function from `Object.prototype`: a
+ * plain index would hand every caller a "track" with no `required` and no
+ * `max_cycles` instead of the unknown-track error they check for.
+ */
+export function findTrack(config: Config, track: string): Track | undefined {
+  return Object.hasOwn(config.tracks, track) ? config.tracks[track] : undefined
+}
+
+/** Specialists the config forces into every cycle regardless of the roster. */
+export function forcedSpecialists(config: Config): string[] {
+  return Object.entries(config.specialists)
+    .filter(([, mode]) => mode === 'always')
+    .map(([name]) => name)
+}
+
+/**
+ * Every agent a track may run. One definition for the two places that must
+ * agree about it: the roster the leader declares and the results it logs.
+ */
+export function permittedAgents(config: Config, track: Track): Set<string> {
+  return new Set([...track.required, ...track.available, ...forcedSpecialists(config)])
+}
 
 /**
  * Tracks shipped in milestone 1. Further tracks are appended by their own

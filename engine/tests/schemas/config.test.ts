@@ -115,6 +115,46 @@ describe('ConfigSchema', () => {
     if (!parsed.success) expect(z.prettifyError(parsed.error)).toContain('phantom')
   })
 
+  it('rejects a gate that blocks the agent proving it', () => {
+    // Copying `required` into `blocks` is the natural mistake, and it shuts the
+    // track for good: the result that opens the gate is the one it refuses.
+    const bad = {
+      version: 1,
+      tracks: {
+        myfix: {
+          required: ['prober', 'patcher'],
+          max_cycles: 3,
+          gate: { proven_by: 'prober', blocks: ['prober', 'patcher'] },
+        },
+      },
+    }
+    const parsed = ConfigSchema.safeParse(bad)
+    expect(parsed.success).toBe(false)
+    if (!parsed.success) expect(z.prettifyError(parsed.error)).toContain('cannot also be blocked')
+  })
+
+  it('names the track roster when a gate names an agent it never runs', () => {
+    // The consequence alone does not show a one-character typo; the remedy and
+    // the names the track does define do.
+    const bad = {
+      version: 1,
+      tracks: {
+        myfix: {
+          required: ['prober', 'patcher'],
+          max_cycles: 3,
+          gate: { proven_by: 'proberr', blocks: ['patcher'] },
+        },
+      },
+    }
+    const parsed = ConfigSchema.safeParse(bad)
+    expect(parsed.success).toBe(false)
+    if (!parsed.success) {
+      const message = z.prettifyError(parsed.error)
+      expect(message).toContain('add it to required or available first')
+      expect(message).toContain('prober, patcher')
+    }
+  })
+
   it('accepts a gate naming agents from required and available', () => {
     const good = {
       version: 1,

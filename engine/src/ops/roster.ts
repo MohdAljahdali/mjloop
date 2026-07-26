@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import { findTrack, forcedSpecialists, permittedAgents } from '../schemas/config.js'
 import { RosterSchema, type Roster } from '../schemas/contract.js'
 import { loadConfig } from '../store/config-store.js'
 import { StateStore } from '../store/state-store.js'
@@ -14,9 +15,9 @@ export class RosterViolationError extends Error {
 
 /**
  * Persist the leader's declared cycle composition. This is the enforcement
- * point for the system's hard invariant: a track's `required` agents —
- * `verifier` above all — cannot be dropped, and every omission must carry a
- * stated reason.
+ * point for the system's hard invariant: the agents a track marks `required`
+ * cannot be dropped, and every omission must carry a stated reason. Which
+ * agents those are is the track's business, not the engine's.
  */
 export async function rosterSet(projectDir: string, roster: Roster): Promise<{ path: string }> {
   const parsed = RosterSchema.parse(roster)
@@ -24,13 +25,11 @@ export async function rosterSet(projectDir: string, roster: Roster): Promise<{ p
   if (state.status !== 'running' || state.track === null) throw new NoActiveRunError()
 
   const config = await loadConfig(projectDir)
-  const track = config.tracks[state.track]
+  const track = findTrack(config, state.track)
   if (track === undefined) throw new UnknownTrackError(state.track, Object.keys(config.tracks))
 
-  const forced = Object.entries(config.specialists)
-    .filter(([, mode]) => mode === 'always')
-    .map(([name]) => name)
-  const permitted = new Set([...track.required, ...track.available, ...forced])
+  const forced = forcedSpecialists(config)
+  const permitted = permittedAgents(config, track)
   const selected = new Set(parsed.selected)
 
   const violations: string[] = []

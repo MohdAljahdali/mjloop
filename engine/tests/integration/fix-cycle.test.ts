@@ -3,7 +3,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { initLoop } from '../../src/ops/init.js'
-import { ReproductionGateError, runLog } from '../../src/ops/log.js'
+import { GateClosedError, runLog } from '../../src/ops/log.js'
 import { rosterSet } from '../../src/ops/roster.js'
 import { cycleAdvance, runDirPath, runStart } from '../../src/ops/run.js'
 import { stateSummary } from '../../src/ops/summary.js'
@@ -33,13 +33,17 @@ const REPRODUCED = {
   next_hint: null,
 }
 
+// Hypotheses rank by array order, most likely first. They are not filed as
+// `high`: severity is what the leader's pass rule reads, and nothing closes a
+// finding inside a cycle, so a `high` hypothesis would fail the cycle that
+// fixed and verified the defect it named.
 const HYPOTHESES = {
   status: 'pass' as const,
   summary: 'Two candidates, ranked.',
   evidence: [{ kind: 'file' as const, ref: 'src/button.js', excerpt: "return 'Submit'" }],
   findings: [
-    { severity: 'high' as const, file: 'src/button.js', line: 2, claim: 'the literal was never updated' },
-    { severity: 'medium' as const, file: 'test/button.test.js', line: 6, claim: 'the assertion may be wrong instead' },
+    { severity: 'medium' as const, file: 'src/button.js', line: 2, claim: 'the literal was never updated' },
+    { severity: 'low' as const, file: 'test/button.test.js', line: 6, claim: 'the assertion may be wrong instead' },
   ],
   files_touched: [],
   next_hint: null,
@@ -114,6 +118,10 @@ describe('a full fix run', () => {
       clock,
     )
 
+    // The state the leader's pass rule reads: a `pass` is only legitimate with
+    // no `high` finding open, and nothing inside a cycle can close one.
+    expect((await stateSummary(project.dir)).findings.high).toBe(0)
+
     const closed = await cycleAdvance(
       project.dir,
       { agents: ['reproducer', 'investigator', 'hypothesis-tester', 'fixer', 'verifier'], result: 'pass' },
@@ -141,7 +149,7 @@ describe('the gate holds', () => {
         },
         clock,
       ),
-    ).rejects.toBeInstanceOf(ReproductionGateError)
+    ).rejects.toBeInstanceOf(GateClosedError)
 
     const state = await new StateStore(project.dir).get()
     const cycleDir = path.join(runDirPath(project.dir, state), 'cycle-01')
@@ -184,6 +192,6 @@ describe('the gate holds', () => {
         },
         clock,
       ),
-    ).rejects.toBeInstanceOf(ReproductionGateError)
+    ).rejects.toBeInstanceOf(GateClosedError)
   })
 })

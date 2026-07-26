@@ -1,10 +1,11 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import * as z from 'zod'
+import { findTrack, permittedAgents } from '../schemas/config.js'
 import { AgentNameSchema, parseAgentResult } from '../schemas/contract.js'
 import { loadConfig } from '../store/config-store.js'
 import { StateStore, type Clock } from '../store/state-store.js'
-import { NoActiveRunError, cycleDirPath } from './run.js'
+import { NoActiveRunError, UnknownTrackError, cycleDirPath } from './run.js'
 
 export class InvalidAgentNameError extends Error {
   constructor(agent: string, detail: string) {
@@ -20,6 +21,17 @@ export class InvalidAgentResultError extends Error {
   }
 }
 
+export class UnknownAgentError extends Error {
+  constructor(agent: string, track: string, permitted: string[]) {
+    super(
+      `"${agent}" is not in track "${track}" — add it to required or available first ` +
+        `(this track runs: ${permitted.join(', ')}). A name no track defines is how a gated agent gets logged ` +
+        'under a spelling the gate does not recognise.',
+    )
+    this.name = 'UnknownAgentError'
+  }
+}
+
 export class CycleClosedError extends Error {
   constructor(agent: string, logged: number, current: number) {
     super(
@@ -30,14 +42,29 @@ export class CycleClosedError extends Error {
   }
 }
 
-export class ReproductionGateError extends Error {
+export class RunReplacedError extends Error {
+  constructor(agent: string, logged: string | null, current: string | null) {
+    super(
+      `run ${logged} was replaced while "${agent}" was being logged — the project is now on run ${current}. ` +
+        'Its findings were not folded in; log the result against the open run.',
+    )
+    this.name = 'RunReplacedError'
+  }
+}
+
+/**
+ * A gate is generic machinery, so its message is built from the gate's own
+ * data. A track that gates "reviewed before implemented" must not be told to
+ * reproduce a defect.
+ */
+export class GateClosedError extends Error {
   constructor(agent: string, provenBy: string) {
     super(
       `"${agent}" is blocked by the "${provenBy}" gate on this track. Nothing it produces can be recorded until ` +
-        `"${provenBy}" returns status "pass" carrying command or test evidence that the defect is real. ` +
-        'Reproduce the defect first, or halt the run — do not fix what has not been demonstrated.',
+        `"${provenBy}" returns status "pass" carrying command or test evidence. ` +
+        `Run "${provenBy}" first, or halt the run — nothing opens this gate by assertion.`,
     )
-    this.name = 'ReproductionGateError'
+    this.name = 'GateClosedError'
   }
 }
 
@@ -66,15 +93,30 @@ export async function runLog(
 
   const store = new StateStore(projectDir, now)
   const state = await store.get()
-  if (state.status !== 'running') throw new NoActiveRunError()
+  if (state.status !== 'running' || state.track === null) throw new NoActiveRunError()
 
   // runLog reads config for the first time here: the gate is a property of the
-  // running track, and a track is configuration.
+  // running track, and a track is configuration. A track that has gone missing
+  // from config fails closed, as it does in `rosterSet` and `cycleAdvance` — a
+  // gate that cannot be found must refuse the log, not disappear.
   const config = await loadConfig(projectDir)
-  const gate = state.track === null ? undefined : config.tracks[state.track]?.gate
+  const track = findTrack(config, state.track)
+  if (track === undefined) throw new UnknownTrackError(state.track, Object.keys(config.tracks))
 
-  if (gate !== undefined && state.reproduction === null && gate.blocks.includes(agent.data)) {
-    throw new ReproductionGateError(agent.data, gate.proven_by)
+  // The same set `rosterSet` enforces: without it the gate is keyed on a name
+  // the leader can change at will, and "fixer2" — or "Fixer", which on a
+  // case-insensitive filesystem lands on the blocked agent's own result file —
+  // records exactly the work the gate exists to refuse.
+  const permitted = permittedAgents(config, track)
+  if (!permitted.has(agent.data)) throw new UnknownAgentError(agent.data, state.track, [...permitted])
+
+  const gate = track.gate
+  if (gate !== undefined && state.reproduction === null) {
+    // Blocking is deliberately case-insensitive while opening below is not: a
+    // variant that differs only in case must never slip past the gate, and it
+    // must never be taken for the agent that opens it.
+    const blocked = gate.blocks.some((name) => name.toLowerCase() === agent.data.toLowerCase())
+    if (blocked) throw new GateClosedError(agent.data, gate.proven_by)
   }
 
   // The gate opens as a side effect of the ordinary evidence-bound channel.
@@ -109,6 +151,11 @@ export async function runLog(
       // agent's work under a cycle that did not do it — or leave an open
       // finding on a run that is already `done`.
       if (draft.status !== 'running') throw new NoActiveRunError()
+      // A `runStart` may have landed instead, and it resets to cycle 1: cycle
+      // equality is not run identity. Without this, an evidenced reproduction
+      // opens the gate of a run that demonstrated nothing — which is precisely
+      // what `runStart` clearing `reproduction` exists to prevent.
+      if (draft.run_id !== state.run_id) throw new RunReplacedError(agent.data, state.run_id, draft.run_id)
       if (draft.cycle !== state.cycle) throw new CycleClosedError(agent.data, state.cycle, draft.cycle)
       draft.findings.push(...parsed.value.findings)
       if (proof !== undefined) {

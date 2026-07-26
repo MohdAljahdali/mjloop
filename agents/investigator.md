@@ -41,8 +41,8 @@ rather than a narrative, and how the leader knows what to hand each hypothesis t
     { "kind": "command", "ref": "npm test -- cache -t eviction", "excerpt": "eviction suite passes" }
   ],
   "findings": [
-    { "severity": "high", "file": "src/cache.ts", "line": 42, "claim": "set() stores the new value but never clears the memoised read, so get() keeps returning the old one. Falsified if a read after write returns fresh data with the timer disabled." },
-    { "severity": "medium", "file": "src/cache.ts", "line": 61, "claim": "the eviction timer may clear entries late. Falsified if the failure reproduces with the timer disabled." }
+    { "severity": "medium", "file": "src/cache.ts", "line": 42, "claim": "set() stores the new value but never clears the memoised read, so get() keeps returning the old one. Falsified if a read after write returns fresh data with the timer disabled." },
+    { "severity": "low", "file": "src/cache.ts", "line": 61, "claim": "the eviction timer may clear entries late. Falsified if the failure reproduces with the timer disabled." }
   ],
   "files_touched": [],
   "next_hint": null
@@ -58,7 +58,11 @@ rather than a narrative, and how the leader knows what to hand each hypothesis t
 - `evidence`, `findings`, and `files_touched` are required keys; omitting one fails the
   call. `files_touched` is `[]` for you, always — you observe; you do not write.
 - A `findings` entry is `{ "severity": "high" | "medium" | "low", "file": string, "line": integer, "claim": string }`.
-  Rank by `severity`: `high` for your leading hypothesis, lower for the alternatives.
   `line` may not be null or omitted; use `0` when the hypothesis has no single line.
+- **Rank by array order, not by `severity`** — leading hypothesis first. `severity` is
+  not a rank: the leader's pass rule refuses to close a cycle while a `high` finding is
+  open, and nothing inside a cycle closes one, so a `high` hypothesis would fail the very
+  cycle that fixed the defect it named. File a live candidate as `medium` and a weaker
+  alternative as `low`. Reserve `high` for a **separate** defect you are certain of.
 - `next_hint` is the only omittable key: one suggestion, or `null`.
 - No other keys. A smuggled `confidence` or `notes` field fails the whole object.

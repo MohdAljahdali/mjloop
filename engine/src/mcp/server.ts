@@ -95,7 +95,7 @@ export function buildServer(): McpServer {
     {
       title: 'Declare the cycle roster',
       description:
-        'Record which agents this cycle runs and why each omission is safe. Rejected if a required agent — verifier above all — is missing.',
+        'Record which agents this cycle runs and why each omission is safe. Rejected if any agent the track marks required is missing, or if an optional agent is omitted without a stated reason.',
       inputSchema: {
         project_dir: projectDirArg,
         cycle: z.number().int().positive(),

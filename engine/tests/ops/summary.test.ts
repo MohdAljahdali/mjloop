@@ -149,12 +149,14 @@ describe('stateSummary and the gate', () => {
 
     const summary = await stateSummary(project.dir)
     expect(summary.reproduction).toEqual({ proven: true, ref: 'npm test -- cache' })
-    expect(renderSummaryLine(summary)).toContain('reproduced')
+    expect(renderSummaryLine(summary)).toContain('gate open')
   })
 
-  it('says the defect is not reproduced in the rendered line', async () => {
+  it('says the gate is shut in the rendered line', async () => {
+    // Rendered from the gate, not from one track's story: a custom track may
+    // gate on something that has nothing to do with reproducing a defect.
     await initLoop(project.dir, clock)
     await runStart(project.dir, { track: 'fix', goal: 'Stale cache' }, clock)
-    expect(renderSummaryLine(await stateSummary(project.dir))).toContain('not reproduced')
+    expect(renderSummaryLine(await stateSummary(project.dir))).toContain('gate shut')
   })
 })

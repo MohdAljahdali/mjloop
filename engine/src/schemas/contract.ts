@@ -16,6 +16,11 @@ export const RESERVED_AGENT_NAMES: readonly string[] = ['findings']
 export const AgentNameSchema = z
   .string()
   .regex(/^[A-Za-z0-9_-]+$/, 'only letters, digits, "-" and "_" are allowed')
+  // `runLog` writes an instance as `<agent>--<instance>.json`, so a name
+  // carrying `--` makes that basename ambiguous: agent `a` instance `b` and
+  // agent `a--b` would resolve to one file, and the second write would
+  // silently discard the first verdict.
+  .refine((name) => !name.includes('--'), '"--" is reserved: it separates an agent from its instance in the cycle file name')
   .refine((name) => !RESERVED_AGENT_NAMES.includes(name), `reserved by the cycle directory: ${RESERVED_AGENT_NAMES.join(', ')}`)
 
 export const EvidenceSchema = z.strictObject({

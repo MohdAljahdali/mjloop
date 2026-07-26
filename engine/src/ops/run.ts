@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import { findTrack } from '../schemas/config.js'
 import type { Finding, Result, State } from '../schemas/state.js'
 import { loadConfig } from '../store/config-store.js'
 import { resolveLoopPaths } from '../store/paths.js'
@@ -48,7 +49,7 @@ export interface RunStartInput {
 
 export async function runStart(projectDir: string, input: RunStartInput, now: Clock = () => new Date()): Promise<State> {
   const config = await loadConfig(projectDir)
-  if (!(input.track in config.tracks)) {
+  if (findTrack(config, input.track) === undefined) {
     throw new UnknownTrackError(input.track, Object.keys(config.tracks))
   }
 
@@ -130,7 +131,7 @@ export async function cycleAdvance(
   // step past its cycle cap.
   const after = await store.update((draft) => {
     if (draft.status !== 'running' || draft.track === null) throw new NoActiveRunError()
-    const track = config.tracks[draft.track]
+    const track = findTrack(config, draft.track)
     if (track === undefined) throw new UnknownTrackError(draft.track, Object.keys(config.tracks))
 
     carried = [...draft.findings]

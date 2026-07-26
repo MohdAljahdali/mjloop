@@ -55,9 +55,19 @@ Order the cycle around it. Dispatch `proven_by` first and wait for its result. O
 dispatch a blocked agent after `loop_run_log` reports `gateOpened: true` — sending it
 early wastes an agent on a result the engine will refuse.
 
-If `proven_by` returns `blocked`, the defect did not reproduce. Halt and report what was
-attempted. Do not dispatch the blocked agents anyway to see what happens, and do not
-reword the goal until something fails.
+If `proven_by` returns `blocked` **and the gate is still shut**, what it was to prove did
+not hold. Halt and report what was attempted. Do not dispatch the blocked agents anyway to
+see what happens, and do not reword the goal until something fails.
+
+If the gate is **already open** from an earlier cycle, a `blocked` from `proven_by` means
+the opposite: the reproducing test no longer fails, so the fix landed. Do not halt —
+`state.reproduction` survives the cycle. Hand it to `verifier` and judge on that verdict.
+
+If `proven_by` returns `pass` but `loop_run_log` reports `gateOpened: false`, the result
+carried no `command` or `test` evidence and the gate is still shut. Send it back as the
+single corrective retry (step 4), asking for the failing command's output as `command` or
+`test` evidence. Halt only if the retry comes back unevidenced too — a blocked agent can
+never be logged while the gate is shut, so there is nothing else the cycle can do.
 
 ### 3c. Fan out hypotheses
 
@@ -73,6 +83,11 @@ Merge the verdicts before dispatching `fixer`. A hypothesis every tester refuted
 the fixer's task list; hand it what survived. If everything was refuted, say so — that is
 a real finding, and the next cycle needs a new investigation rather than a fix.
 
+A tester's `fail` carries two different outcomes, so read the `summary` before you drop
+anything: an explicit refutation is out, but a `fail` that says the evidence was
+**ambiguous** refutes nothing and survives into the fixer's list, ranked below what was
+supported. A hypothesis that was never actually tested must not be recorded as disproven.
+
 ### 4. Dispatch
 
 Send each agent the brief from **loop-contract**. Independent agents may run in
@@ -87,12 +102,16 @@ failed and move on — one bad agent does not end the run.
 
 `pass` requires all of:
 
-- `verifier` returned `status: "pass"`, and
+- the track's verifying agent returned `status: "pass"`, and
 - its `evidence` contains real command output, and
 - no `high` severity finding is open.
 
+The engine enforces `required`, not a name: every shipped track makes `verifier` required
+and that is the agent meant here, but on a custom track it is whichever agent that track
+marks required for the verdict. Read the track before you judge.
+
 Anything short of that is a fail. Never declare success on your own reading of the
-code — the verdict belongs to `verifier`'s evidence, not to your impression.
+code — the verdict belongs to that agent's evidence, not to your impression.
 
 Only those three decide the verdict. Another agent's `fail` — `critic`'s, typically — is
 not a veto: its `medium` and `low` findings ride with the cycle instead of blocking it,

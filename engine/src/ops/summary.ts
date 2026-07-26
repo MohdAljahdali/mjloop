@@ -1,3 +1,4 @@
+import { findTrack } from '../schemas/config.js'
 import type { Severity, State } from '../schemas/state.js'
 import { loadConfig } from '../store/config-store.js'
 import { StateStore } from '../store/state-store.js'
@@ -22,7 +23,8 @@ export interface StateSummary {
   halt_reason: string | null
   /**
    * The state of the running track's gate: `null` when the track has no gate,
-   * otherwise whether the defect has been proven and by which command.
+   * otherwise whether it has been opened and by which command. What the gate
+   * proves is the track's business — on `fix` it is a reproduction.
    */
   reproduction: { proven: boolean; ref: string | null } | null
 }
@@ -60,7 +62,7 @@ export async function stateSummary(projectDir: string): Promise<StateSummary> {
   let reproduction: { proven: boolean; ref: string | null } | null = null
   try {
     const config = await loadConfig(projectDir)
-    const track = state.track === null ? undefined : config.tracks[state.track]
+    const track = state.track === null ? undefined : findTrack(config, state.track)
     maxCycles = track?.max_cycles ?? null
     if (track?.gate !== undefined) {
       reproduction = { proven: state.reproduction !== null, ref: state.reproduction?.ref ?? null }
@@ -103,7 +105,8 @@ export function renderSummaryLine(summary: StateSummary): string {
   const cap = summary.max_cycles === null ? '?' : String(summary.max_cycles)
   const findings = `${summary.findings.high}H/${summary.findings.medium}M/${summary.findings.low}L`
   const tail = summary.halt_reason === null ? '' : ` — ${summary.halt_reason}`
-  const gate =
-    summary.reproduction === null ? '' : summary.reproduction.proven ? ' · reproduced' : ' · not reproduced'
+  // Rendered from the gate's data, not from one track's story: a gate on a
+  // custom track proves whatever that track says it proves.
+  const gate = summary.reproduction === null ? '' : summary.reproduction.proven ? ' · gate open' : ' · gate shut'
   return `Loop: ${summary.status} · track ${summary.track} · ${target} · cycle ${summary.cycle}/${cap} · stage ${summary.stage} · findings ${findings}${gate}${tail}`
 }

@@ -88,6 +88,15 @@ describe('runStart', () => {
     await expect(runStart(project.dir, { track: 'ghost', goal: 'x' }, clock)).rejects.toBeInstanceOf(UnknownTrackError)
   })
 
+  it('rejects a track name inherited from Object.prototype', async () => {
+    // `'toString' in config.tracks` is true for any plain object, and the
+    // "track" the lookup yields is a function: no required set, no cap, so the
+    // cycle cap would never apply and the failure would surface as a TypeError.
+    await expect(runStart(project.dir, { track: 'toString', goal: 'x' }, clock)).rejects.toBeInstanceOf(
+      UnknownTrackError,
+    )
+  })
+
   it('rejects a story id that would escape the runs directory', async () => {
     await expect(
       runStart(project.dir, { track: 'edit', goal: 'x', story: '../../../tmp/x' }, clock),
