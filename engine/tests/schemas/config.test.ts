@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import * as z from 'zod'
 import { ConfigSchema, DEFAULT_TRACKS, defaultConfig } from '../../src/schemas/config.js'
 
 const VERIFY = { test: 'npm test', lint: 'npm run lint', build: null }
@@ -7,7 +8,7 @@ describe('defaultConfig', () => {
   it('is schema-valid and defines only the edit track', () => {
     const config = defaultConfig(VERIFY)
     expect(ConfigSchema.parse(config)).toEqual(config)
-    expect(Object.keys(config.tracks)).toEqual(['edit', 'build'])
+    expect(Object.keys(config.tracks)).toEqual(['edit', 'build', 'fix'])
     expect(config.autonomous).toBe(false)
   })
 
@@ -27,6 +28,20 @@ describe('DEFAULT_TRACKS', () => {
       available: ['scout', 'critic'],
       max_cycles: 5,
     })
+  })
+
+  it('gates the fix track on the reproducer and blocks the fixer', () => {
+    expect(DEFAULT_TRACKS.fix).toEqual({
+      required: ['reproducer', 'fixer', 'verifier'],
+      available: ['investigator', 'hypothesis-tester', 'critic'],
+      max_cycles: 5,
+      gate: { proven_by: 'reproducer', blocks: ['fixer'] },
+    })
+  })
+
+  it('leaves the ungated tracks ungated', () => {
+    expect(DEFAULT_TRACKS.edit?.gate).toBeUndefined()
+    expect(DEFAULT_TRACKS.build?.gate).toBeUndefined()
   })
 })
 
@@ -66,5 +81,52 @@ describe('ConfigSchema', () => {
   it('rejects an unknown top-level key', () => {
     const bad = { version: 1, tracks: { edit: { required: ['editor'], max_cycles: 1 } }, extra: 1 }
     expect(ConfigSchema.safeParse(bad).success).toBe(false)
+  })
+
+  it('rejects a gate proven by an agent the track never runs', () => {
+    const bad = {
+      version: 1,
+      tracks: {
+        fix: {
+          required: ['fixer', 'verifier'],
+          max_cycles: 3,
+          gate: { proven_by: 'ghost', blocks: ['fixer'] },
+        },
+      },
+    }
+    const parsed = ConfigSchema.safeParse(bad)
+    expect(parsed.success).toBe(false)
+    if (!parsed.success) expect(z.prettifyError(parsed.error)).toContain('ghost')
+  })
+
+  it('rejects a gate blocking an agent the track never runs', () => {
+    const bad = {
+      version: 1,
+      tracks: {
+        fix: {
+          required: ['reproducer', 'verifier'],
+          max_cycles: 3,
+          gate: { proven_by: 'reproducer', blocks: ['phantom'] },
+        },
+      },
+    }
+    const parsed = ConfigSchema.safeParse(bad)
+    expect(parsed.success).toBe(false)
+    if (!parsed.success) expect(z.prettifyError(parsed.error)).toContain('phantom')
+  })
+
+  it('accepts a gate naming agents from required and available', () => {
+    const good = {
+      version: 1,
+      tracks: {
+        fix: {
+          required: ['reproducer', 'fixer'],
+          available: ['critic'],
+          max_cycles: 3,
+          gate: { proven_by: 'reproducer', blocks: ['fixer', 'critic'] },
+        },
+      },
+    }
+    expect(ConfigSchema.safeParse(good).success).toBe(true)
   })
 })
