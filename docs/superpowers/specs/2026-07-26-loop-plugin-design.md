@@ -47,28 +47,37 @@ clean contexts so the leader's context does not grow with implementation detail.
    A `PreToolUse` hook enforces this — it is a rule, not a convention.
 2. **Agents are interchangeable.** A single input brief and a single output shape.
    The leader never knows what an agent does internally.
-3. **Tracks are data.** Pipelines live in `config.yaml`. Adding a track requires no code.
-4. **Routing is deterministic.** Specialist agents are selected from written flags in
-   story frontmatter, not from the leader guessing.
-5. **Every loop is bounded.** Cycle caps, stagnation detection, and halt reports are
+3. **Tracks are data.** Rosters live in `config.yaml`. Adding a track requires no code.
+4. **The leader composes the cycle; invariants constrain it.** Each track declares a
+   `required` set the leader cannot drop and an `available` set it may draft from, sized
+   to the task. The one hard invariant in the whole system: **`verifier` always runs, and
+   no success is declared without its evidence.**
+5. **Every selection is declared.** Before executing a cycle the leader writes
+   `roster.json` naming the agents chosen and the reason each omission was safe. The
+   decision is auditable, not hidden.
+6. **Every loop is bounded.** Cycle caps, stagnation detection, and halt reports are
    part of the engine, not optional extras.
-6. **Nothing is aggregated.** One plan = one directory. One story = one file.
+7. **Nothing is aggregated.** One plan = one directory. One story = one file.
 
 ---
 
 ## 3. Tracks
 
+Each track declares a **required** set (the leader cannot drop these) and an
+**available** set (drafted per task). The diagrams below show the full shape; agents
+in brackets are optional and selected by the leader.
+
 ### 3.1 Plan — `/loop:plan <idea>`
 
 ```
 idea
- └─ planner        drafts the core plan
- └─ plan-critic    reviews: gaps, contradictions, YAGNI     ──┐ fail → back to planner
- └─ fit-checker    validates fit with the actual project    ──┘ (architecture, patterns, deps)
+ └─ planner          drafts the core plan
+ └─ [plan-critic]    reviews: gaps, contradictions, YAGNI   ──┐ fail → back to planner
+ └─ fit-checker      validates fit with the actual project  ──┘ (architecture, patterns, deps)
  └─ GATE: plan approval (human by default) → plans/P00N/PLAN.md
- └─ story-writer   plan → implementation stories with acceptance criteria
- └─ story-critic   per story: atomic? verifiable? dependencies correct?
-                     └─ fail → story rewritten
+ └─ story-writer     plan → implementation stories with acceptance criteria
+ └─ [story-critic]   per story: atomic? verifiable? dependencies correct?
+                       └─ fail → story rewritten
  └─ next story … until all stories pass
 ```
 
@@ -79,13 +88,13 @@ Output: `plans/P00N-<slug>/PLAN.md`, `REVIEW.md`, `manifest.json`, `stories/*.md
 No planning. Consumes a story (or a direct goal) and cycles on it:
 
 ```
-scout (only when knowledge is missing)
- └─ [ui-designer]  when story.ui = true
- └─ builder
- └─ verifier
- └─ [ui-critic]    when story.ui = true
- └─ critic
- └─ [security | docs | perf]  conditional
+[scout]                        only when knowledge is missing
+ └─ [ui-designer]              when story.ui = true
+ └─ builder                    required
+ └─ verifier                   required — always, no exception
+ └─ [ui-critic]                when story.ui = true
+ └─ [critic]
+ └─ [security | docs | perf]
  └─ leader judgement
       pass → commit + next story
       fail → findings become next cycle's tasks
@@ -96,14 +105,17 @@ scout (only when knowledge is missing)
 Scientific method. No fix before reproduction is proven.
 
 ```
-reproducer          writes a failing test that proves the problem
-                      └─ GATE: no reproduction → halt, do not proceed
- └─ investigator     gathers evidence, produces ranked hypotheses (must not fix)
- └─ hypothesis-tester ×N in parallel — one hypothesis each, verdict with evidence
- └─ fixer            fixes the root cause, not the symptom
- └─ verifier         failing test now passes + no regression elsewhere
- └─ critic           are there other sites with the same defect?
+reproducer               required — failing test that proves the problem
+                           └─ GATE: no reproduction → halt, do not proceed
+ └─ [investigator]        evidence + ranked hypotheses (must not fix)
+ └─ [hypothesis-tester]   ×N in parallel — one hypothesis each, verdict with evidence
+ └─ fixer                 required — root cause, not the symptom
+ └─ verifier              required — failing test passes + no regression
+ └─ [critic]              other sites with the same defect?
 ```
+
+When the cause is already evident from the reproduction, the leader may go straight from
+`reproducer` to `fixer`. It may never skip the reproduction gate or `verifier`.
 
 ### 3.4 Edit — `/loop:edit <request>`
 
@@ -143,6 +155,31 @@ a public interface, it stops and recommends `/loop:build` rather than proceeding
 | `perf` | conditional | Performance |
 
 `verifier` and `critic` are shared across tracks — no duplication.
+
+Required per track: `plan` → planner, fit-checker, story-writer · `build` → builder,
+verifier · `fix` → reproducer, fixer, verifier · `edit` → editor, verifier.
+Everything else is drafted by the leader per task (see §7).
+
+### Cycle composition — `roster.json`
+
+Before executing a cycle the leader records its selection, so the decision is
+reviewable rather than hidden:
+
+```json
+{
+  "cycle": 1,
+  "selected": ["builder", "verifier", "ui-critic"],
+  "skipped": {
+    "scout": "story references known files only",
+    "critic": "single-file change, no new interface",
+    "security": "no auth, network, or input-handling code"
+  }
+}
+```
+
+Written via `loop_roster_set`, which rejects any roster missing a `required` agent.
+`/loop:status` displays it, and `critic` in a later cycle may challenge an unsafe
+omission — a wrongly skipped agent becomes a finding like any other defect.
 
 ### Agent contract
 
@@ -194,7 +231,7 @@ counted as a cycle failure (it does not kill the loop).
 │           ├── P001-S02-session-token.md
 │           └── P001-S03-logout.md
 ├── runs/
-│   └── 2026-07-26-003--P001-S02--build/    # brief, per-agent output, verify.log
+│   └── 2026-07-26-003--P001-S02--build/    # roster.json, brief, per-agent output, verify.log
 ├── memory/                                 # decisions and extracted lessons
 └── agents/  skills/                        # project-local extensions (optional)
 ```
@@ -251,14 +288,26 @@ verify:                          # detected by /loop:init, editable
   lint:  "npm run lint"
   build: "npm run build"
 
-tracks:
-  plan:  { pipeline: [planner, plan-critic, fit-checker, story-writer, story-critic], max_cycles: 6 }
-  build: { pipeline: [scout, builder, verifier, critic], max_cycles: 10 }
-  fix:   { pipeline: [reproducer, investigator, hypothesis-tester, fixer, verifier, critic], max_cycles: 8 }
-  edit:  { pipeline: [editor, verifier], max_cycles: 1 }
+tracks:                          # required = leader cannot drop; available = drafted per task
+  plan:
+    required:  [planner, fit-checker, story-writer]
+    available: [plan-critic, story-critic]
+    max_cycles: 6
+  build:
+    required:  [builder, verifier]
+    available: [scout, critic, ui-designer, ui-critic, security, docs, perf]
+    max_cycles: 10
+  fix:
+    required:  [reproducer, fixer, verifier]
+    available: [investigator, hypothesis-tester, critic]
+    max_cycles: 8
+  edit:
+    required:  [editor, verifier]
+    available: []
+    max_cycles: 1
 
-specialists:                     # auto | always | never
-  ui: auto                       # auto = driven by story.ui
+specialists:                     # auto = leader decides | always = forced | never
+  ui: auto                       # auto also honours story.ui
   security: auto
   docs: auto
   perf: auto
@@ -307,7 +356,8 @@ context does not inflate as cycles accumulate.
 
 **State:** `loop_init` · `loop_state_get` · `loop_run_start` · `loop_cycle_advance` ·
 `loop_plan_create` · `loop_story_add` · `loop_story_update` · `loop_task_update` ·
-`loop_finding_add` · `loop_gate_set` · `loop_run_log` · `loop_index_render` · `loop_halt`
+`loop_finding_add` · `loop_gate_set` · `loop_roster_set` · `loop_run_log` ·
+`loop_index_render` · `loop_halt`
 
 **Memory:** `loop_memory_record` · `loop_memory_search`
 (built over `runs/` and `memory/`; searched at the start of every track — "have we
@@ -341,8 +391,9 @@ patterns). If nothing is found, it asks once and writes the baseline.
   all states implemented, contrast/focus/RTL correct. Every finding cites a line in the
   design system.
 
-Routing is driven by `story.ui`, set by `story-writer` at creation time and editable
-by hand.
+`story.ui` — set by `story-writer` at creation time and editable by hand — is the signal
+the leader routes on: when it is true, omitting the UI agents must be justified in
+`roster.json`. Setting `specialists.ui: always` forces them regardless.
 
 ---
 
@@ -362,6 +413,8 @@ An unguarded loop is a token bill and broken code.
 
 | Guard | Mechanism |
 |---|---|
+| Verifier invariant | No cycle may complete and no success may be declared without `verifier` evidence. `loop_roster_set` rejects a roster missing it |
+| Required set | `loop_roster_set` rejects any roster omitting a track's `required` agents, so leader composition cannot erode the track's guarantees |
 | Cycle cap | Per-track cap; on reach → `halted` + report |
 | Stagnation | Per-cycle fingerprint (failing tests + files touched + findings hash). Repeat fingerprint = strike; 2 strikes → halt |
 | Same error | Verification failing with the identical error message twice → halt and request human input |
@@ -409,15 +462,16 @@ the recommendation.
 ```yaml
 tracks:
   refactor:
-    pipeline: [scout, critic, builder, verifier, perf]
+    required:  [builder, verifier]
+    available: [scout, critic, perf]
     max_cycles: 5
 ```
 
 **Adding an agent** — `/loop:add agent db-reviewer` generates the agent file with
 frontmatter and output contract in place, installs it into `.loop/agents/`
-(project-scoped) or the plugin (global), and registers it in a chosen pipeline. The
-leader is never modified: it does not know agent names ahead of time, it reads them
-from the track.
+(project-scoped) or the plugin (global), and adds it to a track's `required` or
+`available` set. The leader is never modified: it does not know agent names ahead of
+time, it reads them from the track and composes the cycle from what it finds.
 
 ---
 
@@ -460,6 +514,8 @@ Schemas are exported as a shared package used by both the MCP server and the hoo
   `INDEX.md` generation.
 - **Unit (guards):** given a state → continue or halt; especially stagnation detection
   and repeated-error detection.
+- **Unit (roster):** a roster omitting a `required` agent — above all `verifier` — is
+  rejected; `specialists: always` cannot be overridden by the leader.
 - **Contract:** malformed / incomplete / over-specified agent output → is it rejected
   and corrected?
 - **E2E:** a small fixture repo under `tests/fixtures/`, driven non-interactively
