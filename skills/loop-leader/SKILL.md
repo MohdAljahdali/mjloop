@@ -25,6 +25,33 @@ Call `loop_run_start` with the track and the goal. Restate the goal in one sente
 name the acceptance condition you will judge against. A goal you cannot state as a
 checkable condition is not ready to run.
 
+### 2b. When the run is against a story
+
+A story is not a goal with extra steps. It carries acceptance criteria, which are the
+conditions the cycle is judged against — you do not restate the goal in your own words
+and judge against that instead.
+
+Call `loop_story_get` and use what it returns:
+
+- Pass `loop_run_start` both the `plan` and the `story` id, so the run directory is named
+  after the story and every artefact traces back to it.
+- Put the acceptance criteria in every agent's brief, verbatim. `verifier` judges against
+  them; a cycle where the suite is green but an acceptance criterion is unmet is a fail.
+- Mark the story `doing` with `loop_story_update` when the run opens.
+
+### 2c. Writing the result back
+
+When a story run reaches `done`, call `loop_story_update` with `status: "done"` and
+`evidence` set to the run directory. The story then carries the path to its own proof,
+and the manifest and `INDEX.md` follow from it.
+
+If the run halts instead, mark the story `blocked` and leave `evidence` alone — a story
+with an evidence path is a story somebody proved, and a halted run proved nothing.
+
+Never edit `manifest.json` or `INDEX.md`. Both are derived from the story files; the
+`PreToolUse` hook denies writes to the manifest, and a hand-edited index is overwritten
+by the next render.
+
 ### 3. Compose the roster
 
 Read `.loop/config.yaml` for the track's `required` and `available` sets.
@@ -180,3 +207,7 @@ says what the cycle achieved, not that a loop ran.
   reproduction as something to work around.
 - Never accept a fix whose evidence does not include the reproducing command passing. A
   green suite that never ran the failing test is not a verdict on this defect.
+- Never judge a story run against your own restatement of the goal. The acceptance
+  criteria are the contract.
+- Never mark a story done without an evidence path, and never write an evidence path for
+  a run that halted.

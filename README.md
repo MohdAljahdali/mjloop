@@ -23,12 +23,12 @@ Then add this repository as a plugin marketplace or local plugin in Claude Code.
 ## Use
 
 ```
-/loop:init                          provision .loop/ and detect verify commands
-/loop:edit <what to change>         one-cycle scoped change
-/loop:build <what to build>         multi-cycle build with findings carried forward
-/loop:fix <what is broken>          reproduce first, then fix the root cause
-/loop:status                        where the current run stands
-/loop:stop [reason]                 halt the run and write a report
+/loop:init                               provision .loop/ and detect verify commands
+/loop:edit <what to change>              one-cycle scoped change
+/loop:build <goal | P001-S02 | --next>   multi-cycle build, optionally against a story
+/loop:fix <what is broken>               reproduce first, then fix the root cause
+/loop:status                             where the current run stands
+/loop:stop [reason]                      halt the run and write a report
 ```
 
 ## How a cycle is composed
@@ -41,6 +41,17 @@ declared without its evidence.
 
 Change a track, cap, or forced specialist in `.loop/config.yaml`. Tracks are data — a
 new one needs no code.
+
+## Plans and stories
+
+A plan lives in `.loop/plans/P001-<slug>/`: `PLAN.md`, a `stories/` directory, and a
+generated `manifest.json`. Each story is a markdown file that carries its own id, status,
+acceptance criteria, dependencies, and — once it passes — the path to the run that proved
+it.
+
+The story file is the source of truth. `manifest.json` is derived from the story files
+and `.loop/INDEX.md` is derived from the manifests, so nothing has to be kept in sync.
+Write stories through the `loop_story_*` tools rather than by hand.
 
 ## Development
 
