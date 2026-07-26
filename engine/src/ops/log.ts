@@ -31,6 +31,12 @@ export class CycleClosedError extends Error {
 
 export interface RunLogInput {
   agent: string
+  /**
+   * Distinguishes concurrent runs of the same agent. N hypothesis testers in
+   * one cycle would otherwise all write `hypothesis-tester.json`, and the
+   * cycle would record one verdict where it produced N.
+   */
+  instance?: string
   /** Unvalidated — this is where an agent's raw return value is checked. */
   result: unknown
 }
@@ -50,9 +56,18 @@ export async function runLog(
   const state = await store.get()
   if (state.status !== 'running') throw new NoActiveRunError()
 
+  // Validated by the same schema as the agent name: anything that reaches the
+  // filesystem goes through one check, in one place.
+  let basename = agent.data
+  if (input.instance !== undefined) {
+    const instance = AgentNameSchema.safeParse(input.instance)
+    if (!instance.success) throw new InvalidAgentNameError(input.instance, z.prettifyError(instance.error))
+    basename = `${agent.data}--${instance.data}`
+  }
+
   const cycleDir = cycleDirPath(projectDir, state)
   await fs.mkdir(cycleDir, { recursive: true })
-  const file = path.join(cycleDir, `${agent.data}.json`)
+  const file = path.join(cycleDir, `${basename}.json`)
   await fs.writeFile(file, `${JSON.stringify(parsed.value, null, 2)}\n`, 'utf8')
 
   if (parsed.value.findings.length > 0) {

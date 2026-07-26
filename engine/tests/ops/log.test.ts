@@ -95,6 +95,52 @@ describe('runLog agent names', () => {
   })
 })
 
+describe('runLog instances', () => {
+  const verdict = {
+    status: 'fail' as const,
+    summary: 'The hypothesis does not hold: the cache is populated before the read.',
+    evidence: [{ kind: 'command' as const, ref: 'npm test -- cache', excerpt: 'ordering is correct' }],
+    findings: [],
+    files_touched: [],
+    next_hint: null,
+  }
+
+  it('keeps two runs of the same agent side by side', async () => {
+    const first = await runLog(project.dir, { agent: 'hypothesis-tester', instance: 'stale-cache', result: verdict }, clock)
+    const second = await runLog(project.dir, { agent: 'hypothesis-tester', instance: 'race-on-write', result: verdict }, clock)
+
+    expect(first.path).not.toBe(second.path)
+    expect(path.basename(first.path)).toBe('hypothesis-tester--stale-cache.json')
+    expect(path.basename(second.path)).toBe('hypothesis-tester--race-on-write.json')
+
+    const state = await new StateStore(project.dir).get()
+    const entries = await fs.readdir(path.join(runDirPath(project.dir, state), 'cycle-01'))
+    expect(entries.sort()).toEqual(['hypothesis-tester--race-on-write.json', 'hypothesis-tester--stale-cache.json'])
+  })
+
+  it('writes the plain agent name when no instance is given', async () => {
+    const { path: file } = await runLog(project.dir, { agent: 'investigator', result: verdict }, clock)
+    expect(path.basename(file)).toBe('investigator.json')
+  })
+
+  it('rejects an instance that would escape the cycle directory', async () => {
+    await expect(
+      runLog(project.dir, { agent: 'hypothesis-tester', instance: '../../../state', result: verdict }, clock),
+    ).rejects.toBeInstanceOf(InvalidAgentNameError)
+  })
+
+  it('reuses the same file when the same instance is logged twice', async () => {
+    const first = await runLog(project.dir, { agent: 'hypothesis-tester', instance: 'stale-cache', result: verdict }, clock)
+    const second = await runLog(
+      project.dir,
+      { agent: 'hypothesis-tester', instance: 'stale-cache', result: { ...verdict, summary: 'Revised verdict.' } },
+      clock,
+    )
+    expect(second.path).toBe(first.path)
+    expect(JSON.parse(await fs.readFile(first.path, 'utf8')).summary).toBe('Revised verdict.')
+  })
+})
+
 describe('runLog against a cycle that closes under it', () => {
   beforeEach(async () => {
     const config = await loadConfig(project.dir)
