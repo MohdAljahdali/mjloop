@@ -7,7 +7,7 @@ Run the `build` track for: $ARGUMENTS
 
 Use the **loop-leader** skill. It owns the cycle: composing the roster, dispatching
 agents, judging the result, folding open findings into the next cycle, and committing
-each cycle that passes.
+the cycle that passes.
 
 Unlike `/loop:edit`, this track does not stop after one cycle. A failing cycle produces
 findings that become the next cycle's work, up to the track's cap — or until the run

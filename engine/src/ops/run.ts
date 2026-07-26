@@ -30,6 +30,15 @@ export function runDirPath(projectDir: string, state: State): string {
   return path.join(resolveLoopPaths(projectDir).runs, runDirName(state))
 }
 
+/**
+ * Everything a cycle produces — agent results, the roster, the findings
+ * archive — lives in one directory, named from a single place so the writers
+ * cannot drift apart on the padding.
+ */
+export function cycleDirPath(projectDir: string, state: State, cycle: number = state.cycle): string {
+  return path.join(runDirPath(projectDir, state), `cycle-${String(cycle).padStart(2, '0')}`)
+}
+
 export interface RunStartInput {
   track: string
   goal: string
@@ -60,7 +69,13 @@ export async function runStart(projectDir: string, input: RunStartInput, now: Cl
     }
     draft.findings = []
     draft.history = []
+    // The counter and the fingerprint it counts against are one piece of
+    // state. Keeping the previous run's fingerprint would arm this run's first
+    // cycle for an immediate strike — and `cycleFingerprint([], 'fail')` is a
+    // constant, so any run whose last cycle closed with no findings would do
+    // it to the next run whatever the two were about.
     draft.no_progress_count = 0
+    draft.last_fingerprint = null
     draft.halt_reason = null
   })
 
@@ -121,11 +136,6 @@ export async function cycleAdvance(
     const ref = path.join('.loop', 'runs', runDirName(draft))
     draft.history.push({ cycle: draft.cycle, agents: input.agents, result: input.result, ref })
 
-    // Findings describe one cycle's remaining work. Clearing them keeps state
-    // bounded across a long run and keeps the next fingerprint meaningful; the
-    // caller gets them back to fold into the next cycle's brief.
-    draft.findings = []
-
     if (input.result === 'pass') {
       draft.status = 'done'
       draft.current.stage = 'done'
@@ -153,6 +163,14 @@ export async function cycleAdvance(
       draft.halt_reason = `cycle cap ${track.max_cycles} reached for track ${draft.track}`
       return
     }
+
+    // Findings describe one cycle's remaining work, so the cycle opening here
+    // starts with an empty list: that keeps state bounded across a long run
+    // and keeps the next fingerprint meaningful, and the caller gets the list
+    // back to fold into the next brief. A run that ended above keeps them
+    // instead — they are the work it ended with, and the summary and HALT.md
+    // have nothing else to report it from.
+    draft.findings = []
     draft.cycle += 1
     draft.current.stage = 'compose'
   })
@@ -168,7 +186,8 @@ export async function cycleAdvance(
 /**
  * A convenience aggregate over the `cycle-NN/<agent>.json` files `runLog` has
  * already written — not a second source of truth. Losing it to an interruption
- * costs nothing: every finding is still in the per-agent files.
+ * costs nothing: every finding is still in the per-agent files — and `findings`
+ * is a reserved agent name, so this write can never land on one of them.
  */
 async function archiveFindings(
   projectDir: string,
@@ -176,7 +195,7 @@ async function archiveFindings(
   cycle: number,
   findings: Finding[],
 ): Promise<void> {
-  const dir = path.join(runDirPath(projectDir, state), `cycle-${String(cycle).padStart(2, '0')}`)
+  const dir = cycleDirPath(projectDir, state, cycle)
   await fs.mkdir(dir, { recursive: true })
   await fs.writeFile(path.join(dir, 'findings.json'), `${JSON.stringify(findings, null, 2)}\n`, 'utf8')
 }

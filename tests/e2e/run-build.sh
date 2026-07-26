@@ -15,7 +15,7 @@ workdir="$(mktemp -d)"
 cp -R "${repo_root}/tests/fixtures/tiny-app/." "${workdir}/"
 cd "${workdir}"
 
-# The build track commits each passing cycle, so the fixture needs to be a repo.
+# The build track commits the cycle that passes, so the fixture needs to be a repo.
 git init -q .
 git add -A
 git -c user.email=e2e@loop.test -c user.name=loop-e2e commit -q -m "fixture"

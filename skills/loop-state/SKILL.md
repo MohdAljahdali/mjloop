@@ -11,7 +11,8 @@ description: Use when reading or changing loop state - explains the .loop direct
 .loop/
 ├── config.yaml      tracks, limits, verify commands — hand-editable
 ├── state.json       current run — MCP-owned, never hand-edited
-├── runs/<run>/      roster.json, cycle-NN/<agent>.json, HALT.md
+├── runs/<run>/      HALT.md, and per cycle:
+│   └── cycle-NN/    roster.json, <agent>.json, findings.json
 ├── plans/           one directory per plan (later milestones)
 └── memory/          decisions and lessons (later milestones)
 ```

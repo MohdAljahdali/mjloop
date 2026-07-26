@@ -50,13 +50,28 @@ describe('runStart', () => {
     expect(second.run_id).toBe('2026-07-26-002')
   })
 
-  it('clears findings and history from the previous run', async () => {
-    await runStart(project.dir, { track: 'edit', goal: 'First' }, clock)
-    await cycleAdvance(project.dir, { agents: ['editor', 'verifier'], result: 'pass' }, clock)
-    const second = await runStart(project.dir, { track: 'edit', goal: 'Second' }, clock)
+  it('clears findings, history, and the stagnation state from the previous run', async () => {
+    const failing = {
+      status: 'fail' as const,
+      summary: 'the suite is still red',
+      evidence: [{ kind: 'command' as const, ref: 'npm test', excerpt: '1 failing' }],
+      findings: [{ severity: 'high' as const, file: 'src/a.ts', line: 6, claim: 'asserts the old label' }],
+      files_touched: [],
+      next_hint: null,
+    }
+    await runStart(project.dir, { track: 'build', goal: 'First' }, clock)
+    await runLog(project.dir, { agent: 'verifier', result: failing }, clock)
+    const first = await cycleAdvance(project.dir, { agents: ['builder', 'verifier'], result: 'fail' }, clock)
+    expect(first.fingerprint).not.toBeNull()
+
+    const second = await runStart(project.dir, { track: 'build', goal: 'Second' }, clock)
     expect(second.history).toEqual([])
     expect(second.findings).toEqual([])
     expect(second.halt_reason).toBeNull()
+    // The counter and the fingerprint it counts against reset together, or the
+    // new run's first cycle starts one strike into a stall it never had.
+    expect(second.no_progress_count).toBe(0)
+    expect(second.last_fingerprint).toBeNull()
   })
 
   it('rejects a track that is not in config', async () => {
@@ -159,20 +174,38 @@ describe('cycleAdvance findings lifecycle', () => {
     next_hint: null,
   })
 
-  it('returns the closed cycle findings and clears them from state', async () => {
-    await runStart(project.dir, { track: 'edit', goal: 'Rename' }, clock)
+  it('returns the closed cycle findings and clears them when the next cycle opens', async () => {
+    await runStart(project.dir, { track: 'build', goal: 'Rename' }, clock)
     await runLog(project.dir, { agent: 'verifier', result: failing('assertion is stale') }, clock)
 
     const { state, carried_findings } = await cycleAdvance(
       project.dir,
-      { agents: ['editor', 'verifier'], result: 'fail' },
+      { agents: ['builder', 'verifier'], result: 'fail' },
       clock,
     )
 
     expect(carried_findings).toEqual([
       { severity: 'high', file: 'src/a.ts', line: 1, claim: 'assertion is stale' },
     ])
+    expect(state.cycle).toBe(2)
     expect(state.findings).toEqual([])
+  })
+
+  it('keeps the findings on state when the run ends instead of opening a cycle', async () => {
+    await runStart(project.dir, { track: 'edit', goal: 'Rename' }, clock)
+    await runLog(project.dir, { agent: 'verifier', result: failing('assertion is stale') }, clock)
+
+    // The edit track caps at one cycle, so this fail halts the run. There is
+    // no next cycle to hand the findings to, and HALT.md and the summary have
+    // nothing but state to report them from.
+    const { state, carried_findings } = await cycleAdvance(
+      project.dir,
+      { agents: ['editor', 'verifier'], result: 'fail' },
+      clock,
+    )
+
+    expect(state.status).toBe('halted')
+    expect(state.findings).toEqual(carried_findings)
   })
 
   it('archives the closed cycle findings next to the agent results', async () => {
@@ -205,7 +238,7 @@ describe('cycleAdvance findings lifecycle', () => {
     )
     expect(state.status).toBe('done')
     expect(carried_findings).toHaveLength(1)
-    expect(state.findings).toEqual([])
+    expect(state.findings).toEqual(carried_findings)
   })
 })
 
@@ -220,10 +253,10 @@ describe('stagnation guard', () => {
   }
 
   /** Log a failing verifier result, then close the cycle. */
-  async function failCycle(claim = 'assertion is stale') {
+  async function failCycle(claim = 'assertion is stale', line = 1) {
     await runLog(
       project.dir,
-      { agent: 'verifier', result: { ...sameFailure, findings: [{ ...sameFailure.findings[0]!, claim }] } },
+      { agent: 'verifier', result: { ...sameFailure, findings: [{ ...sameFailure.findings[0]!, claim, line }] } },
       clock,
     )
     return cycleAdvance(project.dir, { agents: ['builder', 'verifier'], result: 'fail' }, clock)
@@ -259,6 +292,33 @@ describe('stagnation guard', () => {
 
     const report = await fs.readFile(path.join(runDirPath(project.dir, state), 'HALT.md'), 'utf8')
     expect(report).toContain('no progress for 2 consecutive cycles')
+  })
+
+  it('still strikes when the defect drifts down the file', async () => {
+    // The builder adds an import or a guard clause above the defect each
+    // cycle, so the verifier reports it a line lower every time. The work has
+    // not changed and neither should the verdict.
+    await failCycle('asserts the old label', 6)
+    expect((await failCycle('asserts the old label', 7)).strikes).toBe(1)
+    expect((await failCycle('asserts the old label', 8)).state.status).toBe('halted')
+  })
+
+  it('still strikes when a second agent reports the same defect', async () => {
+    await failCycle()
+    // Escalating to critic is what a leader does when a cycle stalls. It finds
+    // the same defect, so state carries two copies of one piece of work — the
+    // same work as last cycle, and it must count as such.
+    await runLog(project.dir, { agent: 'critic', result: sameFailure }, clock)
+    const { strikes } = await failCycle()
+    expect(strikes).toBe(1)
+  })
+
+  it('does not carry a strike into the next run', async () => {
+    await failCycle()
+    await runStart(project.dir, { track: 'build', goal: 'A different goal' }, clock)
+    const { state, strikes } = await failCycle()
+    expect(strikes).toBe(0)
+    expect(state.status).toBe('running')
   })
 
   it('resets the count when the remaining work changes', async () => {

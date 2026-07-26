@@ -2,7 +2,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import * as z from 'zod'
-import { AgentResultSchema } from '../schemas/contract.js'
+import { AgentNameSchema, AgentResultSchema } from '../schemas/contract.js'
 import { IdSchema, ResultSchema } from '../schemas/state.js'
 import { initLoop } from '../ops/init.js'
 import { runLog } from '../ops/log.js'
@@ -114,7 +114,7 @@ export function buildServer(): McpServer {
       description: 'Validate an agent result against the contract, persist it under the cycle, and fold findings into state.',
       inputSchema: {
         project_dir: projectDirArg,
-        agent: z.string().min(1),
+        agent: AgentNameSchema.describe('Agent name as it appears in the track roster'),
         result: AgentResultSchema,
       },
     },

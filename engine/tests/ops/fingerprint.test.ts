@@ -16,8 +16,32 @@ describe('cycleFingerprint', () => {
     expect(cycleFingerprint([A, B], 'fail')).toBe(cycleFingerprint([B, A], 'fail'))
   })
 
-  it('changes when one field of one finding changes', () => {
-    expect(cycleFingerprint([{ ...A, line: 13 }, B], 'fail')).not.toBe(cycleFingerprint([A, B], 'fail'))
+  it('ignores a repeated finding', () => {
+    // Two agents reporting one defect is the same remaining work as one agent
+    // reporting it — otherwise adding critic to a stuck cycle would reset the
+    // very counter that stall should be driving.
+    expect(cycleFingerprint([A], 'fail')).toBe(cycleFingerprint([A, A], 'fail'))
+    expect(cycleFingerprint([A, B], 'fail')).toBe(cycleFingerprint([B, A, A, B], 'fail'))
+  })
+
+  it('ignores the line a finding sits on', () => {
+    // The builder writes to the file the finding points at, so the same defect
+    // drifts down a line or two every cycle. Hashing the line would let a
+    // flailing loop escape every strike.
+    expect(cycleFingerprint([{ ...A, line: 40 }], 'fail')).toBe(cycleFingerprint([A], 'fail'))
+  })
+
+  it('ignores "./" and separator noise in the file path', () => {
+    expect(cycleFingerprint([{ ...A, file: './src/a.ts' }], 'fail')).toBe(cycleFingerprint([A], 'fail'))
+    expect(cycleFingerprint([{ ...A, file: 'src\\a.ts' }], 'fail')).toBe(cycleFingerprint([A], 'fail'))
+  })
+
+  it('changes when the severity changes', () => {
+    expect(cycleFingerprint([{ ...A, severity: 'low' }, B], 'fail')).not.toBe(cycleFingerprint([A, B], 'fail'))
+  })
+
+  it('changes when the file changes', () => {
+    expect(cycleFingerprint([{ ...A, file: 'src/c.ts' }], 'fail')).not.toBe(cycleFingerprint([A], 'fail'))
   })
 
   it('changes when the claim changes but the location does not', () => {

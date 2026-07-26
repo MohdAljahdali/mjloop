@@ -67,10 +67,11 @@ describe('a full edit cycle', () => {
 
     // every artefact of the cycle is on disk and traceable to the run
     const dir = runDirPath(project.dir, state)
-    expect(await fs.readdir(dir)).toEqual(expect.arrayContaining(['roster.json', 'cycle-01']))
+    expect(await fs.readdir(dir)).toEqual(expect.arrayContaining(['cycle-01']))
     expect((await fs.readdir(path.join(dir, 'cycle-01'))).sort()).toEqual([
       'editor.json',
       'findings.json',
+      'roster.json',
       'verifier.json',
     ])
 

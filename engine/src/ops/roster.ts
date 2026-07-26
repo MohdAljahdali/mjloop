@@ -3,7 +3,7 @@ import path from 'node:path'
 import { RosterSchema, type Roster } from '../schemas/contract.js'
 import { loadConfig } from '../store/config-store.js'
 import { StateStore } from '../store/state-store.js'
-import { NoActiveRunError, UnknownTrackError, runDirPath } from './run.js'
+import { NoActiveRunError, UnknownTrackError, cycleDirPath } from './run.js'
 
 export class RosterViolationError extends Error {
   constructor(violations: string[]) {
@@ -66,7 +66,12 @@ export async function rosterSet(projectDir: string, roster: Roster): Promise<{ p
 
   if (violations.length > 0) throw new RosterViolationError(violations)
 
-  const file = path.join(runDirPath(projectDir, state), 'roster.json')
+  // Per cycle, alongside that cycle's agent results: a roster is validated
+  // against `state.cycle`, so one file per run would leave a multi-cycle run
+  // holding only its last composition — and the stated reason for each
+  // omission, which is the whole product of the invariant, is not recoverable
+  // from anywhere else.
+  const file = path.join(cycleDirPath(projectDir, state), 'roster.json')
   await fs.mkdir(path.dirname(file), { recursive: true })
   await fs.writeFile(file, `${JSON.stringify(parsed, null, 2)}\n`, 'utf8')
   return { path: file }

@@ -1,13 +1,31 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { parseAgentResult } from '../schemas/contract.js'
+import * as z from 'zod'
+import { AgentNameSchema, parseAgentResult } from '../schemas/contract.js'
 import { StateStore, type Clock } from '../store/state-store.js'
-import { NoActiveRunError, runDirPath } from './run.js'
+import { NoActiveRunError, cycleDirPath } from './run.js'
+
+export class InvalidAgentNameError extends Error {
+  constructor(agent: string, detail: string) {
+    super(`"${agent}" is not a usable agent name — it names a file in the cycle directory:\n${detail}`)
+    this.name = 'InvalidAgentNameError'
+  }
+}
 
 export class InvalidAgentResultError extends Error {
   constructor(agent: string, detail: string) {
     super(`"${agent}" returned a result that does not match the agent contract:\n${detail}`)
     this.name = 'InvalidAgentResultError'
+  }
+}
+
+export class CycleClosedError extends Error {
+  constructor(agent: string, logged: number, current: number) {
+    super(
+      `cycle ${logged} closed while "${agent}" was being logged — the run is now at cycle ${current}. ` +
+        'Its findings were not folded in; log the result against the open cycle.',
+    )
+    this.name = 'CycleClosedError'
   }
 }
 
@@ -22,20 +40,30 @@ export async function runLog(
   input: RunLogInput,
   now: Clock = () => new Date(),
 ): Promise<{ path: string; findingsAdded: number }> {
+  const agent = AgentNameSchema.safeParse(input.agent)
+  if (!agent.success) throw new InvalidAgentNameError(input.agent, z.prettifyError(agent.error))
+
   const parsed = parseAgentResult(input.result)
-  if (!parsed.ok) throw new InvalidAgentResultError(input.agent, parsed.error)
+  if (!parsed.ok) throw new InvalidAgentResultError(agent.data, parsed.error)
 
   const store = new StateStore(projectDir, now)
   const state = await store.get()
   if (state.status !== 'running') throw new NoActiveRunError()
 
-  const cycleDir = path.join(runDirPath(projectDir, state), `cycle-${String(state.cycle).padStart(2, '0')}`)
+  const cycleDir = cycleDirPath(projectDir, state)
   await fs.mkdir(cycleDir, { recursive: true })
-  const file = path.join(cycleDir, `${input.agent}.json`)
+  const file = path.join(cycleDir, `${agent.data}.json`)
   await fs.writeFile(file, `${JSON.stringify(parsed.value, null, 2)}\n`, 'utf8')
 
   if (parsed.value.findings.length > 0) {
     await store.update((draft) => {
+      // The read above was not locked, so a `cycleAdvance` may have landed in
+      // between: it has archived the cycle these findings belong to and either
+      // opened the next one or ended the run. Pushing now would file this
+      // agent's work under a cycle that did not do it — or leave an open
+      // finding on a run that is already `done`.
+      if (draft.status !== 'running') throw new NoActiveRunError()
+      if (draft.cycle !== state.cycle) throw new CycleClosedError(agent.data, state.cycle, draft.cycle)
       draft.findings.push(...parsed.value.findings)
     })
   }

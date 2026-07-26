@@ -3,7 +3,7 @@ import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { RosterViolationError, rosterSet } from '../../src/ops/roster.js'
 import { initLoop } from '../../src/ops/init.js'
-import { runDirPath, runStart } from '../../src/ops/run.js'
+import { cycleAdvance, cycleDirPath, runStart } from '../../src/ops/run.js'
 import { StateStore } from '../../src/store/state-store.js'
 import { loadConfig, writeConfig } from '../../src/store/config-store.js'
 import { makeTmpProject, type TmpProject } from '../helpers/tmp-project.js'
@@ -24,7 +24,7 @@ beforeEach(async () => {
 afterEach(async () => { await project.cleanup() })
 
 describe('rosterSet', () => {
-  it('writes roster.json into the run directory', async () => {
+  it('writes roster.json into the cycle directory', async () => {
     const roster = {
       cycle: 1,
       selected: ['editor', 'verifier'],
@@ -33,8 +33,23 @@ describe('rosterSet', () => {
     const { path: file } = await rosterSet(project.dir, roster)
 
     const state = await new StateStore(project.dir).get()
-    expect(file).toBe(path.join(runDirPath(project.dir, state), 'roster.json'))
+    expect(file).toBe(path.join(cycleDirPath(project.dir, state), 'roster.json'))
     expect(JSON.parse(await fs.readFile(file, 'utf8'))).toEqual(roster)
+  })
+
+  it('keeps every cycle roster, so no omission and its reason is lost', async () => {
+    const first = { cycle: 1, selected: ['editor', 'verifier'], skipped: { scout: 'goal names the file', critic: 'single-file change' } }
+    await rosterSet(project.dir, first)
+    const started = await new StateStore(project.dir).get()
+    await cycleAdvance(project.dir, { agents: ['editor', 'verifier'], result: 'fail' }, clock)
+
+    const second = { cycle: 2, selected: ['editor', 'verifier', 'scout'], skipped: { critic: 'no new interface' } }
+    await rosterSet(project.dir, second)
+
+    for (const [cycle, roster] of [[1, first], [2, second]] as const) {
+      const file = path.join(cycleDirPath(project.dir, started, cycle), 'roster.json')
+      expect(JSON.parse(await fs.readFile(file, 'utf8'))).toEqual(roster)
+    }
   })
 
   it('rejects a roster missing a required agent', async () => {

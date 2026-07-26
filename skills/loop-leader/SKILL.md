@@ -59,13 +59,20 @@ failed and move on — one bad agent does not end the run.
 Anything short of that is a fail. Never declare success on your own reading of the
 code — the verdict belongs to `verifier`'s evidence, not to your impression.
 
+Only those three decide the verdict. Another agent's `fail` — `critic`'s, typically — is
+not a veto: its `medium` and `low` findings ride with the cycle instead of blocking it,
+and they are reported (step 6) or worked (step 7). They are never quietly dropped.
+
 ### 6. Close the cycle
 
 Call `loop_cycle_advance` with the agents that ran and the result. It returns the new
 state, and `carried_findings` — the findings this cycle closed with.
 
 - `done` — report what changed, cite the evidence, and commit when `gates.commit` is
-  `auto`.
+  `auto`. If `carried_findings` is not empty, the run passed with those findings still
+  open: name them as known-remaining work and point at the run directory. A cycle can
+  pass with a `medium` or `low` finding outstanding, and there is no next cycle to hand
+  it to.
 - `running` — the next cycle is open. Go to step 7.
 - `halted` — read `HALT.md`, report it plainly, and recommend a next step. Two reasons
   are possible and they are not the same problem:
@@ -88,14 +95,18 @@ Compose the roster for the new cycle from what the findings actually call for. A
 whose findings are all in one file rarely needs `scout` again — say so in `skipped`
 rather than drafting it out of habit.
 
-### 8. Commit a passing cycle
+### 8. Commit the passing cycle
 
 When `gates.commit` is `auto`, commit after the cycle passes — never before, and never by
 asking an agent to do it.
 
 The order matters: `verifier` gives the verdict, then the commit happens. Only verified
-work reaches the history, a failing cycle leaves none behind, and a run that halts at
-cycle 4 still has its first three cycles saved rather than stranded in the working tree.
+work reaches the history, and a failing cycle leaves none behind.
+
+A pass ends the run, so a run commits at most once, on its last cycle. A run that halts
+has therefore committed nothing: every cycle it ran is still in the working tree, and
+`HALT.md` is what explains it. Say that plainly when you report a halt — do not describe
+earlier cycles as saved, and do not commit unverified work to make it true.
 
 Stage only the files the cycle's agents reported in `files_touched`. Write a message that
 says what the cycle achieved, not that a loop ran.

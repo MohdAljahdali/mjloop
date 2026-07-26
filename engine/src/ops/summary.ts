@@ -13,6 +13,10 @@ export interface StateSummary {
   story: string | null
   stage: string
   goal: string | null
+  /**
+   * The open cycle's findings while a run is `running`; on a run that has
+   * ended, the ones the last cycle closed with — the same list HALT.md prints.
+   */
   findings: Record<Severity, number>
   last_cycle: { result: string; agents: string[] } | null
   halt_reason: string | null

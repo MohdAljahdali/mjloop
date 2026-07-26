@@ -65,7 +65,11 @@ run halts well before it.
 ## 4. Findings lifecycle
 
 `state.findings` holds the findings of **the current cycle only**. On close,
-`cycleAdvance` archives them, clears them, and returns them to the caller.
+`cycleAdvance` archives them, returns them to the caller, and clears them as the next
+cycle opens. A close that ends the run — a pass, a cap halt, a stagnation halt — keeps
+them instead: there is no next cycle to clear for, and they are the work the run ended
+with, which is what `HALT.md` prints and what `loop_state_get` must count. Clearing
+them there would report `0H/0M/0L` for a run that halted over an open high finding.
 
 Why not accumulate: `runLog` appends, so across cycles the same unfixed defect is
 reported again every cycle. The list grows without bound, duplicates inflate the
@@ -136,12 +140,21 @@ export function cycleFingerprint(findings: Finding[], result: Result): string
 ```
 
 A pure function in `engine/src/ops/fingerprint.ts`, so it is testable without a project
-on disk. It sorts findings by `(severity, file, line, claim)`, then hashes the sorted
-list together with the cycle result.
+on disk. It reduces each finding to `(severity, file, claim)` — with `./` and separator
+noise normalised out of `file` — then sorts, deduplicates, and hashes the result
+together with the cycle result.
 
-Sorting is required, not cosmetic: agents are dispatched concurrently, so the order
-findings land in `state.findings` varies between otherwise identical cycles. An
-unsorted hash would make every cycle look new and silently disable the guard.
+Sorting and deduplication are required, not cosmetic. Agents are dispatched
+concurrently, so the order findings land in `state.findings` varies between otherwise
+identical cycles; and one defect reported by two agents is the same remaining work as
+one defect reported by one, so adding `critic` to a stuck cycle must not reset the
+counter that stall should be driving. Either would make a repeat cycle look new and
+silently disable the guard.
+
+`line` is excluded for the same reason: the builder writes to the file its findings
+point at, so a defect that survives a cycle usually drifts a line or two. Hashing the
+line would let a flailing loop escape every strike and halt on the cycle cap instead,
+telling the operator "out of budget" about a run that was stuck from cycle 1.
 
 Evidence is excluded. Excerpts carry durations, timestamps, and counts that differ
 between runs of the same failing command — including them guarantees a unique
@@ -204,10 +217,11 @@ Three additions to `skills/loop-leader/SKILL.md`:
 `cycleAdvance` as the cycle's task list, highest severity first. A cycle with carried
 findings is not a fresh attempt at the goal; it is work on a known list.
 
-**Commit per passing cycle.** When `gates.commit` is `auto`, the leader commits after
+**Commit the passing cycle.** When `gates.commit` is `auto`, the leader commits after
 the cycle passes — never before the verdict, and never `builder`'s own commit. Only
-verified work enters the history, a failing cycle leaves none, and a run that halts at
-cycle 4 still has its first three cycles saved rather than stranded in the working tree.
+verified work enters the history, and a failing cycle leaves none. A pass ends the run,
+so a run commits at most once, on its last cycle; a run that halts has committed nothing
+and its work is still in the working tree, which is what `HALT.md` is for.
 
 **Reading the halt.** The leader distinguishes a stagnation halt from a cap halt and
 says which one happened. It may not raise `max_cycles` or reset the strike count to get
@@ -220,7 +234,7 @@ past either; both are the user's decision.
 | `src/schemas/config.ts` | Add `build` to `DEFAULT_TRACKS` |
 | `src/schemas/state.ts` | Add `last_fingerprint` with a null default; `initialState` sets it |
 | `src/ops/fingerprint.ts` | New — `cycleFingerprint` |
-| `src/ops/run.ts` | `cycleAdvance` archives and clears findings, applies the stagnation guard, returns `CycleAdvanceResult` |
+| `src/ops/run.ts` | `cycleAdvance` archives findings and clears them as the next cycle opens, applies the stagnation guard, returns `CycleAdvanceResult` |
 | `src/mcp/server.ts` | `loop_cycle_advance` returns the new shape |
 | `agents/` | New: `scout.md`, `builder.md`, `critic.md` |
 | `commands/build.md` | New — `/loop:build <goal>` |
@@ -255,15 +269,17 @@ reasons are plain strings.
 ## 11. Testing strategy
 
 **Unit — fingerprint.** Deterministic for identical input; invariant under the order
-findings arrive in; sensitive to a single changed field in a single finding; different
-for the same findings under a different result.
+findings arrive in, under a repeated finding, and under a drifting `line`; sensitive to
+a changed severity, file, or claim; different for the same findings under a different
+result.
 
 **Unit — stagnation transitions.** A repeat takes a strike; a change resets the count;
 the threshold halts with the stagnation reason and not the cap reason; a `pass` never
 takes a strike; stagnation halts before the cap when both would fire.
 
-**Unit — findings lifecycle.** `cycleAdvance` returns the closed cycle's findings,
-`state.findings` is empty afterwards, and the archive file matches what was returned.
+**Unit — findings lifecycle.** `cycleAdvance` returns the closed cycle's findings, the
+archive file matches what was returned, `state.findings` is empty once the next cycle
+opens, and still holds them on a run that ended.
 
 **Integration — a passing multi-cycle run.** Three cycles on a fixture: cycle 1 fails
 with findings, cycle 2 works the carried list and fails with fewer, cycle 3 passes.
@@ -283,7 +299,7 @@ proves the guard earns its place.
 |---|---|---|
 | Milestone scope | Build track **and** the stagnation guard | Track alone — the cap is the only brake, and it only stops after the whole budget is spent |
 | Findings | Per cycle, archived and returned on close | Accumulate with explicit resolution (an assertion without evidence); accumulate with dedup (resolved findings linger forever) |
-| Commits | Leader, after each passing cycle | `builder` commits its own work (unverified history, and the next cycle must revert git state); one commit per run (a halt strands finished cycles) |
+| Commits | Leader, after the cycle that passes — a pass ends the run, so at most one per run | `builder` commits its own work (unverified history, and the next cycle must revert git state); committing a failing cycle (unverified work in the history) |
 | Fingerprint | Findings + cycle result | Adding `files_touched` (makes the guard more permissive, not less); adding evidence excerpts (non-deterministic, disables the guard silently) |
 
 ## 13. What this unlocks

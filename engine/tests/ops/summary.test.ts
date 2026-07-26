@@ -62,6 +62,34 @@ describe('stateSummary', () => {
     expect(renderSummaryLine(summary)).toContain('cycle 1/1')
   })
 
+  it('still reports the findings a halted run ended with', async () => {
+    await initLoop(project.dir, clock)
+    await runStart(project.dir, { track: 'edit', goal: 'Rename submit label' }, clock)
+    await runLog(
+      project.dir,
+      {
+        agent: 'verifier',
+        result: {
+          status: 'fail',
+          summary: 'the assertion still expects the old label',
+          evidence: [{ kind: 'command', ref: 'npm test', excerpt: '1 failing' }],
+          findings: [{ severity: 'high', file: 'test/button.test.js', line: 6, claim: 'asserts the old label' }],
+          files_touched: [],
+          next_hint: null,
+        },
+      },
+      clock,
+    )
+    await cycleAdvance(project.dir, { agents: ['editor', 'verifier'], result: 'fail' }, clock)
+
+    // HALT.md lists this finding as open. A summary reading 0H/0M/0L would
+    // tell a resumed session the run ended with nothing outstanding.
+    const summary = await stateSummary(project.dir)
+    expect(summary.status).toBe('halted')
+    expect(summary.findings).toEqual({ high: 1, medium: 0, low: 0 })
+    expect(renderSummaryLine(summary)).toContain('findings 1H/0M/0L')
+  })
+
   it('degrades to an unknown cap when config.yaml is hand-broken', async () => {
     await initLoop(project.dir, clock)
     await runStart(project.dir, { track: 'edit', goal: 'Rename' }, clock)

@@ -9,6 +9,7 @@ Set up the loop for this project.
 3. If any of `test`, `lint`, or `build` came back null, ask the user **once** for the
    correct command and write it into `.loop/config.yaml`. Never invent a command —
    a fabricated verify command produces false passes.
-4. Tell the user the loop is ready and that `/loop:edit <request>` is available.
+4. Tell the user the loop is ready, and that `/loop:edit <request>` (one scoped cycle)
+   and `/loop:build <goal>` (as many verified cycles as it takes) are available.
 
 If `loop_init` reports `alreadyInitialised: true`, say so and stop. Do not reset state.

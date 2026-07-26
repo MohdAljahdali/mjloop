@@ -112,6 +112,17 @@ describe('a multi-cycle build run', () => {
     const report = await fs.readFile(path.join(runDirPath(project.dir, closed.state), 'HALT.md'), 'utf8')
     expect(report).toContain('no progress for 2 consecutive cycles')
     expect(report).toContain('label is wrong')
+
+    // The summary a resumed session reads agrees with the report it points at.
+    const summary = await stateSummary(project.dir)
+    expect(summary.findings).toEqual({ high: 1, medium: 0, low: 0 })
+
+    // Each cycle kept its own roster, so which agents were skipped and why is
+    // still readable for all three.
+    for (const cycle of ['cycle-01', 'cycle-02', 'cycle-03']) {
+      const file = path.join(runDirPath(project.dir, closed.state), cycle, 'roster.json')
+      expect(JSON.parse(await fs.readFile(file, 'utf8')).skipped.scout).toBe('area already mapped')
+    }
   })
 
   it('still honours the cap when the work keeps changing', async () => {
