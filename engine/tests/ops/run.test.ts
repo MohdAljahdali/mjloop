@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { NoActiveRunError, UnknownTrackError, cycleAdvance, halt, runDirName, runDirPath, runStart } from '../../src/ops/run.js'
 import { initLoop } from '../../src/ops/init.js'
 import { runLog } from '../../src/ops/log.js'
+import { planCreate, storyAdd } from '../../src/ops/plan.js'
 import { InvalidStateError, StateStore } from '../../src/store/state-store.js'
 import { loadConfig, writeConfig } from '../../src/store/config-store.js'
 import { makeTmpProject, type TmpProject } from '../helpers/tmp-project.js'
@@ -34,6 +35,10 @@ describe('runStart', () => {
   })
 
   it('names the run directory after the story when there is one', async () => {
+    await planCreate(project.dir, { slug: 'user-auth', title: 'User authentication' }, clock)
+    await storyAdd(project.dir, { plan: 'P001', title: 'Login form' }, clock)
+    await storyAdd(project.dir, { plan: 'P001', title: 'Session token' }, clock)
+
     const state = await runStart(
       project.dir,
       { track: 'edit', goal: 'Fix label', plan: 'P001', story: 'P001-S02' },
@@ -98,18 +103,49 @@ describe('runStart', () => {
   })
 
   it('rejects a story id that would escape the runs directory', async () => {
+    // The story lookup rejects it first — no such story exists — and the state
+    // schema is the second line of defence, which is what would stop such an id
+    // if it ever reached state by another route.
     await expect(
       runStart(project.dir, { track: 'edit', goal: 'x', story: '../../../tmp/x' }, clock),
+    ).rejects.toThrow()
+    await expect(
+      new StateStore(project.dir, clock).update((draft) => {
+        draft.current.story = '../../../tmp/x'
+      }),
     ).rejects.toBeInstanceOf(InvalidStateError)
     // the state write was rejected, so no run directory was created either
     await expect(fs.access(path.join(project.dir, 'tmp'))).rejects.toThrow()
     expect((await new StateStore(project.dir).get()).status).toBe('idle')
   })
 
+  it('rejects a story id that does not exist', async () => {
+    await expect(
+      runStart(project.dir, { track: 'build', goal: 'Build it', plan: 'P001', story: 'P001-S01' }, clock),
+    ).rejects.toThrow(/P001/)
+  })
+
+  it('accepts a story id that exists', async () => {
+    await planCreate(project.dir, { slug: 'user-auth', title: 'User authentication' }, clock)
+    await storyAdd(project.dir, { plan: 'P001', title: 'Login form' }, clock)
+
+    const state = await runStart(
+      project.dir,
+      { track: 'build', goal: 'Build the login form', plan: 'P001', story: 'P001-S01' },
+      clock,
+    )
+    expect(state.current.story).toBe('P001-S01')
+    expect(runDirName(state)).toContain('P001-S01')
+  })
+
   it('gives concurrent starts distinct run ids and directories', async () => {
+    await planCreate(project.dir, { slug: 'user-auth', title: 'User authentication' }, clock)
+    await storyAdd(project.dir, { plan: 'P001', title: 'Login form' }, clock)
+    await storyAdd(project.dir, { plan: 'P001', title: 'Session token' }, clock)
+
     const [a, b] = await Promise.all([
-      runStart(project.dir, { track: 'edit', goal: 'A', story: 'S-A' }, clock),
-      runStart(project.dir, { track: 'edit', goal: 'B', story: 'S-B' }, clock),
+      runStart(project.dir, { track: 'edit', goal: 'A', story: 'P001-S01' }, clock),
+      runStart(project.dir, { track: 'edit', goal: 'B', story: 'P001-S02' }, clock),
     ])
     expect(a.run_id).not.toBe(b.run_id)
     expect((await fs.stat(runDirPath(project.dir, a))).isDirectory()).toBe(true)

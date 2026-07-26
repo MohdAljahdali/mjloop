@@ -3,9 +3,12 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import * as z from 'zod'
 import { AgentNameSchema, AgentResultSchema } from '../schemas/contract.js'
+import { StoryStatusSchema } from '../schemas/plan.js'
 import { IdSchema, ResultSchema } from '../schemas/state.js'
 import { initLoop } from '../ops/init.js'
+import { renderIndex } from '../ops/index-render.js'
 import { runLog } from '../ops/log.js'
+import { planCreate, storyAdd, storyGet, storyNext, storyUpdate } from '../ops/plan.js'
 import { rosterSet } from '../ops/roster.js'
 import { cycleAdvance, halt, runStart } from '../ops/run.js'
 import { stateSummary } from '../ops/summary.js'
@@ -159,6 +162,124 @@ export function buildServer(): McpServer {
       inputSchema: { project_dir: projectDirArg, reason: z.string().min(1) },
     },
     async ({ project_dir, reason }) => guard(async () => ok(await halt(resolveProjectDir(project_dir), reason))),
+  )
+
+  server.registerTool(
+    'loop_plan_create',
+    {
+      title: 'Create a plan',
+      description: 'Allocate the next plan id, create its directory with PLAN.md, and generate an empty manifest.',
+      inputSchema: {
+        project_dir: projectDirArg,
+        slug: z.string().min(1).describe('Short filename-safe name, e.g. user-auth'),
+        title: z.string().min(1),
+        body: z.string().optional().describe('Prose for PLAN.md — the problem, the approach, the constraints'),
+      },
+    },
+    async ({ project_dir, slug, title, body }) =>
+      guard(async () =>
+        ok(
+          await planCreate(resolveProjectDir(project_dir), {
+            slug,
+            title,
+            ...(body === undefined ? {} : { body }),
+          }),
+        ),
+      ),
+  )
+
+  server.registerTool(
+    'loop_story_add',
+    {
+      title: 'Add a story to a plan',
+      description: 'Allocate the next story id in a plan, write the story file, and regenerate the manifest.',
+      inputSchema: {
+        project_dir: projectDirArg,
+        plan: z.string().min(1).describe('Plan id, e.g. P001'),
+        title: z.string().min(1),
+        acceptance: z.array(z.string().min(1)).optional().describe('Checkable conditions this story must meet'),
+        ui: z.boolean().optional(),
+        depends_on: z.array(z.string().min(1)).optional().describe('Story ids that must be done first'),
+        body: z.string().optional(),
+      },
+    },
+    async ({ project_dir, plan, title, acceptance, ui, depends_on, body }) =>
+      guard(async () =>
+        ok(
+          await storyAdd(resolveProjectDir(project_dir), {
+            plan,
+            title,
+            ...(acceptance === undefined ? {} : { acceptance }),
+            ...(ui === undefined ? {} : { ui }),
+            ...(depends_on === undefined ? {} : { depends_on }),
+            ...(body === undefined ? {} : { body }),
+          }),
+        ),
+      ),
+  )
+
+  server.registerTool(
+    'loop_story_update',
+    {
+      title: 'Update a story',
+      description: 'Change a story status, evidence, acceptance, ui flag, dependencies, or title, then regenerate the manifest.',
+      inputSchema: {
+        project_dir: projectDirArg,
+        story: z.string().min(1).describe('Story id, e.g. P001-S02'),
+        status: StoryStatusSchema.optional(),
+        evidence: z.string().min(1).nullish().describe('Run directory holding the proof this story is done'),
+        acceptance: z.array(z.string().min(1)).optional(),
+        ui: z.boolean().optional(),
+        depends_on: z.array(z.string().min(1)).optional(),
+        title: z.string().min(1).optional(),
+      },
+    },
+    async ({ project_dir, story, status, evidence, acceptance, ui, depends_on, title }) =>
+      guard(async () =>
+        ok(
+          await storyUpdate(resolveProjectDir(project_dir), story, {
+            ...(status === undefined ? {} : { status }),
+            ...(evidence === undefined ? {} : { evidence }),
+            ...(acceptance === undefined ? {} : { acceptance }),
+            ...(ui === undefined ? {} : { ui }),
+            ...(depends_on === undefined ? {} : { depends_on }),
+            ...(title === undefined ? {} : { title }),
+          }),
+        ),
+      ),
+  )
+
+  server.registerTool(
+    'loop_story_get',
+    {
+      title: 'Read a story',
+      description: 'Read one story by id, or with next=true resolve the lowest-id story that is ready to start.',
+      inputSchema: {
+        project_dir: projectDirArg,
+        story: z.string().min(1).optional().describe('Story id. Omit and set next=true to resolve the next ready story'),
+        next: z.boolean().optional(),
+        plan: z.string().min(1).optional().describe('Restrict a next=true search to one plan'),
+      },
+    },
+    async ({ project_dir, story, next, plan }) =>
+      guard(async () => {
+        const dir = resolveProjectDir(project_dir)
+        if (next === true) return ok(await storyNext(dir, plan))
+        if (story === undefined) {
+          throw new Error('give a story id, or set next=true to resolve the next ready story')
+        }
+        return ok({ story: await storyGet(dir, story), reason: 'read by id' })
+      }),
+  )
+
+  server.registerTool(
+    'loop_index_render',
+    {
+      title: 'Regenerate INDEX.md',
+      description: 'Rebuild .loop/INDEX.md from every plan manifest. Returns the rendered markdown.',
+      inputSchema: { project_dir: projectDirArg },
+    },
+    async ({ project_dir }) => guard(async () => ok(await renderIndex(resolveProjectDir(project_dir)))),
   )
 
   return server

@@ -4,6 +4,7 @@ import { findTrack } from '../schemas/config.js'
 import type { Finding, Result, State } from '../schemas/state.js'
 import { loadConfig } from '../store/config-store.js'
 import { resolveLoopPaths } from '../store/paths.js'
+import { readStory } from '../store/plan-store.js'
 import { StateStore, type Clock } from '../store/state-store.js'
 import { cycleFingerprint } from './fingerprint.js'
 
@@ -52,6 +53,10 @@ export async function runStart(projectDir: string, input: RunStartInput, now: Cl
   if (findTrack(config, input.track) === undefined) {
     throw new UnknownTrackError(input.track, Object.keys(config.tracks))
   }
+
+  // A run named after a story that does not exist would produce a run
+  // directory traceable to nothing. readStory throws StoryNotFoundError.
+  if (input.story !== undefined && input.story !== null) await readStory(projectDir, input.story)
 
   const state = await new StateStore(projectDir, now).update(async (draft) => {
     // Computed inside the locked update so two overlapping runStart calls
