@@ -41,6 +41,14 @@ export const StateSchema = z.strictObject({
   }),
   findings: z.array(FindingSchema),
   no_progress_count: z.number().int().nonnegative(),
+  /**
+   * Fingerprint of the previous cycle, compared by the stagnation guard.
+   *
+   * The default is load-bearing: `StateSchema` is a strict object, so without
+   * it every `state.json` written before this field existed would fail
+   * validation on read rather than gaining the field on its next write.
+   */
+  last_fingerprint: z.string().min(1).nullable().default(null),
   history: z.array(HistoryEntrySchema),
   halt_reason: z.string().min(1).nullable(),
   updated_at: z.iso.datetime(),
@@ -66,6 +74,7 @@ export function initialState(now: Date): State {
     current: { plan: null, story: null, stage: 'idle' },
     findings: [],
     no_progress_count: 0,
+    last_fingerprint: null,
     history: [],
     halt_reason: null,
     updated_at: now.toISOString(),

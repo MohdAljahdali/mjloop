@@ -11,6 +11,7 @@ describe('initialState', () => {
     expect(state.cycle).toBe(0)
     expect(state.run_id).toBeNull()
     expect(state.updated_at).toBe('2026-07-26T10:36:00.000Z')
+    expect(state.last_fingerprint).toBeNull()
   })
 })
 
@@ -47,6 +48,18 @@ describe('StateSchema', () => {
       findings: [{ severity: 'low' as const, file: 'src/a.ts', line: 12, claim: 'unused import' }],
       history: [{ cycle: 1, agents: ['editor', 'verifier'], result: 'fail' as const, ref: 'runs/2026-07-26-001--adhoc--edit' }],
     }
+    expect(StateSchema.safeParse(state).success).toBe(true)
+  })
+
+  it('defaults last_fingerprint to null on a document written before the field existed', () => {
+    // StateSchema is strict, so without a default every milestone-1 state.json
+    // would fail validation the first time this build reads it.
+    const { last_fingerprint, ...withoutField } = initialState(NOW)
+    expect(StateSchema.parse(withoutField).last_fingerprint).toBeNull()
+  })
+
+  it('accepts a stored fingerprint', () => {
+    const state = { ...initialState(NOW), last_fingerprint: 'a'.repeat(64) }
     expect(StateSchema.safeParse(state).success).toBe(true)
   })
 })
