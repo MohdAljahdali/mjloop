@@ -61,12 +61,44 @@ code — the verdict belongs to `verifier`'s evidence, not to your impression.
 
 ### 6. Close the cycle
 
-Call `loop_cycle_advance` with the agents that ran and the result.
+Call `loop_cycle_advance` with the agents that ran and the result. It returns the new
+state, and `carried_findings` — the findings this cycle closed with.
 
-- `done` — report what changed, cite the evidence, and commit when `gates.commit` is `auto`.
-- `running` — the next cycle opens; fold the open findings into it as the work to do.
-- `halted` — the cap was reached. Read `HALT.md`, report it plainly, and recommend a
-  next step. Do not raise the cap on your own.
+- `done` — report what changed, cite the evidence, and commit when `gates.commit` is
+  `auto`.
+- `running` — the next cycle is open. Go to step 7.
+- `halted` — read `HALT.md`, report it plainly, and recommend a next step. Two reasons
+  are possible and they are not the same problem:
+  - *cycle cap reached* — the work needed more cycles than the track allows.
+  - *no progress for N consecutive cycles* — the loop closed N cycles in a row with the
+    same work remaining. More cycles would not have helped. Say what stayed unfixed.
+
+  Do not raise `max_cycles` and do not restart to reset the strike count. Both are the
+  user's decision.
+
+### 7. Fold the findings forward
+
+On a multi-cycle track, a cycle after the first is not a fresh attempt at the goal — it
+is work on a known list.
+
+Put `carried_findings` in the next cycle's brief as the task list, highest severity
+first. `builder` works that list; it does not re-derive the goal from scratch.
+
+Compose the roster for the new cycle from what the findings actually call for. A cycle
+whose findings are all in one file rarely needs `scout` again — say so in `skipped`
+rather than drafting it out of habit.
+
+### 8. Commit a passing cycle
+
+When `gates.commit` is `auto`, commit after the cycle passes — never before, and never by
+asking an agent to do it.
+
+The order matters: `verifier` gives the verdict, then the commit happens. Only verified
+work reaches the history, a failing cycle leaves none behind, and a run that halts at
+cycle 4 still has its first three cycles saved rather than stranded in the working tree.
+
+Stage only the files the cycle's agents reported in `files_touched`. Write a message that
+says what the cycle achieved, not that a loop ran.
 
 ## What you never do
 
@@ -76,3 +108,6 @@ Call `loop_cycle_advance` with the agents that ran and the result.
 - Never invent a verify command. A missing command is a `blocked`, and you ask once.
 - Never implement the change yourself. If no agent fits, say so; that is a missing agent,
   not your job.
+- Never let `builder` commit its own work — the verdict comes first, then the commit.
+- Never restart a run to clear the strike count. A stagnation halt is information, not an
+  obstacle.
