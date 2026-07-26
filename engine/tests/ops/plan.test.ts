@@ -1,5 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { DependencyError, planCreate, storyAdd, storyUpdate } from '../../src/ops/plan.js'
+import {
+  DependencyError,
+  planCreate,
+  storyAdd,
+  storyGet,
+  storyNext,
+  storyUpdate,
+} from '../../src/ops/plan.js'
 import {
   PlanNotFoundError,
   StoryNotFoundError,
@@ -202,5 +209,90 @@ describe('dependency validation', () => {
     await expect(
       storyAdd(project.dir, { plan: 'P001', title: 'Fourth', depends_on: ['P001-S99'] }, clock),
     ).rejects.toBeInstanceOf(DependencyError)
+  })
+})
+
+describe('storyNext', () => {
+  beforeEach(async () => {
+    await planCreate(project.dir, { slug: 'user-auth', title: 'User authentication' }, clock)
+    await storyAdd(project.dir, { plan: 'P001', title: 'Login form' }, clock)
+    await storyAdd(project.dir, { plan: 'P001', title: 'Session token', depends_on: ['P001-S01'] }, clock)
+    await storyAdd(project.dir, { plan: 'P001', title: 'Logout', depends_on: ['P001-S02'] }, clock)
+  })
+
+  it('picks the lowest-id todo story with no unmet dependencies', async () => {
+    const next = await storyNext(project.dir)
+    expect(next.story?.frontmatter.id).toBe('P001-S01')
+  })
+
+  it('skips a story whose dependency is not done', async () => {
+    await storyUpdate(project.dir, 'P001-S01', { status: 'doing' }, clock)
+    const next = await storyNext(project.dir)
+    expect(next.story).toBeNull()
+    expect(next.reason).toContain('P001-S02')
+  })
+
+  it('advances once the dependency is done', async () => {
+    await storyUpdate(project.dir, 'P001-S01', { status: 'done' }, clock)
+    expect((await storyNext(project.dir)).story?.frontmatter.id).toBe('P001-S02')
+  })
+
+  it('returns nothing with a reason when every story is done', async () => {
+    for (const id of ['P001-S01', 'P001-S02', 'P001-S03']) {
+      await storyUpdate(project.dir, id, { status: 'done' }, clock)
+    }
+    const next = await storyNext(project.dir)
+    expect(next.story).toBeNull()
+    expect(next.reason).toContain('done')
+  })
+
+  it('ignores stories that are doing or blocked', async () => {
+    await storyUpdate(project.dir, 'P001-S01', { status: 'blocked' }, clock)
+    const next = await storyNext(project.dir)
+    expect(next.story).toBeNull()
+    expect(next.reason).toMatch(/blocked|waiting/i)
+  })
+
+  it('searches every plan when none is named', async () => {
+    await storyUpdate(project.dir, 'P001-S01', { status: 'done' }, clock)
+    await storyUpdate(project.dir, 'P001-S02', { status: 'done' }, clock)
+    await storyUpdate(project.dir, 'P001-S03', { status: 'done' }, clock)
+    await planCreate(project.dir, { slug: 'billing', title: 'Billing' }, clock)
+    await storyAdd(project.dir, { plan: 'P002', title: 'Invoices' }, clock)
+
+    expect((await storyNext(project.dir)).story?.frontmatter.id).toBe('P002-S01')
+  })
+
+  it('restricts the search to one plan when asked', async () => {
+    await planCreate(project.dir, { slug: 'billing', title: 'Billing' }, clock)
+    await storyAdd(project.dir, { plan: 'P002', title: 'Invoices' }, clock)
+
+    expect((await storyNext(project.dir, 'P002')).story?.frontmatter.id).toBe('P002-S01')
+  })
+
+  it('returns nothing for a project with no plans', async () => {
+    const empty = await makeTmpProject()
+    try {
+      const next = await storyNext(empty.dir)
+      expect(next.story).toBeNull()
+      expect(next.reason).toContain('no plans')
+    } finally {
+      await empty.cleanup()
+    }
+  })
+})
+
+describe('storyGet', () => {
+  it('reads a story by id', async () => {
+    await planCreate(project.dir, { slug: 'user-auth', title: 'User authentication' }, clock)
+    await storyAdd(project.dir, { plan: 'P001', title: 'Login form', acceptance: ['Shows an error on bad input'] }, clock)
+
+    const story = await storyGet(project.dir, 'P001-S01')
+    expect(story.frontmatter.acceptance).toEqual(['Shows an error on bad input'])
+  })
+
+  it('throws StoryNotFoundError for an unknown id', async () => {
+    await planCreate(project.dir, { slug: 'user-auth', title: 'User authentication' }, clock)
+    await expect(storyGet(project.dir, 'P001-S99')).rejects.toBeInstanceOf(StoryNotFoundError)
   })
 })

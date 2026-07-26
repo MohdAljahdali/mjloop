@@ -196,3 +196,48 @@ export async function storyUpdate(
     return { id: storyId, file, manifest }
   })
 }
+
+export async function storyGet(projectDir: string, storyId: string): Promise<Story> {
+  return readStory(projectDir, storyId)
+}
+
+/**
+ * Resolve `--next`: the lowest-id story that is ready to start.
+ *
+ * Returning nothing is a normal answer rather than an error — every story may
+ * be done, or the remainder may be waiting on something. The reason says which,
+ * because "nothing to do" and "everything is stuck" call for opposite responses.
+ */
+export async function storyNext(
+  projectDir: string,
+  planId?: string,
+): Promise<{ story: Story | null; reason: string }> {
+  const planIds = planId === undefined ? await listPlanIds(projectDir) : [planId]
+  if (planIds.length === 0) return { story: null, reason: 'no plans exist yet — create one first' }
+
+  const waiting: string[] = []
+  let sawAny = false
+  let allDone = true
+
+  for (const id of planIds) {
+    const stories = await listStories(projectDir, id)
+    const done = new Set(
+      stories.filter((story) => story.frontmatter.status === 'done').map((story) => story.frontmatter.id),
+    )
+
+    for (const story of stories) {
+      sawAny = true
+      if (story.frontmatter.status !== 'done') allDone = false
+      if (story.frontmatter.status !== 'todo') continue
+
+      const unmet = story.frontmatter.depends_on.filter((dependency) => !done.has(dependency))
+      if (unmet.length === 0) return { story, reason: `${story.frontmatter.id} is todo with every dependency done` }
+      waiting.push(`${story.frontmatter.id} waiting on ${unmet.join(', ')}`)
+    }
+  }
+
+  if (!sawAny) return { story: null, reason: 'no stories exist yet — add one first' }
+  if (allDone) return { story: null, reason: 'every story is done' }
+  if (waiting.length > 0) return { story: null, reason: `nothing is ready: ${waiting.join('; ')}` }
+  return { story: null, reason: 'no story is todo — the remainder is doing or blocked' }
+}
