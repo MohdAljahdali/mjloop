@@ -126,7 +126,8 @@ export function buildServer(): McpServer {
     'loop_cycle_advance',
     {
       title: 'Close the cycle',
-      description: 'Record the cycle outcome. pass finishes the run; otherwise the next cycle opens unless the cap is reached.',
+      description:
+        'Record the cycle outcome. pass finishes the run; otherwise the next cycle opens unless the cap is reached. Returns the new state plus carried_findings — the closed cycle findings, which are the next cycle task list.',
       inputSchema: {
         project_dir: projectDirArg,
         agents: z.array(z.string().min(1)).min(1),

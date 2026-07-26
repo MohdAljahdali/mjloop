@@ -62,13 +62,17 @@ describe('a full edit cycle', () => {
     )
     await runLog(project.dir, { agent: 'verifier', result: PASSING_VERIFIER }, clock)
 
-    const state = await cycleAdvance(project.dir, { agents: ['editor', 'verifier'], result: 'pass' }, clock)
+    const { state } = await cycleAdvance(project.dir, { agents: ['editor', 'verifier'], result: 'pass' }, clock)
     expect(state.status).toBe('done')
 
     // every artefact of the cycle is on disk and traceable to the run
     const dir = runDirPath(project.dir, state)
     expect(await fs.readdir(dir)).toEqual(expect.arrayContaining(['roster.json', 'cycle-01']))
-    expect((await fs.readdir(path.join(dir, 'cycle-01'))).sort()).toEqual(['editor.json', 'verifier.json'])
+    expect((await fs.readdir(path.join(dir, 'cycle-01'))).sort()).toEqual([
+      'editor.json',
+      'findings.json',
+      'verifier.json',
+    ])
 
     const summary = await stateSummary(project.dir)
     expect(summary.status).toBe('done')
@@ -95,7 +99,7 @@ describe('a full edit cycle', () => {
       clock,
     )
 
-    const state = await cycleAdvance(project.dir, { agents: ['editor', 'verifier'], result: 'fail' }, clock)
+    const { state } = await cycleAdvance(project.dir, { agents: ['editor', 'verifier'], result: 'fail' }, clock)
     expect(state.status).toBe('halted')
 
     const report = await fs.readFile(path.join(runDirPath(project.dir, state), 'HALT.md'), 'utf8')

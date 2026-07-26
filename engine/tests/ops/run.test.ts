@@ -3,6 +3,7 @@ import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { NoActiveRunError, UnknownTrackError, cycleAdvance, halt, runDirName, runDirPath, runStart } from '../../src/ops/run.js'
 import { initLoop } from '../../src/ops/init.js'
+import { runLog } from '../../src/ops/log.js'
 import { InvalidStateError, StateStore } from '../../src/store/state-store.js'
 import { loadConfig, writeConfig } from '../../src/store/config-store.js'
 import { makeTmpProject, type TmpProject } from '../helpers/tmp-project.js'
@@ -85,7 +86,7 @@ describe('runStart', () => {
 describe('cycleAdvance', () => {
   it('records the cycle and finishes the run on pass', async () => {
     await runStart(project.dir, { track: 'edit', goal: 'Rename' }, clock)
-    const state = await cycleAdvance(project.dir, { agents: ['editor', 'verifier'], result: 'pass' }, clock)
+    const { state } = await cycleAdvance(project.dir, { agents: ['editor', 'verifier'], result: 'pass' }, clock)
 
     expect(state.status).toBe('done')
     expect(state.current.stage).toBe('done')
@@ -97,7 +98,7 @@ describe('cycleAdvance', () => {
 
   it('halts with a cycle-cap reason when the track cap is reached', async () => {
     await runStart(project.dir, { track: 'edit', goal: 'Rename' }, clock)
-    const state = await cycleAdvance(project.dir, { agents: ['editor', 'verifier'], result: 'fail' }, clock)
+    const { state } = await cycleAdvance(project.dir, { agents: ['editor', 'verifier'], result: 'fail' }, clock)
 
     expect(state.status).toBe('halted')
     expect(state.current.stage).toBe('halted')
@@ -115,7 +116,7 @@ describe('cycleAdvance', () => {
     await writeConfig(project.dir, config)
 
     await runStart(project.dir, { track: 'edit', goal: 'Rename' }, clock)
-    const state = await cycleAdvance(project.dir, { agents: ['editor', 'verifier'], result: 'fail' }, clock)
+    const { state } = await cycleAdvance(project.dir, { agents: ['editor', 'verifier'], result: 'fail' }, clock)
 
     expect(state.status).toBe('running')
     expect(state.cycle).toBe(2)
@@ -145,6 +146,66 @@ describe('cycleAdvance', () => {
     expect(state.cycle).toBe(2)
     expect(state.status).toBe('halted')
     expect(state.halt_reason).toBe('cycle cap 2 reached for track edit')
+  })
+})
+
+describe('cycleAdvance findings lifecycle', () => {
+  const failing = (claim: string) => ({
+    status: 'fail' as const,
+    summary: 'the suite is still red',
+    evidence: [{ kind: 'command' as const, ref: 'npm test', excerpt: '1 failing' }],
+    findings: [{ severity: 'high' as const, file: 'src/a.ts', line: 1, claim }],
+    files_touched: [],
+    next_hint: null,
+  })
+
+  it('returns the closed cycle findings and clears them from state', async () => {
+    await runStart(project.dir, { track: 'edit', goal: 'Rename' }, clock)
+    await runLog(project.dir, { agent: 'verifier', result: failing('assertion is stale') }, clock)
+
+    const { state, carried_findings } = await cycleAdvance(
+      project.dir,
+      { agents: ['editor', 'verifier'], result: 'fail' },
+      clock,
+    )
+
+    expect(carried_findings).toEqual([
+      { severity: 'high', file: 'src/a.ts', line: 1, claim: 'assertion is stale' },
+    ])
+    expect(state.findings).toEqual([])
+  })
+
+  it('archives the closed cycle findings next to the agent results', async () => {
+    const started = await runStart(project.dir, { track: 'edit', goal: 'Rename' }, clock)
+    await runLog(project.dir, { agent: 'verifier', result: failing('assertion is stale') }, clock)
+    const { carried_findings } = await cycleAdvance(
+      project.dir,
+      { agents: ['editor', 'verifier'], result: 'fail' },
+      clock,
+    )
+
+    const file = path.join(runDirPath(project.dir, started), 'cycle-01', 'findings.json')
+    expect(JSON.parse(await fs.readFile(file, 'utf8'))).toEqual(carried_findings)
+  })
+
+  it('carries a passing cycle findings too, with no next cycle to hand them to', async () => {
+    await runStart(project.dir, { track: 'edit', goal: 'Rename' }, clock)
+    await runLog(
+      project.dir,
+      {
+        agent: 'verifier',
+        result: { ...failing('minor nit'), status: 'pass', findings: [{ severity: 'low', file: 'src/a.ts', line: 2, claim: 'minor nit' }] },
+      },
+      clock,
+    )
+    const { state, carried_findings } = await cycleAdvance(
+      project.dir,
+      { agents: ['editor', 'verifier'], result: 'pass' },
+      clock,
+    )
+    expect(state.status).toBe('done')
+    expect(carried_findings).toHaveLength(1)
+    expect(state.findings).toEqual([])
   })
 })
 

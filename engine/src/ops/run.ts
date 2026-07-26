@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import type { Result, State } from '../schemas/state.js'
+import type { Finding, Result, State } from '../schemas/state.js'
 import { loadConfig } from '../store/config-store.js'
 import { resolveLoopPaths } from '../store/paths.js'
 import { StateStore, type Clock } from '../store/state-store.js'
@@ -72,6 +72,21 @@ export interface CycleAdvanceInput {
   result: Result
 }
 
+export interface CycleAdvanceResult {
+  state: State
+  /**
+   * The closed cycle's findings. On a fail these are the next cycle's task
+   * list. On a pass they are informational — the leader's pass rule forbids an
+   * open high-severity finding, but a medium or low one may survive a passing
+   * cycle and there is no next cycle to carry it to.
+   */
+  carried_findings: Finding[]
+  /** `null` on a pass: the run is over, so no fingerprint is recorded. */
+  fingerprint: string | null
+  /** `state.no_progress_count` after this cycle. */
+  strikes: number
+}
+
 /**
  * Close the current cycle. `pass` finishes the run; anything else opens the
  * next cycle unless the track's cap is reached, in which case the run halts.
@@ -80,9 +95,14 @@ export async function cycleAdvance(
   projectDir: string,
   input: CycleAdvanceInput,
   now: Clock = () => new Date(),
-): Promise<State> {
+): Promise<CycleAdvanceResult> {
   const store = new StateStore(projectDir, now)
   const config = await loadConfig(projectDir)
+
+  // Captured inside the locked callback so the archive written afterwards
+  // describes exactly the findings the state transition consumed.
+  let carried: Finding[] = []
+  let closedCycle = 0
 
   // Status and cap are evaluated against the draft inside the locked update,
   // not a pre-lock snapshot: two racing advances (or an advance racing a
@@ -93,8 +113,17 @@ export async function cycleAdvance(
     const track = config.tracks[draft.track]
     if (track === undefined) throw new UnknownTrackError(draft.track, Object.keys(config.tracks))
 
+    carried = [...draft.findings]
+    closedCycle = draft.cycle
+
     const ref = path.join('.loop', 'runs', runDirName(draft))
     draft.history.push({ cycle: draft.cycle, agents: input.agents, result: input.result, ref })
+
+    // Findings describe one cycle's remaining work. Clearing them keeps state
+    // bounded across a long run and keeps the next fingerprint meaningful; the
+    // caller gets them back to fold into the next cycle's brief.
+    draft.findings = []
+
     if (input.result === 'pass') {
       draft.status = 'done'
       draft.current.stage = 'done'
@@ -110,8 +139,28 @@ export async function cycleAdvance(
     draft.current.stage = 'compose'
   })
 
-  if (after.status === 'halted') await writeHaltReport(projectDir, after)
-  return after
+  await archiveFindings(projectDir, after, closedCycle, carried)
+  // The report names the findings the halted cycle closed with — state no
+  // longer holds them, so they are passed in explicitly.
+  if (after.status === 'halted') await writeHaltReport(projectDir, after, carried)
+
+  return { state: after, carried_findings: carried, fingerprint: null, strikes: after.no_progress_count }
+}
+
+/**
+ * A convenience aggregate over the `cycle-NN/<agent>.json` files `runLog` has
+ * already written — not a second source of truth. Losing it to an interruption
+ * costs nothing: every finding is still in the per-agent files.
+ */
+async function archiveFindings(
+  projectDir: string,
+  state: State,
+  cycle: number,
+  findings: Finding[],
+): Promise<void> {
+  const dir = path.join(runDirPath(projectDir, state), `cycle-${String(cycle).padStart(2, '0')}`)
+  await fs.mkdir(dir, { recursive: true })
+  await fs.writeFile(path.join(dir, 'findings.json'), `${JSON.stringify(findings, null, 2)}\n`, 'utf8')
 }
 
 export async function halt(projectDir: string, reason: string, now: Clock = () => new Date()): Promise<State> {
@@ -150,16 +199,16 @@ async function nextRunId(projectDir: string, now: Date, previousRunId: string | 
   return `${date}-${String(next).padStart(3, '0')}`
 }
 
-async function writeHaltReport(projectDir: string, state: State): Promise<void> {
+async function writeHaltReport(projectDir: string, state: State, open: Finding[] = state.findings): Promise<void> {
   const dir = runDirPath(projectDir, state)
   await fs.mkdir(dir, { recursive: true })
 
   const cycles = state.history
     .map((entry) => `| ${entry.cycle} | ${entry.agents.join(', ')} | ${entry.result} |`)
     .join('\n')
-  const findings = state.findings.length === 0
+  const findings = open.length === 0
     ? '_none recorded_'
-    : state.findings.map((f) => `- **${f.severity}** ${f.file}:${f.line} — ${f.claim}`).join('\n')
+    : open.map((f) => `- **${f.severity}** ${f.file}:${f.line} — ${f.claim}`).join('\n')
 
   const report = `# Halt report — ${state.run_id}
 

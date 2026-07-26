@@ -96,7 +96,7 @@ describe('tool behaviour', () => {
       name: 'loop_cycle_advance',
       arguments: { project_dir: project.dir, agents: ['editor', 'verifier'], result: 'pass' },
     })
-    expect(JSON.parse(textOf(advanced)).status).toBe('done')
+    expect(JSON.parse(textOf(advanced)).state.status).toBe('done')
   })
 
   it('returns a tool error, not a crash, when the roster drops verifier', async () => {
