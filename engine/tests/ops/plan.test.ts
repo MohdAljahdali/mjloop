@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { planCreate, storyAdd } from '../../src/ops/plan.js'
-import { PlanNotFoundError, listPlanIds, readStory } from '../../src/store/plan-store.js'
+import { DependencyError, planCreate, storyAdd, storyUpdate } from '../../src/ops/plan.js'
+import {
+  PlanNotFoundError,
+  StoryNotFoundError,
+  listPlanIds,
+  readStory,
+} from '../../src/store/plan-store.js'
 import { makeTmpProject, type TmpProject } from '../helpers/tmp-project.js'
 
 const NOW = new Date('2026-07-27T09:00:00.000Z')
@@ -106,5 +111,96 @@ describe('storyAdd', () => {
       storyAdd(project.dir, { plan: 'P001', title: 'Two' }, clock),
     ])
     expect(new Set([first.id, second.id]).size).toBe(2)
+  })
+})
+
+describe('storyUpdate', () => {
+  beforeEach(async () => {
+    await planCreate(project.dir, { slug: 'user-auth', title: 'User authentication' }, clock)
+    await storyAdd(project.dir, { plan: 'P001', title: 'Login form' }, clock)
+    await storyAdd(project.dir, { plan: 'P001', title: 'Session token', depends_on: ['P001-S01'] }, clock)
+  })
+
+  it('changes the status and regenerates the manifest', async () => {
+    const updated = await storyUpdate(project.dir, 'P001-S01', { status: 'done' }, clock)
+    expect(updated.manifest.stories[0]?.status).toBe('done')
+    expect((await readStory(project.dir, 'P001-S01')).frontmatter.status).toBe('done')
+  })
+
+  it('records an evidence path', async () => {
+    await storyUpdate(project.dir, 'P001-S01', { status: 'done', evidence: '.loop/runs/2026-07-27-001--P001-S01--build' }, clock)
+    expect((await readStory(project.dir, 'P001-S01')).frontmatter.evidence).toBe(
+      '.loop/runs/2026-07-27-001--P001-S01--build',
+    )
+  })
+
+  it('leaves untouched fields alone', async () => {
+    await storyUpdate(project.dir, 'P001-S02', { status: 'doing' }, clock)
+    const story = await readStory(project.dir, 'P001-S02')
+    expect(story.frontmatter.depends_on).toEqual(['P001-S01'])
+    expect(story.frontmatter.title).toBe('Session token')
+  })
+
+  it('throws StoryNotFoundError for a story that does not exist', async () => {
+    await expect(storyUpdate(project.dir, 'P001-S99', { status: 'done' }, clock)).rejects.toBeInstanceOf(
+      StoryNotFoundError,
+    )
+  })
+
+  it('renames the file when the title changes, leaving one file for the story', async () => {
+    await storyUpdate(project.dir, 'P001-S01', { title: 'Login screen' }, clock)
+    const story = await readStory(project.dir, 'P001-S01')
+    expect(story.file).toContain('P001-S01-login-screen.md')
+
+    const manifest = (await storyUpdate(project.dir, 'P001-S01', { status: 'doing' }, clock)).manifest
+    expect(manifest.stories.filter((entry) => entry.id === 'P001-S01')).toHaveLength(1)
+  })
+})
+
+describe('dependency validation', () => {
+  beforeEach(async () => {
+    await planCreate(project.dir, { slug: 'user-auth', title: 'User authentication' }, clock)
+    await storyAdd(project.dir, { plan: 'P001', title: 'Login form' }, clock)
+    await storyAdd(project.dir, { plan: 'P001', title: 'Session token' }, clock)
+    await storyAdd(project.dir, { plan: 'P001', title: 'Logout' }, clock)
+  })
+
+  it('rejects a dependency on a story that does not exist', async () => {
+    await expect(
+      storyUpdate(project.dir, 'P001-S02', { depends_on: ['P001-S99'] }, clock),
+    ).rejects.toBeInstanceOf(DependencyError)
+  })
+
+  it('rejects a dependency on itself', async () => {
+    await expect(
+      storyUpdate(project.dir, 'P001-S02', { depends_on: ['P001-S02'] }, clock),
+    ).rejects.toBeInstanceOf(DependencyError)
+  })
+
+  it('rejects a two-story cycle', async () => {
+    await storyUpdate(project.dir, 'P001-S02', { depends_on: ['P001-S01'] }, clock)
+    await expect(
+      storyUpdate(project.dir, 'P001-S01', { depends_on: ['P001-S02'] }, clock),
+    ).rejects.toThrow(/cycle/i)
+  })
+
+  it('rejects a three-story cycle', async () => {
+    await storyUpdate(project.dir, 'P001-S02', { depends_on: ['P001-S01'] }, clock)
+    await storyUpdate(project.dir, 'P001-S03', { depends_on: ['P001-S02'] }, clock)
+    await expect(
+      storyUpdate(project.dir, 'P001-S01', { depends_on: ['P001-S03'] }, clock),
+    ).rejects.toThrow(/cycle/i)
+  })
+
+  it('accepts a diamond', async () => {
+    await storyUpdate(project.dir, 'P001-S02', { depends_on: ['P001-S01'] }, clock)
+    await storyUpdate(project.dir, 'P001-S03', { depends_on: ['P001-S01', 'P001-S02'] }, clock)
+    expect((await readStory(project.dir, 'P001-S03')).frontmatter.depends_on).toEqual(['P001-S01', 'P001-S02'])
+  })
+
+  it('rejects a dangling dependency at add time too', async () => {
+    await expect(
+      storyAdd(project.dir, { plan: 'P001', title: 'Fourth', depends_on: ['P001-S99'] }, clock),
+    ).rejects.toBeInstanceOf(DependencyError)
   })
 })

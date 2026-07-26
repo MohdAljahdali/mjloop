@@ -1,9 +1,23 @@
 import fs from 'node:fs/promises'
 import * as z from 'zod'
-import { PlanFrontmatterSchema, StoryFrontmatterSchema, type Manifest } from '../schemas/plan.js'
+import {
+  PlanFrontmatterSchema,
+  StoryFrontmatterSchema,
+  type Manifest,
+  type StoryFrontmatter,
+  type StoryStatus,
+} from '../schemas/plan.js'
 import { withLock } from '../store/lock.js'
 import { resolveLoopPaths } from '../store/paths.js'
-import { findPlanDir, listPlanIds, listStories, writePlan, writeStory } from '../store/plan-store.js'
+import {
+  findPlanDir,
+  listPlanIds,
+  listStories,
+  readStory,
+  writePlan,
+  writeStory,
+  type Story,
+} from '../store/plan-store.js'
 import type { Clock } from '../store/state-store.js'
 import { renderManifest } from './manifest.js'
 
@@ -93,8 +107,92 @@ export async function storyAdd(
     })
     if (!frontmatter.success) throw new InvalidPlanInputError(z.prettifyError(frontmatter.error))
 
+    assertDependenciesResolve(existing, frontmatter.data)
+
     const file = await writeStory(projectDir, { frontmatter: frontmatter.data, body: input.body ?? '' })
     const manifest = await renderManifest(projectDir, input.plan, now)
     return { id, file, manifest }
+  })
+}
+
+export class DependencyError extends Error {
+  constructor(detail: string) {
+    super(detail)
+    this.name = 'DependencyError'
+  }
+}
+
+/**
+ * A dangling edge makes `--next` unanswerable and a cycle makes it silently
+ * return nothing forever, so both are rejected where they are introduced
+ * rather than discovered later by a leader with no way to explain the stall.
+ */
+export function assertDependenciesResolve(stories: Story[], candidate: StoryFrontmatter): void {
+  const byId = new Map(stories.map((story) => [story.frontmatter.id, story.frontmatter.depends_on]))
+  byId.set(candidate.id, candidate.depends_on)
+
+  for (const dependency of candidate.depends_on) {
+    if (dependency === candidate.id) {
+      throw new DependencyError(`"${candidate.id}" cannot depend on itself`)
+    }
+    if (!byId.has(dependency)) {
+      throw new DependencyError(`"${candidate.id}" depends on "${dependency}", which does not exist in this plan`)
+    }
+  }
+
+  // Depth-first search from the candidate. Only the candidate's edges changed,
+  // so any new cycle must pass through it.
+  const seen = new Set<string>()
+  const stack: string[] = []
+
+  const visit = (id: string): void => {
+    if (stack.includes(id)) {
+      throw new DependencyError(`dependency cycle: ${[...stack.slice(stack.indexOf(id)), id].join(' -> ')}`)
+    }
+    if (seen.has(id)) return
+    seen.add(id)
+    stack.push(id)
+    for (const next of byId.get(id) ?? []) visit(next)
+    stack.pop()
+  }
+
+  visit(candidate.id)
+}
+
+export interface StoryPatch {
+  status?: StoryStatus
+  evidence?: string | null
+  acceptance?: string[]
+  ui?: boolean
+  depends_on?: string[]
+  title?: string
+}
+
+export async function storyUpdate(
+  projectDir: string,
+  storyId: string,
+  patch: StoryPatch,
+  now: Clock = () => new Date(),
+): Promise<{ id: string; file: string; manifest: Manifest }> {
+  const paths = resolveLoopPaths(projectDir)
+  const planId = storyId.slice(0, 4)
+
+  return withLock(paths.lock, async () => {
+    const current = await readStory(projectDir, storyId)
+    const merged = StoryFrontmatterSchema.safeParse({ ...current.frontmatter, ...patch })
+    if (!merged.success) throw new InvalidPlanInputError(z.prettifyError(merged.error))
+
+    const siblings = (await listStories(projectDir, planId)).filter(
+      (story) => story.frontmatter.id !== storyId,
+    )
+    assertDependenciesResolve(siblings, merged.data)
+
+    const file = await writeStory(projectDir, { frontmatter: merged.data, body: current.body })
+    // A title change renames the file; the old one would otherwise linger and
+    // the manifest would list the story twice.
+    if (file !== current.file) await fs.rm(current.file, { force: true })
+
+    const manifest = await renderManifest(projectDir, planId, now)
+    return { id: storyId, file, manifest }
   })
 }
