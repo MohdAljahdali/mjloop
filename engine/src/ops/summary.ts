@@ -20,6 +20,11 @@ export interface StateSummary {
   findings: Record<Severity, number>
   last_cycle: { result: string; agents: string[] } | null
   halt_reason: string | null
+  /**
+   * The state of the running track's gate: `null` when the track has no gate,
+   * otherwise whether the defect has been proven and by which command.
+   */
+  reproduction: { proven: boolean; ref: string | null } | null
 }
 
 const NO_FINDINGS: Record<Severity, number> = { high: 0, medium: 0, low: 0 }
@@ -47,17 +52,23 @@ export async function stateSummary(projectDir: string): Promise<StateSummary> {
       findings: { ...NO_FINDINGS },
       last_cycle: null,
       halt_reason: null,
+      reproduction: null,
     }
   }
 
   let maxCycles: number | null = null
+  let reproduction: { proven: boolean; ref: string | null } | null = null
   try {
     const config = await loadConfig(projectDir)
-    maxCycles = state.track === null ? null : config.tracks[state.track]?.max_cycles ?? null
+    const track = state.track === null ? undefined : config.tracks[state.track]
+    maxCycles = track?.max_cycles ?? null
+    if (track?.gate !== undefined) {
+      reproduction = { proven: state.reproduction !== null, ref: state.reproduction?.ref ?? null }
+    }
   } catch {
-    // A missing or hand-broken config.yaml (HALT.md tells users to edit it)
-    // must not take the summary — and with it the SessionStart hook — down.
-    // The cap simply degrades to unknown.
+    // A config that cannot be read degrades the summary; it does not fail it.
+    // The SessionStart hook renders this line on every session, and a YAML
+    // typo in a hand-edited config must not turn that into a stack trace.
   }
 
   const findings = { ...NO_FINDINGS }
@@ -79,6 +90,7 @@ export async function stateSummary(projectDir: string): Promise<StateSummary> {
     findings,
     last_cycle: last === undefined ? null : { result: last.result, agents: last.agents },
     halt_reason: state.halt_reason,
+    reproduction,
   }
 }
 
@@ -91,5 +103,7 @@ export function renderSummaryLine(summary: StateSummary): string {
   const cap = summary.max_cycles === null ? '?' : String(summary.max_cycles)
   const findings = `${summary.findings.high}H/${summary.findings.medium}M/${summary.findings.low}L`
   const tail = summary.halt_reason === null ? '' : ` — ${summary.halt_reason}`
-  return `Loop: ${summary.status} · track ${summary.track} · ${target} · cycle ${summary.cycle}/${cap} · stage ${summary.stage} · findings ${findings}${tail}`
+  const gate =
+    summary.reproduction === null ? '' : summary.reproduction.proven ? ' · reproduced' : ' · not reproduced'
+  return `Loop: ${summary.status} · track ${summary.track} · ${target} · cycle ${summary.cycle}/${cap} · stage ${summary.stage} · findings ${findings}${gate}${tail}`
 }

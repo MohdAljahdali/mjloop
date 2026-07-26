@@ -151,4 +151,53 @@ describe('tool behaviour', () => {
     expect((result as { isError?: boolean }).isError).toBe(true)
     expect(textOf(result)).toContain('summary')
   })
+
+  it('accepts an instance so parallel agents do not overwrite each other', async () => {
+    await client.callTool({ name: 'loop_init', arguments: { project_dir: project.dir } })
+    await client.callTool({
+      name: 'loop_run_start',
+      arguments: { project_dir: project.dir, track: 'fix', goal: 'Stale cache' },
+    })
+    const logged = await client.callTool({
+      name: 'loop_run_log',
+      arguments: {
+        project_dir: project.dir,
+        agent: 'hypothesis-tester',
+        instance: 'stale-cache',
+        result: {
+          status: 'fail',
+          summary: 'Refuted: the cache is invalidated on write.',
+          evidence: [{ kind: 'command', ref: 'npm test -- cache', excerpt: 'ordering is correct' }],
+          findings: [],
+          files_touched: [],
+        },
+      },
+    })
+    expect((logged as { isError?: boolean }).isError).not.toBe(true)
+    expect(JSON.parse(textOf(logged)).path).toContain('hypothesis-tester--stale-cache.json')
+  })
+
+  it('returns a tool error when the fixer runs before the defect is reproduced', async () => {
+    await client.callTool({ name: 'loop_init', arguments: { project_dir: project.dir } })
+    await client.callTool({
+      name: 'loop_run_start',
+      arguments: { project_dir: project.dir, track: 'fix', goal: 'Stale cache' },
+    })
+    const result = await client.callTool({
+      name: 'loop_run_log',
+      arguments: {
+        project_dir: project.dir,
+        agent: 'fixer',
+        result: {
+          status: 'pass',
+          summary: 'Invalidated the entry on write.',
+          evidence: [{ kind: 'file', ref: 'src/cache.ts', excerpt: 'this.map.delete(key)' }],
+          findings: [],
+          files_touched: ['src/cache.ts'],
+        },
+      },
+    })
+    expect((result as { isError?: boolean }).isError).toBe(true)
+    expect(textOf(result)).toContain('reproducer')
+  })
 })

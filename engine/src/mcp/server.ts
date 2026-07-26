@@ -115,11 +115,24 @@ export function buildServer(): McpServer {
       inputSchema: {
         project_dir: projectDirArg,
         agent: AgentNameSchema.describe('Agent name as it appears in the track roster'),
+        instance: z
+          .string()
+          .min(1)
+          .optional()
+          .describe('Distinguishes parallel runs of the same agent, e.g. one hypothesis-tester per hypothesis'),
         result: AgentResultSchema,
       },
     },
-    async ({ project_dir, agent, result }) =>
-      guard(async () => ok(await runLog(resolveProjectDir(project_dir), { agent, result }))),
+    async ({ project_dir, agent, instance, result }) =>
+      guard(async () =>
+        ok(
+          await runLog(resolveProjectDir(project_dir), {
+            agent,
+            ...(instance === undefined ? {} : { instance }),
+            result,
+          }),
+        ),
+      ),
   )
 
   server.registerTool(

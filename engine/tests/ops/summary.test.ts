@@ -114,3 +114,47 @@ describe('stateSummary', () => {
     expect(renderSummaryLine(summary)).toContain('halted')
   })
 })
+
+describe('stateSummary and the gate', () => {
+  it('reports null for a track with no gate', async () => {
+    await initLoop(project.dir, clock)
+    await runStart(project.dir, { track: 'edit', goal: 'Rename' }, clock)
+    expect((await stateSummary(project.dir)).reproduction).toBeNull()
+  })
+
+  it('reports an unproven gate before the defect is reproduced', async () => {
+    await initLoop(project.dir, clock)
+    await runStart(project.dir, { track: 'fix', goal: 'Stale cache' }, clock)
+    expect((await stateSummary(project.dir)).reproduction).toEqual({ proven: false, ref: null })
+  })
+
+  it('reports the reproducing command once the gate is open', async () => {
+    await initLoop(project.dir, clock)
+    await runStart(project.dir, { track: 'fix', goal: 'Stale cache' }, clock)
+    await runLog(
+      project.dir,
+      {
+        agent: 'reproducer',
+        result: {
+          status: 'pass',
+          summary: 'A failing test that proves the stale read.',
+          evidence: [{ kind: 'command', ref: 'npm test -- cache', excerpt: '1 failing' }],
+          findings: [],
+          files_touched: ['test/cache.test.ts'],
+          next_hint: null,
+        },
+      },
+      clock,
+    )
+
+    const summary = await stateSummary(project.dir)
+    expect(summary.reproduction).toEqual({ proven: true, ref: 'npm test -- cache' })
+    expect(renderSummaryLine(summary)).toContain('reproduced')
+  })
+
+  it('says the defect is not reproduced in the rendered line', async () => {
+    await initLoop(project.dir, clock)
+    await runStart(project.dir, { track: 'fix', goal: 'Stale cache' }, clock)
+    expect(renderSummaryLine(await stateSummary(project.dir))).toContain('not reproduced')
+  })
+})
