@@ -53,6 +53,9 @@ export type Config = z.infer<typeof ConfigSchema>
  */
 export const DEFAULT_TRACKS: Record<string, Track> = {
   edit: { required: ['editor', 'verifier'], available: [], max_cycles: 1 },
+  // max_cycles is a ceiling, not a target: with the stagnation guard in place
+  // a stuck run halts well before reaching it.
+  build: { required: ['builder', 'verifier'], available: ['scout', 'critic'], max_cycles: 5 },
 }
 
 export function defaultConfig(verify: Verify): Config {

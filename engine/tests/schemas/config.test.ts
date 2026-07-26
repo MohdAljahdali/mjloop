@@ -7,7 +7,7 @@ describe('defaultConfig', () => {
   it('is schema-valid and defines only the edit track', () => {
     const config = defaultConfig(VERIFY)
     expect(ConfigSchema.parse(config)).toEqual(config)
-    expect(Object.keys(config.tracks)).toEqual(['edit'])
+    expect(Object.keys(config.tracks)).toEqual(['edit', 'build'])
     expect(config.autonomous).toBe(false)
   })
 
@@ -19,6 +19,14 @@ describe('defaultConfig', () => {
 describe('DEFAULT_TRACKS', () => {
   it('makes editor and verifier required for edit, capped at one cycle', () => {
     expect(DEFAULT_TRACKS.edit).toEqual({ required: ['editor', 'verifier'], available: [], max_cycles: 1 })
+  })
+
+  it('makes builder and verifier required for build, with scout and critic available', () => {
+    expect(DEFAULT_TRACKS.build).toEqual({
+      required: ['builder', 'verifier'],
+      available: ['scout', 'critic'],
+      max_cycles: 5,
+    })
   })
 })
 
