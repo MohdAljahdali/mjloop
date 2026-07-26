@@ -29,17 +29,19 @@ export class StateStore {
     return value
   }
 
-  async update(mutate: (draft: State) => void): Promise<State> {
+  async update(mutate: (draft: State) => void | Promise<void>): Promise<State> {
     return withLock(this.paths.lock, async () => {
-      const { value } = await readJsonValidated(this.paths.state, StateSchema)
+      const { value, recovered } = await readJsonValidated(this.paths.state, StateSchema)
       const draft = structuredClone(value)
-      mutate(draft)
+      await mutate(draft)
       draft.updated_at = this.now().toISOString()
 
       const parsed = StateSchema.safeParse(draft)
       if (!parsed.success) throw new InvalidStateError(z.prettifyError(parsed.error))
 
-      await writeJsonAtomic(this.paths.state, parsed.data)
+      // When the read recovered from `.bak`, the file currently on disk is
+      // the corrupt primary — backing it up would replace the good backup.
+      await writeJsonAtomic(this.paths.state, parsed.data, { backup: !recovered })
       return parsed.data
     })
   }

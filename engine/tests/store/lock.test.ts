@@ -27,11 +27,20 @@ describe('withLock', () => {
 
   it('serialises concurrent writers', async () => {
     const order: string[] = []
+    // The second withLock starts only once the first is provably inside
+    // fn(): starting both back to back races their initial mkdir calls on
+    // the filesystem thread pool, and nothing guarantees the first call
+    // wins — the test would then fail on ordering while mutual exclusion
+    // actually held.
+    let signalEntered!: () => void
+    const entered = new Promise<void>((resolve) => { signalEntered = resolve })
     const slow = withLock(lockDir, async () => {
       order.push('a-start')
+      signalEntered()
       await new Promise((resolve) => setTimeout(resolve, 60))
       order.push('a-end')
     })
+    await entered
     const fast = withLock(lockDir, async () => { order.push('b') }, { pollMs: 5 })
     await Promise.all([slow, fast])
     expect(order).toEqual(['a-start', 'a-end', 'b'])
@@ -49,6 +58,37 @@ describe('withLock', () => {
     await fs.mkdir(lockDir)
     const result = await withLock(lockDir, async () => 'reclaimed', { staleMs: 0, pollMs: 5, timeoutMs: 500 })
     expect(result).toBe('reclaimed')
+  })
+
+  it('reclaims a stale lock even when a crashed reclaimer left its marker behind', async () => {
+    // A reclaimer that dies between creating `.lock.reclaiming` and its
+    // finally-cleanup orphans the marker; both lock and marker are backdated
+    // past staleMs, so the marker must be reclaimed too or the lock is
+    // bricked forever.
+    await fs.mkdir(lockDir)
+    await fs.mkdir(`${lockDir}.reclaiming`)
+    const past = new Date(Date.now() - 10_000)
+    await fs.utimes(lockDir, past, past)
+    await fs.utimes(`${lockDir}.reclaiming`, past, past)
+
+    const result = await withLock(lockDir, async () => 'recovered', { staleMs: 50, pollMs: 5, timeoutMs: 2000 })
+    expect(result).toBe('recovered')
+  })
+
+  it('times out instead of spinning forever when reclaim cannot make progress', async () => {
+    // Stale lock, fresh marker: the reclaim branch runs every round but never
+    // succeeds (the marker stays under staleMs for the whole test), so the
+    // deadline check must fire on this path too.
+    await fs.mkdir(lockDir)
+    const past = new Date(Date.now() - 10_000)
+    await fs.utimes(lockDir, past, past)
+    await fs.mkdir(`${lockDir}.reclaiming`)
+
+    await expect(
+      withLock(lockDir, async () => 'never', { staleMs: 5000, pollMs: 5, timeoutMs: 200 }),
+    ).rejects.toBeInstanceOf(LockTimeoutError)
+    await fs.rm(`${lockDir}.reclaiming`, { recursive: true, force: true })
+    await fs.rm(lockDir, { recursive: true, force: true })
   })
 
   it('never runs two callbacks concurrently when many waiters race the same stale lock', async () => {

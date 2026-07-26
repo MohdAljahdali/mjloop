@@ -1,5 +1,13 @@
 import * as z from 'zod'
 
+/**
+ * Plan and story ids are interpolated into run directory names
+ * (`<run_id>--<story>--<track>`), so they must stay filename-safe: a value
+ * containing `/` or `..` would steer the run directory outside `.loop/runs`,
+ * and these ids arrive from the leader model via an MCP tool call.
+ */
+export const IdSchema = z.string().regex(/^[A-Za-z0-9_-]+$/, 'only letters, digits, "-" and "_" are allowed')
+
 export const StatusSchema = z.enum(['idle', 'running', 'paused', 'halted', 'done', 'failed'])
 export const StageSchema = z.enum(['idle', 'compose', 'execute', 'judge', 'halted', 'done'])
 export const SeveritySchema = z.enum(['high', 'medium', 'low'])
@@ -27,8 +35,8 @@ export const StateSchema = z.strictObject({
   cycle: z.number().int().nonnegative(),
   goal: z.string().min(1).nullable(),
   current: z.strictObject({
-    plan: z.string().min(1).nullable(),
-    story: z.string().min(1).nullable(),
+    plan: IdSchema.nullable(),
+    story: IdSchema.nullable(),
     stage: StageSchema,
   }),
   findings: z.array(FindingSchema),

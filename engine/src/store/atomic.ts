@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import * as z from 'zod'
@@ -24,14 +25,18 @@ export async function writeJsonAtomic(file: string, data: unknown, options: Writ
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
     }
   }
-  const temp = `${file}.${process.pid}.tmp`
+  // The pid alone is not unique enough: two writers in the same process
+  // would share one temp path, and the loser's rename would fail (or land
+  // late and clobber the winner). The uuid makes every write's temp file
+  // its own.
+  const temp = `${file}.${process.pid}.${randomUUID()}.tmp`
   await fs.writeFile(temp, `${JSON.stringify(data, null, 2)}\n`, 'utf8')
   await fs.rename(temp, file)
 }
 
 export interface ReadResult<T> {
   value: T
-  /** True when the primary file was unusable and `.bak` was restored. */
+  /** True when the primary file was unusable and the value came from `.bak`. */
   recovered: boolean
 }
 
@@ -47,8 +52,11 @@ export async function readJsonValidated<T>(file: string, schema: z.ZodType<T>): 
         `${file} is unusable and no valid backup exists: ${(primaryError as Error).message}`,
       )
     }
-    // backup:false — the corrupt primary must never become the new backup.
-    await writeJsonAtomic(file, value, { backup: false })
+    // Deliberately no repair write here: reading must stay read-only, or an
+    // unlocked reader racing a locked writer could regress the primary to
+    // the stale backup. The caller that holds the write lock (StateStore.
+    // update) persists the recovered value — with backup disabled, so the
+    // corrupt primary never becomes the new backup.
     return { value, recovered: true }
   }
 }

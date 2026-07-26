@@ -42,9 +42,12 @@ export async function runStart(projectDir: string, input: RunStartInput, now: Cl
     throw new UnknownTrackError(input.track, Object.keys(config.tracks))
   }
 
-  const runId = await nextRunId(projectDir, now())
-  const state = await new StateStore(projectDir, now).update((draft) => {
-    draft.run_id = runId
+  const state = await new StateStore(projectDir, now).update(async (draft) => {
+    // Computed inside the locked update so two overlapping runStart calls
+    // cannot observe the same sequence number. The previous run's id (still
+    // on the draft at this point) covers the window where that run's
+    // directory has not been created yet.
+    draft.run_id = await nextRunId(projectDir, now(), draft.run_id)
     draft.track = input.track
     draft.status = 'running'
     draft.cycle = 1
@@ -79,28 +82,28 @@ export async function cycleAdvance(
   now: Clock = () => new Date(),
 ): Promise<State> {
   const store = new StateStore(projectDir, now)
-  const before = await store.get()
-  if (before.status !== 'running' || before.track === null) throw new NoActiveRunError()
-
   const config = await loadConfig(projectDir)
-  const track = config.tracks[before.track]
-  if (track === undefined) throw new UnknownTrackError(before.track, Object.keys(config.tracks))
 
-  const ref = path.join('.loop', 'runs', runDirName(before))
-  const capReached = before.cycle >= track.max_cycles
-  const haltReason = `cycle cap ${track.max_cycles} reached for track ${before.track}`
-
+  // Status and cap are evaluated against the draft inside the locked update,
+  // not a pre-lock snapshot: two racing advances (or an advance racing a
+  // halt) must each judge the state the other one left behind, or a run can
+  // step past its cycle cap.
   const after = await store.update((draft) => {
+    if (draft.status !== 'running' || draft.track === null) throw new NoActiveRunError()
+    const track = config.tracks[draft.track]
+    if (track === undefined) throw new UnknownTrackError(draft.track, Object.keys(config.tracks))
+
+    const ref = path.join('.loop', 'runs', runDirName(draft))
     draft.history.push({ cycle: draft.cycle, agents: input.agents, result: input.result, ref })
     if (input.result === 'pass') {
       draft.status = 'done'
       draft.current.stage = 'done'
       return
     }
-    if (capReached) {
+    if (draft.cycle >= track.max_cycles) {
       draft.status = 'halted'
       draft.current.stage = 'halted'
-      draft.halt_reason = haltReason
+      draft.halt_reason = `cycle cap ${track.max_cycles} reached for track ${draft.track}`
       return
     }
     draft.cycle += 1
@@ -114,6 +117,10 @@ export async function cycleAdvance(
 export async function halt(projectDir: string, reason: string, now: Clock = () => new Date()): Promise<State> {
   const store = new StateStore(projectDir, now)
   const state = await store.update((draft) => {
+    // Guarded inside the locked update: with no run to halt, the mutation
+    // must never land — writeHaltReport would fail right after it and leave
+    // a "halted" state for a run that never existed.
+    if (draft.run_id === null || draft.track === null) throw new NoActiveRunError()
     draft.status = 'halted'
     draft.current.stage = 'halted'
     draft.halt_reason = reason
@@ -122,7 +129,7 @@ export async function halt(projectDir: string, reason: string, now: Clock = () =
   return state
 }
 
-async function nextRunId(projectDir: string, now: Date): Promise<string> {
+async function nextRunId(projectDir: string, now: Date, previousRunId: string | null): Promise<string> {
   const date = now.toISOString().slice(0, 10)
   const runsDir = resolveLoopPaths(projectDir).runs
   let entries: string[] = []
@@ -131,8 +138,12 @@ async function nextRunId(projectDir: string, now: Date): Promise<string> {
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
   }
-  const used = entries
-    .map((entry) => new RegExp(`^${date}-(\\d{3})--`).exec(entry)?.[1])
+  // The previous run's id counts alongside the directory scan: its directory
+  // is created only after the state write, so a concurrent (or crashed)
+  // start may not have produced one yet.
+  const fromDirs = entries.map((entry) => new RegExp(`^${date}-(\\d{3})--`).exec(entry)?.[1])
+  const fromState = new RegExp(`^${date}-(\\d{3})$`).exec(previousRunId ?? '')?.[1]
+  const used = [...fromDirs, fromState]
     .filter((seq): seq is string => seq !== undefined)
     .map(Number)
   const next = used.length === 0 ? 1 : Math.max(...used) + 1

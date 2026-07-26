@@ -47,4 +47,4 @@ npm test           # unit and integration tests
 npm run typecheck
 ```
 
-`LOOP_E2E=1 tests/e2e/run-edit.sh` runs the opt-in smoke test against the real CLI.
+`LOOP_E2E=1 npm run e2e` (from `engine/`) runs the opt-in smoke test against the real CLI.

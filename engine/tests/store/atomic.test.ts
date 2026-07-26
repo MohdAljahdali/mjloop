@@ -73,10 +73,12 @@ describe('readJsonValidated', () => {
     const result = await readJsonValidated(paths.state, StateSchema)
     expect(result.recovered).toBe(true)
     expect(result.value.cycle).toBe(0)
-    // recovery must not overwrite the good backup with the corrupt file
+    // the read path never writes: repairing the primary here would race a
+    // locked writer, so the corrupt file is left for StateStore.update to
+    // repair under the lock
+    expect(await fs.readFile(paths.state, 'utf8')).toBe('{ this is not json')
+    // and the good backup is untouched
     expect(JSON.parse(await fs.readFile(`${paths.state}.bak`, 'utf8')).cycle).toBe(0)
-    // the primary file is repaired in place
-    expect(JSON.parse(await fs.readFile(paths.state, 'utf8')).cycle).toBe(0)
   })
 
   it('recovers from .bak when the primary file fails schema validation', async () => {

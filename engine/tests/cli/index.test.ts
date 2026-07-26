@@ -52,6 +52,8 @@ describe('evaluateStateGuard', () => {
     })
     expect(verdict.deny).toBe(true)
     expect(verdict.reason).toContain('loop_')
+    // the guidance must only name tools the MCP server actually registers
+    expect(verdict.reason).not.toContain('loop_story_update')
   })
 
   it('denies a write to a plan manifest.json', () => {

@@ -65,13 +65,18 @@ export async function withLock<T>(lockDir: string, fn: () => Promise<T>, options
       ownedSnapshot = await statSnapshot(lockDir)
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
-      const observed = await statSnapshot(lockDir)
-      if (observed !== null && observed.ageMs >= staleMs) {
-        await reclaimIfSameInstance(lockDir, observed, pollMs)
-        continue
-      }
+      // Checked before the stale-reclaim branch as well as the waiting
+      // branch: reclaiming can fail to make progress round after round
+      // (e.g. the reclaim marker is contended), and a path that never
+      // reaches the deadline check would spin forever instead of failing
+      // with a diagnosable timeout.
       if (Date.now() >= deadline) {
         throw new LockTimeoutError(`could not acquire ${lockDir} within ${timeoutMs}ms`)
+      }
+      const observed = await statSnapshot(lockDir)
+      if (observed !== null && observed.ageMs >= staleMs) {
+        await reclaimIfSameInstance(lockDir, observed, pollMs, staleMs)
+        continue
       }
       await new Promise((resolve) => setTimeout(resolve, pollMs))
     }
@@ -111,14 +116,28 @@ export async function withLock<T>(lockDir: string, fn: () => Promise<T>, options
  * and retries from the top, relying on the marker holder (or, if it was
  * mistaken, the lock's real owner) to resolve things.
  */
-async function reclaimIfSameInstance(lockDir: string, observed: LockSnapshot, pollMs: number): Promise<void> {
+async function reclaimIfSameInstance(
+  lockDir: string,
+  observed: LockSnapshot,
+  pollMs: number,
+  staleMs: number,
+): Promise<void> {
   const reclaimMarker = `${lockDir}.reclaiming`
   try {
     await fs.mkdir(reclaimMarker)
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
-      // Someone else is already reclaiming this round; let them finish.
-      await new Promise((resolve) => setTimeout(resolve, pollMs))
+      // Someone else is already reclaiming this round; let them finish —
+      // unless the marker itself is stale. A live reclaimer holds it only
+      // for a stat-and-delete, so a marker aged past staleMs belongs to a
+      // reclaimer that died between creating it and its finally-cleanup;
+      // without this check an orphaned marker blocks reclaiming forever.
+      const marker = await statSnapshot(reclaimMarker)
+      if (marker !== null && marker.ageMs >= staleMs) {
+        await fs.rm(reclaimMarker, { recursive: true, force: true })
+      } else {
+        await new Promise((resolve) => setTimeout(resolve, pollMs))
+      }
       return
     }
     throw error

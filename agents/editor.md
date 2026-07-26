@@ -16,8 +16,9 @@ Stop and return `status: "blocked"` if the change would:
 - require a new dependency, or
 - require a design decision that the request does not settle.
 
-In `summary`, say which condition tripped and recommend `/loop:build`. Escalating is
-success for this agent. Expanding scope is failure.
+In `summary`, say which condition tripped and recommend a wider track — until
+`/loop:build` lands in a later milestone, that means asking the user how to proceed.
+Escalating is success for this agent. Expanding scope is failure.
 
 ## Otherwise
 

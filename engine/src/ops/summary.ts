@@ -1,5 +1,5 @@
 import type { Severity, State } from '../schemas/state.js'
-import { ConfigMissingError, loadConfig } from '../store/config-store.js'
+import { loadConfig } from '../store/config-store.js'
 import { StateStore } from '../store/state-store.js'
 
 export interface StateSummary {
@@ -50,8 +50,10 @@ export async function stateSummary(projectDir: string): Promise<StateSummary> {
   try {
     const config = await loadConfig(projectDir)
     maxCycles = state.track === null ? null : config.tracks[state.track]?.max_cycles ?? null
-  } catch (error) {
-    if (!(error instanceof ConfigMissingError)) throw error
+  } catch {
+    // A missing or hand-broken config.yaml (HALT.md tells users to edit it)
+    // must not take the summary — and with it the SessionStart hook — down.
+    // The cap simply degrades to unknown.
   }
 
   const findings = { ...NO_FINDINGS }

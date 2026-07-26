@@ -2,6 +2,7 @@
 import path from 'node:path'
 import { renderSummaryLine, stateSummary } from '../ops/summary.js'
 import { PROTECTED_BASENAMES } from '../store/paths.js'
+import { isEntrypoint } from '../util/entrypoint.js'
 
 const USAGE = `usage: loop-cli <command>
 
@@ -95,7 +96,7 @@ export function evaluateStateGuard(input: unknown): GuardVerdict {
 
   return {
     deny: true,
-    reason: `${basename} is owned by the loop MCP server. Use the loop_* tools (loop_run_start, loop_cycle_advance, loop_story_update, ...) instead of editing it directly.`,
+    reason: `${basename} is owned by the loop MCP server. Use the loop_* tools (loop_run_start, loop_cycle_advance, loop_run_log, ...) instead of editing it directly.`,
   }
 }
 
@@ -116,8 +117,7 @@ function readCwd(stdin: string): string {
   }
 }
 
-const isEntrypoint = process.argv[1] !== undefined && import.meta.url === `file://${path.resolve(process.argv[1])}`
-if (isEntrypoint) {
+if (await isEntrypoint(import.meta.url)) {
   const stdin = process.stdin.isTTY === true ? '' : await readAll()
   const result = await runCli(process.argv.slice(2), stdin)
   if (result.stdout.length > 0) process.stdout.write(result.stdout)

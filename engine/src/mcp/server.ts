@@ -1,15 +1,15 @@
 #!/usr/bin/env node
-import path from 'node:path'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import * as z from 'zod'
 import { AgentResultSchema } from '../schemas/contract.js'
-import { ResultSchema } from '../schemas/state.js'
+import { IdSchema, ResultSchema } from '../schemas/state.js'
 import { initLoop } from '../ops/init.js'
 import { runLog } from '../ops/log.js'
 import { rosterSet } from '../ops/roster.js'
 import { cycleAdvance, halt, runStart } from '../ops/run.js'
 import { stateSummary } from '../ops/summary.js'
+import { isEntrypoint } from '../util/entrypoint.js'
 
 /** MCP servers are launched with the project as cwd; the argument is an escape hatch. */
 export function resolveProjectDir(projectDir?: string): string {
@@ -73,8 +73,8 @@ export function buildServer(): McpServer {
         project_dir: projectDirArg,
         track: z.string().min(1).describe('Track name as defined in .loop/config.yaml'),
         goal: z.string().min(1).describe('What this run must achieve'),
-        plan: z.string().min(1).nullish().describe('Plan id, e.g. P001'),
-        story: z.string().min(1).nullish().describe('Story id, e.g. P001-S02'),
+        plan: IdSchema.nullish().describe('Plan id, e.g. P001'),
+        story: IdSchema.nullish().describe('Story id, e.g. P001-S02'),
       },
     },
     async ({ project_dir, track, goal, plan, story }) =>
@@ -150,8 +150,7 @@ export function buildServer(): McpServer {
   return server
 }
 
-const isEntrypoint = process.argv[1] !== undefined && import.meta.url === `file://${path.resolve(process.argv[1])}`
-if (isEntrypoint) {
+if (await isEntrypoint(import.meta.url)) {
   const server = buildServer()
   await server.connect(new StdioServerTransport())
 }
