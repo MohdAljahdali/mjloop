@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises'
-import path from 'node:path'
 import type { ManifestEntry } from '../schemas/plan.js'
+import { withLock } from '../store/lock.js'
 import { resolveLoopPaths } from '../store/paths.js'
 import { listPlanIds } from '../store/plan-store.js'
 import type { Clock } from '../store/state-store.js'
@@ -16,41 +16,67 @@ export function planStatus(stories: ManifestEntry[]): 'planned' | 'in-progress' 
   if (stories.length === 0) return 'planned'
   if (stories.every((story) => story.status === 'done')) return 'done'
 
+  // Readiness is the rule `storyNext` resolves `--next` with: a story can
+  // proceed only while it is unfinished and every dependency is done. Reading
+  // status alone would call a plan whose whole remainder waits on a blocked
+  // story `planned`, which is the one word that says "nothing is wrong here".
+  const done = new Set(stories.filter((story) => story.status === 'done').map((story) => story.id))
+  const canProceed = stories.some(
+    (story) =>
+      (story.status === 'todo' || story.status === 'doing') &&
+      story.depends_on.every((dependency) => done.has(dependency)),
+  )
+  if (!canProceed && stories.some((story) => story.status === 'blocked')) return 'blocked'
+
   const started = stories.some((story) => story.status === 'done' || story.status === 'doing')
-  const stalled = stories.every((story) => story.status === 'done' || story.status === 'blocked')
-  if (stalled && stories.some((story) => story.status === 'blocked')) return 'blocked'
   return started ? 'in-progress' : 'planned'
 }
 
+/**
+ * Rendering takes the same write lock the story tools take.
+ *
+ * It is not a pure reader: it regenerates every manifest on the way past. An
+ * unlocked render can therefore finish reading a plan, watch a locked
+ * `storyUpdate` commit a new status, and then land its own older snapshot on
+ * top — leaving a manifest that disagrees with the story file it is derived
+ * from until the next write to that same plan.
+ */
 export async function renderIndex(projectDir: string, now: Clock = () => new Date()): Promise<string> {
-  const planIds = await listPlanIds(projectDir)
   const paths = resolveLoopPaths(projectDir)
+  // The lock is a non-recursive mkdir, so `.loop` must exist first — an index
+  // can be rendered before anything else has written there. Same reason
+  // `planCreate` does this.
+  await fs.mkdir(paths.root, { recursive: true })
 
-  let markdown: string
-  if (planIds.length === 0) {
-    markdown = `${HEADER}\n\nNo plans yet.\n`
-  } else {
-    const rows: string[] = []
-    for (const planId of planIds) {
-      // Rendering the manifest first means the index can never be newer than
-      // the manifests it summarises.
-      const manifest = await renderManifest(projectDir, planId, now)
-      const done = manifest.stories.filter((story) => story.status === 'done').length
-      rows.push(
-        `| ${manifest.plan} | ${manifest.title} | ${manifest.stories.length} | ${done} | ${planStatus(manifest.stories)} |`,
-      )
+  return withLock(paths.lock, async () => {
+    const planIds = await listPlanIds(projectDir)
+
+    let markdown: string
+    if (planIds.length === 0) {
+      markdown = `${HEADER}\n\nNo plans yet.\n`
+    } else {
+      const rows: string[] = []
+      for (const planId of planIds) {
+        // Rendering the manifest first means the index can never be newer than
+        // the manifests it summarises.
+        const manifest = await renderManifest(projectDir, planId, now)
+        const done = manifest.stories.filter((story) => story.status === 'done').length
+        rows.push(
+          `| ${manifest.plan} | ${manifest.title} | ${manifest.stories.length} | ${done} | ${planStatus(manifest.stories)} |`,
+        )
+      }
+      markdown = [
+        HEADER,
+        '',
+        '| Plan | Title | Stories | Done | Status |',
+        '|------|-------|---------|------|--------|',
+        ...rows,
+        '',
+      ].join('\n')
     }
-    markdown = [
-      HEADER,
-      '',
-      '| Plan | Title | Stories | Done | Status |',
-      '|------|-------|---------|------|--------|',
-      ...rows,
-      '',
-    ].join('\n')
-  }
 
-  await fs.mkdir(path.dirname(paths.index), { recursive: true })
-  await fs.writeFile(paths.index, markdown, 'utf8')
-  return markdown
+    // `.loop` was created before the lock was taken, so the index has a home.
+    await fs.writeFile(paths.index, markdown, 'utf8')
+    return markdown
+  })
 }

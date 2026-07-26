@@ -52,6 +52,13 @@ describe('StateSchema', () => {
     expect(StateSchema.safeParse(state).success).toBe(true)
   })
 
+  it('rejects a track name that could steer a path', () => {
+    // The run directory is `<run_id>--<story>--<track>`: the track shares that
+    // template with the story id and is bound by the same schema.
+    const bad = { ...initialState(NOW), track: '../../../tmp/victim' }
+    expect(StateSchema.safeParse(bad).success).toBe(false)
+  })
+
   it('defaults last_fingerprint to null on a document written before the field existed', () => {
     // StateSchema is strict, so without a default every milestone-1 state.json
     // would fail validation the first time this build reads it.

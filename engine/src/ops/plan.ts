@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises'
+import path from 'node:path'
 import * as z from 'zod'
 import {
   PlanFrontmatterSchema,
@@ -14,6 +15,8 @@ import {
   listPlanIds,
   listStories,
   readStory,
+  storyFileName,
+  usedStoryNumbers,
   writePlan,
   writeStory,
   type Story,
@@ -70,6 +73,9 @@ export async function planCreate(
   })
 }
 
+/** `S` plus two digits is the id format, so a plan holds at most 99 stories. */
+const MAX_STORY_NUMBER = 99
+
 export interface StoryAddInput {
   plan: string
   title: string
@@ -91,8 +97,17 @@ export async function storyAdd(
 
   return withLock(paths.lock, async () => {
     const existing = await listStories(projectDir, input.plan)
-    const used = existing.map((story) => Number(story.frontmatter.id.slice(-2)))
+    // Allocated from the directory rather than from the parsed stories: a file
+    // the schema can no longer read still owns its id.
+    const used = await usedStoryNumbers(projectDir, input.plan)
     const next = used.length === 0 ? 1 : Math.max(...used) + 1
+    // Two digits is the id format, so 99 is the ceiling. Saying so beats
+    // handing the caller a validation error about an id it never supplied.
+    if (next > MAX_STORY_NUMBER) {
+      throw new InvalidPlanInputError(
+        `plan "${input.plan}" is full: story ids run to S${MAX_STORY_NUMBER}. Split the remaining work into another plan`,
+      )
+    }
     const id = `${input.plan}-S${String(next).padStart(2, '0')}`
 
     const frontmatter = StoryFrontmatterSchema.safeParse({
@@ -182,15 +197,25 @@ export async function storyUpdate(
     const merged = StoryFrontmatterSchema.safeParse({ ...current.frontmatter, ...patch })
     if (!merged.success) throw new InvalidPlanInputError(z.prettifyError(merged.error))
 
-    const siblings = (await listStories(projectDir, planId)).filter(
-      (story) => story.frontmatter.id !== storyId,
-    )
-    assertDependenciesResolve(siblings, merged.data)
+    // Only a patch that changes the edges is checked against the graph. A
+    // dangling edge left by a story file somebody deleted is a pre-existing
+    // condition, and gating an unrelated status or evidence write on it would
+    // make the dependent story permanently un-updatable — with an error that
+    // blames dependencies for a missing file.
+    if (patch.depends_on !== undefined) {
+      const siblings = (await listStories(projectDir, planId)).filter(
+        (story) => story.frontmatter.id !== storyId,
+      )
+      assertDependenciesResolve(siblings, merged.data)
+    }
 
+    // A title change renames the file. The rename happens first and is one
+    // syscall, so the story never occupies two paths at once: an interrupted
+    // update cannot leave a second file claiming the same id, which nothing
+    // afterwards would ever clean up.
+    const renamed = path.join(path.dirname(current.file), storyFileName(merged.data))
+    if (renamed !== current.file) await fs.rename(current.file, renamed)
     const file = await writeStory(projectDir, { frontmatter: merged.data, body: current.body })
-    // A title change renames the file; the old one would otherwise linger and
-    // the manifest would list the story twice.
-    if (file !== current.file) await fs.rm(current.file, { force: true })
 
     const manifest = await renderManifest(projectDir, planId, now)
     return { id: storyId, file, manifest }

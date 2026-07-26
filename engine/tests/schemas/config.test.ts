@@ -69,6 +69,18 @@ describe('ConfigSchema', () => {
     expect(ConfigSchema.safeParse(bad).success).toBe(false)
   })
 
+  it('rejects a track name that could steer a path', () => {
+    // The track name is the last component of every run directory name, so a
+    // path-shaped one steers writes outside .loop/runs.
+    const bad = {
+      version: 1,
+      tracks: { '../../tmp/victim': { required: ['editor'], max_cycles: 1 } },
+    }
+    const parsed = ConfigSchema.safeParse(bad)
+    expect(parsed.success).toBe(false)
+    if (!parsed.success) expect(z.prettifyError(parsed.error)).toContain('tracks')
+  })
+
   it('rejects an unknown specialist mode', () => {
     const bad = {
       version: 1,

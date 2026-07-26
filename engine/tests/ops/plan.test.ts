@@ -1,6 +1,9 @@
+import fs from 'node:fs/promises'
+import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   DependencyError,
+  InvalidPlanInputError,
   planCreate,
   storyAdd,
   storyGet,
@@ -10,7 +13,9 @@ import {
 import {
   PlanNotFoundError,
   StoryNotFoundError,
+  findPlanDir,
   listPlanIds,
+  listStories,
   readStory,
 } from '../../src/store/plan-store.js'
 import { makeTmpProject, type TmpProject } from '../helpers/tmp-project.js'
@@ -119,6 +124,32 @@ describe('storyAdd', () => {
     ])
     expect(new Set([first.id, second.id]).size).toBe(2)
   })
+
+  it('does not reuse the id of a story whose frontmatter stopped parsing', async () => {
+    const first = await storyAdd(project.dir, { plan: 'P001', title: 'Login form' }, clock)
+    const raw = await fs.readFile(first.file, 'utf8')
+    await fs.writeFile(first.file, raw.replace('status: todo', 'status: todo\nnotes: remember'), 'utf8')
+
+    // listStories skips the file, but its id is spoken for: reusing it puts
+    // two stories under one name, and marking one done leaves the other open.
+    const second = await storyAdd(project.dir, { plan: 'P001', title: 'Session token' }, clock)
+    expect(second.id).toBe('P001-S02')
+  })
+
+  it('says the plan is full rather than rejecting an id the caller never supplied', async () => {
+    const dir = path.join(await findPlanDir(project.dir, 'P001'), 'stories')
+    await fs.writeFile(path.join(dir, 'P001-S99-last.md'), 'placeholder\n', 'utf8')
+
+    await expect(storyAdd(project.dir, { plan: 'P001', title: 'One too many' }, clock)).rejects.toThrow(/full/)
+  })
+
+  it('rejects a title too long to name a file, naming the field', async () => {
+    const failure = await storyAdd(project.dir, { plan: 'P001', title: 'a'.repeat(244) }, clock).catch(
+      (error: Error) => error,
+    )
+    expect(failure).toBeInstanceOf(InvalidPlanInputError)
+    expect((failure as Error).message).toContain('title')
+  })
 })
 
 describe('storyUpdate', () => {
@@ -161,6 +192,50 @@ describe('storyUpdate', () => {
 
     const manifest = (await storyUpdate(project.dir, 'P001-S01', { status: 'doing' }, clock)).manifest
     expect(manifest.stories.filter((entry) => entry.id === 'P001-S01')).toHaveLength(1)
+  })
+
+  it('renames rather than writing a second file, so an interruption cannot orphan one', async () => {
+    const before = await readStory(project.dir, 'P001-S01')
+    // rename replaces the write-then-delete pair: a delete that never happens
+    // leaves two files claiming one id, and nothing afterwards removes either.
+    await storyUpdate(project.dir, 'P001-S01', { title: 'Login screen' }, clock)
+
+    const files = await fs.readdir(path.dirname(before.file))
+    expect(files.filter((name) => name.startsWith('P001-S01'))).toEqual(['P001-S01-login-screen.md'])
+  })
+
+  it('records a status when a dependency file was deleted by hand', async () => {
+    const s01 = await readStory(project.dir, 'P001-S01')
+    await fs.rm(s01.file)
+
+    // The patch does not touch depends_on, so a dangling edge it did not
+    // introduce must not make the story permanently un-updatable.
+    const updated = await storyUpdate(project.dir, 'P001-S02', { status: 'done', evidence: '.loop/runs/x' }, clock)
+    expect(updated.manifest.stories[0]?.status).toBe('done')
+  })
+
+  it('still rejects a dangling edge the patch introduces', async () => {
+    await expect(
+      storyUpdate(project.dir, 'P001-S01', { depends_on: ['P001-S99'] }, clock),
+    ).rejects.toBeInstanceOf(DependencyError)
+  })
+
+  it('leaves a story whose plan and id disagree where it is', async () => {
+    await planCreate(project.dir, { slug: 'billing', title: 'Billing' }, clock)
+    const dir = path.join(await findPlanDir(project.dir, 'P001'), 'stories')
+    await fs.writeFile(
+      path.join(dir, 'P001-S07-hand.md'),
+      '---\nid: P001-S07\nplan: P002\ntitle: Hand written\nstatus: todo\nui: false\ndepends_on: []\nacceptance: []\nevidence: null\n---\n\nbody\n',
+      'utf8',
+    )
+
+    // Read from P001 and written from `plan`, the story would otherwise land
+    // in P002 and disappear from both manifests.
+    await expect(storyUpdate(project.dir, 'P001-S07', { status: 'doing' }, clock)).rejects.toBeInstanceOf(
+      StoryNotFoundError,
+    )
+    expect((await listStories(project.dir, 'P002')).length).toBe(0)
+    expect(await fs.readdir(dir)).toContain('P001-S07-hand.md')
   })
 })
 

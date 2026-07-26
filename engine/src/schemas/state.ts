@@ -1,10 +1,11 @@
 import * as z from 'zod'
 
 /**
- * Plan and story ids are interpolated into run directory names
- * (`<run_id>--<story>--<track>`), so they must stay filename-safe: a value
- * containing `/` or `..` would steer the run directory outside `.loop/runs`,
- * and these ids arrive from the leader model via an MCP tool call.
+ * Plan ids, story ids and track names are interpolated into run directory
+ * names (`<run_id>--<story>--<track>`), so they must stay filename-safe: a
+ * value containing `/` or `..` would steer the run directory outside
+ * `.loop/runs`, and all three arrive from the leader model — the ids through an
+ * MCP tool call, the track through one as well as through `.loop/config.yaml`.
  */
 export const IdSchema = z.string().regex(/^[A-Za-z0-9_-]+$/, 'only letters, digits, "-" and "_" are allowed')
 
@@ -47,7 +48,9 @@ export const ReproductionSchema = z.strictObject({
 export const StateSchema = z.strictObject({
   schema: z.literal(1),
   run_id: z.string().min(1).nullable(),
-  track: z.string().min(1).nullable(),
+  /** Names the run directory alongside the story, so it is bound by the same
+   * schema rather than merely by convention. */
+  track: IdSchema.nullable(),
   status: StatusSchema,
   cycle: z.number().int().nonnegative(),
   goal: z.string().min(1).nullable(),

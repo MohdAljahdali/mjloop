@@ -74,7 +74,7 @@ export function buildServer(): McpServer {
       description: 'Open a new run on a track. Resets cycle, findings, and history.',
       inputSchema: {
         project_dir: projectDirArg,
-        track: z.string().min(1).describe('Track name as defined in .loop/config.yaml'),
+        track: IdSchema.describe('Track name as defined in .loop/config.yaml'),
         goal: z.string().min(1).describe('What this run must achieve'),
         plan: IdSchema.nullish().describe('Plan id, e.g. P001'),
         story: IdSchema.nullish().describe('Story id, e.g. P001-S02'),

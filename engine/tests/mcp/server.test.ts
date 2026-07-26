@@ -143,6 +143,23 @@ describe('tool behaviour', () => {
     expect(JSON.parse(textOf(summary)).status).toBe('running')
   })
 
+  it('refuses a track name that would steer the run directory', async () => {
+    await client.callTool({ name: 'loop_init', arguments: { project_dir: project.dir } })
+
+    // The track names the run directory alongside the story id, which this
+    // surface has always constrained.
+    const outcome = await client
+      .callTool({
+        name: 'loop_run_start',
+        arguments: { project_dir: project.dir, track: '../../../tmp/victim', goal: 'Rename' },
+      })
+      .then((result) => ((result as { isError?: boolean }).isError === true ? 'rejected' : 'accepted'), () => 'rejected')
+    expect(outcome).toBe('rejected')
+
+    const summary = await client.callTool({ name: 'loop_state_get', arguments: { project_dir: project.dir } })
+    expect(JSON.parse(textOf(summary)).status).toBe('idle')
+  })
+
   it('returns a tool error when an agent result breaks the contract', async () => {
     await client.callTool({ name: 'loop_init', arguments: { project_dir: project.dir } })
     await client.callTool({

@@ -45,37 +45,49 @@ export interface Story {
   file: string
 }
 
+/**
+ * The slug is bounded because the whole basename is: a title is free text, and
+ * `NAME_MAX` is 255 bytes on every filesystem this runs on. A truncated slug
+ * still identifies the file — the id in front of it is what makes it unique.
+ */
+const SLUG_MAX = 60
+
 /** `<id>-<slugified title>.md` — identifiable in a directory listing. */
 export function storyFileName(frontmatter: StoryFrontmatter): string {
   const slug = frontmatter.title
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
+    .slice(0, SLUG_MAX)
     .replace(/^-+|-+$/g, '')
   return `${frontmatter.id}-${slug}.md`
 }
 
-export async function listPlanIds(projectDir: string): Promise<string[]> {
-  const plansDir = resolveLoopPaths(projectDir).plans
-  let entries: string[] = []
+/** Plan directories only: a stray file named like a plan is not one. */
+async function listPlanDirs(plansDir: string): Promise<string[]> {
   try {
-    entries = await fs.readdir(plansDir)
+    const entries = await fs.readdir(plansDir, { withFileTypes: true })
+    return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name)
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+    return []
   }
-  return entries
-    .map((entry) => /^(P\d{3})-/.exec(entry)?.[1])
-    .filter((id): id is string => id !== undefined)
-    .sort()
+}
+
+export async function listPlanIds(projectDir: string): Promise<string[]> {
+  const ids = new Set<string>()
+  for (const entry of await listPlanDirs(resolveLoopPaths(projectDir).plans)) {
+    const id = /^(P\d{3})-/.exec(entry)?.[1]
+    // Deduplicated: two directories can share an id (`P001-auth` beside a
+    // stale `P001-old`), and rendering that plan twice would double-count it
+    // in INDEX.md.
+    if (id !== undefined) ids.add(id)
+  }
+  return [...ids].sort()
 }
 
 export async function findPlanDir(projectDir: string, planId: string): Promise<string> {
   const plansDir = resolveLoopPaths(projectDir).plans
-  let entries: string[] = []
-  try {
-    entries = await fs.readdir(plansDir)
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
-  }
+  const entries = await listPlanDirs(plansDir)
   const match = entries.find((entry) => entry.startsWith(`${planId}-`))
   if (match === undefined) throw new PlanNotFoundError(planId, plansDir)
   return path.join(plansDir, match)
@@ -83,7 +95,20 @@ export async function findPlanDir(projectDir: string, planId: string): Promise<s
 
 export async function readPlan(projectDir: string, planId: string): Promise<Plan> {
   const dir = await findPlanDir(projectDir, planId)
-  const raw = await fs.readFile(path.join(dir, 'PLAN.md'), 'utf8')
+  const file = path.join(dir, 'PLAN.md')
+  let raw: string
+  try {
+    raw = await fs.readFile(file, 'utf8')
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+    // A directory without a PLAN.md is a half-built plan — a create that was
+    // interrupted, or one started by hand. A raw errno here names a file the
+    // caller never touched; this says what is wrong with the directory.
+    throw new InvalidStoryFileError(
+      file,
+      'the file is missing — a plan directory without a PLAN.md is half-built; remove the directory or write the file',
+    )
+  }
   const { data, body } = parseFrontmatter(raw)
   const parsed = PlanFrontmatterSchema.safeParse(data)
   if (!parsed.success) throw new InvalidStoryFileError(path.join(dir, 'PLAN.md'), z.prettifyError(parsed.error))
@@ -124,6 +149,38 @@ export async function listStories(projectDir: string, planId: string): Promise<S
     }
   }
   return stories.sort((a, b) => a.frontmatter.id.localeCompare(b.frontmatter.id))
+}
+
+/**
+ * Story numbers already spoken for in a plan, read from the filenames rather
+ * than from the parsed stories.
+ *
+ * `listStories` skips a file whose frontmatter no longer parses — one stray
+ * key is enough — but that file still owns its id, and handing the id out
+ * again would put two stories under one name. Allocation therefore reads the
+ * directory, which cannot be talked out of an id by a bad edit.
+ */
+export async function usedStoryNumbers(projectDir: string, planId: string): Promise<number[]> {
+  const dir = path.join(await findPlanDir(projectDir, planId), 'stories')
+  let entries: string[] = []
+  try {
+    entries = await fs.readdir(dir)
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+  }
+
+  const numbers = new Set<number>()
+  for (const entry of entries) {
+    const match = /^(P\d{3})-S(\d{2})(?:[-.]|$)/.exec(entry)
+    if (match?.[1] === planId && match[2] !== undefined) numbers.add(Number(match[2]))
+  }
+  // A story whose file was renamed out of the convention is still a story:
+  // its frontmatter id counts too.
+  for (const story of await listStories(projectDir, planId)) {
+    const match = /^(P\d{3})-S(\d{2})$/.exec(story.frontmatter.id)
+    if (match?.[1] === planId && match[2] !== undefined) numbers.add(Number(match[2]))
+  }
+  return [...numbers]
 }
 
 export async function readStory(projectDir: string, storyId: string): Promise<Story> {

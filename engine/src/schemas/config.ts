@@ -1,4 +1,5 @@
 import * as z from 'zod'
+import { IdSchema } from './state.js'
 
 export const SpecialistModeSchema = z.enum(['auto', 'always', 'never'])
 
@@ -78,7 +79,11 @@ export const ConfigSchema = z.strictObject({
     })
     .default({ max_parallel_agents: 4, no_progress_strikes: 2 }),
   verify: VerifySchema.default({ test: null, lint: null, build: null }),
-  tracks: z.record(z.string().min(1), TrackSchema),
+  /** A track name reaches the filesystem — it is the last component of every
+   * run directory name — so it is constrained where it is defined, exactly as
+   * the story id in the same template is. `config.yaml` is hand-editable and
+   * travels with a cloned repository, so this is the only place to catch it. */
+  tracks: z.record(IdSchema, TrackSchema),
   specialists: z.record(z.string().min(1), SpecialistModeSchema).default({}),
   gates: z
     .strictObject({

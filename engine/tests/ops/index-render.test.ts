@@ -1,7 +1,9 @@
 import fs from 'node:fs/promises'
+import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { planStatus, renderIndex } from '../../src/ops/index-render.js'
 import { planCreate, storyAdd, storyUpdate } from '../../src/ops/plan.js'
+import { withLock } from '../../src/store/lock.js'
 import { resolveLoopPaths } from '../../src/store/paths.js'
 import { makeTmpProject, type TmpProject } from '../helpers/tmp-project.js'
 
@@ -12,8 +14,8 @@ let project: TmpProject
 beforeEach(async () => { project = await makeTmpProject() })
 afterEach(async () => { await project.cleanup() })
 
-function entry(id: string, status: 'todo' | 'doing' | 'done' | 'blocked') {
-  return { id, title: id, status, ui: false, depends_on: [], file: `stories/${id}.md` }
+function entry(id: string, status: 'todo' | 'doing' | 'done' | 'blocked', depends_on: string[] = []) {
+  return { id, title: id, status, ui: false, depends_on, file: `stories/${id}.md` }
 }
 
 describe('planStatus', () => {
@@ -36,6 +38,22 @@ describe('planStatus', () => {
 
   it('is planned for a plan with no stories', () => {
     expect(planStatus([])).toBe('planned')
+  })
+
+  it('is blocked when the only unfinished story waits on a blocked one', () => {
+    // storyNext answers "nothing is ready" here; the index must not answer
+    // "planned", which reads as a plan nobody has touched yet.
+    expect(
+      planStatus([entry('P001-S01', 'blocked'), entry('P001-S02', 'todo', ['P001-S01'])]),
+    ).toBe('blocked')
+  })
+
+  it('is planned when a blocked story leaves an independent one ready', () => {
+    expect(planStatus([entry('P001-S01', 'blocked'), entry('P001-S02', 'todo')])).toBe('planned')
+  })
+
+  it('is in-progress when a story is doing beside a blocked one', () => {
+    expect(planStatus([entry('P001-S01', 'blocked'), entry('P001-S02', 'doing')])).toBe('in-progress')
   })
 })
 
@@ -64,5 +82,34 @@ describe('renderIndex', () => {
   it('is byte-identical when regenerated from unchanged input', async () => {
     await planCreate(project.dir, { slug: 'user-auth', title: 'User authentication' }, clock)
     expect(await renderIndex(project.dir, clock)).toBe(await renderIndex(project.dir, clock))
+  })
+
+  it('waits for the write lock instead of overwriting what a locked write commits', async () => {
+    await planCreate(project.dir, { slug: 'user-auth', title: 'User authentication' }, clock)
+    const order: string[] = []
+
+    // Rendering rewrites every manifest, so it is a writer: unlocked, its
+    // snapshot can land on top of a storyAdd or storyUpdate that finished
+    // after it started reading.
+    await Promise.all([
+      withLock(resolveLoopPaths(project.dir).lock, async () => {
+        await new Promise((resolve) => setTimeout(resolve, 200))
+        order.push('write')
+      }),
+      (async () => {
+        await new Promise((resolve) => setTimeout(resolve, 50))
+        await renderIndex(project.dir, clock)
+        order.push('render')
+      })(),
+    ])
+
+    expect(order).toEqual(['write', 'render'])
+  })
+
+  it('names the offending directory when a plan has no PLAN.md', async () => {
+    await planCreate(project.dir, { slug: 'user-auth', title: 'User authentication' }, clock)
+    await fs.mkdir(path.join(resolveLoopPaths(project.dir).plans, 'P002-billing', 'stories'), { recursive: true })
+
+    await expect(renderIndex(project.dir, clock)).rejects.toThrow(/P002-billing/)
   })
 })

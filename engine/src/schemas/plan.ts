@@ -20,18 +20,34 @@ export const PlanFrontmatterSchema = z.strictObject({
   created_at: z.iso.datetime(),
 })
 
-export const StoryFrontmatterSchema = z.strictObject({
-  id: StoryIdSchema,
-  plan: PlanIdSchema,
-  title: z.string().min(1),
-  status: StoryStatusSchema,
-  /** Drives the conditional UI specialists in a later milestone. */
-  ui: z.boolean().default(false),
-  depends_on: z.array(StoryIdSchema).default([]),
-  acceptance: z.array(z.string().min(1)).default([]),
-  /** Run directory holding the proof this story is done. Null until it is. */
-  evidence: z.string().min(1).nullable().default(null),
-})
+export const StoryFrontmatterSchema = z
+  .strictObject({
+    id: StoryIdSchema,
+    plan: PlanIdSchema,
+    /**
+     * Bounded because it reaches the filesystem: the story file is named
+     * `<id>-<slugified title>.md`. The slug is truncated as well, so this bound
+     * is about the caller getting a validation error naming the field rather
+     * than a title that quietly loses most of itself.
+     */
+    title: z.string().min(1).max(200),
+    status: StoryStatusSchema,
+    /** Drives the conditional UI specialists in a later milestone. */
+    ui: z.boolean().default(false),
+    depends_on: z.array(StoryIdSchema).default([]),
+    acceptance: z.array(z.string().min(1)).default([]),
+    /** Run directory holding the proof this story is done. Null until it is. */
+    evidence: z.string().min(1).nullable().default(null),
+  })
+  /**
+   * `readStory` locates a story from its id and `writeStory` from its `plan`,
+   * so the two must name the same directory. Without this they can disagree,
+   * and a story read from one plan is then written into another.
+   */
+  .refine((story) => story.id.startsWith(`${story.plan}-`), {
+    error: 'a story id must begin with its plan id',
+    path: ['id'],
+  })
 
 export const ManifestEntrySchema = z.strictObject({
   id: StoryIdSchema,

@@ -119,6 +119,28 @@ describe('runStart', () => {
     expect((await new StateStore(project.dir).get()).status).toBe('idle')
   })
 
+  it('rejects a track name that would escape the runs directory', async () => {
+    // The track is the third component of `<run_id>--<story>--<track>`, and it
+    // arrives from a hand-editable config as well as from a tool call. The
+    // config schema refuses to define it and the state schema refuses to hold
+    // it, so nothing reaches runDirName that could steer the write.
+    const config = await loadConfig(project.dir)
+    config.tracks['../../../tmp/victim'] = { required: ['editor'], available: [], max_cycles: 1 }
+    await writeConfig(project.dir, config)
+
+    await expect(loadConfig(project.dir)).rejects.toThrow(/tracks/)
+    await expect(
+      runStart(project.dir, { track: '../../../tmp/victim', goal: 'x' }, clock),
+    ).rejects.toThrow(/tracks/)
+
+    await expect(
+      new StateStore(project.dir, clock).update((draft) => {
+        draft.track = '../../../tmp/victim'
+      }),
+    ).rejects.toBeInstanceOf(InvalidStateError)
+    await expect(fs.access(path.join(project.dir, 'tmp'))).rejects.toThrow()
+  })
+
   it('rejects a story id that does not exist', async () => {
     await expect(
       runStart(project.dir, { track: 'build', goal: 'Build it', plan: 'P001', story: 'P001-S01' }, clock),

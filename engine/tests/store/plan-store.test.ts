@@ -10,6 +10,7 @@ import {
   readPlan,
   readStory,
   storyFileName,
+  usedStoryNumbers,
   writePlan,
   writeStory,
 } from '../../src/store/plan-store.js'
@@ -51,6 +52,14 @@ describe('storyFileName', () => {
   it('strips characters that do not belong in a filename', () => {
     const named = storyFileName({ ...STORY.frontmatter, title: 'Refresh / rotate  the token!' })
     expect(named).toBe('P001-S02-refresh-rotate-the-token.md')
+  })
+
+  it('bounds the name whatever the title', () => {
+    // NAME_MAX is 255 bytes: an unbounded title fails the write with a raw
+    // errno instead of naming the field at fault.
+    const named = storyFileName({ ...STORY.frontmatter, title: 'a'.repeat(200) })
+    expect(named.length).toBeLessThanOrEqual(255)
+    expect(named.startsWith('P001-S02-')).toBe(true)
   })
 })
 
@@ -144,5 +153,50 @@ describe('listPlanIds', () => {
 
   it('returns an empty list when nothing is provisioned', async () => {
     expect(await listPlanIds(project.dir)).toEqual([])
+  })
+
+  it('ignores a file named like a plan directory', async () => {
+    await writePlan(project.dir, PLAN)
+    await fs.writeFile(path.join(resolveLoopPaths(project.dir).plans, 'P001-notes.md'), 'notes\n', 'utf8')
+
+    // Counted, the stray file renders P001 twice in INDEX.md; found first by
+    // findPlanDir, it fails every read of the plan.
+    expect(await listPlanIds(project.dir)).toEqual(['P001'])
+    expect(await findPlanDir(project.dir, 'P001')).toContain('P001-user-auth')
+  })
+
+  it('reports one id for two directories that claim it', async () => {
+    await writePlan(project.dir, PLAN)
+    await fs.mkdir(path.join(resolveLoopPaths(project.dir).plans, 'P001-old'), { recursive: true })
+
+    expect(await listPlanIds(project.dir)).toEqual(['P001'])
+  })
+})
+
+describe('readPlan', () => {
+  it('names the directory when PLAN.md is missing rather than failing with an errno', async () => {
+    await fs.mkdir(path.join(resolveLoopPaths(project.dir).plans, 'P002-billing', 'stories'), { recursive: true })
+    await expect(readPlan(project.dir, 'P002')).rejects.toThrow(/PLAN\.md/)
+  })
+})
+
+describe('usedStoryNumbers', () => {
+  it('counts a story whose frontmatter no longer parses', async () => {
+    await writePlan(project.dir, PLAN)
+    const file = await writeStory(project.dir, { ...STORY, frontmatter: { ...STORY.frontmatter, id: 'P001-S01', depends_on: [] } })
+    await fs.writeFile(file, '---\nid: P001-S01\nnonsense: true\n---\n', 'utf8')
+
+    // listStories drops it, but the file still owns the id: handing S01 out
+    // again would put two stories under one name.
+    expect(await listStories(project.dir, 'P001')).toEqual([])
+    expect(await usedStoryNumbers(project.dir, 'P001')).toEqual([1])
+  })
+
+  it('ignores a file belonging to another plan', async () => {
+    await writePlan(project.dir, PLAN)
+    const dir = path.join(await findPlanDir(project.dir, 'P001'), 'stories')
+    await fs.writeFile(path.join(dir, 'P002-S07-stray.md'), 'stray\n', 'utf8')
+
+    expect(await usedStoryNumbers(project.dir, 'P001')).toEqual([])
   })
 })

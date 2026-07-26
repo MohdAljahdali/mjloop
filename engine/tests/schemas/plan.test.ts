@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import * as z from 'zod'
 import {
   ManifestSchema,
   PlanFrontmatterSchema,
@@ -62,6 +63,19 @@ describe('StoryFrontmatterSchema', () => {
 
   it('rejects a dependency that is not a story id', () => {
     expect(StoryFrontmatterSchema.safeParse({ ...STORY, depends_on: ['../x'] }).success).toBe(false)
+  })
+
+  it('rejects an id that does not begin with its plan id', () => {
+    // readStory locates the file from the id and writeStory from the plan, so
+    // a story whose two fields disagree is read from one plan and written to
+    // another.
+    const parsed = StoryFrontmatterSchema.safeParse({ ...STORY, plan: 'P002' })
+    expect(parsed.success).toBe(false)
+    expect(z.prettifyError(parsed.error!)).toContain('a story id must begin with its plan id')
+  })
+
+  it('rejects a title too long to name a file', () => {
+    expect(StoryFrontmatterSchema.safeParse({ ...STORY, title: 'a'.repeat(201) }).success).toBe(false)
   })
 })
 
