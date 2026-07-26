@@ -2,6 +2,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import * as z from 'zod'
 import { AgentNameSchema, parseAgentResult } from '../schemas/contract.js'
+import { loadConfig } from '../store/config-store.js'
 import { StateStore, type Clock } from '../store/state-store.js'
 import { NoActiveRunError, cycleDirPath } from './run.js'
 
@@ -29,6 +30,17 @@ export class CycleClosedError extends Error {
   }
 }
 
+export class ReproductionGateError extends Error {
+  constructor(agent: string, provenBy: string) {
+    super(
+      `"${agent}" is blocked by the "${provenBy}" gate on this track. Nothing it produces can be recorded until ` +
+        `"${provenBy}" returns status "pass" carrying command or test evidence that the defect is real. ` +
+        'Reproduce the defect first, or halt the run — do not fix what has not been demonstrated.',
+    )
+    this.name = 'ReproductionGateError'
+  }
+}
+
 export interface RunLogInput {
   agent: string
   /**
@@ -45,7 +57,7 @@ export async function runLog(
   projectDir: string,
   input: RunLogInput,
   now: Clock = () => new Date(),
-): Promise<{ path: string; findingsAdded: number }> {
+): Promise<{ path: string; findingsAdded: number; gateOpened: boolean }> {
   const agent = AgentNameSchema.safeParse(input.agent)
   if (!agent.success) throw new InvalidAgentNameError(input.agent, z.prettifyError(agent.error))
 
@@ -55,6 +67,25 @@ export async function runLog(
   const store = new StateStore(projectDir, now)
   const state = await store.get()
   if (state.status !== 'running') throw new NoActiveRunError()
+
+  // runLog reads config for the first time here: the gate is a property of the
+  // running track, and a track is configuration.
+  const config = await loadConfig(projectDir)
+  const gate = state.track === null ? undefined : config.tracks[state.track]?.gate
+
+  if (gate !== undefined && state.reproduction === null && gate.blocks.includes(agent.data)) {
+    throw new ReproductionGateError(agent.data, gate.proven_by)
+  }
+
+  // The gate opens as a side effect of the ordinary evidence-bound channel.
+  // There is no tool that simply declares a defect reproduced: the engine
+  // cannot read an excerpt and confirm it shows a failure, but it can insist
+  // the claim came from the designated agent, carried command or test
+  // evidence, and passed contract validation on the way in.
+  const proof =
+    gate !== undefined && agent.data === gate.proven_by && parsed.value.status === 'pass'
+      ? parsed.value.evidence.find((entry) => entry.kind === 'command' || entry.kind === 'test')
+      : undefined
 
   // Validated by the same schema as the agent name: anything that reaches the
   // filesystem goes through one check, in one place.
@@ -70,7 +101,7 @@ export async function runLog(
   const file = path.join(cycleDir, `${basename}.json`)
   await fs.writeFile(file, `${JSON.stringify(parsed.value, null, 2)}\n`, 'utf8')
 
-  if (parsed.value.findings.length > 0) {
+  if (parsed.value.findings.length > 0 || proof !== undefined) {
     await store.update((draft) => {
       // The read above was not locked, so a `cycleAdvance` may have landed in
       // between: it has archived the cycle these findings belong to and either
@@ -80,8 +111,11 @@ export async function runLog(
       if (draft.status !== 'running') throw new NoActiveRunError()
       if (draft.cycle !== state.cycle) throw new CycleClosedError(agent.data, state.cycle, draft.cycle)
       draft.findings.push(...parsed.value.findings)
+      if (proof !== undefined) {
+        draft.reproduction = { agent: agent.data, cycle: draft.cycle, ref: proof.ref, excerpt: proof.excerpt }
+      }
     })
   }
 
-  return { path: file, findingsAdded: parsed.value.findings.length }
+  return { path: file, findingsAdded: parsed.value.findings.length, gateOpened: proof !== undefined }
 }

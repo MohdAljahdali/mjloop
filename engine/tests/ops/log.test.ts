@@ -1,7 +1,13 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { CycleClosedError, InvalidAgentNameError, InvalidAgentResultError, runLog } from '../../src/ops/log.js'
+import {
+  CycleClosedError,
+  InvalidAgentNameError,
+  InvalidAgentResultError,
+  ReproductionGateError,
+  runLog,
+} from '../../src/ops/log.js'
 import { initLoop } from '../../src/ops/init.js'
 import { cycleAdvance, runDirPath, runStart } from '../../src/ops/run.js'
 import { loadConfig, writeConfig } from '../../src/store/config-store.js'
@@ -174,5 +180,106 @@ describe('runLog against a cycle that closes under it', () => {
     // Either the finding was in the cycle that passed — and the leader's pass
     // rule owns that judgement — or it was rejected. It is never filed after.
     if (logged.status === 'rejected') expect(state.findings).toEqual([])
+  })
+})
+
+describe('the reproduction gate', () => {
+  const proof = {
+    status: 'pass' as const,
+    summary: 'A test that fails because the cache returns a stale entry.',
+    evidence: [{ kind: 'command' as const, ref: 'npm test -- cache', excerpt: '1 failing: expected fresh, got stale' }],
+    findings: [],
+    files_touched: ['test/cache.test.ts'],
+    next_hint: null,
+  }
+
+  const fix = {
+    status: 'pass' as const,
+    summary: 'Invalidated the entry on write.',
+    evidence: [{ kind: 'file' as const, ref: 'src/cache.ts', excerpt: 'this.map.delete(key)' }],
+    findings: [],
+    files_touched: ['src/cache.ts'],
+    next_hint: null,
+  }
+
+  beforeEach(async () => {
+    await runStart(project.dir, { track: 'fix', goal: 'Stale cache entry' }, clock)
+  })
+
+  it('rejects a blocked agent while the gate is shut', async () => {
+    await expect(runLog(project.dir, { agent: 'fixer', result: fix }, clock)).rejects.toBeInstanceOf(
+      ReproductionGateError,
+    )
+  })
+
+  it('names the agent that would open it', async () => {
+    await expect(runLog(project.dir, { agent: 'fixer', result: fix }, clock)).rejects.toThrow(/reproducer/)
+  })
+
+  it('writes nothing and touches no state when it rejects', async () => {
+    await expect(runLog(project.dir, { agent: 'fixer', result: fix }, clock)).rejects.toThrow()
+
+    const state = await new StateStore(project.dir).get()
+    const cycleDir = path.join(runDirPath(project.dir, state), 'cycle-01')
+    await expect(fs.access(path.join(cycleDir, 'fixer.json'))).rejects.toThrow()
+    expect(state.reproduction).toBeNull()
+  })
+
+  it('opens on an evidenced pass from the proving agent', async () => {
+    const { gateOpened } = await runLog(project.dir, { agent: 'reproducer', result: proof }, clock)
+    expect(gateOpened).toBe(true)
+
+    const state = await new StateStore(project.dir).get()
+    expect(state.reproduction).toEqual({
+      agent: 'reproducer',
+      cycle: 1,
+      ref: 'npm test -- cache',
+      excerpt: '1 failing: expected fresh, got stale',
+    })
+  })
+
+  it('lets the blocked agent through once it is open', async () => {
+    await runLog(project.dir, { agent: 'reproducer', result: proof }, clock)
+    const { path: file } = await runLog(project.dir, { agent: 'fixer', result: fix }, clock)
+    expect(path.basename(file)).toBe('fixer.json')
+  })
+
+  it('stays shut for a pass with no command or test evidence', async () => {
+    const { gateOpened } = await runLog(
+      project.dir,
+      { agent: 'reproducer', result: { ...proof, evidence: [] } },
+      clock,
+    )
+    expect(gateOpened).toBe(false)
+    expect((await new StateStore(project.dir).get()).reproduction).toBeNull()
+  })
+
+  it('stays shut when the proving agent could not reproduce', async () => {
+    const { gateOpened } = await runLog(
+      project.dir,
+      { agent: 'reproducer', result: { ...proof, status: 'blocked' as const } },
+      clock,
+    )
+    expect(gateOpened).toBe(false)
+  })
+
+  it('re-records a later reproduction, so a second attempt wins', async () => {
+    await runLog(project.dir, { agent: 'reproducer', result: proof }, clock)
+    await runLog(
+      project.dir,
+      {
+        agent: 'reproducer',
+        result: { ...proof, evidence: [{ kind: 'command' as const, ref: 'npm test -- cache -t eviction', excerpt: '1 failing' }] },
+      },
+      clock,
+    )
+    expect((await new StateStore(project.dir).get()).reproduction?.ref).toBe('npm test -- cache -t eviction')
+  })
+
+  it('blocks nothing on a track with no gate', async () => {
+    await runStart(project.dir, { track: 'edit', goal: 'Rename' }, clock)
+    const { path: file, gateOpened } = await runLog(project.dir, { agent: 'fixer', result: fix }, clock)
+    expect(path.basename(file)).toBe('fixer.json')
+    expect(gateOpened).toBe(false)
   })
 })
