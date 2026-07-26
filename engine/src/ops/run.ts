@@ -4,6 +4,7 @@ import type { Finding, Result, State } from '../schemas/state.js'
 import { loadConfig } from '../store/config-store.js'
 import { resolveLoopPaths } from '../store/paths.js'
 import { StateStore, type Clock } from '../store/state-store.js'
+import { cycleFingerprint } from './fingerprint.js'
 
 export class UnknownTrackError extends Error {
   constructor(track: string, known: string[]) {
@@ -103,6 +104,7 @@ export async function cycleAdvance(
   // describes exactly the findings the state transition consumed.
   let carried: Finding[] = []
   let closedCycle = 0
+  let fingerprint: string | null = null
 
   // Status and cap are evaluated against the draft inside the locked update,
   // not a pre-lock snapshot: two racing advances (or an advance racing a
@@ -129,6 +131,22 @@ export async function cycleAdvance(
       draft.current.stage = 'done'
       return
     }
+    // Computed from the findings this cycle closed with, captured above
+    // before they were cleared.
+    fingerprint = cycleFingerprint(carried, input.result)
+    draft.no_progress_count = fingerprint === draft.last_fingerprint ? draft.no_progress_count + 1 : 0
+    draft.last_fingerprint = fingerprint
+
+    // Stagnation is checked before the cap because halting earlier is its
+    // entire purpose. The two reasons stay distinct: "the loop is stuck" and
+    // "the loop ran out of budget" call for different responses from whoever
+    // reads HALT.md.
+    if (draft.no_progress_count >= config.limits.no_progress_strikes) {
+      draft.status = 'halted'
+      draft.current.stage = 'halted'
+      draft.halt_reason = `no progress for ${draft.no_progress_count} consecutive cycles on track ${draft.track}`
+      return
+    }
     if (draft.cycle >= track.max_cycles) {
       draft.status = 'halted'
       draft.current.stage = 'halted'
@@ -144,7 +162,7 @@ export async function cycleAdvance(
   // longer holds them, so they are passed in explicitly.
   if (after.status === 'halted') await writeHaltReport(projectDir, after, carried)
 
-  return { state: after, carried_findings: carried, fingerprint: null, strikes: after.no_progress_count }
+  return { state: after, carried_findings: carried, fingerprint, strikes: after.no_progress_count }
 }
 
 /**

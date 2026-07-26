@@ -209,6 +209,101 @@ describe('cycleAdvance findings lifecycle', () => {
   })
 })
 
+describe('stagnation guard', () => {
+  const sameFailure = {
+    status: 'fail' as const,
+    summary: 'the suite is still red',
+    evidence: [{ kind: 'command' as const, ref: 'npm test', excerpt: '1 failing' }],
+    findings: [{ severity: 'high' as const, file: 'src/a.ts', line: 1, claim: 'assertion is stale' }],
+    files_touched: [],
+    next_hint: null,
+  }
+
+  /** Log a failing verifier result, then close the cycle. */
+  async function failCycle(claim = 'assertion is stale') {
+    await runLog(
+      project.dir,
+      { agent: 'verifier', result: { ...sameFailure, findings: [{ ...sameFailure.findings[0]!, claim }] } },
+      clock,
+    )
+    return cycleAdvance(project.dir, { agents: ['builder', 'verifier'], result: 'fail' }, clock)
+  }
+
+  beforeEach(async () => {
+    await runStart(project.dir, { track: 'build', goal: 'Add the endpoint' }, clock)
+  })
+
+  it('takes no strike on the first failing cycle', async () => {
+    const { state, strikes, fingerprint } = await failCycle()
+    expect(strikes).toBe(0)
+    expect(fingerprint).toMatch(/^[0-9a-f]{64}$/)
+    expect(state.status).toBe('running')
+    expect(state.cycle).toBe(2)
+  })
+
+  it('takes a strike when a cycle closes with the same work remaining', async () => {
+    await failCycle()
+    const { state, strikes } = await failCycle()
+    expect(strikes).toBe(1)
+    expect(state.status).toBe('running')
+  })
+
+  it('halts on the second strike, naming stagnation rather than the cap', async () => {
+    await failCycle()
+    await failCycle()
+    const { state } = await failCycle()
+
+    expect(state.status).toBe('halted')
+    expect(state.cycle).toBe(3)
+    expect(state.halt_reason).toBe('no progress for 2 consecutive cycles on track build')
+
+    const report = await fs.readFile(path.join(runDirPath(project.dir, state), 'HALT.md'), 'utf8')
+    expect(report).toContain('no progress for 2 consecutive cycles')
+  })
+
+  it('resets the count when the remaining work changes', async () => {
+    await failCycle()
+    await failCycle()
+    const { strikes } = await failCycle('a different defect')
+    expect(strikes).toBe(0)
+  })
+
+  it('halts on stagnation before the cap when both would fire', async () => {
+    const config = await loadConfig(project.dir)
+    config.tracks.build = { required: ['builder', 'verifier'], available: [], max_cycles: 3 }
+    await writeConfig(project.dir, config)
+
+    await failCycle()
+    await failCycle()
+    const { state } = await failCycle()
+
+    // Cycle 3 reaches both the second strike and the cap. Stagnation is the
+    // more actionable reason, and it is checked first.
+    expect(state.halt_reason).toContain('no progress')
+    expect(state.halt_reason).not.toContain('cycle cap')
+  })
+
+  it('never strikes a passing cycle', async () => {
+    await failCycle()
+    await runLog(
+      project.dir,
+      {
+        agent: 'verifier',
+        result: { ...sameFailure, status: 'pass', findings: [] },
+      },
+      clock,
+    )
+    const { state, strikes, fingerprint } = await cycleAdvance(
+      project.dir,
+      { agents: ['builder', 'verifier'], result: 'pass' },
+      clock,
+    )
+    expect(state.status).toBe('done')
+    expect(fingerprint).toBeNull()
+    expect(strikes).toBe(0)
+  })
+})
+
 describe('halt', () => {
   it('refuses to halt when no run exists and leaves state untouched', async () => {
     await expect(halt(project.dir, 'user requested stop', clock)).rejects.toBeInstanceOf(NoActiveRunError)
