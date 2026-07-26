@@ -12,6 +12,7 @@ describe('initialState', () => {
     expect(state.run_id).toBeNull()
     expect(state.updated_at).toBe('2026-07-26T10:36:00.000Z')
     expect(state.last_fingerprint).toBeNull()
+    expect(state.reproduction).toBeNull()
   })
 })
 
@@ -61,5 +62,26 @@ describe('StateSchema', () => {
   it('accepts a stored fingerprint', () => {
     const state = { ...initialState(NOW), last_fingerprint: 'a'.repeat(64) }
     expect(StateSchema.safeParse(state).success).toBe(true)
+  })
+
+  it('defaults reproduction to null on a document written before the field existed', () => {
+    const { reproduction, ...withoutField } = initialState(NOW)
+    expect(StateSchema.parse(withoutField).reproduction).toBeNull()
+  })
+
+  it('accepts a recorded reproduction', () => {
+    const state = {
+      ...initialState(NOW),
+      reproduction: { agent: 'reproducer', cycle: 1, ref: 'npm test -- cache', excerpt: '1 failing' },
+    }
+    expect(StateSchema.safeParse(state).success).toBe(true)
+  })
+
+  it('rejects a reproduction proven in cycle 0', () => {
+    const bad = {
+      ...initialState(NOW),
+      reproduction: { agent: 'reproducer', cycle: 0, ref: 'npm test', excerpt: '' },
+    }
+    expect(StateSchema.safeParse(bad).success).toBe(false)
   })
 })

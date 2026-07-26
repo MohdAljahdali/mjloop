@@ -27,6 +27,23 @@ export const HistoryEntrySchema = z.strictObject({
   ref: z.string().min(1),
 })
 
+/**
+ * Proof that a defect exists, recorded when a gated track's proving agent
+ * returns an evidenced pass. Its presence is what opens the gate; there is no
+ * tool that sets it directly, because a defect somebody merely asserts was
+ * reproduced is exactly what the fix track exists to rule out.
+ */
+export const ReproductionSchema = z.strictObject({
+  /** The agent whose result opened the gate. */
+  agent: z.string().min(1),
+  /** The cycle it was proven in. */
+  cycle: z.number().int().positive(),
+  /** The command that reproduces the defect. */
+  ref: z.string().min(1),
+  /** Its decisive output. May be empty — the contract allows an empty excerpt. */
+  excerpt: z.string(),
+})
+
 export const StateSchema = z.strictObject({
   schema: z.literal(1),
   run_id: z.string().min(1).nullable(),
@@ -49,6 +66,12 @@ export const StateSchema = z.strictObject({
    * validation on read rather than gaining the field on its next write.
    */
   last_fingerprint: z.string().min(1).nullable().default(null),
+  /**
+   * The default matters for the same reason `last_fingerprint`'s does: without
+   * it every state file written before this field existed would fail
+   * validation on read rather than gaining the field on its next write.
+   */
+  reproduction: ReproductionSchema.nullable().default(null),
   history: z.array(HistoryEntrySchema),
   halt_reason: z.string().min(1).nullable(),
   updated_at: z.iso.datetime(),
@@ -60,6 +83,7 @@ export type Severity = z.infer<typeof SeveritySchema>
 export type Result = z.infer<typeof ResultSchema>
 export type Finding = z.infer<typeof FindingSchema>
 export type HistoryEntry = z.infer<typeof HistoryEntrySchema>
+export type Reproduction = z.infer<typeof ReproductionSchema>
 export type State = z.infer<typeof StateSchema>
 
 /** A freshly provisioned, not-yet-running state. */
@@ -75,6 +99,7 @@ export function initialState(now: Date): State {
     findings: [],
     no_progress_count: 0,
     last_fingerprint: null,
+    reproduction: null,
     history: [],
     halt_reason: null,
     updated_at: now.toISOString(),

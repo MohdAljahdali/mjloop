@@ -74,6 +74,16 @@ describe('runStart', () => {
     expect(second.last_fingerprint).toBeNull()
   })
 
+  it('clears a previous run reproduction', async () => {
+    await runStart(project.dir, { track: 'fix', goal: 'First defect' }, clock)
+    await new StateStore(project.dir, clock).update((draft) => {
+      draft.reproduction = { agent: 'reproducer', cycle: 1, ref: 'npm test', excerpt: '1 failing' }
+    })
+
+    const second = await runStart(project.dir, { track: 'fix', goal: 'Second defect' }, clock)
+    expect(second.reproduction).toBeNull()
+  })
+
   it('rejects a track that is not in config', async () => {
     await expect(runStart(project.dir, { track: 'ghost', goal: 'x' }, clock)).rejects.toBeInstanceOf(UnknownTrackError)
   })

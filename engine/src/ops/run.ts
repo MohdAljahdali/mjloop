@@ -76,6 +76,9 @@ export async function runStart(projectDir: string, input: RunStartInput, now: Cl
     // it to the next run whatever the two were about.
     draft.no_progress_count = 0
     draft.last_fingerprint = null
+    // A new run has proven nothing. Carrying a previous run's reproduction
+    // would open this run's gate for a defect nobody demonstrated here.
+    draft.reproduction = null
     draft.halt_reason = null
   })
 
