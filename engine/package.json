@@ -16,7 +16,8 @@
     "e2e": "bash ../tests/e2e/run-edit.sh",
     "e2e:build": "bash ../tests/e2e/run-build.sh",
     "e2e:fix": "bash ../tests/e2e/run-fix.sh",
-    "e2e:story": "bash ../tests/e2e/run-story.sh"
+    "e2e:story": "bash ../tests/e2e/run-story.sh",
+    "e2e:plan": "bash ../tests/e2e/run-plan.sh"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.29.0",
