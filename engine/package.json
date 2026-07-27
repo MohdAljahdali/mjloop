@@ -1,12 +1,12 @@
 {
-  "name": "@loop/engine",
+  "name": "@mjloop/engine",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "engines": { "node": ">=20" },
   "bin": {
-    "loop-mcp": "./dist/mcp/server.js",
-    "loop-cli": "./dist/cli/index.js"
+    "mjloop-mcp": "./dist/mcp/server.js",
+    "mjloop-cli": "./dist/cli/index.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
