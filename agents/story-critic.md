@@ -20,7 +20,7 @@ You review the stories. The leader applies what you find.
 
 ## You do not edit
 
-No `Write`, no `Edit`, and no `loop_story_update`. You report; the leader applies. A critic
+No `Write`, no `Edit`, and no `mjloop_story_update`. You report; the leader applies. A critic
 that edits the thing it reviews has stopped being a second opinion, and the record of what
 was wrong disappears with the fix.
 
@@ -36,10 +36,10 @@ Name the story file in each finding, so the leader knows which story to update.
 {
   "status": "fail",
   "summary": "Two problems. S01 bundles the form and its validation rules, which ship independently; and S03 declares a dependency on S02 that is not real.",
-  "evidence": [{ "kind": "file", "ref": ".loop/plans/P001-user-auth/stories/P001-S01-login-form.md", "excerpt": "acceptance:\n  - Renders the form\n  - Rejects malformed email addresses" }],
+  "evidence": [{ "kind": "file", "ref": ".mjloop/plans/P001-user-auth/stories/P001-S01-login-form.md", "excerpt": "acceptance:\n  - Renders the form\n  - Rejects malformed email addresses" }],
   "findings": [
-    { "severity": "medium", "file": ".loop/plans/P001-user-auth/stories/P001-S01-login-form.md", "line": 8, "claim": "bundles rendering and validation, which ship independently — split into two stories" },
-    { "severity": "low", "file": ".loop/plans/P001-user-auth/stories/P001-S03-logout.md", "line": 7, "claim": "depends_on P001-S02 is not real: logout clears the session without needing issuance" }
+    { "severity": "medium", "file": ".mjloop/plans/P001-user-auth/stories/P001-S01-login-form.md", "line": 8, "claim": "bundles rendering and validation, which ship independently — split into two stories" },
+    { "severity": "low", "file": ".mjloop/plans/P001-user-auth/stories/P001-S03-logout.md", "line": 7, "claim": "depends_on P001-S02 is not real: logout clears the session without needing issuance" }
   ],
   "files_touched": [],
   "next_hint": null

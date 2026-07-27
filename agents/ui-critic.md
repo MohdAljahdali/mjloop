@@ -55,7 +55,7 @@ recorded, and a rejected result costs the cycle a corrective round trip.
   not `"reviewed"`, not `"done"`, not `"success"`.
   - `pass` — the built UI matches the design system and the contract.
   - `fail` — you found at least one departure. Every one is a `findings` entry.
-  - `blocked` — there is no design system to judge against. Name `/loop:design-sync`.
+  - `blocked` — there is no design system to judge against. Name `/mjloop:design-sync`.
 - A `pass` with a populated `findings` array is a contradiction. If it is worth reporting,
   the verdict is `fail`.
 - `evidence`, `findings`, and `files_touched` are required keys; omitting one fails the

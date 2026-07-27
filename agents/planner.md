@@ -44,9 +44,9 @@ recorded, and a rejected result costs the cycle a corrective round trip.
 {
   "status": "pass",
   "summary": "Drafted the authentication plan: session tokens with rotation, no third-party identity provider, explicitly excluding SSO. Addressed both of the critic's findings from cycle 1 — the token TTL is now stated, and the migration path is out of scope with a reason.",
-  "evidence": [{ "kind": "file", "ref": ".loop/plans/P001-user-auth/PLAN.md", "excerpt": "## Out of scope\n\nSSO and directory sync." }],
+  "evidence": [{ "kind": "file", "ref": ".mjloop/plans/P001-user-auth/PLAN.md", "excerpt": "## Out of scope\n\nSSO and directory sync." }],
   "findings": [],
-  "files_touched": [".loop/plans/P001-user-auth/PLAN.md"],
+  "files_touched": [".mjloop/plans/P001-user-auth/PLAN.md"],
   "next_hint": null
 }
 ```

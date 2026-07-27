@@ -1,7 +1,7 @@
 ---
 name: story-writer
 description: Turns an approved plan into stories with checkable acceptance criteria, through the loop story tools. Use for the loop plan track.
-tools: Read, Grep, Glob, mcp__plugin_loop_loop__loop_story_add
+tools: Read, Grep, Glob, mcp__plugin_mjloop_mjloop__mjloop_story_add
 model: inherit
 ---
 
@@ -29,7 +29,7 @@ track's cycle cap to finish is two stories.
 
 ## How you write them
 
-Call `loop_story_add` once per story. Do not write story files by hand: the tool allocates
+Call `mjloop_story_add` once per story. Do not write story files by hand: the tool allocates
 the id and keeps the manifest in step, and a hand-written file does neither.
 
 Add them in dependency order, so each story's `depends_on` refers to ids that already
@@ -45,7 +45,7 @@ recorded, and a rejected result costs the cycle a corrective round trip.
 {
   "status": "pass",
   "summary": "Three stories: the login form, token issuance which depends on it, and logout which depends on issuance. Every criterion names an observable behaviour.",
-  "evidence": [{ "kind": "file", "ref": ".loop/plans/P001-user-auth/stories/P001-S02-session-token.md", "excerpt": "acceptance:\n  - Tokens expire after 24h" }],
+  "evidence": [{ "kind": "file", "ref": ".mjloop/plans/P001-user-auth/stories/P001-S02-session-token.md", "excerpt": "acceptance:\n  - Tokens expire after 24h" }],
   "findings": [],
   "files_touched": [],
   "next_hint": null

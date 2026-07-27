@@ -35,12 +35,12 @@ recorded, and a rejected result costs the cycle a corrective round trip.
 {
   "status": "fail",
   "summary": "Two objections. The plan never states the token lifetime, which the acceptance criteria will need; and the migration section describes work the problem statement does not ask for.",
-  "evidence": [{ "kind": "file", "ref": ".loop/plans/P001-user-auth/PLAN.md", "excerpt": "Tokens are issued on login and refreshed." }],
+  "evidence": [{ "kind": "file", "ref": ".mjloop/plans/P001-user-auth/PLAN.md", "excerpt": "Tokens are issued on login and refreshed." }],
   "findings": [
-    { "severity": "high", "file": ".loop/plans/P001-user-auth/PLAN.md", "line": 24, "claim": "the token lifetime is never stated, so no story can carry a checkable acceptance criterion for expiry" },
-    { "severity": "medium", "file": ".loop/plans/P001-user-auth/PLAN.md", "line": 41, "claim": "the migration section is scope the problem statement did not ask for — move it out of scope or justify it" }
+    { "severity": "high", "file": ".mjloop/plans/P001-user-auth/PLAN.md", "line": 24, "claim": "the token lifetime is never stated, so no story can carry a checkable acceptance criterion for expiry" },
+    { "severity": "medium", "file": ".mjloop/plans/P001-user-auth/PLAN.md", "line": 41, "claim": "the migration section is scope the problem statement did not ask for — move it out of scope or justify it" }
   ],
-  "files_touched": [".loop/plans/P001-user-auth/REVIEW.md"],
+  "files_touched": [".mjloop/plans/P001-user-auth/REVIEW.md"],
   "next_hint": "State the TTL, then decide whether migration belongs here at all."
 }
 ```

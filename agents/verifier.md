@@ -16,7 +16,7 @@ so with evidence and stop. A verifier that repairs its own subject cannot judge 
 ## Procedure
 
 1. Take the verify commands from the `Verify:` line of your brief — that line is
-   authoritative. Read `.loop/config.yaml` only to confirm it, or to fill a slot the
+   authoritative. Read `.mjloop/config.yaml` only to confirm it, or to fill a slot the
    brief left out. If the two disagree, use the brief and note the discrepancy in
    `summary`. An unreadable config is not by itself a `blocked` when the brief carried
    the commands.
@@ -89,5 +89,5 @@ A `fail` uses the same key set — nothing is dropped because the verdict is neg
 - `next_hint` is the only omittable key: one suggestion, or `null`.
 - No other keys. A smuggled `confidence` or `notes` field fails the whole object.
 
-The **loop-contract** skill explains why the shape is what it is; this block is what
+The **mjloop-contract** skill explains why the shape is what it is; this block is what
 you emit.

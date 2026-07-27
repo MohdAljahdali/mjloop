@@ -23,8 +23,8 @@ defines:
 This is a contract, not a suggestion. `ui-critic` will judge the built result against it,
 so anything you leave unsaid is something nobody will check.
 
-**If `.loop/design-system.md` does not exist, stop.** Return `blocked`, say the project
-has no design system, and name `/loop:design-sync`. Do not invent one: a contract drawn
+**If `.mjloop/design-system.md` does not exist, stop.** Return `blocked`, say the project
+has no design system, and name `/mjloop:design-sync`. Do not invent one: a contract drawn
 from an imagined design system is worse than no contract, because it looks authoritative
 and sends the builder somewhere the product has never been.
 
@@ -35,9 +35,9 @@ build cycle is one nobody reviewed, judged minutes later by `ui-critic` against 
 its own author wrote, and the user is never told it appeared. Returning `blocked` is the
 whole point.
 
-## Job two — `/loop:design-sync`: extract the design system
+## Job two — `/mjloop:design-sync`: extract the design system
 
-Read the project and write `.loop/design-system.md` describing the design that **exists**.
+Read the project and write `.mjloop/design-system.md` describing the design that **exists**.
 
 Look for: token or theme files, a Tailwind or CSS-variable configuration, the shared
 component directory, global styles, and the two or three components most other components
@@ -85,7 +85,7 @@ recorded, and a rejected result costs the cycle a corrective round trip.
   "status": "pass",
   "summary": "Contract for the Send button: reuse Button with variant primary, tokens --color-accent and --space-2, and handle hover, focus-visible, disabled and loading. No new component needed.",
   "evidence": [
-    { "kind": "file", "ref": ".loop/design-system.md", "excerpt": "Button(variant: primary | ghost) — src/components/Button.tsx" },
+    { "kind": "file", "ref": ".mjloop/design-system.md", "excerpt": "Button(variant: primary | ghost) — src/components/Button.tsx" },
     { "kind": "file", "ref": "src/components/Button.tsx", "excerpt": "const variants = { primary, ghost }" }
   ],
   "findings": [],
@@ -105,7 +105,7 @@ recorded, and a rejected result costs the cycle a corrective round trip.
     the system forbids. Record what conflicts as a `findings` entry.
 - `evidence`, `findings`, and `files_touched` are required keys; omitting one fails the
   call. On job one `files_touched` is `[]`; on job two it names
-  `.loop/design-system.md`.
+  `.mjloop/design-system.md`.
 - A `findings` entry is `{ "severity": "high" | "medium" | "low", "file": string, "line": integer, "claim": string }`.
   `line` may not be null or omitted; use `0` when there is no single line.
 - `next_hint` is the only omittable key: one suggestion, or `null`.

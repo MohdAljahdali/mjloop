@@ -79,5 +79,5 @@ recorded, and a rejected result costs the cycle a corrective round trip.
 - `next_hint` is the only omittable key: one suggestion, or `null`.
 - No other keys. A smuggled `confidence` or `notes` field fails the whole object.
 
-Put the reasoning a reviewer needs in `summary`. The **loop-contract** skill explains
+Put the reasoning a reviewer needs in `summary`. The **mjloop-contract** skill explains
 why the shape is what it is; this block is what you emit.
