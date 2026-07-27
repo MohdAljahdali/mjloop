@@ -70,6 +70,14 @@ export const StateSchema = z.strictObject({
    */
   last_fingerprint: z.string().min(1).nullable().default(null),
   /**
+   * Normalised error signatures observed this cycle, appended by `runLog` and
+   * cleared when the next cycle opens — the same lifecycle findings have, for
+   * the same reason: they describe one cycle's failure, not the run's.
+   */
+  cycle_errors: z.array(z.string().min(1)).default([]),
+  /** Fingerprint of the previous cycle's errors, compared by the repeated-error guard. */
+  last_error_fingerprint: z.string().min(1).nullable().default(null),
+  /**
    * The default matters for the same reason `last_fingerprint`'s does: without
    * it every state file written before this field existed would fail
    * validation on read rather than gaining the field on its next write.
@@ -102,6 +110,8 @@ export function initialState(now: Date): State {
     findings: [],
     no_progress_count: 0,
     last_fingerprint: null,
+    cycle_errors: [],
+    last_error_fingerprint: null,
     reproduction: null,
     history: [],
     halt_reason: null,

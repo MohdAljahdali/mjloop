@@ -13,6 +13,8 @@ describe('initialState', () => {
     expect(state.updated_at).toBe('2026-07-26T10:36:00.000Z')
     expect(state.last_fingerprint).toBeNull()
     expect(state.reproduction).toBeNull()
+    expect(state.cycle_errors).toEqual([])
+    expect(state.last_error_fingerprint).toBeNull()
   })
 })
 
@@ -90,5 +92,21 @@ describe('StateSchema', () => {
       reproduction: { agent: 'reproducer', cycle: 0, ref: 'npm test', excerpt: '' },
     }
     expect(StateSchema.safeParse(bad).success).toBe(false)
+  })
+
+  it('defaults the error fields on a document written before they existed', () => {
+    const { cycle_errors, last_error_fingerprint, ...withoutFields } = initialState(NOW)
+    const parsed = StateSchema.parse(withoutFields)
+    expect(parsed.cycle_errors).toEqual([])
+    expect(parsed.last_error_fingerprint).toBeNull()
+  })
+
+  it('accepts recorded error signatures', () => {
+    const state = { ...initialState(NOW), cycle_errors: ['npm test :: N failing'], last_error_fingerprint: 'a'.repeat(64) }
+    expect(StateSchema.safeParse(state).success).toBe(true)
+  })
+
+  it('rejects an empty signature', () => {
+    expect(StateSchema.safeParse({ ...initialState(NOW), cycle_errors: [''] }).success).toBe(false)
   })
 })
