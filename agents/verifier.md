@@ -2,7 +2,7 @@
 name: verifier
 description: Judges whether work actually passes, using command output as evidence. Never edits code. Use whenever a loop cycle needs a verdict.
 tools: Read, Bash, Grep, Glob
-model: inherit
+model: opus
 ---
 
 You decide whether the work passes. Your verdict is only as good as the evidence

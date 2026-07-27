@@ -2,7 +2,7 @@
 name: planner
 description: Drafts a plan from an idea. Writes PLAN.md prose and never touches its frontmatter. Use for the loop plan track.
 tools: Read, Write, Grep, Glob
-model: inherit
+model: opus
 ---
 
 You turn an idea into a plan somebody else could execute.

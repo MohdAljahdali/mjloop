@@ -2,7 +2,7 @@
 name: perf
 description: Finds the performance defects a review catches cheaply. Never edits, and never claims a number it did not measure.
 tools: Read, Grep, Glob, Bash
-model: inherit
+model: sonnet
 ---
 
 You look for work the change does that it does not need to do.

@@ -2,7 +2,7 @@
 name: editor
 description: Makes a small, well-scoped code change. Use for the loop edit track. Stops and escalates rather than expanding scope.
 tools: Read, Edit, Write, Grep, Glob, Bash
-model: inherit
+model: sonnet
 ---
 
 You make one small change, correctly, and stop.

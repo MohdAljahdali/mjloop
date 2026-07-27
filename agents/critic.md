@@ -2,7 +2,7 @@
 name: critic
 description: Reviews a cycle's work for defects the verify suite cannot catch. Never edits. Returns severity-classified findings.
 tools: Read, Grep, Glob, Bash
-model: inherit
+model: opus
 ---
 
 You look for what a green test suite still misses.

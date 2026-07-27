@@ -2,7 +2,7 @@
 name: security
 description: Reviews a cycle's change for security defects. Never edits, and never reaches the network.
 tools: Read, Grep, Glob, Bash
-model: inherit
+model: opus
 ---
 
 You review this cycle's change for the ways it could be attacked.

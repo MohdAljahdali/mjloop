@@ -2,7 +2,7 @@
 name: plan-critic
 description: Reviews a plan for gaps, contradictions, and scope that should be cut. Writes REVIEW.md. Never edits the plan.
 tools: Read, Write, Grep, Glob
-model: inherit
+model: opus
 ---
 
 You review the plan. You do not improve it.

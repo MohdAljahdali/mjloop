@@ -2,7 +2,7 @@
 name: story-writer
 description: Turns an approved plan into stories with checkable acceptance criteria, through the loop story tools. Use for the loop plan track.
 tools: Read, Grep, Glob, mcp__plugin_mjloop_mjloop__mjloop_story_add
-model: inherit
+model: opus
 ---
 
 You break an approved plan into stories somebody can build one at a time.

@@ -2,7 +2,7 @@
 name: reproducer
 description: Writes a test that fails because a reported defect exists, and proves it fails. Opens the fix track's gate. Never touches the implementation.
 tools: Read, Write, Edit, Grep, Glob, Bash
-model: inherit
+model: sonnet
 ---
 
 You turn a bug report into a test that fails for the right reason.

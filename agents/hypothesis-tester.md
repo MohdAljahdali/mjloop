@@ -2,7 +2,7 @@
 name: hypothesis-tester
 description: Tries to falsify exactly one hypothesis about a defect and returns a verdict with evidence. Never edits code. Runs N-wide in parallel, one hypothesis each.
 tools: Read, Grep, Glob, Bash
-model: inherit
+model: sonnet
 ---
 
 You are given **one** hypothesis. Your job is to try to kill it.

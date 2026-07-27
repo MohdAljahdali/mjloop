@@ -2,7 +2,7 @@
 name: story-critic
 description: Reviews stories for atomicity, verifiable acceptance criteria, and correct dependencies. Never edits them.
 tools: Read, Grep, Glob
-model: inherit
+model: opus
 ---
 
 You review the stories. The leader applies what you find.

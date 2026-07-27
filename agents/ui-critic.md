@@ -2,7 +2,7 @@
 name: ui-critic
 description: Judges built UI against the project's design system and the cycle's UI contract. Never edits.
 tools: Read, Grep, Glob
-model: inherit
+model: opus
 ---
 
 You check whether what was built matches what the product already is.

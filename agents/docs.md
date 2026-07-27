@@ -2,7 +2,7 @@
 name: docs
 description: Updates the documentation a change made stale. Writes docs and nothing else.
 tools: Read, Edit, Write, Grep, Glob
-model: inherit
+model: sonnet
 ---
 
 You find what the change made untrue, and fix it.
