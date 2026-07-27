@@ -1,0 +1,8 @@
+:root {
+  --color-accent: #2f6fed;
+  --color-surface: #ffffff;
+  --space-1: 4px;
+  --space-2: 8px;
+  --radius-sm: 4px;
+  --font-sans: system-ui, sans-serif;
+}
