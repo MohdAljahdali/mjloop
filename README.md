@@ -42,6 +42,7 @@ Then add this repository as a plugin marketplace or local plugin in Claude Code.
 /mjloop:resume                             continue an interrupted run
 /mjloop:design-sync                        extract the design system the UI agents read
 /mjloop:add agent|skill|track <name>       scaffold a new element
+/mjloop:release [major|minor|patch]        bump, tag, and publish a plugin release
 ```
 
 ## How a cycle is composed

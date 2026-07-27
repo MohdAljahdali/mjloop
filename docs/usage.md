@@ -207,6 +207,21 @@ imagination would confidently describe a project that does not exist. Its frontm
 names the files the extraction actually read, so you can check the claim. Without it,
 `ui-designer` stops rather than inventing a design.
 
+## Releasing a plugin
+
+If the project you are working in is itself a Claude Code plugin, one command cuts its
+release:
+
+```
+/mjloop:release            derive the bump from the commits since the last tag
+/mjloop:release minor      choose the bump yourself
+```
+
+It refuses a dirty tree, a branch behind its remote, and failing verification; then bumps
+the version everywhere it appears, commits, tags, pushes, and publishes the notes. The
+version in `.claude-plugin/plugin.json` is what `/plugin` compares, so a release that
+changes behaviour without bumping it is one nobody can install.
+
 ## Next
 
 - [About](./about.md)
