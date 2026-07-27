@@ -20,5 +20,6 @@ Set up the loop for this project.
    - `/loop:stop [reason]` — halt the run and write a report
    - `/loop:resume` — continue a run that was interrupted
    - `/loop:design-sync` — extract the project's design system for the UI agents
+   - `/loop:add agent|skill|track <name>` — scaffold a new element
 
 If `loop_init` reports `alreadyInitialised: true`, say so and stop. Do not reset state.

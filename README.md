@@ -36,6 +36,7 @@ Then add this repository as a plugin marketplace or local plugin in Claude Code.
 /loop:stop [reason]                      halt the run and write a report
 /loop:resume                             continue an interrupted run
 /loop:design-sync                        extract the design system the UI agents read
+/loop:add agent|skill|track <name>       scaffold a new element
 ```
 
 ## How a cycle is composed
@@ -48,8 +49,28 @@ declared without its evidence. The `plan` track has no verifier: there is no sui
 against a document, so its verdict comes from `fit-checker`, the approval gate, and the
 story reviews.
 
-Change a track, cap, or forced specialist in `.loop/config.yaml`. Tracks are data — a
-new one needs no code.
+Change a track, cap, or forced specialist in `.loop/config.yaml`.
+
+## Extending it
+
+A track is data. Adding one is a few lines in `.loop/config.yaml`, and the leader never
+changes: it does not know agent names ahead of time, it reads them from the track.
+
+```yaml
+tracks:
+  refactor:
+    required:  [builder, verifier]
+    available: [scout, critic, perf]
+    max_cycles: 5
+```
+
+`/loop:add agent|skill|track <name>` scaffolds any of the three. New agents land in
+`.claude/agents/`, which is where Claude Code reads project subagents from — the scaffold
+refuses a name that would shadow one this plugin ships.
+
+The `loop-tracks` and `loop-extend` skills explain the whole system: what `required` and
+`available` guarantee, the two kinds of gate, the three specialist modes, and what a new
+agent must return.
 
 ## Plans and stories
 
