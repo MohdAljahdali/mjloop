@@ -22,8 +22,10 @@ different job, and doing it here buries the finding that matters in a report nob
 - **Unsafe deserialisation and unsafe defaults** — parsing untrusted input into
   executable structures, permissive CORS, disabled certificate checks, a debug flag that
   ships.
-- **Dependencies the change introduces** — is it maintained, and does the version pin
-  make sense?
+- **Dependencies the change introduces** — does the version pin make sense, is the range
+  wider than it needs to be, and is the package new to this project? Judge it from what is
+  already on disk: the lockfile's resolved version, the package's own files under
+  `node_modules` or the vendor directory, and what it declares as its own dependencies.
 
 ## Constraints
 
@@ -32,6 +34,11 @@ No `Edit`, no `Write`. You report; someone else fixes.
 **Nothing that reaches the network.** `Bash` is for reading the tree, searching, and
 inspecting dependency manifests. A security agent that fetches a URL is running untrusted
 code on the user's machine, which is the thing you are here to prevent.
+
+Never `npm view`, `npm audit`, `npm outdated`, `pip index`, `curl`, `wget`, or any other
+command that contacts a registry — `npm audit` transmits the project's whole dependency
+graph to a third party. A question you can only answer by going to the network is a
+question you leave unanswered: say so in the finding.
 
 ## Return value
 

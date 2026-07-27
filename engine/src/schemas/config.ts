@@ -1,4 +1,5 @@
 import * as z from 'zod'
+import { AgentNameSchema } from './contract.js'
 import { IdSchema } from './state.js'
 
 export const SpecialistModeSchema = z.enum(['auto', 'always', 'never'])
@@ -85,7 +86,14 @@ export const ConfigSchema = z
      * the story id in the same template is. `config.yaml` is hand-editable and
      * travels with a cloned repository, so this is the only place to catch it. */
     tracks: z.record(IdSchema, TrackSchema),
-    specialists: z.record(z.string().min(1), SpecialistModeSchema).default({}),
+    /** Keyed on the same schema every other agent name goes through. A key
+     * here is load-bearing and matched against a name the leader supplies, so
+     * a typo fails silently in both directions: `never` on a misspelling
+     * forbids nothing and the agent runs every cycle, while `always` on a name
+     * `runLog` would refuse forces a cycle that can be composed but never
+     * logged. Neither is reported anywhere, so this is the only place to catch
+     * it. */
+    specialists: z.record(AgentNameSchema, SpecialistModeSchema).default({}),
     gates: z
       .strictObject({
         plan_approval: z.enum(['human', 'auto']).default('human'),
@@ -117,6 +125,17 @@ export const ConfigSchema = z
             message: `"${agent}" is required by track "${trackName}" but specialists.${agent} is "never" — every possible roster for that track would be rejected. Drop one of the two.`,
           })
         }
+      }
+      // The sibling contradiction, and the same permanent, silent shutdown
+      // `TrackSchema`'s own gate checks exist to prevent: a prover in
+      // `available` passes those checks, so only the whole document can see
+      // that the config has forbidden the one agent that opens the gate.
+      if (track.gate !== undefined && forbidden.has(track.gate.proven_by)) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['tracks', trackName, 'gate', 'proven_by'],
+          message: `"${track.gate.proven_by}" proves the gate on track "${trackName}" but specialists.${track.gate.proven_by} is "never" — the only result that opens the gate could never be produced, so everything it blocks would be refused for the whole run. Drop one of the two.`,
+        })
       }
     }
   })

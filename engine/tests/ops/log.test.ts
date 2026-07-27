@@ -3,6 +3,7 @@ import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   CycleClosedError,
+  ForbiddenSpecialistError,
   GateClosedError,
   InvalidAgentNameError,
   InvalidAgentResultError,
@@ -135,6 +136,25 @@ describe('runLog against the track roster', () => {
     await writeConfig(project.dir, config)
 
     await expect(runLog(project.dir, { agent: 'security', result: RESULT }, clock)).resolves.toBeDefined()
+  })
+
+  it('refuses a specialist the config forbids, though the track defines it', async () => {
+    const config = await loadConfig(project.dir)
+    config.tracks.edit = { required: ['editor', 'verifier'], available: ['security'], max_cycles: 3 }
+    config.specialists = { security: 'never' }
+    await writeConfig(project.dir, config)
+
+    await expect(runLog(project.dir, { agent: 'security', result: RESULT }, clock)).rejects.toBeInstanceOf(
+      ForbiddenSpecialistError,
+    )
+    await expect(runLog(project.dir, { agent: 'security', result: RESULT }, clock)).rejects.toThrow(/never/)
+
+    // No result file, and no finding: a forbidden agent leaves nothing behind
+    // for the leader's pass rule to trip over. `rosterSet` is not consulted
+    // here, so this is the only thing standing between it and the cycle.
+    const state = await new StateStore(project.dir).get()
+    expect(state.findings).toEqual([])
+    expect(await fs.readdir(path.join(runDirPath(project.dir, state), 'cycle-01')).catch(() => [])).toEqual([])
   })
 
   it('refuses the log when the running track has gone missing from config', async () => {

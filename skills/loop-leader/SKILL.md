@@ -103,6 +103,10 @@ it — the rejection is the invariant doing its job.
 Seven agents are available on the build track and each omission needs a stated reason.
 These are the conditions that call for each:
 
+- **`scout`** — the change spans files or subsystems this cycle has not mapped, and you
+  would otherwise be guessing where the work lands.
+- **`critic`** — the change is large enough or risky enough that a second reading before
+  verification pays for itself.
 - **`ui-designer` and `ui-critic`** — the story has `ui: true`, or the change alters what
   a user sees. Draft them as a pair: a contract nobody checks and a check with no contract
   are both worthless. `ui-designer` runs **before** `builder`, because a contract written
@@ -217,7 +221,8 @@ command that builds the first one — `/loop:build --next`.
 
 Send each agent the brief from **loop-contract**. Independent agents may run in
 parallel up to `limits.max_parallel_agents`; an agent that consumes another's output
-waits for it. `verifier` always runs last, after every agent that touches code.
+waits for it. `verifier` runs after every agent that touches code — only `ui-critic`,
+which judges the verified result against the contract, runs after it.
 
 Call `loop_run_log` for each result. If it rejects the result, hand the error text back
 to that agent as a **single** corrective retry. On a second failure, treat the cycle as
@@ -242,6 +247,11 @@ code — the verdict belongs to that agent's evidence, not to your impression.
 Only those three decide the verdict. Another agent's `fail` — `critic`'s, typically — is
 not a veto: its `medium` and `low` findings ride with the cycle instead of blocking it,
 and they are reported (step 6) or worked (step 7). They are never quietly dropped.
+
+Judge only once every agent the roster drafted has returned. `ui-critic` is the one to
+watch, because it runs after `verifier`: a cycle directory holding a `roster.json` that
+names it and no `ui-critic.json` has not been checked, and a pass declared there commits
+work whose UI nobody judged.
 
 ### 6. Close the cycle
 

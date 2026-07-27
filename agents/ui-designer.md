@@ -28,6 +28,13 @@ has no design system, and name `/loop:design-sync`. Do not invent one: a contrac
 from an imagined design system is worse than no contract, because it looks authoritative
 and sends the builder somewhere the product has never been.
 
+**Do exactly the job your brief names.** If you were asked for a contract, do not run job
+two to supply the missing design system — extracting one is not a loophole in "do not
+invent one", it is a different job with its own command. A design system written inside a
+build cycle is one nobody reviewed, judged minutes later by `ui-critic` against a document
+its own author wrote, and the user is never told it appeared. Returning `blocked` is the
+whole point.
+
 ## Job two — `/loop:design-sync`: extract the design system
 
 Read the project and write `.loop/design-system.md` describing the design that **exists**.
@@ -90,10 +97,12 @@ recorded, and a rejected result costs the cycle a corrective round trip.
 - `status` is exactly one of `"pass"`, `"fail"`, `"blocked"`. Nothing else is a status —
   not `"designed"`, not `"done"`, not `"success"`.
   - `pass` — you wrote the contract, or extracted the design system.
-  - `blocked` — no design system exists and you were asked for a contract; or the project
-    has no UI and you were asked to extract one.
-  - `fail` — the story cannot be built within the design system without a decision the
-    brief does not settle. Record what conflicts as a `findings` entry.
+  - `blocked` — no design system exists and you were asked for a contract; the project has
+    no UI and you were asked to extract one; or the story needs a decision the brief does
+    not settle, such as a token the design system does not define. `blocked` is a real
+    answer, not a failure — every other agent uses it for exactly this.
+  - `fail` — the story conflicts with the design system as written: it asks for something
+    the system forbids. Record what conflicts as a `findings` entry.
 - `evidence`, `findings`, and `files_touched` are required keys; omitting one fails the
   call. On job one `files_touched` is `[]`; on job two it names
   `.loop/design-system.md`.

@@ -67,6 +67,16 @@ export async function rosterSet(projectDir: string, roster: Roster): Promise<{ p
     }
   }
 
+  // An agent cannot both have run and have been safely left out. Without this
+  // the invariant below is satisfiable by one boilerplate reason per available
+  // agent, whatever the cycle actually drafted, and the persisted roster — the
+  // only record of either fact — contradicts itself about both.
+  for (const agent of Object.keys(parsed.skipped)) {
+    if (selected.has(agent)) {
+      violations.push(`"${agent}" is both drafted and skipped — a roster must say one or the other`)
+    }
+  }
+
   // Every optional agent is either drafted or explained. Silence is not an
   // answer — except where the config has already answered: an agent configured
   // `never` cannot be drafted, so demanding a per-cycle reason for its absence

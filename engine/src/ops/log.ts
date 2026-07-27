@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import * as z from 'zod'
-import { findTrack, permittedAgents } from '../schemas/config.js'
+import { findTrack, forbiddenSpecialists, permittedAgents } from '../schemas/config.js'
 import { AgentNameSchema, parseAgentResult } from '../schemas/contract.js'
 import { loadConfig } from '../store/config-store.js'
 import { StateStore, type Clock } from '../store/state-store.js'
@@ -30,6 +30,23 @@ export class UnknownAgentError extends Error {
         'under a spelling the gate does not recognise.',
     )
     this.name = 'UnknownAgentError'
+  }
+}
+
+/**
+ * The mirror of `rosterSet`'s rule at the other end of the cycle. Its own
+ * error, not an `UnknownAgentError`: the agent *is* in the track, and telling
+ * a project that has switched one off to add it to the track first would send
+ * the reader to the wrong line of the config.
+ */
+export class ForbiddenSpecialistError extends Error {
+  constructor(agent: string) {
+    super(
+      `"${agent}" is configured as specialists.${agent}=never — its result cannot be recorded. ` +
+        'A project that switched an agent off must not have it open a gate, block a pass, or ' +
+        `reach its history. Drop it from the cycle, or change specialists.${agent} in .loop/config.yaml.`,
+    )
+    this.name = 'ForbiddenSpecialistError'
   }
 }
 
@@ -110,6 +127,15 @@ export async function runLog(
   // records exactly the work the gate exists to refuse.
   const permitted = permittedAgents(config, track)
   if (!permitted.has(agent.data)) throw new UnknownAgentError(agent.data, state.track, [...permitted])
+
+  // `never` is checked separately rather than subtracted inside
+  // `permittedAgents`: that set is also what `rosterSet` reports against, and
+  // a forbidden agent removed from it would be rejected there for not being in
+  // the track — which it is. Without this check the config's `never` binds the
+  // roster the leader declares and nothing else, so the forbidden agent skips
+  // the declaration and logs its result anyway: findings land in state, a high
+  // one blocks the pass, and it can open the track's gate.
+  if (forbiddenSpecialists(config).includes(agent.data)) throw new ForbiddenSpecialistError(agent.data)
 
   const gate = track.gate
   if (gate !== undefined && state.reproduction === null) {

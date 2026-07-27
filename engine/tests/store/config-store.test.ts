@@ -28,6 +28,16 @@ describe('writeConfig / loadConfig', () => {
     await expect(loadConfig(project.dir)).rejects.toBeInstanceOf(ConfigMissingError)
   })
 
+  it('names the file when the YAML itself does not parse', async () => {
+    const paths = resolveLoopPaths(project.dir)
+    await fs.mkdir(paths.root, { recursive: true })
+    // Duplicate keys are how a project would try to set two specialist modes
+    // for one agent. YAML refuses the document, and the reader must be told
+    // which file it was.
+    await fs.writeFile(paths.config, 'version: 1\nspecialists:\n  security: always\n  security: never\n', 'utf8')
+    await expect(loadConfig(project.dir)).rejects.toThrow(/config\.yaml is not valid YAML/)
+  })
+
   it('throws a readable error for an invalid config', async () => {
     const paths = resolveLoopPaths(project.dir)
     await fs.mkdir(paths.root, { recursive: true })

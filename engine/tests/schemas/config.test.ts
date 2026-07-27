@@ -227,6 +227,39 @@ describe('ConfigSchema', () => {
     }
   })
 
+  it('rejects a gate proven by an agent the config forbids', () => {
+    const bad = {
+      version: 1,
+      tracks: {
+        mine: {
+          required: ['patcher', 'verifier'],
+          available: ['prober'],
+          max_cycles: 3,
+          gate: { proven_by: 'prober', blocks: ['patcher'] },
+        },
+      },
+      specialists: { prober: 'never' },
+    }
+    const parsed = ConfigSchema.safeParse(bad)
+    expect(parsed.success).toBe(false)
+    if (!parsed.success) {
+      const message = z.prettifyError(parsed.error)
+      expect(message).toContain('prober')
+      expect(message).toContain('never')
+    }
+  })
+
+  it('rejects a specialist key that is not a usable agent name', () => {
+    const bad = {
+      version: 1,
+      tracks: { edit: { required: ['editor'], max_cycles: 1 } },
+      specialists: { 'sec/urity': 'always' },
+    }
+    const parsed = ConfigSchema.safeParse(bad)
+    expect(parsed.success).toBe(false)
+    if (!parsed.success) expect(z.prettifyError(parsed.error)).toContain('sec/urity')
+  })
+
   it('allows a never specialist that no track requires', () => {
     const good = {
       version: 1,

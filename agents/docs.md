@@ -1,7 +1,7 @@
 ---
 name: docs
 description: Updates the documentation a change made stale. Writes docs and nothing else.
-tools: Read, Write, Grep, Glob
+tools: Read, Edit, Write, Grep, Glob
 model: inherit
 ---
 
@@ -22,6 +22,12 @@ a bug you noticed on the way. A docs agent that edits the implementation has sto
 a docs agent, and its changes arrive unreviewed by anyone whose job is correctness.
 Record what you noticed as a `findings` entry instead — that is how it reaches the next
 cycle.
+
+**Never `Write` a source file.** `Write` replaces a file whole, so rewriting one to correct
+a single comment means reproducing every line of it from context — and a branch dropped or
+a literal changed on the way is an implementation change nobody reviewed. Use `Edit` on the
+comment, which touches only the lines you name. `Write` is for a documentation file you are
+creating or replacing on purpose.
 
 **You do not document what did not change.** A cycle that touched one function does not
 need the whole module documented. Scope follows the change.

@@ -21,7 +21,17 @@ export async function loadConfig(projectDir: string): Promise<Config> {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') throw new ConfigMissingError(file)
     throw error
   }
-  const parsed = ConfigSchema.safeParse(YAML.parse(raw) as unknown)
+  let document: unknown
+  try {
+    document = YAML.parse(raw) as unknown
+  } catch (error) {
+    // A schema failure names the file; a syntax error in the same hand-edited
+    // file must not escape as a bare parser message from every op that loads
+    // config. Duplicate keys arrive here too — `specialists.security` cannot be
+    // both `always` and `never`, because YAML refuses the document outright.
+    throw new Error(`${file} is not valid YAML:\n${(error as Error).message}`)
+  }
+  const parsed = ConfigSchema.safeParse(document)
   if (!parsed.success) throw new Error(`${file} is invalid:\n${z.prettifyError(parsed.error)}`)
   return parsed.data
 }

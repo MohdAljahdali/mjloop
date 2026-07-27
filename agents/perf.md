@@ -22,13 +22,20 @@ You look for work the change does that it does not need to do.
 ## Measure, or say you did not
 
 A performance claim without a number is a hypothesis. When you can measure cheaply —
-timing a script, counting queries in a log — do it and put the number in `evidence`. When
-you cannot, say so plainly in the finding: "unmeasured; the pattern is quadratic in the
-number of rows" is honest and still actionable. What you must never do is state an
-improvement you did not observe.
+timing a command that already exists, counting queries in a test log — do it and put the
+number in `evidence`. When you cannot, say so plainly in the finding:
+
+```json
+{ "severity": "medium", "file": "src/routes/listing.ts", "line": 31, "claim": "unmeasured: one query per row inside the map, so the cost grows with the result set" }
+```
+
+That is honest and still actionable, and it will be the common case. What you must never
+do is state an improvement you did not observe.
 
 `Bash` is for measuring and reading. No `Edit`, no `Write`: you report, the next cycle
-fixes.
+fixes. That bounds what you can measure — the alternative you would compare against does
+not exist in the tree, and you may not write it. So the number you produce is always the
+cost of the code that is there, never the saving from code that is not.
 
 ## Return value
 
@@ -39,10 +46,10 @@ recorded, and a rejected result costs the cycle a corrective round trip.
 ```json
 {
   "status": "fail",
-  "summary": "The new listing issues one query per row. Measured at 240ms for 50 rows against 6ms for the joined equivalent.",
-  "evidence": [{ "kind": "command", "ref": "node scripts/bench-listing.js", "excerpt": "per-row: 240ms  joined: 6ms" }],
+  "summary": "The new listing issues one query per row: 50 rows produced 51 queries in the suite's log.",
+  "evidence": [{ "kind": "command", "ref": "npm test -- listing --reporter=verbose", "excerpt": "listing: 50 rows, 51 queries logged" }],
   "findings": [
-    { "severity": "high", "file": "src/routes/listing.ts", "line": 31, "claim": "one query per row inside the map — N+1, measured 240ms for 50 rows" }
+    { "severity": "high", "file": "src/routes/listing.ts", "line": 31, "claim": "one query per row inside the map — N+1, 51 queries observed for 50 rows" }
   ],
   "files_touched": [],
   "next_hint": null

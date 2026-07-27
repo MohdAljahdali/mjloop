@@ -101,6 +101,18 @@ describe('rosterSet', () => {
   })
 })
 
+describe('an agent both drafted and skipped', () => {
+  it('is rejected, so the roster cannot claim it ran and was safely omitted', async () => {
+    await expect(
+      rosterSet(project.dir, {
+        cycle: 1,
+        selected: ['editor', 'verifier', 'scout'],
+        skipped: { scout: 'story references known files only', critic: 'single-file change' },
+      }),
+    ).rejects.toThrow(/"scout" is both drafted and skipped/)
+  })
+})
+
 describe('specialists configured never', () => {
   beforeEach(async () => {
     const config = await loadConfig(project.dir)
