@@ -20,7 +20,7 @@ git add -A
 git -c user.email=e2e@loop.test -c user.name=loop-e2e commit -q -m "fixture"
 
 allowed=(
-  "mcp__plugin_loop_loop"
+  "mcp__plugin_mjloop_mjloop"
   Task Read Edit Write Grep Glob Bash
 )
 
@@ -30,7 +30,7 @@ fail() {
   exit 1
 }
 
-claude -p "/loop:init" --permission-mode acceptEdits --allowedTools "${allowed[@]}"
+claude -p "/mjloop:init" --permission-mode acceptEdits --allowedTools "${allowed[@]}"
 
 # The approval gate cannot be answered by a person in a headless run, and the
 # leader is right to stop rather than approve its own plan. This script proves
@@ -38,19 +38,19 @@ claude -p "/loop:init" --permission-mode acceptEdits --allowedTools "${allowed[@
 # the fixture out explicitly, exactly as run-plan.sh does.
 node -e '
 const fs = require("fs")
-const path = ".loop/config.yaml"
+const path = ".mjloop/config.yaml"
 fs.writeFileSync(path, fs.readFileSync(path, "utf8").replace("plan_approval: human", "plan_approval: auto"))
 '
-grep -q "plan_approval: auto" .loop/config.yaml || fail "could not switch the approval gate to auto"
+grep -q "plan_approval: auto" .mjloop/config.yaml || fail "could not switch the approval gate to auto"
 
 # Write the plan and its one story through the tools, the supported path.
 claude -p "Using the loop MCP tools only, create a plan with slug 'labels' titled 'Button labels', then add one story titled 'Cancel label' whose acceptance criterion is: src/button.js exports cancelLabel() returning 'Cancel', covered by a test. Then render the index. Do not write any file by hand." \
   --permission-mode acceptEdits --allowedTools "${allowed[@]}"
 
-[[ -f .loop/INDEX.md ]] || fail "INDEX.md was not generated"
-grep -q "Button labels" .loop/INDEX.md || fail "the plan is missing from INDEX.md"
+[[ -f .mjloop/INDEX.md ]] || fail "INDEX.md was not generated"
+grep -q "Button labels" .mjloop/INDEX.md || fail "the plan is missing from INDEX.md"
 
-claude -p "/loop:build --next" --permission-mode acceptEdits --allowedTools "${allowed[@]}"
+claude -p "/mjloop:build --next" --permission-mode acceptEdits --allowedTools "${allowed[@]}"
 
 echo "--- state ---"
 node "${repo_root}/engine/dist/cli/index.js" summary --dir "${workdir}" --json
@@ -60,8 +60,8 @@ status="$(node "${repo_root}/engine/dist/cli/index.js" summary --dir "${workdir}
 
 [[ "${status}" == "done" ]] || fail "expected status done, got ${status}"
 grep -q "cancelLabel" src/button.js || fail "the export was not added"
-grep -rq "status: done" .loop/plans/*/stories/ || fail "the story was not marked done"
-grep -rq "evidence: .loop/runs" .loop/plans/*/stories/ || fail "the story carries no evidence path"
+grep -rq "status: done" .mjloop/plans/*/stories/ || fail "the story was not marked done"
+grep -rq "evidence: .mjloop/runs" .mjloop/plans/*/stories/ || fail "the story carries no evidence path"
 
 rm -rf "${workdir}"
 echo "PASS: the story drove the build and carries the proof of its own completion"

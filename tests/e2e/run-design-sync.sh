@@ -16,7 +16,7 @@ cp -R "${repo_root}/tests/fixtures/tiny-app/." "${workdir}/"
 cd "${workdir}"
 
 allowed=(
-  "mcp__plugin_loop_loop"
+  "mcp__plugin_mjloop_mjloop"
   Task Read Edit Write Grep Glob Bash
 )
 
@@ -26,17 +26,17 @@ fail() {
   exit 1
 }
 
-claude -p "/loop:init" --permission-mode acceptEdits --allowedTools "${allowed[@]}"
-claude -p "/loop:design-sync" --permission-mode acceptEdits --allowedTools "${allowed[@]}"
+claude -p "/mjloop:init" --permission-mode acceptEdits --allowedTools "${allowed[@]}"
+claude -p "/mjloop:design-sync" --permission-mode acceptEdits --allowedTools "${allowed[@]}"
 
 echo "--- design system ---"
-cat .loop/design-system.md 2>/dev/null || fail "design-system.md was not written"
+cat .mjloop/design-system.md 2>/dev/null || fail "design-system.md was not written"
 
-grep -q "extracted_at:" .loop/design-system.md || fail "no extracted_at in the frontmatter"
-grep -q "sources:" .loop/design-system.md || fail "no sources list in the frontmatter"
+grep -q "extracted_at:" .mjloop/design-system.md || fail "no extracted_at in the frontmatter"
+grep -q "sources:" .mjloop/design-system.md || fail "no sources list in the frontmatter"
 # The extraction must name a file it actually read, not one it imagined.
-grep -qE "tokens\.css|card\.js|button\.js" .loop/design-system.md || fail "no real source file is named"
-grep -q "color-accent" .loop/design-system.md || fail "the token file was not actually read"
+grep -qE "tokens\.css|card\.js|button\.js" .mjloop/design-system.md || fail "no real source file is named"
+grep -q "color-accent" .mjloop/design-system.md || fail "the token file was not actually read"
 
 rm -rf "${workdir}"
 echo "PASS: the design system was extracted from files that exist"

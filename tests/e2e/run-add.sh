@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# Opt-in smoke test of /loop:add against the real Claude Code CLI.
+# Opt-in smoke test of /mjloop:add against the real Claude Code CLI.
 # Not part of `npm test`: it needs the CLI, a network, and real tokens.
 #   LOOP_E2E=1 tests/e2e/run-add.sh
 #
 # WHAT THIS PROVES, AND WHAT IT DOES NOT
 #
-# `/loop:add track` is proven end to end: it edits `.loop/config.yaml`, which
+# `/mjloop:add track` is proven end to end: it edits `.mjloop/config.yaml`, which
 # nothing guards, and validates the result through `config_error`.
 #
-# `/loop:add agent` is proven as far as a headless run can take it — the name
+# `/mjloop:add agent` is proven as far as a headless run can take it — the name
 # is validated and a name that would shadow a shipped agent is refused. The
 # write itself is NOT proven here. Claude Code guards `.claude/`, because that
 # directory holds settings and hooks, so writing an agent there asks for
@@ -35,7 +35,7 @@ cp -R "${repo_root}/tests/fixtures/tiny-app/." "${workdir}/"
 cd "${workdir}"
 
 allowed=(
-  "mcp__plugin_loop_loop"
+  "mcp__plugin_mjloop_mjloop"
   Task Read Edit Write Grep Glob Bash
 )
 
@@ -45,19 +45,19 @@ fail() {
   exit 1
 }
 
-claude -p "/loop:init" --permission-mode acceptEdits --allowedTools "${allowed[@]}"
+claude -p "/mjloop:init" --permission-mode acceptEdits --allowedTools "${allowed[@]}"
 
 # --- 1. A track, end to end -------------------------------------------------
 # The sets are given in the prompt: the command is told to ask for them, and a
 # headless session has nobody to ask.
-claude -p "/loop:add track refactor — required: builder and verifier; available: scout, critic and perf; max_cycles 4" \
+claude -p "/mjloop:add track refactor — required: builder and verifier; available: scout, critic and perf; max_cycles 4" \
   --permission-mode acceptEdits --allowedTools "${allowed[@]}"
 
-grep -q "refactor:" .loop/config.yaml || fail "the track was not added to .loop/config.yaml"
+grep -q "refactor:" .mjloop/config.yaml || fail "the track was not added to .mjloop/config.yaml"
 node -e '
 const YAML = require("'"${repo_root}"'/engine/node_modules/yaml")
 const fs = require("fs")
-const config = YAML.parse(fs.readFileSync(".loop/config.yaml", "utf8"))
+const config = YAML.parse(fs.readFileSync(".mjloop/config.yaml", "utf8"))
 const track = config.tracks.refactor
 if (!track) { console.error("no refactor track"); process.exit(1) }
 const required = (track.required || []).join(",")
@@ -74,7 +74,7 @@ config_error="$(node "${repo_root}/engine/dist/cli/index.js" summary --dir "${wo
 [[ "${config_error}" == "null" ]] || fail "the edit broke the config: ${config_error}"
 
 # --- 2. An agent name that would shadow a shipped agent ---------------------
-claude -p "/loop:add agent verifier" --permission-mode acceptEdits --allowedTools "${allowed[@]}" \
+claude -p "/mjloop:add agent verifier" --permission-mode acceptEdits --allowedTools "${allowed[@]}" \
   > shadow.log 2>&1
 
 [[ -f .claude/agents/verifier.md ]] && fail "a shipped agent was shadowed — .claude/agents/verifier.md must not exist"
@@ -83,7 +83,7 @@ grep -qi "verifier" shadow.log || fail "the refusal did not name the agent it pr
 # --- 3. A valid agent name reaches the write ---------------------------------
 # The write is guarded, so this asserts the command got that far and named the
 # right destination rather than stopping earlier or writing somewhere else.
-claude -p "/loop:add agent db-reviewer" --permission-mode acceptEdits --allowedTools "${allowed[@]}" \
+claude -p "/mjloop:add agent db-reviewer" --permission-mode acceptEdits --allowedTools "${allowed[@]}" \
   > scaffold.log 2>&1
 
 grep -q "\.claude/agents" scaffold.log || fail "the scaffold did not name .claude/agents as the destination"

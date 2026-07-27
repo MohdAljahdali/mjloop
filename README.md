@@ -1,10 +1,10 @@
-# loop
+# mjloop
 
 A Claude Code plugin. Install once, invoke from any project.
 
-`loop` runs work as a **cycle**: a leader composes the cycle from a track's agent
+`mjloop` runs work as a **cycle**: a leader composes the cycle from a track's agent
 roster, dispatches contract-bound agents in isolated contexts, and judges the result on
-evidence. Execution state lives in `.loop/` in the host project and is owned by an MCP
+evidence. Execution state lives in `.mjloop/` in the host project and is owned by an MCP
 server, so no agent can corrupt it by hand.
 
 ## Status
@@ -12,12 +12,12 @@ server, so no agent can corrupt it by hand.
 Milestone 7 — all four tracks ship: `plan`, `build`, `fix`, and `edit`, and so do all the
 guards: the cycle cap, the stagnation guard, the repeated-error guard, the reproduction
 gate, and the autonomous `Stop` hook. The five conditional specialists ship with it —
-`ui-designer`, `ui-critic`, `security`, `docs`, and `perf` — along with `/loop:design-sync`
+`ui-designer`, `ui-critic`, `security`, `docs`, and `perf` — along with `/mjloop:design-sync`
 and a `specialists` setting the engine enforces in both directions.
 
-Memory ships too: `.loop/memory/` and the three `loop_memory_*` tools, so a run can record
-a decision or a lesson and a later run can find it. So does extension — `/loop:add`
-scaffolds an agent, a skill, or a track, and the `loop-tracks` and `loop-extend` skills
+Memory ships too: `.mjloop/memory/` and the three `mjloop_memory_*` tools, so a run can record
+a decision or a lesson and a later run can find it. So does extension — `/mjloop:add`
+scaffolds an agent, a skill, or a track, and the `mjloop-tracks` and `mjloop-extend` skills
 document what a track is and how to add one.
 See `docs/superpowers/specs/2026-07-27-loop-milestone-7-memory-and-extension-design.md`.
 
@@ -32,16 +32,16 @@ Then add this repository as a plugin marketplace or local plugin in Claude Code.
 ## Use
 
 ```
-/loop:init                               provision .loop/ and detect verify commands
-/loop:edit <what to change>              one-cycle scoped change
-/loop:plan <idea>                        idea to approved plan to stories
-/loop:build <goal | P001-S02 | --next>   multi-cycle build, optionally against a story
-/loop:fix <what is broken>               reproduce first, then fix the root cause
-/loop:status                             where the current run stands
-/loop:stop [reason]                      halt the run and write a report
-/loop:resume                             continue an interrupted run
-/loop:design-sync                        extract the design system the UI agents read
-/loop:add agent|skill|track <name>       scaffold a new element
+/mjloop:init                               provision .mjloop/ and detect verify commands
+/mjloop:edit <what to change>              one-cycle scoped change
+/mjloop:plan <idea>                        idea to approved plan to stories
+/mjloop:build <goal | P001-S02 | --next>   multi-cycle build, optionally against a story
+/mjloop:fix <what is broken>               reproduce first, then fix the root cause
+/mjloop:status                             where the current run stands
+/mjloop:stop [reason]                      halt the run and write a report
+/mjloop:resume                             continue an interrupted run
+/mjloop:design-sync                        extract the design system the UI agents read
+/mjloop:add agent|skill|track <name>       scaffold a new element
 ```
 
 ## How a cycle is composed
@@ -54,11 +54,11 @@ declared without its evidence. The `plan` track has no verifier: there is no sui
 against a document, so its verdict comes from `fit-checker`, the approval gate, and the
 story reviews.
 
-Change a track, cap, or forced specialist in `.loop/config.yaml`.
+Change a track, cap, or forced specialist in `.mjloop/config.yaml`.
 
 ## Extending it
 
-A track is data. Adding one is a few lines in `.loop/config.yaml`, and the leader never
+A track is data. Adding one is a few lines in `.mjloop/config.yaml`, and the leader never
 changes: it does not know agent names ahead of time, it reads them from the track.
 
 ```yaml
@@ -69,26 +69,26 @@ tracks:
     max_cycles: 5
 ```
 
-`/loop:add agent|skill|track <name>` scaffolds any of the three. New agents land in
+`/mjloop:add agent|skill|track <name>` scaffolds any of the three. New agents land in
 `.claude/agents/`, which is where Claude Code reads project subagents from — the scaffold
 refuses a name that would shadow one this plugin ships.
 
-The `loop-tracks` and `loop-extend` skills explain the whole system: what `required` and
+The `mjloop-tracks` and `mjloop-extend` skills explain the whole system: what `required` and
 `available` guarantee, the two kinds of gate, the three specialist modes, and what a new
 agent must return.
 
 ## Plans and stories
 
-A plan lives in `.loop/plans/P001-<slug>/`: `PLAN.md`, a `stories/` directory, and a
+A plan lives in `.mjloop/plans/P001-<slug>/`: `PLAN.md`, a `stories/` directory, and a
 generated `manifest.json`. Each story is a markdown file that carries its own id, status,
 acceptance criteria, dependencies, and — once it passes — the path to the run that proved
 it.
 
 The story file is the source of truth. `manifest.json` is derived from the story files
-and `.loop/INDEX.md` is derived from the manifests, so nothing is ever edited in two
-places. Every `loop_story_*` write regenerates its plan's manifest; `.loop/INDEX.md` is
-regenerated by `loop_index_render`, which the leader calls after writing a story back.
-Write stories through the `loop_story_*` tools rather than by hand.
+and `.mjloop/INDEX.md` is derived from the manifests, so nothing is ever edited in two
+places. Every `mjloop_story_*` write regenerates its plan's manifest; `.mjloop/INDEX.md` is
+regenerated by `mjloop_index_render`, which the leader calls after writing a story back.
+Write stories through the `mjloop_story_*` tools rather than by hand.
 
 ## Specialists
 
@@ -96,7 +96,7 @@ A build cycle can draw on seven optional agents beyond `builder` and `verifier`:
 `critic`, `ui-designer`, `ui-critic`, `security`, `docs`, and `perf`. The leader drafts
 what the change calls for and must record a reason for every one it leaves out.
 
-`specialists` in `.loop/config.yaml` overrides that judgement in both directions:
+`specialists` in `.mjloop/config.yaml` overrides that judgement in both directions:
 
 ```yaml
 specialists:
@@ -105,12 +105,12 @@ specialists:
   docs: auto           # the leader decides — the default
 ```
 
-The UI pair reads `.loop/design-system.md`, which `/loop:design-sync` extracts from your
+The UI pair reads `.mjloop/design-system.md`, which `/mjloop:design-sync` extracts from your
 code. Without it they stop rather than invent a design.
 
 ## Running unattended
 
-Set `autonomous: true` in `.loop/config.yaml` and a `Stop` hook keeps the turn going
+Set `autonomous: true` in `.mjloop/config.yaml` and a `Stop` hook keeps the turn going
 between cycles, so a run continues without somebody pressing enter.
 
 It extends nothing. The cycle cap, the stagnation guard, and the repeated-error guard end
@@ -119,7 +119,7 @@ pause, and it goes quiet the moment the run is no longer running.
 
 It removes one pause per turn, not all of them: Claude Code marks a stop it has already
 continued from, and the hook yields on that mark rather than blocking its own
-continuation. A long run can therefore come to rest with cycles still to go — `/loop:resume`
+continuation. A long run can therefore come to rest with cycles still to go — `/mjloop:resume`
 picks it up from exactly where it stopped.
 
 ## Development
@@ -139,5 +139,5 @@ LOOP_E2E=1 npm run e2e:fix     # fix track — the gate stays shut until the def
 LOOP_E2E=1 npm run e2e:story   # build track against a story — INDEX.md and evidence path
 LOOP_E2E=1 npm run e2e:plan    # plan track — idea to approved plan to stories, both gates
 LOOP_E2E=1 npm run e2e:design  # design-sync — the design system is extracted, never invented
-LOOP_E2E=1 npm run e2e:add     # /loop:add — scaffolding an agent, a skill, and a track
+LOOP_E2E=1 npm run e2e:add     # /mjloop:add — scaffolding an agent, a skill, and a track
 ```

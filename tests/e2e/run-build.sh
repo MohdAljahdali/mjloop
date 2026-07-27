@@ -23,7 +23,7 @@ git -c user.email=e2e@loop.test -c user.name=loop-e2e commit -q -m "fixture"
 # `claude -p` is non-interactive, so a tool awaiting approval has no way to get
 # it and the run stalls into a refusal instead of failing loudly.
 allowed=(
-  "mcp__plugin_loop_loop"
+  "mcp__plugin_mjloop_mjloop"
   Task Read Edit Write Grep Glob Bash
 )
 
@@ -33,8 +33,8 @@ fail() {
   exit 1
 }
 
-claude -p "/loop:init" --permission-mode acceptEdits --allowedTools "${allowed[@]}"
-claude -p "/loop:build add a cancelLabel() export to src/button.js returning 'Cancel', with a test covering it" \
+claude -p "/mjloop:init" --permission-mode acceptEdits --allowedTools "${allowed[@]}"
+claude -p "/mjloop:build add a cancelLabel() export to src/button.js returning 'Cancel', with a test covering it" \
   --permission-mode acceptEdits --allowedTools "${allowed[@]}"
 
 echo "--- state ---"

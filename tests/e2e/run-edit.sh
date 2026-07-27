@@ -20,7 +20,7 @@ cd "${workdir}"
 # cycle needs is granted up front: the loop MCP server for the leader, and the
 # file and shell tools the editor and verifier agents run on.
 allowed=(
-  "mcp__plugin_loop_loop"
+  "mcp__plugin_mjloop_mjloop"
   Task Read Edit Write Grep Glob Bash
 )
 
@@ -30,8 +30,8 @@ fail() {
   exit 1
 }
 
-claude -p "/loop:init" --permission-mode acceptEdits --allowedTools "${allowed[@]}"
-claude -p "/loop:edit change the submit button label to Send" \
+claude -p "/mjloop:init" --permission-mode acceptEdits --allowedTools "${allowed[@]}"
+claude -p "/mjloop:edit change the submit button label to Send" \
   --permission-mode acceptEdits --allowedTools "${allowed[@]}"
 
 echo "--- state ---"
@@ -42,7 +42,7 @@ status="$(node "${repo_root}/engine/dist/cli/index.js" summary --dir "${workdir}
 
 if [[ "${status}" != "done" ]]; then
   echo "--- run artefacts ---" >&2
-  find "${workdir}/.loop/runs" -type f -print >&2 2>/dev/null || true
+  find "${workdir}/.mjloop/runs" -type f -print >&2 2>/dev/null || true
   fail "expected status done, got ${status}"
 fi
 

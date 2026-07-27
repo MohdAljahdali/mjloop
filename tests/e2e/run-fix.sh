@@ -33,7 +33,7 @@ git add -A
 git -c user.email=e2e@loop.test -c user.name=loop-e2e commit -q -m "fixture with a planted defect"
 
 allowed=(
-  "mcp__plugin_loop_loop"
+  "mcp__plugin_mjloop_mjloop"
   Task Read Edit Write Grep Glob Bash
 )
 
@@ -43,8 +43,8 @@ fail() {
   exit 1
 }
 
-claude -p "/loop:init" --permission-mode acceptEdits --allowedTools "${allowed[@]}"
-claude -p "/loop:fix primaryLabel() returns the raw key 'submit_label' instead of the human label 'Submit'" \
+claude -p "/mjloop:init" --permission-mode acceptEdits --allowedTools "${allowed[@]}"
+claude -p "/mjloop:fix primaryLabel() returns the raw key 'submit_label' instead of the human label 'Submit'" \
   --permission-mode acceptEdits --allowedTools "${allowed[@]}"
 
 echo "--- state ---"
