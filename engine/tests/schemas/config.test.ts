@@ -100,7 +100,7 @@ describe('ConfigSchema', () => {
     expect(parsed.limits.max_parallel_agents).toBe(4)
     expect(parsed.limits.no_progress_strikes).toBe(2)
     expect(parsed.gates.plan_approval).toBe('human')
-    expect(parsed.custom_dirs.agents).toBe('.loop/agents')
+    expect((parsed as unknown as Record<string, unknown>).custom_dirs).toBeUndefined()
     expect(parsed.tracks.edit?.available).toEqual([])
   })
 

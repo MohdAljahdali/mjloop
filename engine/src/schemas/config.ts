@@ -70,6 +70,18 @@ export const VerifySchema = z.strictObject({
   build: z.string().min(1).nullable().default(null),
 })
 
+/**
+ * Keys earlier versions wrote that no longer exist. `loadConfig` drops them
+ * before parsing, so a project initialised by an older milestone keeps working
+ * and its next write is clean.
+ *
+ * `custom_dirs` pointed at `.loop/agents` and `.loop/skills`. Claude Code reads
+ * project agents from `.claude/agents` and skills from `.claude/skills`, and no
+ * setting anywhere redirects that — so the field's default, and every value it
+ * could be given, produced files that are never loaded.
+ */
+export const LEGACY_CONFIG_KEYS = ['custom_dirs'] as const
+
 export const ConfigSchema = z
   .strictObject({
     version: z.literal(1),
@@ -100,12 +112,6 @@ export const ConfigSchema = z
         commit: z.enum(['auto', 'human']).default('auto'),
       })
       .default({ plan_approval: 'human', commit: 'auto' }),
-    custom_dirs: z
-      .strictObject({
-        agents: z.string().min(1).default('.loop/agents'),
-        skills: z.string().min(1).default('.loop/skills'),
-      })
-      .default({ agents: '.loop/agents', skills: '.loop/skills' }),
   })
   // A track cannot see the `specialists` map, so the contradiction between a
   // track that requires an agent and a config that forbids it can only be

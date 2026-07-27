@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises'
 import { findTrack } from '../schemas/config.js'
 import type { Severity, State } from '../schemas/state.js'
-import { loadConfig } from '../store/config-store.js'
+import { ConfigMissingError, loadConfig } from '../store/config-store.js'
 import { resolveLoopPaths } from '../store/paths.js'
 import { StateStore } from '../store/state-store.js'
 
@@ -38,6 +38,12 @@ export interface StateSummary {
   reproduction: { proven: boolean; ref: string | null } | null
   /** Whether `.loop/design-system.md` exists. The UI agents need one and will not invent it. */
   design_system: boolean
+  /**
+   * The reason the config could not be read, or null. Every other field
+   * degrades silently when config is unreadable — this is the one that says so,
+   * because a user whose config has a typo currently sees nothing at all.
+   */
+  config_error: string | null
 }
 
 const NO_FINDINGS: Record<Severity, number> = { high: 0, medium: 0, low: 0 }
@@ -78,11 +84,13 @@ export async function stateSummary(projectDir: string): Promise<StateSummary> {
       halt_reason: null,
       reproduction: null,
       design_system: false,
+      config_error: null,
     }
   }
 
   let maxCycles: number | null = null
   let reproduction: { proven: boolean; ref: string | null } | null = null
+  let configError: string | null = null
   try {
     const config = await loadConfig(projectDir)
     const track = state.track === null ? undefined : findTrack(config, state.track)
@@ -90,10 +98,14 @@ export async function stateSummary(projectDir: string): Promise<StateSummary> {
     if (track?.gate !== undefined) {
       reproduction = { proven: state.reproduction !== null, ref: state.reproduction?.ref ?? null }
     }
-  } catch {
+  } catch (error) {
     // A config that cannot be read degrades the summary; it does not fail it.
     // The SessionStart hook renders this line on every session, and a YAML
     // typo in a hand-edited config must not turn that into a stack trace.
+    //
+    // A missing config is not an error: a project may be mid-provisioning.
+    // Anything else is worth surfacing.
+    configError = error instanceof ConfigMissingError ? null : (error as Error).message
   }
 
   const findings = { ...NO_FINDINGS }
@@ -118,6 +130,7 @@ export async function stateSummary(projectDir: string): Promise<StateSummary> {
     halt_reason: state.halt_reason,
     reproduction,
     design_system: await hasDesignSystem(projectDir),
+    config_error: configError,
   }
 }
 

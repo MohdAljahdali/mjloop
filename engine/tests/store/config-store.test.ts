@@ -45,3 +45,37 @@ describe('writeConfig / loadConfig', () => {
     await expect(loadConfig(project.dir)).rejects.toThrow(/mystery/)
   })
 })
+
+describe('legacy keys', () => {
+  it('loads a config written before custom_dirs was removed', async () => {
+    const config = defaultConfig({ test: 'npm test', lint: null, build: null })
+    await writeConfig(project.dir, config)
+
+    const raw = await fs.readFile(resolveLoopPaths(project.dir).config, 'utf8')
+    await fs.writeFile(
+      resolveLoopPaths(project.dir).config,
+      `${raw}\ncustom_dirs:\n  agents: .loop/agents\n  skills: .loop/skills\n`,
+      'utf8',
+    )
+
+    const loaded = await loadConfig(project.dir)
+    expect(loaded.version).toBe(1)
+    expect((loaded as unknown as Record<string, unknown>).custom_dirs).toBeUndefined()
+  })
+
+  it('still rejects an unrelated unknown key', async () => {
+    const config = defaultConfig({ test: null, lint: null, build: null })
+    await writeConfig(project.dir, config)
+
+    const raw = await fs.readFile(resolveLoopPaths(project.dir).config, 'utf8')
+    await fs.writeFile(resolveLoopPaths(project.dir).config, `${raw}\nmystery: true\n`, 'utf8')
+
+    await expect(loadConfig(project.dir)).rejects.toThrow(/mystery/)
+  })
+
+  it('does not write custom_dirs on a fresh config', async () => {
+    await writeConfig(project.dir, defaultConfig({ test: null, lint: null, build: null }))
+    const raw = await fs.readFile(resolveLoopPaths(project.dir).config, 'utf8')
+    expect(raw).not.toContain('custom_dirs')
+  })
+})

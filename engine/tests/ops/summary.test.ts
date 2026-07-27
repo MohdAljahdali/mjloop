@@ -162,6 +162,32 @@ describe('stateSummary and the gate', () => {
   })
 })
 
+describe('config_error', () => {
+  it('is null for a sound config', async () => {
+    await initLoop(project.dir, clock)
+    expect((await stateSummary(project.dir)).config_error).toBeNull()
+  })
+
+  it('is null when there is no config at all', async () => {
+    expect((await stateSummary(project.dir)).config_error).toBeNull()
+  })
+
+  it('reports a config that fails to parse', async () => {
+    await initLoop(project.dir, clock)
+    await fs.writeFile(resolveLoopPaths(project.dir).config, 'version: 1\ntracks: {}\nmystery: true\n', 'utf8')
+
+    const summary = await stateSummary(project.dir)
+    expect(summary.config_error).toContain('mystery')
+    expect(summary.initialised).toBe(true)
+  })
+
+  it('reports unparseable yaml without throwing', async () => {
+    await initLoop(project.dir, clock)
+    await fs.writeFile(resolveLoopPaths(project.dir).config, 'version: [unclosed\n', 'utf8')
+    expect((await stateSummary(project.dir)).config_error).not.toBeNull()
+  })
+})
+
 describe('the design system flag', () => {
   it('is false for an uninitialised project', async () => {
     expect((await stateSummary(project.dir)).design_system).toBe(false)
