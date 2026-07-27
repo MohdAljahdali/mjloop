@@ -9,9 +9,9 @@ server, so no agent can corrupt it by hand.
 
 ## Status
 
-Milestone 4a — the engine, the `edit`, `build`, and `fix` tracks, and plans and stories
-as data. The `plan` track that writes those plans for you lands in the next milestone.
-See `docs/superpowers/specs/2026-07-26-loop-plugin-design.md`.
+Milestone 4b — all four tracks ship: `plan`, `build`, `fix`, and `edit`. What remains is
+guards, the autonomous `Stop` hook, the UI and specialist agents, and memory. See
+`docs/superpowers/specs/2026-07-26-loop-plugin-design.md`.
 
 ## Install
 
@@ -26,6 +26,7 @@ Then add this repository as a plugin marketplace or local plugin in Claude Code.
 ```
 /loop:init                               provision .loop/ and detect verify commands
 /loop:edit <what to change>              one-cycle scoped change
+/loop:plan <idea>                        idea to approved plan to stories
 /loop:build <goal | P001-S02 | --next>   multi-cycle build, optionally against a story
 /loop:fix <what is broken>               reproduce first, then fix the root cause
 /loop:status                             where the current run stands

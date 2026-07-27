@@ -125,6 +125,36 @@ anything: an explicit refutation is out, but a `fail` that says the evidence was
 **ambiguous** refutes nothing and survives into the fixer's list, ranked below what was
 supported. A hypothesis that was never actually tested must not be recorded as disproven.
 
+### 3d. Running the plan track
+
+The plan track has no `verifier`, because there is no suite to run against a document.
+Do not read that as a missing verdict: its cycle passes when `fit-checker` passes, the
+approval gate is open, and every story `story-critic` examined came back clean.
+
+Order it like this:
+
+1. `loop_plan_create` first, so `planner` has a directory and frontmatter to write into.
+2. `planner`, then `plan-critic` if you drafted it. A `fail` from the critic sends its
+   findings into the next cycle, where `planner` works them — that is the ordinary
+   multi-cycle path, not a failure of the run.
+3. `fit-checker`. Its evidenced pass opens the engine's gate; `loop_run_log` reports
+   `gateOpened: true`. Do not dispatch `story-writer` before you have seen it — the engine
+   will refuse the result, and you will have spent an agent to learn what the gate already
+   told you.
+4. **The approval gate.** Read `gates.plan_approval` from `.loop/config.yaml`.
+   - `human` — show the user the plan and ask whether it is approved. Record their answer
+     with `loop_gate_set`, putting their own words in `note`. **Never record an approval
+     nobody gave.** If they ask for changes, record `changes_requested` with their reason,
+     and the next cycle returns to `planner` with it as the work.
+   - `auto` — record the decision yourself with `by` naming the loop rather than a person,
+     and say in your final report that no human reviewed this plan.
+5. `story-writer`, then `story-critic` per story if you drafted it. Apply what the critic
+   finds with `loop_story_update`; the critic does not edit.
+6. `loop_index_render`, so the new plan appears in `.loop/INDEX.md`.
+
+Report at the end: the plan id, how many stories, whether a human approved it, and the
+command that builds the first one — `/loop:build --next`.
+
 ### 4. Dispatch
 
 Send each agent the brief from **loop-contract**. Independent agents may run in
@@ -221,3 +251,7 @@ says what the cycle achieved, not that a loop ran.
   criteria are the contract.
 - Never mark a story done without an evidence path, and never write an evidence path for
   a run that halted.
+- Never record a plan approval that a person did not give. `gates.plan_approval: auto`
+  exists for projects that do not want a human in the loop; using it is honest, and
+  self-approving under `human` is not.
+- Never let `plan-critic` or `story-critic` edit what it reviewed.

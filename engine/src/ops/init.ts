@@ -14,6 +14,7 @@ const CLAUDE_MD_BLOCK = `${CLAUDE_MD_SECTION}
 This project uses the \`loop\` plugin. Execution state lives in \`.loop/\`.
 
 - \`/loop:edit <request>\` — small, well-scoped change (one cycle)
+- \`/loop:plan <idea>\` — turn an idea into an approved plan broken into stories
 - \`/loop:build <what to build | P001-S02 | --next>\` — multi-cycle build, optionally against a story
 - \`/loop:fix <problem>\` — reproduce a defect, find the root cause, fix it
 - \`/loop:status\` — current track, cycle, and latest evidence

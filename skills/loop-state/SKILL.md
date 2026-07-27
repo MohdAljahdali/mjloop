@@ -16,6 +16,7 @@ description: Use when reading or changing loop state - explains the .loop direct
 │   └── cycle-NN/    roster.json, <agent>.json, findings.json
 ├── plans/<plan>/    one directory per plan
 │   ├── PLAN.md      the plan itself — prose, authored
+│   ├── REVIEW.md    plan-critic's objections — prose, authored
 │   ├── manifest.json  derived from the story files — MCP-owned
 │   └── stories/     one markdown file per story, written through the tools
 └── memory/          decisions and lessons (later milestones)
@@ -23,6 +24,10 @@ description: Use when reading or changing loop state - explains the .loop direct
 
 A run directory is named `<run_id>--<story|adhoc>--<track>`, and
 `state.history[-1].ref` holds the path — that is what a story's `evidence` points at.
+
+`PLAN.md` carries the plan's identity and its approval decision in frontmatter, with the
+plan itself as prose below. `REVIEW.md` is `plan-critic`'s output. Both are authored;
+`manifest.json` is derived.
 
 ## One owner
 
@@ -50,6 +55,7 @@ manifest as part of the write, and a hand-edited story leaves the derived state 
 | Close a cycle | `loop_cycle_advance` | `state.json`, `cycle-NN/findings.json`, `HALT.md` |
 | Stop with a report | `loop_halt` | `state.json`, `HALT.md` |
 | Create a plan | `loop_plan_create` | `plans/<plan>/PLAN.md`, its `manifest.json` |
+| Record a plan approval | `loop_gate_set` | `plans/<plan>/PLAN.md` frontmatter |
 | Add a story | `loop_story_add` | the story file, its plan's `manifest.json` |
 | Change a story | `loop_story_update` | the story file, its plan's `manifest.json` |
 | Read a story, or resolve `--next` | `loop_story_get` | — |

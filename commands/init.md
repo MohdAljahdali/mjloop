@@ -12,6 +12,7 @@ Set up the loop for this project.
 4. Tell the user the loop is ready, and list what it offers — the same list `loop_init`
    writes into `CLAUDE.md`:
    - `/loop:edit <request>` — one scoped cycle
+   - `/loop:plan <idea>` — turn an idea into an approved plan broken into stories
    - `/loop:build <what to build | P001-S02 | --next>` — as many verified cycles as it
      takes, optionally against a story from a plan
    - `/loop:fix <problem>` — reproduce the defect first, then fix the root cause

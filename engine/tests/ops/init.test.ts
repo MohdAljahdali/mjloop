@@ -82,7 +82,7 @@ describe('initLoop', () => {
     project = await makeTmpProject()
     await initLoop(project.dir, () => NOW)
     const claudeMd = await fs.readFile(path.join(project.dir, 'CLAUDE.md'), 'utf8')
-    for (const command of ['/loop:edit', '/loop:build', '/loop:fix', '/loop:status', '/loop:stop']) {
+    for (const command of ['/loop:edit', '/loop:plan', '/loop:build', '/loop:fix', '/loop:status', '/loop:stop']) {
       expect(claudeMd).toContain(command)
     }
   })
