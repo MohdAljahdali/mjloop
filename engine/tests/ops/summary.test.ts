@@ -5,6 +5,7 @@ import { renderSummaryLine, stateSummary } from '../../src/ops/summary.js'
 import { initLoop } from '../../src/ops/init.js'
 import { cycleAdvance, runStart } from '../../src/ops/run.js'
 import { runLog } from '../../src/ops/log.js'
+import { resolveLoopPaths } from '../../src/store/paths.js'
 import { makeTmpProject, type TmpProject } from '../helpers/tmp-project.js'
 
 const NOW = new Date('2026-07-26T10:36:00.000Z')
@@ -158,5 +159,28 @@ describe('stateSummary and the gate', () => {
     await initLoop(project.dir, clock)
     await runStart(project.dir, { track: 'fix', goal: 'Stale cache' }, clock)
     expect(renderSummaryLine(await stateSummary(project.dir))).toContain('gate shut')
+  })
+})
+
+describe('the design system flag', () => {
+  it('is false for an uninitialised project', async () => {
+    expect((await stateSummary(project.dir)).design_system).toBe(false)
+  })
+
+  it('is false after init, since nothing extracts one there', async () => {
+    await initLoop(project.dir, clock)
+    expect((await stateSummary(project.dir)).design_system).toBe(false)
+  })
+
+  it('is true once the file exists', async () => {
+    await initLoop(project.dir, clock)
+    await fs.writeFile(resolveLoopPaths(project.dir).designSystem, '# Design System\n', 'utf8')
+    expect((await stateSummary(project.dir)).design_system).toBe(true)
+  })
+
+  it('is false rather than throwing when the path is a directory', async () => {
+    await initLoop(project.dir, clock)
+    await fs.mkdir(resolveLoopPaths(project.dir).designSystem)
+    expect((await stateSummary(project.dir)).design_system).toBe(false)
   })
 })

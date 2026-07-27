@@ -1,6 +1,8 @@
+import fs from 'node:fs/promises'
 import { findTrack } from '../schemas/config.js'
 import type { Severity, State } from '../schemas/state.js'
 import { loadConfig } from '../store/config-store.js'
+import { resolveLoopPaths } from '../store/paths.js'
 import { StateStore } from '../store/state-store.js'
 
 export interface StateSummary {
@@ -34,9 +36,20 @@ export interface StateSummary {
    * proves is the track's business — on `fix` it is a reproduction.
    */
   reproduction: { proven: boolean; ref: string | null } | null
+  /** Whether `.loop/design-system.md` exists. The UI agents need one and will not invent it. */
+  design_system: boolean
 }
 
 const NO_FINDINGS: Record<Severity, number> = { high: 0, medium: 0, low: 0 }
+
+/** A regular file, not merely a path that exists — a directory here is not a design system. */
+async function hasDesignSystem(projectDir: string): Promise<boolean> {
+  try {
+    return (await fs.stat(resolveLoopPaths(projectDir).designSystem)).isFile()
+  } catch {
+    return false
+  }
+}
 
 /**
  * A compact view for the leader and the SessionStart hook. Deliberately not
@@ -64,6 +77,7 @@ export async function stateSummary(projectDir: string): Promise<StateSummary> {
       last_cycle: null,
       halt_reason: null,
       reproduction: null,
+      design_system: false,
     }
   }
 
@@ -103,6 +117,7 @@ export async function stateSummary(projectDir: string): Promise<StateSummary> {
     last_cycle: last === undefined ? null : { result: last.result, agents: last.agents },
     halt_reason: state.halt_reason,
     reproduction,
+    design_system: await hasDesignSystem(projectDir),
   }
 }
 
