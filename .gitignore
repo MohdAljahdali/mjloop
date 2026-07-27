@@ -21,6 +21,7 @@ npm-debug.log*
 
 # Loop execution state — this repo is the plugin, not a project it runs on
 .mjloop/
+CLAUDE.md
 
 # Editors
 .idea/
