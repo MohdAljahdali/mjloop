@@ -32,6 +32,17 @@ fail() {
 
 claude -p "/loop:init" --permission-mode acceptEdits --allowedTools "${allowed[@]}"
 
+# The approval gate cannot be answered by a person in a headless run, and the
+# leader is right to stop rather than approve its own plan. This script proves
+# the story-driven build, not the gate — run-plan.sh covers that — so it opts
+# the fixture out explicitly, exactly as run-plan.sh does.
+node -e '
+const fs = require("fs")
+const path = ".loop/config.yaml"
+fs.writeFileSync(path, fs.readFileSync(path, "utf8").replace("plan_approval: human", "plan_approval: auto"))
+'
+grep -q "plan_approval: auto" .loop/config.yaml || fail "could not switch the approval gate to auto"
+
 # Write the plan and its one story through the tools, the supported path.
 claude -p "Using the loop MCP tools only, create a plan with slug 'labels' titled 'Button labels', then add one story titled 'Cancel label' whose acceptance criterion is: src/button.js exports cancelLabel() returning 'Cancel', covered by a test. Then render the index. Do not write any file by hand." \
   --permission-mode acceptEdits --allowedTools "${allowed[@]}"
