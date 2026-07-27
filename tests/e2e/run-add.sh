@@ -18,6 +18,12 @@ cd "${workdir}"
 allowed=(
   "mcp__plugin_loop_loop"
   Task Read Edit Write Grep Glob Bash
+  # A bare `Write` grants the tool, not the path. File-writing permission is
+  # matched by `Edit(path)` rules, which cover every file-editing tool — so a
+  # headless run scaffolding into `.claude/agents/` needs this as well, and
+  # stops with "Write needs permission" without it. An interactive user simply
+  # approves the prompt; this is the non-interactive equivalent.
+  "Edit(.claude/**)"
 )
 
 fail() {
