@@ -174,9 +174,117 @@ describe('listPlanIds', () => {
 })
 
 describe('readPlan', () => {
-  it('names the directory when PLAN.md is missing rather than failing with an errno', async () => {
+  it('writes a PLAN.md for a hand-made directory that never had one', async () => {
     await fs.mkdir(path.join(resolveLoopPaths(project.dir).plans, 'P002-billing', 'stories'), { recursive: true })
-    await expect(readPlan(project.dir, 'P002')).rejects.toThrow(/PLAN\.md/)
+
+    const read = await readPlan(project.dir, 'P002')
+    expect(read.repaired).toBe(true)
+    expect(read.frontmatter.id).toBe('P002')
+    expect(read.frontmatter.slug).toBe('billing')
+    expect((await readPlan(project.dir, 'P002')).repaired).toBe(false)
+  })
+})
+
+describe('frontmatter repair', () => {
+  beforeEach(async () => {
+    await writePlan(project.dir, PLAN)
+  })
+
+  it('returns a sound plan untouched and does not rewrite it', async () => {
+    const dir = await findPlanDir(project.dir, 'P001')
+    const before = await fs.readFile(path.join(dir, 'PLAN.md'), 'utf8')
+
+    const read = await readPlan(project.dir, 'P001')
+    expect(read.repaired).toBe(false)
+    expect(await fs.readFile(path.join(dir, 'PLAN.md'), 'utf8')).toBe(before)
+  })
+
+  it('rebuilds id and slug from the directory name when the frontmatter is gone', async () => {
+    const dir = await findPlanDir(project.dir, 'P001')
+    await fs.writeFile(path.join(dir, 'PLAN.md'), 'Just prose, no frontmatter.\n', 'utf8')
+
+    const read = await readPlan(project.dir, 'P001')
+    expect(read.repaired).toBe(true)
+    expect(read.frontmatter.id).toBe('P001')
+    expect(read.frontmatter.slug).toBe('user-auth')
+    expect(read.body).toBe('Just prose, no frontmatter.')
+  })
+
+  it('rebuilds from an unparseable frontmatter block', async () => {
+    const dir = await findPlanDir(project.dir, 'P001')
+    await fs.writeFile(path.join(dir, 'PLAN.md'), '---\nid: [unclosed\n---\n\nThe body survives.\n', 'utf8')
+
+    const read = await readPlan(project.dir, 'P001')
+    expect(read.repaired).toBe(true)
+    expect(read.frontmatter.id).toBe('P001')
+    expect(read.body).toBe('The body survives.')
+  })
+
+  it('rebuilds when a required field was dropped', async () => {
+    const dir = await findPlanDir(project.dir, 'P001')
+    await fs.writeFile(path.join(dir, 'PLAN.md'), '---\nid: P001\n---\n\nBody.\n', 'utf8')
+
+    const read = await readPlan(project.dir, 'P001')
+    expect(read.repaired).toBe(true)
+    expect(read.frontmatter.slug).toBe('user-auth')
+  })
+
+  it('persists the repair so the next read is clean', async () => {
+    const dir = await findPlanDir(project.dir, 'P001')
+    await fs.writeFile(path.join(dir, 'PLAN.md'), 'No frontmatter.\n', 'utf8')
+
+    await readPlan(project.dir, 'P001')
+    expect((await readPlan(project.dir, 'P001')).repaired).toBe(false)
+  })
+
+  it('recovers the title from the manifest when one exists', async () => {
+    const dir = await findPlanDir(project.dir, 'P001')
+    await fs.writeFile(
+      path.join(dir, 'manifest.json'),
+      JSON.stringify({
+        schema: 1,
+        plan: 'P001',
+        slug: 'user-auth',
+        title: 'User authentication',
+        generated_at: '2026-07-27T09:14:00.000Z',
+        stories: [],
+      }),
+      'utf8',
+    )
+    await fs.writeFile(path.join(dir, 'PLAN.md'), 'No frontmatter.\n', 'utf8')
+
+    expect((await readPlan(project.dir, 'P001')).frontmatter.title).toBe('User authentication')
+  })
+
+  it('falls back to the slug for a title when there is no manifest', async () => {
+    const dir = await findPlanDir(project.dir, 'P001')
+    await fs.rm(path.join(dir, 'manifest.json'), { force: true })
+    await fs.writeFile(path.join(dir, 'PLAN.md'), 'No frontmatter.\n', 'utf8')
+
+    expect((await readPlan(project.dir, 'P001')).frontmatter.title).toBe('user-auth')
+  })
+
+  it('rebuilds a PLAN.md that is missing entirely', async () => {
+    const dir = await findPlanDir(project.dir, 'P001')
+    await fs.rm(path.join(dir, 'PLAN.md'))
+
+    const read = await readPlan(project.dir, 'P001')
+    expect(read.repaired).toBe(true)
+    expect(read.frontmatter.id).toBe('P001')
+    expect(read.body).toBe('')
+  })
+
+  it('preserves a recorded approval through an unrelated read', async () => {
+    const dir = await findPlanDir(project.dir, 'P001')
+    const approved = {
+      ...PLAN.frontmatter,
+      approval: { decision: 'approved', by: 'mohd', at: '2026-07-27T11:20:00.000Z', note: null },
+    }
+    await writePlan(project.dir, { frontmatter: approved, body: 'Body.' })
+
+    const read = await readPlan(project.dir, 'P001')
+    expect(read.repaired).toBe(false)
+    expect(read.frontmatter.approval?.decision).toBe('approved')
   })
 })
 

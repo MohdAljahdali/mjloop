@@ -36,6 +36,8 @@ export interface Plan {
   body: string
   /** Absolute path to the plan directory. */
   dir: string
+  /** True when PLAN.md's frontmatter was missing or invalid and was rebuilt. */
+  repaired: boolean
 }
 
 export interface Story {
@@ -93,29 +95,88 @@ export async function findPlanDir(projectDir: string, planId: string): Promise<s
   return path.join(plansDir, match)
 }
 
+/**
+ * Read a plan, rebuilding its frontmatter if an agent clobbered it.
+ *
+ * `planner` writes prose into PLAN.md, so the frontmatter the engine depends on
+ * is reachable by an agent's `Write`. Failing loudly would let one careless
+ * write brick a directory that still holds every story — and repair is cheap
+ * here precisely because the identifying facts were never stored in only one
+ * place: the directory is named `<id>-<slug>`.
+ */
 export async function readPlan(projectDir: string, planId: string): Promise<Plan> {
   const dir = await findPlanDir(projectDir, planId)
   const file = path.join(dir, 'PLAN.md')
-  let raw: string
+
+  let raw = ''
+  let missing = false
   try {
     raw = await fs.readFile(file, 'utf8')
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
-    // A directory without a PLAN.md is a half-built plan — a create that was
-    // interrupted, or one started by hand. A raw errno here names a file the
-    // caller never touched; this says what is wrong with the directory.
-    throw new InvalidStoryFileError(
-      file,
-      'the file is missing — a plan directory without a PLAN.md is half-built; remove the directory or write the file',
-    )
+    missing = true
   }
-  const { data, body } = parseFrontmatter(raw)
-  const parsed = PlanFrontmatterSchema.safeParse(data)
-  if (!parsed.success) throw new InvalidStoryFileError(path.join(dir, 'PLAN.md'), z.prettifyError(parsed.error))
-  return { frontmatter: parsed.data, body, dir }
+
+  if (!missing) {
+    try {
+      const { data, body } = parseFrontmatter(raw)
+      const parsed = PlanFrontmatterSchema.safeParse(data)
+      if (parsed.success) return { frontmatter: parsed.data, body, dir, repaired: false }
+    } catch {
+      // Fall through to repair: an unparseable block is a clobbered block.
+    }
+  }
+
+  const body = missing ? '' : recoverBody(raw)
+  const frontmatter = await rebuildFrontmatter(dir, planId)
+  await fs.writeFile(file, serialiseFrontmatter(frontmatter, body), 'utf8')
+  return { frontmatter, body, dir, repaired: true }
 }
 
-export async function writePlan(projectDir: string, plan: Omit<Plan, 'dir'>): Promise<string> {
+/** Everything after a frontmatter block, or the whole file when there is none. */
+function recoverBody(raw: string): string {
+  const closed = /^---\r?\n[\s\S]*?\r?\n---\r?\n?([\s\S]*)$/.exec(raw)
+  return (closed?.[1] ?? raw).trim()
+}
+
+async function rebuildFrontmatter(dir: string, planId: string): Promise<PlanFrontmatter> {
+  const basename = path.basename(dir)
+  const slug = basename.slice(planId.length + 1)
+
+  // The manifest is derived from the stories rather than from PLAN.md, so it
+  // survives a clobbered PLAN.md and is the best source for the title.
+  let title = slug
+  let createdAt: string | undefined
+  try {
+    const manifest = JSON.parse(await fs.readFile(path.join(dir, 'manifest.json'), 'utf8')) as {
+      title?: unknown
+      generated_at?: unknown
+    }
+    if (typeof manifest.title === 'string' && manifest.title.length > 0) title = manifest.title
+    if (typeof manifest.generated_at === 'string') createdAt = manifest.generated_at
+  } catch {
+    // No manifest, or an unreadable one. The slug is a usable title.
+  }
+
+  if (createdAt === undefined) {
+    // The directory's own timestamp is the best remaining evidence of when
+    // this plan came into existence.
+    const stats = await fs.stat(dir)
+    createdAt = new Date(stats.birthtimeMs || stats.mtimeMs).toISOString()
+  }
+
+  const parsed = PlanFrontmatterSchema.safeParse({ id: planId, slug, title, created_at: createdAt })
+  if (!parsed.success) {
+    throw new InvalidStoryFileError(path.join(dir, 'PLAN.md'), z.prettifyError(parsed.error))
+  }
+  return parsed.data
+}
+
+/** `repaired` is a fact about a read, so a writer neither supplies it nor can. */
+export async function writePlan(
+  projectDir: string,
+  plan: Omit<Plan, 'dir' | 'repaired'>,
+): Promise<string> {
   const dir = path.join(
     resolveLoopPaths(projectDir).plans,
     `${plan.frontmatter.id}-${plan.frontmatter.slug}`,

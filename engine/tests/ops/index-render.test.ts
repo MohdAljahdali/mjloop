@@ -106,10 +106,12 @@ describe('renderIndex', () => {
     expect(order).toEqual(['write', 'render'])
   })
 
-  it('names the offending directory when a plan has no PLAN.md', async () => {
+  it('renders a plan whose PLAN.md was rebuilt from the directory name', async () => {
     await planCreate(project.dir, { slug: 'user-auth', title: 'User authentication' }, clock)
     await fs.mkdir(path.join(resolveLoopPaths(project.dir).plans, 'P002-billing', 'stories'), { recursive: true })
 
-    await expect(renderIndex(project.dir, clock)).rejects.toThrow(/P002-billing/)
+    // readPlan repairs rather than throws, so one clobbered plan no longer
+    // takes the whole index down with it.
+    expect(await renderIndex(project.dir, clock)).toContain('| P002 | billing |')
   })
 })
