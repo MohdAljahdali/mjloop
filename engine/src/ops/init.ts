@@ -7,7 +7,7 @@ import { writeConfig } from '../store/config-store.js'
 import { resolveLoopPaths } from '../store/paths.js'
 import type { Clock } from '../store/state-store.js'
 
-export const CLAUDE_MD_SECTION = '## Loop'
+export const CLAUDE_MD_SECTION = '## mjloop'
 
 const CLAUDE_MD_BLOCK = `${CLAUDE_MD_SECTION}
 

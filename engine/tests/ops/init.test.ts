@@ -68,6 +68,18 @@ describe('initLoop', () => {
     expect(claudeMd.split(CLAUDE_MD_SECTION).length - 1).toBe(1)
   })
 
+  it('writes its block into a CLAUDE.md left by the pre-rename plugin', async () => {
+    // The old plugin's marker was '## Loop'. If it still gated this write, a
+    // project it had touched would keep pointing at /loop: commands and .loop/.
+    project = await makeTmpProject({
+      'CLAUDE.md': '# Tiny\n\n## Loop\n\nThis project uses the `loop` plugin. State lives in `.loop/`.\n',
+    })
+    await initLoop(project.dir, () => NOW)
+    const claudeMd = await fs.readFile(path.join(project.dir, 'CLAUDE.md'), 'utf8')
+    expect(claudeMd).toContain(CLAUDE_MD_SECTION)
+    expect(claudeMd).toContain('/mjloop:status')
+  })
+
   it('creates CLAUDE.md when the project has none', async () => {
     project = await makeTmpProject()
     await initLoop(project.dir, () => NOW)
