@@ -145,6 +145,15 @@ export const DEFAULT_TRACKS: Record<string, Track> = {
     max_cycles: 5,
     gate: { proven_by: 'reproducer', blocks: ['fixer'] },
   },
+  plan: {
+    required: ['planner', 'fit-checker', 'story-writer'],
+    available: ['plan-critic', 'story-critic'],
+    max_cycles: 6,
+    // An evidence gate: whether a plan fits the project that exists is a fact,
+    // and fit-checker demonstrates it. The approval gate is a different kind
+    // and lives on the plan, not here.
+    gate: { proven_by: 'fit-checker', blocks: ['story-writer'] },
+  },
 }
 
 export function defaultConfig(verify: Verify): Config {

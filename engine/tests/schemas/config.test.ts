@@ -8,7 +8,7 @@ describe('defaultConfig', () => {
   it('is schema-valid and defines only the edit track', () => {
     const config = defaultConfig(VERIFY)
     expect(ConfigSchema.parse(config)).toEqual(config)
-    expect(Object.keys(config.tracks)).toEqual(['edit', 'build', 'fix'])
+    expect(Object.keys(config.tracks)).toEqual(['edit', 'build', 'fix', 'plan'])
     expect(config.autonomous).toBe(false)
   })
 
@@ -36,6 +36,15 @@ describe('DEFAULT_TRACKS', () => {
       available: ['investigator', 'hypothesis-tester', 'critic'],
       max_cycles: 5,
       gate: { proven_by: 'reproducer', blocks: ['fixer'] },
+    })
+  })
+
+  it('gates the plan track on the fit-checker and blocks the story-writer', () => {
+    expect(DEFAULT_TRACKS.plan).toEqual({
+      required: ['planner', 'fit-checker', 'story-writer'],
+      available: ['plan-critic', 'story-critic'],
+      max_cycles: 6,
+      gate: { proven_by: 'fit-checker', blocks: ['story-writer'] },
     })
   })
 

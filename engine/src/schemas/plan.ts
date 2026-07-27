@@ -12,12 +12,38 @@ export const StoryStatusSchema = z.enum(['todo', 'doing', 'done', 'blocked'])
 export const PlanIdSchema = z.string().regex(/^P\d{3}$/, 'a plan id looks like P001')
 export const StoryIdSchema = z.string().regex(/^P\d{3}-S\d{2}$/, 'a story id looks like P001-S02')
 
+export const ApprovalDecisionSchema = z.enum(['approved', 'rejected', 'changes_requested'])
+
+/**
+ * A decision, not a demonstrated fact. That is why a tool records it, where
+ * milestones 2 and 3 refused tools that would have taken the leader's word for
+ * a finding being resolved or a defect being reproduced: those had an
+ * underlying fact that evidence could establish, and an approval does not.
+ *
+ * `rejected` and `changes_requested` are recorded too. A plan that was seen and
+ * turned down is in a different state from one nobody has looked at.
+ */
+export const ApprovalSchema = z.strictObject({
+  decision: ApprovalDecisionSchema,
+  /** Who decided. Free text: the engine cannot verify it, and pretending otherwise would be worse. */
+  by: z.string().min(1),
+  at: z.iso.datetime(),
+  /** The approver's own words, kept so the approval is auditable rather than a bare flag. */
+  note: z.string().min(1).nullable().default(null),
+})
+
 export const PlanFrontmatterSchema = z.strictObject({
   id: PlanIdSchema,
   /** Also reaches the filesystem: the directory is `<id>-<slug>`. */
   slug: IdSchema,
   title: z.string().min(1),
   created_at: z.iso.datetime(),
+  /**
+   * The default is load-bearing, as it was for `last_fingerprint` and
+   * `reproduction`: the schema is strict, so without it every PLAN.md written
+   * before this field existed would fail validation on read.
+   */
+  approval: ApprovalSchema.nullable().default(null),
 })
 
 export const StoryFrontmatterSchema = z
@@ -70,6 +96,8 @@ export const ManifestSchema = z.strictObject({
 })
 
 export type StoryStatus = z.infer<typeof StoryStatusSchema>
+export type ApprovalDecision = z.infer<typeof ApprovalDecisionSchema>
+export type Approval = z.infer<typeof ApprovalSchema>
 export type PlanFrontmatter = z.infer<typeof PlanFrontmatterSchema>
 export type StoryFrontmatter = z.infer<typeof StoryFrontmatterSchema>
 export type ManifestEntry = z.infer<typeof ManifestEntrySchema>

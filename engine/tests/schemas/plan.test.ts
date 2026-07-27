@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import * as z from 'zod'
 import {
+  ApprovalSchema,
   ManifestSchema,
   PlanFrontmatterSchema,
   PlanIdSchema,
@@ -82,12 +83,48 @@ describe('StoryFrontmatterSchema', () => {
 describe('PlanFrontmatterSchema', () => {
   it('accepts a complete plan', () => {
     const plan = { id: 'P001', slug: 'user-auth', title: 'User authentication', created_at: '2026-07-27T09:00:00.000Z' }
-    expect(PlanFrontmatterSchema.parse(plan)).toEqual(plan)
+    expect(PlanFrontmatterSchema.parse(plan)).toEqual({ ...plan, approval: null })
   })
 
   it('rejects a slug that could steer a path', () => {
     const bad = { id: 'P001', slug: '../escape', title: 'x', created_at: '2026-07-27T09:00:00.000Z' }
     expect(PlanFrontmatterSchema.safeParse(bad).success).toBe(false)
+  })
+
+  it('defaults approval to null on a plan written before the field existed', () => {
+    const plan = { id: 'P001', slug: 'user-auth', title: 'User authentication', created_at: '2026-07-27T09:00:00.000Z' }
+    expect(PlanFrontmatterSchema.parse(plan).approval).toBeNull()
+  })
+
+  it('accepts a recorded approval', () => {
+    const plan = {
+      id: 'P001',
+      slug: 'user-auth',
+      title: 'User authentication',
+      created_at: '2026-07-27T09:00:00.000Z',
+      approval: {
+        decision: 'approved',
+        by: 'mohd',
+        at: '2026-07-27T11:20:00.000Z',
+        note: 'Ship it, but keep the token TTL configurable.',
+      },
+    }
+    expect(PlanFrontmatterSchema.safeParse(plan).success).toBe(true)
+  })
+
+  it('accepts an approval with no note', () => {
+    const approval = { decision: 'rejected', by: 'mohd', at: '2026-07-27T11:20:00.000Z' }
+    expect(ApprovalSchema.parse(approval).note).toBeNull()
+  })
+
+  it('rejects a decision outside the three values', () => {
+    const approval = { decision: 'maybe', by: 'mohd', at: '2026-07-27T11:20:00.000Z' }
+    expect(ApprovalSchema.safeParse(approval).success).toBe(false)
+  })
+
+  it('rejects an approval with no approver', () => {
+    const approval = { decision: 'approved', by: '', at: '2026-07-27T11:20:00.000Z' }
+    expect(ApprovalSchema.safeParse(approval).success).toBe(false)
   })
 })
 

@@ -69,7 +69,7 @@ describe('writePlan and readPlan', () => {
     expect(dir).toBe(path.join(resolveLoopPaths(project.dir).plans, 'P001-user-auth'))
 
     const read = await readPlan(project.dir, 'P001')
-    expect(read.frontmatter).toEqual(PLAN.frontmatter)
+    expect(read.frontmatter).toEqual({ ...PLAN.frontmatter, approval: null })
     expect(read.body).toBe(PLAN.body)
     expect(read.dir).toBe(dir)
   })
