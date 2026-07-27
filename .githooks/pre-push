@@ -1,0 +1,63 @@
+#!/bin/sh
+#
+# Refuse to push a release branch whose plugin version already exists on the remote.
+#
+# `/plugin` resolves updates by the version in .claude-plugin/plugin.json. A push that
+# changes behaviour but leaves the version alone lands on GitHub and is then invisible
+# to every installed copy — the update reports "already at the latest version".
+#
+# Enable it once per clone:  git config core.hooksPath .githooks
+
+set -e
+
+protected_ref='refs/heads/main'
+manifest='.claude-plugin/plugin.json'
+package='engine/package.json'
+zero='0000000000000000000000000000000000000000'
+
+# Reads the "version" field out of a JSON blob on stdin. No jq dependency.
+read_version() {
+	sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1
+}
+
+while read -r _local_ref local_sha remote_ref remote_sha; do
+	[ "$remote_ref" = "$protected_ref" ] || continue
+	[ "$local_sha" = "$zero" ] && continue   # branch deletion
+	[ "$remote_sha" = "$zero" ] && continue  # branch does not exist on the remote yet
+
+	local_version=$(git show "$local_sha:$manifest" | read_version)
+	remote_version=$(git show "$remote_sha:$manifest" 2>/dev/null | read_version)
+
+	if [ -z "$local_version" ]; then
+		echo "pre-push: no version found in $manifest" >&2
+		exit 1
+	fi
+
+	if [ "$local_version" = "$remote_version" ]; then
+		cat >&2 <<-EOF
+
+			pre-push: the version is still $local_version, the same one already on the remote.
+
+			  /plugin compares this number, so an unbumped push cannot be installed as an
+			  update. Bump $manifest and $package by what changed:
+
+			    breaking change  -> major
+			    feat             -> minor
+			    fix / chore      -> patch
+
+			  Then amend or add a commit and push again.
+			  Deliberate exception (docs-only, CI, a re-push): git push --no-verify
+
+		EOF
+		exit 1
+	fi
+
+	package_version=$(git show "$local_sha:$package" | read_version)
+	if [ "$package_version" != "$local_version" ]; then
+		echo "pre-push: $manifest says $local_version but $package says $package_version." >&2
+		echo "          Both describe the same release; make them match." >&2
+		exit 1
+	fi
+done
+
+exit 0

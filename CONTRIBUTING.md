@@ -18,6 +18,32 @@ To use your working copy inside Claude Code, add the repository root as a local 
 plugin marketplace. The MCP server is served from `engine/dist/mcp/server.js`, so
 `npm run build` must have run before the plugin will load.
 
+Enable the repository's git hooks once per clone:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+## Versioning
+
+`/plugin` decides whether an update exists by comparing the `version` in
+`.claude-plugin/plugin.json`. A push that changes behaviour but leaves the version alone
+reaches GitHub and is still invisible to every installed copy.
+
+So every push to `main` bumps the version, in `.claude-plugin/plugin.json` and
+`engine/package.json` together, by what changed:
+
+| Change                     | Bump  |
+| -------------------------- | ----- |
+| Breaking change            | major |
+| `feat`                     | minor |
+| `fix`, `chore`, `refactor` | patch |
+
+The `.githooks/pre-push` hook enforces this: it refuses a push to `main` whose version
+already exists on the remote, and refuses one where the two files disagree. For a change
+that genuinely ships nothing to users — a docs-only commit, a CI tweak — `git push
+--no-verify` is the deliberate way past it.
+
 ## Repository layout
 
 | Path              | What lives there                                                       |
