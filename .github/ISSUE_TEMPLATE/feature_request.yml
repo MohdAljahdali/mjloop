@@ -1,0 +1,53 @@
+name: Feature request
+description: Propose a new agent, skill, track, or engine capability
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Adding an agent, a skill, or a track should not require an engine change — see the
+        `mjloop-extend` skill and `/mjloop:add`. If your proposal does require one, say why
+        below.
+
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What kind of addition is this
+      options:
+        - "A new agent"
+        - "A new skill"
+        - "A new track"
+        - "A change to an existing track's roster"
+        - "An engine or MCP capability"
+        - "Something else"
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What can you not do today, and what did you try instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: The proposal
+      description: >
+        For an agent, say what it returns and which track's roster it joins, and whether it
+        is required or available. For a track, say what its gate is and how a cycle ends.
+    validations:
+      required: true
+
+  - type: textarea
+    id: engine
+    attributes:
+      label: Does this need an engine change
+      description: If yes, explain why the extension path is not enough.
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you considered

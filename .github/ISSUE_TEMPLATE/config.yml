@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Contributing guide
+    url: https://github.com/MohdAljahdali/mjloop/blob/main/CONTRIBUTING.md
+    about: How to build the plugin, run the tests, and open a reviewable pull request.

@@ -1,0 +1,78 @@
+name: Bug report
+description: A track, command, agent, or the engine did not behave as documented
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please include the evidence from the failing cycle. A run report or the verifier's
+        output from `.mjloop/` is usually the whole diagnosis.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: What was running
+      options:
+        - "/mjloop:edit"
+        - "/mjloop:plan"
+        - "/mjloop:build"
+        - "/mjloop:fix"
+        - "/mjloop:init"
+        - "/mjloop:status"
+        - "/mjloop:stop"
+        - "/mjloop:resume"
+        - "/mjloop:design-sync"
+        - "/mjloop:add"
+        - "The engine or the MCP server"
+        - "Something else"
+    validations:
+      required: true
+
+  - type: textarea
+    id: command
+    attributes:
+      label: The command you invoked
+      description: The full invocation, including the argument you passed.
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened instead
+      description: Paste the output. If the run halted, include the reason it gave.
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence from `.mjloop/`
+      description: >
+        The run report, the roster the leader wrote, or the verifier's evidence from the
+        failing cycle, if the affected project still has them.
+      render: shell
+
+  - type: input
+    id: version
+    attributes:
+      label: Plugin version or commit
+      placeholder: "0.1.0, or the commit SHA you are running"
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Node version and OS
+      placeholder: "Node 22.11.0, macOS 15.5"
+    validations:
+      required: true
