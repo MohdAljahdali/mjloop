@@ -1,5 +1,7 @@
 # Loop — Milestone 5: The Remaining Guards — Design
 
+> **Renamed after this document was written.** The plugin ships as `mjloop`: the `/loop:run` and `/loop:resume` commands described here are `/mjloop:run` and `/mjloop:resume`, MCP tools are `mjloop_*`, skills are `mjloop-*`, and project state lives in `.mjloop/`. `loop` collided with a command Claude Code already provides. This document predates the rename and uses the old identifiers throughout; the code is authoritative.
+
 **Status:** approved, ready for planning
 **Extends** `docs/superpowers/specs/2026-07-26-loop-plugin-design.md` §11, §12.
 

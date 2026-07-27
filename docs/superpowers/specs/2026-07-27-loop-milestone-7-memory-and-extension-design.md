@@ -1,5 +1,7 @@
 # Loop — Milestone 7: Memory and Extension — Design
 
+> **Renamed after this document was written.** The plugin ships as `mjloop`: the `/loop:add` command described here is `/mjloop:add`, MCP tools are `mjloop_*`, skills are `mjloop-*`, and the memory store lives at `.mjloop/memory/`. `loop` collided with a command Claude Code already provides. This document predates the rename and uses the old identifiers throughout; the code is authoritative.
+
 **Status:** approved, ready for planning
 **Extends** `docs/superpowers/specs/2026-07-26-loop-plugin-design.md` §6, §13, §14.
 

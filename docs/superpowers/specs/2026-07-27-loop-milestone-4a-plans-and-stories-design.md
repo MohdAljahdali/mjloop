@@ -1,5 +1,7 @@
 # Loop — Milestone 4a: Plans and Stories as Data — Design
 
+> **Renamed after this document was written.** The plugin ships as `mjloop`: the `loop_*` MCP tools named here are `mjloop_*`, commands are `/mjloop:*`, skills are `mjloop-*`, and plans, stories, and the rest of project state live under `.mjloop/`. `loop` collided with a command Claude Code already provides. This document predates the rename and uses the old identifiers throughout; the code is authoritative.
+
 **Status:** approved, ready for planning
 **Extends** `docs/superpowers/specs/2026-07-26-loop-plugin-design.md` §6, §9.
 

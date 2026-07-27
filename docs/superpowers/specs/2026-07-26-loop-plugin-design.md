@@ -1,5 +1,7 @@
 # Loop — Design Document
 
+> **Renamed after this document was written.** The plugin ships as `mjloop`: commands are `/mjloop:*`, MCP tools are `mjloop_*`, skills are `mjloop-*`, and project state lives in `.mjloop/`. `loop` collided with a command Claude Code already provides. Every design document in this directory predates the rename and uses the old identifiers; the code is authoritative.
+
 **Date:** 2026-07-26
 **Status:** Approved (design phase)
 

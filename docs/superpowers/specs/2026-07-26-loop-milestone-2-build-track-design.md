@@ -1,5 +1,7 @@
 # Loop — Milestone 2: Build Track and Stagnation Guard — Design
 
+> **Renamed after this document was written.** The plugin ships as `mjloop`: the `/loop:build` command described here is `/mjloop:build`, MCP tools are `mjloop_*`, skills are `mjloop-*`, and project state lives in `.mjloop/`. `loop` collided with a command Claude Code already provides. This document predates the rename and uses the old identifiers throughout; the code is authoritative.
+
 **Status:** approved, ready for planning
 **Supersedes nothing.** Extends `docs/superpowers/specs/2026-07-26-loop-plugin-design.md` §3.2, §4, §12.
 
