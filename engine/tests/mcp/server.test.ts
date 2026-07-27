@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { buildServer, resolveProjectDir } from '../../src/mcp/server.js'
+import { gateSet } from '../../src/ops/plan.js'
 import { makeTmpProject, type TmpProject } from '../helpers/tmp-project.js'
 
 let project: TmpProject
@@ -231,6 +232,10 @@ describe('tool behaviour', () => {
       arguments: { project_dir: project.dir, slug: 'user-auth', title: 'User authentication' },
     })
     expect(JSON.parse(textOf(created)).id).toBe('P001')
+
+    // gates.plan_approval defaults to "human", and this test is about the plan
+    // tools rather than the gate, so the approval is recorded directly.
+    await gateSet(project.dir, { plan: 'P001', decision: 'approved', by: 'test' })
 
     await client.callTool({
       name: 'loop_story_add',

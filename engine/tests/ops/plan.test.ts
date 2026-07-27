@@ -1,21 +1,26 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { initLoop } from '../../src/ops/init.js'
 import {
+  ApprovalRequiredError,
   DependencyError,
   InvalidPlanInputError,
+  gateSet,
   planCreate,
   storyAdd,
   storyGet,
   storyNext,
   storyUpdate,
 } from '../../src/ops/plan.js'
+import { loadConfig, writeConfig } from '../../src/store/config-store.js'
 import {
   PlanNotFoundError,
   StoryNotFoundError,
   findPlanDir,
   listPlanIds,
   listStories,
+  readPlan,
   readStory,
 } from '../../src/store/plan-store.js'
 import { makeTmpProject, type TmpProject } from '../helpers/tmp-project.js'
@@ -369,5 +374,101 @@ describe('storyGet', () => {
   it('throws StoryNotFoundError for an unknown id', async () => {
     await planCreate(project.dir, { slug: 'user-auth', title: 'User authentication' }, clock)
     await expect(storyGet(project.dir, 'P001-S99')).rejects.toBeInstanceOf(StoryNotFoundError)
+  })
+})
+
+describe('gateSet', () => {
+  beforeEach(async () => {
+    await planCreate(project.dir, { slug: 'user-auth', title: 'User authentication' }, clock)
+  })
+
+  it('records the decision, the approver, the time, and their words', async () => {
+    const result = await gateSet(
+      project.dir,
+      { plan: 'P001', decision: 'approved', by: 'mohd', note: 'Ship it.' },
+      clock,
+    )
+    expect(result.approval).toEqual({
+      decision: 'approved',
+      by: 'mohd',
+      at: NOW.toISOString(),
+      note: 'Ship it.',
+    })
+    expect((await readPlan(project.dir, 'P001')).frontmatter.approval?.decision).toBe('approved')
+  })
+
+  it('defaults the note to null', async () => {
+    const result = await gateSet(project.dir, { plan: 'P001', decision: 'rejected', by: 'mohd' }, clock)
+    expect(result.approval.note).toBeNull()
+  })
+
+  it('lets a later decision replace an earlier one', async () => {
+    await gateSet(project.dir, { plan: 'P001', decision: 'changes_requested', by: 'mohd' }, clock)
+    await gateSet(project.dir, { plan: 'P001', decision: 'approved', by: 'mohd' }, clock)
+    expect((await readPlan(project.dir, 'P001')).frontmatter.approval?.decision).toBe('approved')
+  })
+
+  it('leaves the plan body intact', async () => {
+    await planCreate(project.dir, { slug: 'billing', title: 'Billing', body: 'The approach.' }, clock)
+    await gateSet(project.dir, { plan: 'P002', decision: 'approved', by: 'mohd' }, clock)
+    expect((await readPlan(project.dir, 'P002')).body).toBe('The approach.')
+  })
+
+  it('throws PlanNotFoundError for a plan that does not exist', async () => {
+    await expect(
+      gateSet(project.dir, { plan: 'P404', decision: 'approved', by: 'mohd' }, clock),
+    ).rejects.toBeInstanceOf(PlanNotFoundError)
+  })
+})
+
+describe('the approval gate', () => {
+  beforeEach(async () => {
+    await initLoop(project.dir, clock)
+    await planCreate(project.dir, { slug: 'user-auth', title: 'User authentication' }, clock)
+  })
+
+  it('refuses a story on an unapproved plan when approval is human', async () => {
+    await expect(storyAdd(project.dir, { plan: 'P001', title: 'Login form' }, clock)).rejects.toBeInstanceOf(
+      ApprovalRequiredError,
+    )
+  })
+
+  it('names the plan and the tool that would open it', async () => {
+    await expect(storyAdd(project.dir, { plan: 'P001', title: 'Login form' }, clock)).rejects.toThrow(
+      /P001[\s\S]*loop_gate_set/,
+    )
+  })
+
+  it('writes nothing when it refuses', async () => {
+    await expect(storyAdd(project.dir, { plan: 'P001', title: 'Login form' }, clock)).rejects.toThrow()
+    const dir = await findPlanDir(project.dir, 'P001')
+    expect(await fs.readdir(path.join(dir, 'stories'))).toEqual([])
+  })
+
+  it('allows the story once the plan is approved', async () => {
+    await gateSet(project.dir, { plan: 'P001', decision: 'approved', by: 'mohd' }, clock)
+    const added = await storyAdd(project.dir, { plan: 'P001', title: 'Login form' }, clock)
+    expect(added.id).toBe('P001-S01')
+  })
+
+  it('stays shut for a rejection or a change request', async () => {
+    await gateSet(project.dir, { plan: 'P001', decision: 'rejected', by: 'mohd' }, clock)
+    await expect(storyAdd(project.dir, { plan: 'P001', title: 'Login form' }, clock)).rejects.toBeInstanceOf(
+      ApprovalRequiredError,
+    )
+
+    await gateSet(project.dir, { plan: 'P001', decision: 'changes_requested', by: 'mohd' }, clock)
+    await expect(storyAdd(project.dir, { plan: 'P001', title: 'Login form' }, clock)).rejects.toBeInstanceOf(
+      ApprovalRequiredError,
+    )
+  })
+
+  it('does not gate anything when approval is auto', async () => {
+    const config = await loadConfig(project.dir)
+    config.gates.plan_approval = 'auto'
+    await writeConfig(project.dir, config)
+
+    const added = await storyAdd(project.dir, { plan: 'P001', title: 'Login form' }, clock)
+    expect(added.id).toBe('P001-S01')
   })
 })

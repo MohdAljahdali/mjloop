@@ -5,7 +5,7 @@ import { initLoop } from '../../src/ops/init.js'
 import { renderIndex } from '../../src/ops/index-render.js'
 import { runLog } from '../../src/ops/log.js'
 import { manifestPath } from '../../src/ops/manifest.js'
-import { planCreate, storyAdd, storyNext, storyUpdate } from '../../src/ops/plan.js'
+import { gateSet, planCreate, storyAdd, storyNext, storyUpdate } from '../../src/ops/plan.js'
 import { rosterSet } from '../../src/ops/roster.js'
 import { cycleAdvance, runDirName, runDirPath, runStart } from '../../src/ops/run.js'
 import { findPlanDir, readStory } from '../../src/store/plan-store.js'
@@ -20,6 +20,9 @@ beforeEach(async () => {
   project = await makeTmpProject({ 'package.json': JSON.stringify({ scripts: { test: 'vitest run' } }) })
   await initLoop(project.dir, clock)
   await planCreate(project.dir, { slug: 'user-auth', title: 'User authentication' }, clock)
+  // The project is initialised, so gates.plan_approval is "human": stories need
+  // an approved plan. This suite is about the build, not about the gate.
+  await gateSet(project.dir, { plan: 'P001', decision: 'approved', by: 'test' }, clock)
   await storyAdd(project.dir, { plan: 'P001', title: 'Login form', acceptance: ['Shows an error on bad input'] }, clock)
   await storyAdd(project.dir, { plan: 'P001', title: 'Session token', depends_on: ['P001-S01'] }, clock)
 })

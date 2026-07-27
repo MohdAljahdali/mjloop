@@ -2,18 +2,23 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import * as z from 'zod'
 import {
+  ApprovalSchema,
   PlanFrontmatterSchema,
   StoryFrontmatterSchema,
+  type Approval,
+  type ApprovalDecision,
   type Manifest,
   type StoryFrontmatter,
   type StoryStatus,
 } from '../schemas/plan.js'
+import { loadConfig } from '../store/config-store.js'
 import { withLock } from '../store/lock.js'
 import { resolveLoopPaths } from '../store/paths.js'
 import {
   findPlanDir,
   listPlanIds,
   listStories,
+  readPlan,
   readStory,
   storyFileName,
   usedStoryNumbers,
@@ -73,6 +78,60 @@ export async function planCreate(
   })
 }
 
+export class ApprovalRequiredError extends Error {
+  constructor(planId: string) {
+    super(
+      `plan "${planId}" has no recorded approval and gates.plan_approval is "human", so no story may be added ` +
+        'to it yet. Show the plan to the user, ask whether it is approved, and record their answer with ' +
+        'loop_gate_set — including their own words. Never record an approval nobody gave; set ' +
+        'gates.plan_approval to "auto" in .loop/config.yaml if this project does not want a human in the loop.',
+    )
+    this.name = 'ApprovalRequiredError'
+  }
+}
+
+export interface GateSetInput {
+  plan: string
+  decision: ApprovalDecision
+  by: string
+  note?: string | null
+}
+
+/**
+ * Record a decision about a plan.
+ *
+ * A tool is the right shape here where milestones 2 and 3 refused one: those
+ * would have taken the leader's word for a fact that evidence could establish,
+ * and an approval has no fact underneath it — the record is the thing. What the
+ * engine cannot do is verify a human made the decision, so it records `by` and
+ * the approver's own words instead of pretending to.
+ */
+export async function gateSet(
+  projectDir: string,
+  input: GateSetInput,
+  now: Clock = () => new Date(),
+): Promise<{ plan: string; approval: Approval }> {
+  const paths = resolveLoopPaths(projectDir)
+  await findPlanDir(projectDir, input.plan)
+
+  return withLock(paths.lock, async () => {
+    const plan = await readPlan(projectDir, input.plan)
+    const approval = ApprovalSchema.safeParse({
+      decision: input.decision,
+      by: input.by,
+      at: now().toISOString(),
+      note: input.note ?? null,
+    })
+    if (!approval.success) throw new InvalidPlanInputError(z.prettifyError(approval.error))
+
+    await writePlan(projectDir, {
+      frontmatter: { ...plan.frontmatter, approval: approval.data },
+      body: plan.body,
+    })
+    return { plan: input.plan, approval: approval.data }
+  })
+}
+
 /** `S` plus two digits is the id format, so a plan holds at most 99 stories. */
 const MAX_STORY_NUMBER = 99
 
@@ -94,6 +153,20 @@ export async function storyAdd(
   // findPlanDir throws PlanNotFoundError before the lock is taken, so a bad
   // plan id fails fast instead of serialising behind unrelated work.
   await findPlanDir(projectDir, input.plan)
+
+  // The approval gate. A project with no .loop/config.yaml has not opted into
+  // anything, so an unreadable config gates nothing — the same degradation
+  // stateSummary already applies to a config a user hand-edited badly.
+  let requiresApproval = false
+  try {
+    requiresApproval = (await loadConfig(projectDir)).gates.plan_approval === 'human'
+  } catch {
+    requiresApproval = false
+  }
+  if (requiresApproval) {
+    const plan = await readPlan(projectDir, input.plan)
+    if (plan.frontmatter.approval?.decision !== 'approved') throw new ApprovalRequiredError(input.plan)
+  }
 
   return withLock(paths.lock, async () => {
     const existing = await listStories(projectDir, input.plan)

@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { NoActiveRunError, UnknownTrackError, cycleAdvance, halt, runDirName, runDirPath, runStart } from '../../src/ops/run.js'
 import { initLoop } from '../../src/ops/init.js'
 import { runLog } from '../../src/ops/log.js'
-import { planCreate, storyAdd } from '../../src/ops/plan.js'
+import { gateSet, planCreate, storyAdd } from '../../src/ops/plan.js'
 import { InvalidStateError, StateStore } from '../../src/store/state-store.js'
 import { loadConfig, writeConfig } from '../../src/store/config-store.js'
 import { makeTmpProject, type TmpProject } from '../helpers/tmp-project.js'
@@ -36,6 +36,9 @@ describe('runStart', () => {
 
   it('names the run directory after the story when there is one', async () => {
     await planCreate(project.dir, { slug: 'user-auth', title: 'User authentication' }, clock)
+    // The project is initialised, so gates.plan_approval is "human" and stories
+    // need an approved plan. These tests are about runs, not about the gate.
+    await gateSet(project.dir, { plan: 'P001', decision: 'approved', by: 'test' }, clock)
     await storyAdd(project.dir, { plan: 'P001', title: 'Login form' }, clock)
     await storyAdd(project.dir, { plan: 'P001', title: 'Session token' }, clock)
 
@@ -149,6 +152,7 @@ describe('runStart', () => {
 
   it('accepts a story id that exists', async () => {
     await planCreate(project.dir, { slug: 'user-auth', title: 'User authentication' }, clock)
+    await gateSet(project.dir, { plan: 'P001', decision: 'approved', by: 'test' }, clock)
     await storyAdd(project.dir, { plan: 'P001', title: 'Login form' }, clock)
 
     const state = await runStart(
@@ -162,6 +166,7 @@ describe('runStart', () => {
 
   it('gives concurrent starts distinct run ids and directories', async () => {
     await planCreate(project.dir, { slug: 'user-auth', title: 'User authentication' }, clock)
+    await gateSet(project.dir, { plan: 'P001', decision: 'approved', by: 'test' }, clock)
     await storyAdd(project.dir, { plan: 'P001', title: 'Login form' }, clock)
     await storyAdd(project.dir, { plan: 'P001', title: 'Session token' }, clock)
 
