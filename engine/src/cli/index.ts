@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import path from 'node:path'
-import { renderSummaryLine, stateSummary } from '../ops/summary.js'
+import { renderSummaryLine, stateSummary, type StateSummary } from '../ops/summary.js'
+import { ConfigMissingError, loadConfig } from '../store/config-store.js'
 import { PROTECTED_BASENAMES } from '../store/paths.js'
 import { isEntrypoint } from '../util/entrypoint.js'
 
@@ -9,6 +10,7 @@ const USAGE = `usage: loop-cli <command>
   summary [--dir <path>] [--json]   print the current loop state
   session-start                     SessionStart hook (reads hook JSON on stdin)
   state-guard                       PreToolUse hook (reads hook JSON on stdin)
+  stop-guard                        Stop hook (reads hook JSON on stdin)
 `
 
 export interface CliResult {
@@ -25,6 +27,8 @@ export async function runCli(argv: string[], stdin: string): Promise<CliResult> 
       return sessionStartCommand(stdin)
     case 'state-guard':
       return stateGuardCommand(stdin)
+    case 'stop-guard':
+      return stopGuardCommand(stdin)
     default:
       return { stdout: USAGE, exitCode: 1 }
   }
@@ -98,6 +102,79 @@ export function evaluateStateGuard(input: unknown): GuardVerdict {
     deny: true,
     reason: `${basename} is owned by the loop MCP server. Use the loop_* tools (loop_run_start, loop_cycle_advance, loop_run_log, ...) instead of editing it directly.`,
   }
+}
+
+export interface StopVerdict {
+  block: boolean
+  reason: string
+}
+
+/**
+ * Decide whether an autonomous run should keep going when Claude Code is about
+ * to end the turn.
+ *
+ * Every branch that is not "a running loop in a project that opted in" allows
+ * the stop. That includes anything this function could not make sense of: a
+ * guard that blocks on its own confusion traps the session, and there is no
+ * way out from inside it.
+ */
+export function evaluateStopGuard(input: unknown, summary: StateSummary, autonomous: boolean): StopVerdict {
+  if (typeof input !== 'object' || input === null) return { block: false, reason: '' }
+
+  // Claude Code sets this once a Stop hook has already caused a continuation
+  // this turn. Re-blocking is how a hook loops forever; its own cap on
+  // consecutive blocks is a backstop, not a design.
+  if ((input as { stop_hook_active?: unknown }).stop_hook_active === true) return { block: false, reason: '' }
+
+  if (!autonomous) return { block: false, reason: '' }
+  if (!summary.initialised) return { block: false, reason: '' }
+  if (summary.status !== 'running') return { block: false, reason: '' }
+
+  const cap = summary.max_cycles === null ? '?' : String(summary.max_cycles)
+  const open = summary.findings.high + summary.findings.medium + summary.findings.low
+  const findings =
+    open === 0
+      ? 'There are no open findings from the previous cycle.'
+      : `${open} open findings carried from the previous cycle (${summary.findings.high} high, ${summary.findings.medium} medium, ${summary.findings.low} low).`
+
+  return {
+    block: true,
+    reason: [
+      `Loop is running autonomously: track ${summary.track}, cycle ${summary.cycle} of ${cap}, stage ${summary.stage}.`,
+      `Goal: ${summary.goal ?? 'not set'}.`,
+      findings,
+      'Continue the cycle with the loop-leader skill. Do not stop until the run reaches done or halted —',
+      "the engine's guards end it: the cycle cap, the stagnation guard, and the repeated-error guard.",
+    ].join('\n'),
+  }
+}
+
+async function stopGuardCommand(stdin: string): Promise<CliResult> {
+  let input: unknown
+  try {
+    input = JSON.parse(stdin) as unknown
+  } catch {
+    return { stdout: '', exitCode: 0 }
+  }
+
+  const cwd = readCwd(stdin)
+  const summary = await stateSummary(cwd)
+
+  let autonomous = false
+  try {
+    autonomous = (await loadConfig(cwd)).autonomous
+  } catch (error) {
+    // A project with no config has not opted into autonomy, and an unreadable
+    // one cannot be read as opting in either.
+    if (!(error instanceof ConfigMissingError)) autonomous = false
+  }
+
+  const verdict = evaluateStopGuard(input, summary, autonomous)
+  if (!verdict.block) return { stdout: '', exitCode: 0 }
+
+  // A top-level decision object. This is NOT the hookSpecificOutput shape the
+  // SessionStart and PreToolUse hooks use — the Stop event has its own.
+  return { stdout: `${JSON.stringify({ decision: 'block', reason: verdict.reason })}\n`, exitCode: 0 }
 }
 
 function extractFilePath(input: unknown): string | null {
