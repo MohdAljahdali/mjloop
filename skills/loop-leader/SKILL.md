@@ -17,13 +17,36 @@ touching state.
 
 Call `loop_state_get`. If the project has no loop, stop and tell the user to run
 `/loop:init`. If a run is already `running`, ask whether to resume it or halt it — do
-not silently start a second run.
+not silently start a second run. Resuming is step 2a, and it skips step 2 entirely.
 
 ### 2. Open the run
 
 Call `loop_run_start` with the track and the goal. Restate the goal in one sentence and
 name the acceptance condition you will judge against. A goal you cannot state as a
 checkable condition is not ready to run.
+
+### 2a. Resuming an open run
+
+`/loop:resume` — and any run `loop_state_get` already reports as `running` — enters here
+instead. **Do not call `loop_run_start`.** The run is open; starting one mints a new
+`run_id` and resets `cycle` to 1, `findings`, `history` and `reproduction`, so the gate
+slams shut, every result the interrupted cycle logged is orphaned in the old run
+directory, and the next `loop_run_log` for a gated agent is refused.
+
+Pick the run up where it stopped instead:
+
+1. List `cycle-NN/` in the run directory — `.loop/runs/<run_id>--<story|adhoc>--<track>`,
+   at the cycle `loop_state_get` reports. Every `<agent>.json` there is an agent that
+   already ran.
+2. Read those results. They are the cycle's work so far, and their findings are already
+   folded into state — re-running an agent that has a result file would double them.
+3. Continue from the first agent in the roster with no result file, respecting the track's
+   gate and ordering exactly as a fresh cycle would (steps 3b–4).
+4. Judge and close the cycle as usual (steps 5–6). The cycle number, the strike count and
+   the gate all carry on from where the interruption left them.
+
+If the interrupted run should be abandoned rather than continued, that is `/loop:stop` —
+a clean halt with a report — not a new run started over the top of it.
 
 ### 2b. When the run is against a story
 
@@ -255,8 +278,13 @@ the pause, and every guard still ends the run exactly where it would have. What 
 is that nobody is reading your intermediate reports, so make the final one complete: what
 was attempted, what the evidence showed, and where it stopped.
 
-If the run halts, say so plainly and stop. The hook releases the turn the moment the run is
-no longer `running`.
+Know its bound: the hook removes **one** pause per turn. Claude Code marks a stop it has
+already continued from, and the guard yields on that mark rather than blocking twice — a
+hook that re-blocks its own continuation never lets a turn end. So a long run may still
+come to rest with cycles left; that is the hook working, not a fault, and `/loop:resume`
+is how it picks up. It also goes quiet the moment the run is no longer `running`.
+
+If the run halts, say so plainly and stop.
 
 ## What you never do
 

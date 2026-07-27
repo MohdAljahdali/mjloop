@@ -74,6 +74,22 @@ describe('an autonomous run', () => {
     expect(evaluateStopGuard(HOOK, await stateSummary(project.dir), true).block).toBe(false)
   })
 
+  it('removes one pause per turn, not every pause until the run ends', async () => {
+    // The bound the prose has to tell the truth about: Claude Code sets
+    // stop_hook_active once a Stop hook has already continued this turn, and
+    // re-blocking on it is how a hook loops forever. So an autonomous run is
+    // carried past the pause it is at, not automatically to completion — the
+    // turn can end with the run still open, and /loop:resume is the way back in.
+    await runStart(project.dir, { track: 'build', goal: 'Add the endpoint' }, clock)
+    await runLog(project.dir, { agent: 'verifier', result: failing('1 failing: cannot resolve module', 'first') }, clock)
+    const first = await cycleAdvance(project.dir, { agents: ['builder', 'verifier'], result: 'fail' }, clock)
+    expect(first.state.status).toBe('running')
+
+    const summary = await stateSummary(project.dir)
+    expect(evaluateStopGuard(HOOK, summary, true).block).toBe(true)
+    expect(evaluateStopGuard({ ...HOOK, stop_hook_active: true }, summary, true).block).toBe(false)
+  })
+
   it('never blocks a project that did not opt in', async () => {
     const config = await loadConfig(project.dir)
     config.autonomous = false

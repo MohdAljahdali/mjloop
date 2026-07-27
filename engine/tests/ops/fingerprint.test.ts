@@ -101,6 +101,15 @@ describe('errorSignature', () => {
     expect(errorSignature(failing, 'pass')).toEqual([])
   })
 
+  it('returns nothing for a blocked result', () => {
+    // A blocked result means the check never ran — a missing command, no
+    // network, a container nobody started. That is not a verification failure
+    // recurring, and cycleFingerprint already treats the two statuses as
+    // different states of the world.
+    expect(errorSignature(failing, 'blocked')).toEqual([])
+    expect(errorSignature([{ kind: 'command', ref: 'npm test', excerpt: 'no network' }], 'blocked')).toEqual([])
+  })
+
   it('returns nothing when no evidence is a command or a test', () => {
     expect(errorSignature([failing[1]!], 'fail')).toEqual([])
   })

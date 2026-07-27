@@ -25,8 +25,18 @@ export class StateStore {
   }
 
   async get(): Promise<State> {
-    const { value } = await readJsonValidated(this.paths.state, StateSchema)
-    return value
+    return (await this.read()).state
+  }
+
+  /**
+   * The state plus whether it came from `.bak`. Most callers want `get`; a
+   * caller that acts on the state rather than reporting it needs to know the
+   * primary was unreadable, because a recovered value is by definition the
+   * *previous* write — stale by exactly one update.
+   */
+  async read(): Promise<{ state: State; recovered: boolean }> {
+    const { value, recovered } = await readJsonValidated(this.paths.state, StateSchema)
+    return { state: value, recovered }
   }
 
   async update(mutate: (draft: State) => void | Promise<void>): Promise<State> {

@@ -5,6 +5,13 @@ import { StateStore } from '../store/state-store.js'
 
 export interface StateSummary {
   initialised: boolean
+  /**
+   * True when `state.json` was unreadable and the value came from `.bak` — so
+   * this summary describes the write *before* the last one. Reporting on it is
+   * fine; deciding on it is not, and the autonomous `Stop` guard treats it as
+   * state it cannot reason about.
+   */
+  recovered: boolean
   status: State['status'] | 'uninitialised'
   track: string | null
   run_id: string | null
@@ -37,11 +44,13 @@ const NO_FINDINGS: Record<Severity, number> = { high: 0, medium: 0, low: 0 }
  */
 export async function stateSummary(projectDir: string): Promise<StateSummary> {
   let state: State
+  let recovered: boolean
   try {
-    state = await new StateStore(projectDir).get()
+    ;({ state, recovered } = await new StateStore(projectDir).read())
   } catch {
     return {
       initialised: false,
+      recovered: false,
       status: 'uninitialised',
       track: null,
       run_id: null,
@@ -80,6 +89,7 @@ export async function stateSummary(projectDir: string): Promise<StateSummary> {
 
   return {
     initialised: true,
+    recovered,
     status: state.status,
     track: state.track,
     run_id: state.run_id,

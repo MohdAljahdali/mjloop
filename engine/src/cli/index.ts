@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import path from 'node:path'
 import { renderSummaryLine, stateSummary, type StateSummary } from '../ops/summary.js'
-import { ConfigMissingError, loadConfig } from '../store/config-store.js'
+import { loadConfig } from '../store/config-store.js'
 import { PROTECTED_BASENAMES } from '../store/paths.js'
 import { isEntrypoint } from '../util/entrypoint.js'
 
@@ -128,19 +128,35 @@ export function evaluateStopGuard(input: unknown, summary: StateSummary, autonom
 
   if (!autonomous) return { block: false, reason: '' }
   if (!summary.initialised) return { block: false, reason: '' }
+
+  // `state.json` was unreadable and this summary came from `.bak`, so it is the
+  // previous write — a run recorded as `running` here may already be done. The
+  // store itself could not trust the primary; blocking is the one decision that
+  // must never be made on state that stale.
+  if (summary.recovered) return { block: false, reason: '' }
+
   if (summary.status !== 'running') return { block: false, reason: '' }
 
-  const cap = summary.max_cycles === null ? '?' : String(summary.max_cycles)
+  // No cap means the running track is not in config — renamed, removed, or on
+  // another branch. `cycleAdvance` throws before any status transition in that
+  // state, so none of the guards named below can ever end this run: blocking
+  // would promise an ending that cannot arrive, once per turn, forever. An
+  // uncapped run is also exactly the run that should not continue unattended.
+  if (summary.max_cycles === null) return { block: false, reason: '' }
+
   const open = summary.findings.high + summary.findings.medium + summary.findings.low
+  // The open cycle's, not the previous one's: `cycleAdvance` clears findings
+  // before it increments the cycle, so a non-zero count here was logged by
+  // this cycle's own agents.
   const findings =
     open === 0
-      ? 'There are no open findings from the previous cycle.'
-      : `${open} open findings carried from the previous cycle (${summary.findings.high} high, ${summary.findings.medium} medium, ${summary.findings.low} low).`
+      ? 'There are no open findings in this cycle.'
+      : `${open} open findings in this cycle (${summary.findings.high} high, ${summary.findings.medium} medium, ${summary.findings.low} low).`
 
   return {
     block: true,
     reason: [
-      `Loop is running autonomously: track ${summary.track}, cycle ${summary.cycle} of ${cap}, stage ${summary.stage}.`,
+      `Loop is running autonomously: track ${summary.track}, cycle ${summary.cycle} of ${summary.max_cycles}, stage ${summary.stage}.`,
       `Goal: ${summary.goal ?? 'not set'}.`,
       findings,
       'Continue the cycle with the loop-leader skill. Do not stop until the run reaches done or halted —',
@@ -163,10 +179,13 @@ async function stopGuardCommand(stdin: string): Promise<CliResult> {
   let autonomous = false
   try {
     autonomous = (await loadConfig(cwd)).autonomous
-  } catch (error) {
-    // A project with no config has not opted into autonomy, and an unreadable
-    // one cannot be read as opting in either.
-    if (!(error instanceof ConfigMissingError)) autonomous = false
+  } catch {
+    // Every way of failing to read the config means the same thing: nothing
+    // opted in. A project with no config never did, and a malformed or
+    // unreadable one cannot be read as having done so. Assigned rather than
+    // left to the initialiser above, so the fail-safe survives a refactor that
+    // seeds `autonomous` from a cached value or a default object.
+    autonomous = false
   }
 
   const verdict = evaluateStopGuard(input, summary, autonomous)

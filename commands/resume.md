@@ -10,9 +10,12 @@ machine that slept mid-cycle.
    one.
 2. Read the run directory for the open cycle. The per-agent results already logged tell
    you which agents ran and what they returned — that is where the cycle got to.
-3. Continue from that stage with the **loop-leader** skill. Do not restart the cycle from
-   the beginning: an agent whose result is already logged does not need to run again, and
-   re-running it would double its findings.
+3. Continue from that stage with the **loop-leader** skill, entering at its
+   *"2a. Resuming an open run"* section. Do not restart the cycle from the beginning: an
+   agent whose result is already logged does not need to run again, and re-running it
+   would double its findings. In particular the leader must **not** call
+   `loop_run_start` — that opens a second run and discards this one's cycle, findings,
+   history and gate.
 4. If the run is on a gated track and the gate is already open, it stays open. Reproduction
    and fit-check evidence survive an interruption.
 

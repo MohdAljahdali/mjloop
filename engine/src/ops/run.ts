@@ -82,6 +82,14 @@ export async function runStart(projectDir: string, input: RunStartInput, now: Cl
     // it to the next run whatever the two were about.
     draft.no_progress_count = 0
     draft.last_fingerprint = null
+    // The repeated-error guard's state resets for the same reason, and needs
+    // saying separately because `cycleAdvance` returns early on both a halt and
+    // a pass: the previous run's signatures and fingerprint are still on the
+    // draft here. Keeping either arms this run's *first* cycle — the error
+    // guard halts on one repeat where stagnation waits for two — so a narrowed
+    // goal would halt after a single cycle on a command this run never ran.
+    draft.cycle_errors = []
+    draft.last_error_fingerprint = null
     // A new run has proven nothing. Carrying a previous run's reproduction
     // would open this run's gate for a defect nobody demonstrated here.
     draft.reproduction = null
@@ -91,6 +99,13 @@ export async function runStart(projectDir: string, input: RunStartInput, now: Cl
   await fs.mkdir(runDirPath(projectDir, state), { recursive: true })
   return state
 }
+
+/**
+ * Why a run stopped. `manual` covers `/loop:stop` — a person deciding, which
+ * needs no diagnosis. The other three are guards, and each calls for a
+ * different next step from whoever reads HALT.md.
+ */
+export type HaltCause = 'cycle-cap' | 'stagnation' | 'repeated-error' | 'manual'
 
 export interface CycleAdvanceInput {
   agents: string[]
@@ -129,6 +144,11 @@ export async function cycleAdvance(
   let carried: Finding[] = []
   let closedCycle = 0
   let fingerprint: string | null = null
+  // Which guard ended the run, carried out of the update as a value rather
+  // than re-derived from `halt_reason`: HALT.md recommends a different next
+  // step per guard, and parsing the sentence back apart would couple the
+  // report to the wording.
+  let cause: HaltCause = 'manual'
 
   // Status and cap are evaluated against the draft inside the locked update,
   // not a pre-lock snapshot: two racing advances (or an advance racing a
@@ -140,7 +160,12 @@ export async function cycleAdvance(
     if (track === undefined) throw new UnknownTrackError(draft.track, Object.keys(config.tracks))
 
     carried = [...draft.findings]
-    const errors = [...draft.cycle_errors]
+    // Sorted because `runLog` appends each agent's signatures as that agent
+    // finishes, and agents are dispatched concurrently. `errorFingerprint`
+    // sorts before hashing, so without this the halt *reason* — which names
+    // `errors[0]` — would blame whichever agent happened to land first and
+    // differ between two identical runs.
+    const errors = [...draft.cycle_errors].sort()
     closedCycle = draft.cycle
 
     const ref = path.join('.loop', 'runs', runDirName(draft))
@@ -164,6 +189,7 @@ export async function cycleAdvance(
         draft.status = 'halted'
         draft.current.stage = 'halted'
         draft.halt_reason = `the same verification failure recurred: ${refOf(errors[0] ?? '')}`
+        cause = 'repeated-error'
         return
       }
     }
@@ -182,12 +208,14 @@ export async function cycleAdvance(
       draft.status = 'halted'
       draft.current.stage = 'halted'
       draft.halt_reason = `no progress for ${draft.no_progress_count} consecutive cycles on track ${draft.track}`
+      cause = 'stagnation'
       return
     }
     if (draft.cycle >= track.max_cycles) {
       draft.status = 'halted'
       draft.current.stage = 'halted'
       draft.halt_reason = `cycle cap ${track.max_cycles} reached for track ${draft.track}`
+      cause = 'cycle-cap'
       return
     }
 
@@ -206,7 +234,7 @@ export async function cycleAdvance(
   await archiveFindings(projectDir, after, closedCycle, carried)
   // The report names the findings the halted cycle closed with — state no
   // longer holds them, so they are passed in explicitly.
-  if (after.status === 'halted') await writeHaltReport(projectDir, after, carried)
+  if (after.status === 'halted') await writeHaltReport(projectDir, after, cause, carried)
 
   return { state: after, carried_findings: carried, fingerprint, strikes: after.no_progress_count }
 }
@@ -244,7 +272,7 @@ export async function halt(projectDir: string, reason: string, now: Clock = () =
     draft.current.stage = 'halted'
     draft.halt_reason = reason
   })
-  await writeHaltReport(projectDir, state)
+  await writeHaltReport(projectDir, state, 'manual')
   return state
 }
 
@@ -269,7 +297,35 @@ async function nextRunId(projectDir: string, now: Date, previousRunId: string | 
   return `${date}-${String(next).padStart(3, '0')}`
 }
 
-async function writeHaltReport(projectDir: string, state: State, open: Finding[] = state.findings): Promise<void> {
+/**
+ * What to do next, per guard. Only the cap is a budget, so only the cap is
+ * answered by widening one: the stagnation and repeated-error guards fire
+ * before the cap is consulted, and a reader who edits `max_cycles` on their
+ * advice halts again at exactly the same place. The leader skill forbids
+ * raising a cap to get past a halt, so a report that recommended it for every
+ * reason would put the leader in the position of relaying advice it is banned
+ * from giving.
+ */
+const NEXT_STEP: Record<HaltCause, string> = {
+  'cycle-cap': `The run used every cycle the track allows. Narrow the goal so it fits and start a
+new run — or, if the work really is that large, widen the track's \`max_cycles\` in
+\`.loop/config.yaml\` first. That second one is the user's call, not the loop's.`,
+  stagnation: `The same work was still outstanding cycle after cycle, so more cycles would not
+have helped and widening \`max_cycles\` will not change the outcome. Narrow the
+goal to the finding that would not move, or fix it by hand and start a new run.`,
+  'repeated-error': `One command failed the same way twice running, so the loop was not making
+progress against it and widening \`max_cycles\` will not change the outcome. Run
+the command named in the reason yourself, fix what it reports, then start a new
+run.`,
+  manual: `The run was stopped by hand. Start a new one when the work is ready to continue.`,
+}
+
+async function writeHaltReport(
+  projectDir: string,
+  state: State,
+  cause: HaltCause,
+  open: Finding[] = state.findings,
+): Promise<void> {
   const dir = runDirPath(projectDir, state)
   await fs.mkdir(dir, { recursive: true })
 
@@ -299,8 +355,9 @@ ${findings}
 
 ## Next step
 
-Review the per-agent output in this directory, then either widen the track's
-\`max_cycles\` in \`.loop/config.yaml\` or narrow the goal and start a new run.
+Review the per-agent output in this directory.
+
+${NEXT_STEP[cause]}
 `
   await fs.writeFile(path.join(dir, 'HALT.md'), report, 'utf8')
 }

@@ -80,6 +80,47 @@ describe('runStart', () => {
     // new run's first cycle starts one strike into a stall it never had.
     expect(second.no_progress_count).toBe(0)
     expect(second.last_fingerprint).toBeNull()
+    // And the repeated-error guard's state with them. It halts on one repeat
+    // rather than two strikes, so a leak here is worse: the new run would halt
+    // after a single cycle on a command it never ran.
+    expect(second.cycle_errors).toEqual([])
+    expect(second.last_error_fingerprint).toBeNull()
+  })
+
+  it('does not let a halted run arm the next run first cycle', async () => {
+    const failing = (claim: string) => ({
+      status: 'fail' as const,
+      summary: 'the suite is still red',
+      evidence: [{ kind: 'command' as const, ref: 'npm test', excerpt: '1 failing: cannot resolve module' }],
+      findings: [{ severity: 'high' as const, file: 'src/a.ts', line: 6, claim }],
+      files_touched: [],
+      next_hint: null,
+    })
+
+    await runStart(project.dir, { track: 'build', goal: 'First' }, clock)
+    await runLog(project.dir, { agent: 'verifier', result: failing('first') }, clock)
+    await cycleAdvance(project.dir, { agents: ['builder', 'verifier'], result: 'fail' }, clock)
+    await runLog(project.dir, { agent: 'verifier', result: failing('second') }, clock)
+    const halted = await cycleAdvance(project.dir, { agents: ['builder', 'verifier'], result: 'fail' }, clock)
+    // `cycleAdvance` returns before the clear on a halt, so the signatures of
+    // the cycle that halted are still on state when the next run opens.
+    expect(halted.state.status).toBe('halted')
+
+    // The operator narrows the goal and starts again. Cycle 1 reports a failure
+    // with no command or test evidence at all — the previous run's signatures
+    // must not halt it.
+    await runStart(project.dir, { track: 'build', goal: 'A narrower goal' }, clock)
+    await runLog(
+      project.dir,
+      {
+        agent: 'verifier',
+        result: { ...failing('third'), evidence: [] },
+      },
+      clock,
+    )
+    const next = await cycleAdvance(project.dir, { agents: ['builder', 'verifier'], result: 'fail' }, clock)
+    expect(next.state.status).toBe('running')
+    expect(next.state.cycle).toBe(2)
   })
 
   it('clears a previous run reproduction', async () => {
@@ -553,6 +594,59 @@ describe('the repeated-error guard', () => {
     expect((await new StateStore(project.dir).get()).cycle_errors).toEqual([])
   })
 
+  it('never fires on a repeated blocked cycle', async () => {
+    // The reproducer could not reach the database twice running. Nothing was
+    // verified, so nothing recurred — the environment is what needs fixing, and
+    // a halt naming a verification failure would send the reader to the suite.
+    const blocked = (claim: string) => ({
+      status: 'blocked' as const,
+      summary: 'the database container is not up',
+      evidence: [{ kind: 'command' as const, ref: 'npm test', excerpt: 'Error: connect ECONNREFUSED' }],
+      findings: [{ severity: 'high' as const, file: 'src/a.ts', line: 1, claim }],
+      files_touched: [],
+      next_hint: null,
+    })
+
+    await runLog(project.dir, { agent: 'verifier', result: blocked('first') }, clock)
+    await cycleAdvance(project.dir, { agents: ['verifier'], result: 'blocked' }, clock)
+    await runLog(project.dir, { agent: 'verifier', result: blocked('second') }, clock)
+    const { state } = await cycleAdvance(project.dir, { agents: ['verifier'], result: 'blocked' }, clock)
+
+    expect(state.status).toBe('running')
+    expect(state.halt_reason).toBeNull()
+  })
+
+  it('names the same command whichever agent logged first', async () => {
+    // Agents are dispatched concurrently, so cycle_errors arrives in finish
+    // order. The reason must not depend on it, or two identical runs blame two
+    // different commands and send the operator to two different places.
+    const failure = (ref: string, excerpt: string) => ({
+      status: 'fail' as const,
+      summary: 'the suite is red',
+      evidence: [{ kind: 'command' as const, ref, excerpt }],
+      findings: [],
+      files_touched: [],
+      next_hint: null,
+    })
+    const lint = () => runLog(project.dir, { agent: 'builder', result: failure('npm run lint', 'lint boom') }, clock)
+    const test = () => runLog(project.dir, { agent: 'verifier', result: failure('npm test', 'test boom') }, clock)
+    const close = () => cycleAdvance(project.dir, { agents: ['builder', 'verifier'], result: 'fail' }, clock)
+
+    // Cycle 1: the builder lands first. Cycle 2: the verifier does — so the
+    // cycle that halts holds "npm test" at index 0 in arrival order.
+    await lint()
+    await test()
+    await close()
+    await test()
+    await lint()
+    const { state } = await close()
+
+    expect(state.status).toBe('halted')
+    // Sorted, not first-to-arrive: the same two failures name the same command
+    // whichever agent won the race.
+    expect(state.halt_reason).toBe('the same verification failure recurred: npm run lint')
+  })
+
   it('never fires on a pass', async () => {
     await failCycle('1 failing: cannot resolve module', 'first')
     await runLog(
@@ -572,6 +666,72 @@ describe('the repeated-error guard', () => {
     )
     const { state } = await cycleAdvance(project.dir, { agents: ['verifier'], result: 'pass' }, clock)
     expect(state.status).toBe('done')
+  })
+})
+
+describe('the halt report next step', () => {
+  const failing = (excerpt: string, claim: string) => ({
+    status: 'fail' as const,
+    summary: 'the suite is red',
+    evidence: [{ kind: 'command' as const, ref: 'npm test', excerpt }],
+    findings: [{ severity: 'high' as const, file: 'src/a.ts', line: 1, claim }],
+    files_touched: [],
+    next_hint: null,
+  })
+
+  async function reportFor(state: Awaited<ReturnType<typeof runStart>>): Promise<string> {
+    return fs.readFile(path.join(runDirPath(project.dir, state), 'HALT.md'), 'utf8')
+  }
+
+  it('offers a wider cap only when the cap is what ended the run', async () => {
+    await runStart(project.dir, { track: 'edit', goal: 'Rename' }, clock)
+    const { state } = await cycleAdvance(project.dir, { agents: ['editor', 'verifier'], result: 'fail' }, clock)
+
+    expect(state.halt_reason).toContain('cycle cap')
+    expect(await reportFor(state)).toContain('`max_cycles`')
+  })
+
+  it('does not send a stagnation halt to max_cycles', async () => {
+    // The stagnation guard fires before the cap is consulted, so a wider cap
+    // changes nothing — and the leader skill forbids raising one to get past a
+    // halt, which it would be relaying if the report recommended it.
+    await runStart(project.dir, { track: 'build', goal: 'Add the endpoint' }, clock)
+    // A distinct excerpt each cycle, so the repeated-error guard — which fires
+    // a cycle earlier — leaves this to stagnation.
+    const failCycle = async (excerpt: string) => {
+      await runLog(project.dir, { agent: 'verifier', result: failing(excerpt, 'the same defect') }, clock)
+      return cycleAdvance(project.dir, { agents: ['builder', 'verifier'], result: 'fail' }, clock)
+    }
+    await failCycle('step a')
+    await failCycle('step b')
+    const { state } = await failCycle('step c')
+
+    expect(state.halt_reason).toContain('no progress')
+    const report = await reportFor(state)
+    expect(report).toContain('will not change the outcome')
+    expect(report).not.toContain('widen the track')
+  })
+
+  it('does not send a repeated-error halt to max_cycles', async () => {
+    await runStart(project.dir, { track: 'build', goal: 'Add the endpoint' }, clock)
+    await runLog(project.dir, { agent: 'verifier', result: failing('1 failing: boom', 'first') }, clock)
+    await cycleAdvance(project.dir, { agents: ['builder', 'verifier'], result: 'fail' }, clock)
+    await runLog(project.dir, { agent: 'verifier', result: failing('1 failing: boom', 'second') }, clock)
+    const { state } = await cycleAdvance(project.dir, { agents: ['builder', 'verifier'], result: 'fail' }, clock)
+
+    expect(state.halt_reason).toContain('same verification failure')
+    const report = await reportFor(state)
+    expect(report).toContain('the command named in the reason')
+    expect(report).not.toContain('widen the track')
+  })
+
+  it('asks a hand-stopped run for nothing at all', async () => {
+    await runStart(project.dir, { track: 'build', goal: 'Add the endpoint' }, clock)
+    const state = await halt(project.dir, 'user requested stop', clock)
+
+    const report = await reportFor(state)
+    expect(report).toContain('stopped by hand')
+    expect(report).not.toContain('widen the track')
   })
 })
 

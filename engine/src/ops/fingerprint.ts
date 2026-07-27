@@ -71,9 +71,16 @@ function compareIdentities(a: FindingIdentity, b: FindingIdentity): number {
  * so hashing them makes every cycle look new and silently disables the guard.
  * These are normalised first: the headline only, with digit runs collapsed, so
  * `1 failing` and `2 failing` are one failure recurring rather than two.
+ *
+ * Only a `fail` produces signatures. A `blocked` result says the agent could
+ * not run the check at all — a missing command, no network, a container that
+ * was never started — which is a different state of the world, not a
+ * verification failure that recurred. `cycleFingerprint` already keeps the two
+ * apart, and a guard whose reason reads "the same verification failure
+ * recurred" must not fire on a cycle where nothing was verified.
  */
 export function errorSignature(evidence: Evidence[], result: Result): string[] {
-  if (result === 'pass') return []
+  if (result !== 'fail') return []
   const signatures = evidence
     .filter((entry) => entry.kind === 'command' || entry.kind === 'test')
     .map((entry) => `${entry.ref} :: ${headline(entry.excerpt)}`)

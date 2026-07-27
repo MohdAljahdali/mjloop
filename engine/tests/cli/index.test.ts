@@ -1,3 +1,5 @@
+import fs from 'node:fs/promises'
+import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { evaluateStateGuard, evaluateStopGuard, runCli } from '../../src/cli/index.js'
 import { initLoop } from '../../src/ops/init.js'
@@ -110,6 +112,7 @@ describe('runCli state-guard', () => {
 describe('evaluateStopGuard', () => {
   const running = {
     initialised: true,
+    recovered: false,
     status: 'running' as const,
     track: 'build',
     run_id: '2026-07-27-001',
@@ -139,6 +142,29 @@ describe('evaluateStopGuard', () => {
     expect(reason).toContain('Add a Send button')
     expect(reason).toContain('3 open findings')
     expect(reason).toContain('loop-leader')
+  })
+
+  it('attributes the findings to the cycle that is open', () => {
+    // cycleAdvance clears findings before it increments the cycle, so a count
+    // on a running state was logged by this cycle's own agents. Calling it
+    // carried-forward debt invites the model to re-plan around work it just did.
+    const { reason } = evaluateStopGuard(input, running, true)
+    expect(reason).toContain('in this cycle')
+    expect(reason).not.toContain('previous cycle')
+  })
+
+  it('allows the stop when the state came from the backup', () => {
+    // The store could not read state.json and fell back to .bak, so this is the
+    // write before the last one: a run recorded here as running may already be
+    // done. Blocking would send the model to continue a finished run.
+    expect(evaluateStopGuard(input, { ...running, recovered: true }, true).block).toBe(false)
+  })
+
+  it('allows the stop when the running track has no cap', () => {
+    // The track is gone from config — renamed, removed, or on another branch.
+    // cycleAdvance throws UnknownTrackError before any status transition, so
+    // none of the guards the reason promises can end this run.
+    expect(evaluateStopGuard(input, { ...running, max_cycles: null }, true).block).toBe(false)
   })
 
   it('allows the stop when a Stop hook already continued this turn', () => {
@@ -216,6 +242,51 @@ describe('runCli stop-guard', () => {
     const { stdout, exitCode } = await runCli(['stop-guard'], 'not json')
     expect(stdout).toBe('')
     expect(exitCode).toBe(0)
+  })
+
+  it('emits nothing when a config that opted in no longer parses', async () => {
+    // The single most safety-critical fail-open path: config.yaml is
+    // hand-editable, and a run left `running` by a YAML typo must not be read
+    // as still having opted into autonomy.
+    await initLoop(project.dir, clock)
+    const config = await loadConfig(project.dir)
+    config.autonomous = true
+    await writeConfig(project.dir, config)
+    await runStart(project.dir, { track: 'build', goal: 'Add it' }, clock)
+    await fs.writeFile(path.join(project.dir, '.loop', 'config.yaml'), 'autonomous: true\ntracks: [unclosed', 'utf8')
+
+    const { stdout } = await runCli(['stop-guard'], JSON.stringify({ cwd: project.dir, stop_hook_active: false }))
+    expect(stdout).toBe('')
+  })
+
+  it('emits nothing when state.json is corrupt and the value came from the backup', async () => {
+    await initLoop(project.dir, clock)
+    const config = await loadConfig(project.dir)
+    config.autonomous = true
+    await writeConfig(project.dir, config)
+    await runStart(project.dir, { track: 'build', goal: 'Add it' }, clock)
+
+    const statePath = path.join(project.dir, '.loop', 'state.json')
+    await fs.copyFile(statePath, `${statePath}.bak`)
+    await fs.writeFile(statePath, '<<<<<<< HEAD\nnot json', 'utf8')
+
+    const { stdout } = await runCli(['stop-guard'], JSON.stringify({ cwd: project.dir, stop_hook_active: false }))
+    expect(stdout).toBe('')
+  })
+
+  it('emits nothing when the running track has left config', async () => {
+    await initLoop(project.dir, clock)
+    const config = await loadConfig(project.dir)
+    config.autonomous = true
+    await writeConfig(project.dir, config)
+    await runStart(project.dir, { track: 'build', goal: 'Add it' }, clock)
+
+    const renamed = await loadConfig(project.dir)
+    delete renamed.tracks.build
+    await writeConfig(project.dir, renamed)
+
+    const { stdout } = await runCli(['stop-guard'], JSON.stringify({ cwd: project.dir, stop_hook_active: false }))
+    expect(stdout).toBe('')
   })
 })
 

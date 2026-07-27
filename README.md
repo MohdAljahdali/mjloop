@@ -9,9 +9,10 @@ server, so no agent can corrupt it by hand.
 
 ## Status
 
-Milestone 4b — all four tracks ship: `plan`, `build`, `fix`, and `edit`. What remains is
-guards, the autonomous `Stop` hook, the UI and specialist agents, and memory. See
-`docs/superpowers/specs/2026-07-26-loop-plugin-design.md`.
+Milestone 5 — all four tracks ship: `plan`, `build`, `fix`, and `edit`, and so do all the
+guards: the cycle cap, the stagnation guard, the repeated-error guard, the reproduction
+gate, and the autonomous `Stop` hook. What remains is the UI and specialist agents, and
+memory. See `docs/superpowers/specs/2026-07-26-loop-plugin-design.md`.
 
 ## Install
 
@@ -63,11 +64,16 @@ Write stories through the `loop_story_*` tools rather than by hand.
 ## Running unattended
 
 Set `autonomous: true` in `.loop/config.yaml` and a `Stop` hook keeps the turn going
-between cycles, so a run carries itself to completion.
+between cycles, so a run continues without somebody pressing enter.
 
 It extends nothing. The cycle cap, the stagnation guard, and the repeated-error guard end
-the run exactly where they would have with a person pressing enter — the hook only removes
-the pause, and it goes quiet the moment the run is no longer running.
+the run exactly where they would have with a person there — the hook only removes the
+pause, and it goes quiet the moment the run is no longer running.
+
+It removes one pause per turn, not all of them: Claude Code marks a stop it has already
+continued from, and the hook yields on that mark rather than blocking its own
+continuation. A long run can therefore come to rest with cycles still to go — `/loop:resume`
+picks it up from exactly where it stopped.
 
 ## Development
 
