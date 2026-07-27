@@ -5,6 +5,7 @@ import { findTrack, permittedAgents } from '../schemas/config.js'
 import { AgentNameSchema, parseAgentResult } from '../schemas/contract.js'
 import { loadConfig } from '../store/config-store.js'
 import { StateStore, type Clock } from '../store/state-store.js'
+import { errorSignature } from './fingerprint.js'
 import { NoActiveRunError, UnknownTrackError, cycleDirPath } from './run.js'
 
 export class InvalidAgentNameError extends Error {
@@ -129,6 +130,8 @@ export async function runLog(
       ? parsed.value.evidence.find((entry) => entry.kind === 'command' || entry.kind === 'test')
       : undefined
 
+  const signatures = errorSignature(parsed.value.evidence, parsed.value.status)
+
   // Validated by the same schema as the agent name: anything that reaches the
   // filesystem goes through one check, in one place.
   let basename = agent.data
@@ -143,7 +146,7 @@ export async function runLog(
   const file = path.join(cycleDir, `${basename}.json`)
   await fs.writeFile(file, `${JSON.stringify(parsed.value, null, 2)}\n`, 'utf8')
 
-  if (parsed.value.findings.length > 0 || proof !== undefined) {
+  if (parsed.value.findings.length > 0 || proof !== undefined || signatures.length > 0) {
     await store.update((draft) => {
       // The read above was not locked, so a `cycleAdvance` may have landed in
       // between: it has archived the cycle these findings belong to and either
@@ -160,6 +163,12 @@ export async function runLog(
       draft.findings.push(...parsed.value.findings)
       if (proof !== undefined) {
         draft.reproduction = { agent: agent.data, cycle: draft.cycle, ref: proof.ref, excerpt: proof.excerpt }
+      }
+      // Deduplicated across agents: one defect reported by two agents is one
+      // failure recurring, not two, exactly as the stagnation fingerprint
+      // deduplicates findings.
+      for (const signature of signatures) {
+        if (!draft.cycle_errors.includes(signature)) draft.cycle_errors.push(signature)
       }
     })
   }

@@ -384,3 +384,57 @@ describe('the reproduction gate', () => {
     }
   })
 })
+
+describe('runLog error signatures', () => {
+  const failing = {
+    status: 'fail' as const,
+    summary: 'the suite is red',
+    evidence: [{ kind: 'command' as const, ref: 'npm test', excerpt: '3 failing: cannot resolve module' }],
+    findings: [],
+    files_touched: [],
+    next_hint: null,
+  }
+
+  // Both agents belong to the `build` track, and `runLog` accepts only agents
+  // the running track defines.
+  beforeEach(async () => {
+    await runStart(project.dir, { track: 'build', goal: 'Add the export button' }, clock)
+  })
+
+  it('records a signature from a failing result', async () => {
+    await runLog(project.dir, { agent: 'verifier', result: failing }, clock)
+    expect((await new StateStore(project.dir).get()).cycle_errors).toEqual([
+      'npm test :: N failing: cannot resolve module',
+    ])
+  })
+
+  it('records nothing from a passing result', async () => {
+    await runLog(project.dir, { agent: 'verifier', result: { ...failing, status: 'pass' } }, clock)
+    expect((await new StateStore(project.dir).get()).cycle_errors).toEqual([])
+  })
+
+  it('does not duplicate the same failure reported by two agents', async () => {
+    await runLog(project.dir, { agent: 'verifier', result: failing }, clock)
+    await runLog(project.dir, { agent: 'critic', result: failing }, clock)
+    expect((await new StateStore(project.dir).get()).cycle_errors).toHaveLength(1)
+  })
+
+  it('accumulates different failures', async () => {
+    await runLog(project.dir, { agent: 'verifier', result: failing }, clock)
+    await runLog(
+      project.dir,
+      { agent: 'critic', result: { ...failing, evidence: [{ kind: 'command', ref: 'npm run lint', excerpt: 'boom' }] } },
+      clock,
+    )
+    expect((await new StateStore(project.dir).get()).cycle_errors).toHaveLength(2)
+  })
+
+  it('records nothing when a failing result carries no command or test evidence', async () => {
+    await runLog(
+      project.dir,
+      { agent: 'verifier', result: { ...failing, evidence: [{ kind: 'file', ref: 'a.ts', excerpt: 'x' }] } },
+      clock,
+    )
+    expect((await new StateStore(project.dir).get()).cycle_errors).toEqual([])
+  })
+})
