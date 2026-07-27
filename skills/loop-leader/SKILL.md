@@ -304,6 +304,28 @@ earlier cycles as saved, and do not commit unverified work to make it true.
 Stage only the files the cycle's agents reported in `files_touched`. Write a message that
 says what the cycle achieved, not that a loop ran.
 
+### Memory
+
+The project remembers on purpose, not automatically. Nothing injects memory into a session
+or a brief; you consult it and you record to it.
+
+**Consult it when you open a run.** Call `loop_memory_search` with the goal's distinctive
+terms. A hit changes how you brief the agents — a recorded decision explains why the
+obvious approach was rejected before, and a recorded lesson saves a cycle rediscovering it.
+No hit costs one call.
+
+**Record at the end of a run**, and record one thing:
+
+- a **decision** the diff will not explain — why this approach and not the obvious one
+- a **lesson** from a halt — what the run learned about this project the hard way
+- a **pattern** worth following next time
+
+Not a diary. A memory per cycle buries the entries that matter, and the corpus is only
+worth searching while it is worth reading.
+
+Nothing to record is a normal outcome. A run that did the obvious thing and it worked has
+taught the project nothing it did not know.
+
 ## Running autonomously
 
 When `autonomous: true` is set in `.loop/config.yaml`, a `Stop` hook keeps the turn going
