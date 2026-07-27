@@ -141,3 +141,7 @@ LOOP_E2E=1 npm run e2e:plan    # plan track — idea to approved plan to stories
 LOOP_E2E=1 npm run e2e:design  # design-sync — the design system is extracted, never invented
 LOOP_E2E=1 npm run e2e:add     # /mjloop:add — scaffolding an agent, a skill, and a track
 ```
+
+## License
+
+MIT — see [LICENSE](LICENSE).
