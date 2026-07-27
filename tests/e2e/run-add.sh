@@ -15,15 +15,24 @@ workdir="$(mktemp -d)"
 cp -R "${repo_root}/tests/fixtures/tiny-app/." "${workdir}/"
 cd "${workdir}"
 
+# Claude Code guards `.claude/` — it holds settings and hooks, so a write there
+# asks for approval, and a headless session has no way to give it. An
+# interactive user just approves the prompt. The scoped equivalent for a test is
+# a project-level settings file granting that one path, written before the run
+# rather than by it. Creating the directory here also means the scaffold is not
+# the first thing in `.claude/`, so the restart caveat does not apply.
+mkdir -p .claude/agents
+cat > .claude/settings.json <<'EOF'
+{
+  "permissions": {
+    "allow": ["Edit(.claude/**)"]
+  }
+}
+EOF
+
 allowed=(
   "mcp__plugin_loop_loop"
   Task Read Edit Write Grep Glob Bash
-  # A bare `Write` grants the tool, not the path. File-writing permission is
-  # matched by `Edit(path)` rules, which cover every file-editing tool — so a
-  # headless run scaffolding into `.claude/agents/` needs this as well, and
-  # stops with "Write needs permission" without it. An interactive user simply
-  # approves the prompt; this is the non-interactive equivalent.
-  "Edit(.claude/**)"
 )
 
 fail() {
