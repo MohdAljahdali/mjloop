@@ -205,14 +205,17 @@ state, and `carried_findings` — the findings this cycle closed with.
   pass with a `medium` or `low` finding outstanding, and there is no next cycle to hand
   it to.
 - `running` — the next cycle is open. Go to step 7.
-- `halted` — read `HALT.md`, report it plainly, and recommend a next step. Two reasons
-  are possible and they are not the same problem:
+- `halted` — read `HALT.md`, report it plainly, and recommend a next step. Three reasons
+  are possible, and they are not the same problem:
   - *cycle cap reached* — the work needed more cycles than the track allows.
   - *no progress for N consecutive cycles* — the loop closed N cycles in a row with the
     same work remaining. More cycles would not have helped. Say what stayed unfixed.
+  - *the same verification failure recurred* — one command failed the same way twice
+    running. Name that command in your report: it is the most specific thing the run
+    knows about why it stopped.
 
-  Do not raise `max_cycles` and do not restart to reset the strike count. Both are the
-  user's decision.
+  Do not raise `max_cycles`, do not restart to clear a strike count, and do not re-run to
+  see whether the same failure happens a third time. All three are the user's decision.
 
 ### 7. Fold the findings forward
 
@@ -241,6 +244,19 @@ earlier cycles as saved, and do not commit unverified work to make it true.
 
 Stage only the files the cycle's agents reported in `files_touched`. Write a message that
 says what the cycle achieved, not that a loop ran.
+
+## Running autonomously
+
+When `autonomous: true` is set in `.loop/config.yaml`, a `Stop` hook keeps the turn going
+between cycles, so a run continues without the user pressing enter.
+
+Nothing about your judgement changes. The hook does not extend any limit — it only removes
+the pause, and every guard still ends the run exactly where it would have. What does change
+is that nobody is reading your intermediate reports, so make the final one complete: what
+was attempted, what the evidence showed, and where it stopped.
+
+If the run halts, say so plainly and stop. The hook releases the turn the moment the run is
+no longer `running`.
 
 ## What you never do
 

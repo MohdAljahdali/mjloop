@@ -19,6 +19,7 @@ This project uses the \`loop\` plugin. Execution state lives in \`.loop/\`.
 - \`/loop:fix <problem>\` — reproduce a defect, find the root cause, fix it
 - \`/loop:status\` — current track, cycle, and latest evidence
 - \`/loop:stop [reason]\` — halt the run and write a report
+- \`/loop:resume\` — continue a run that was interrupted
 
 \`.loop/state.json\` is owned by the loop MCP server. Never edit it by hand.
 `
