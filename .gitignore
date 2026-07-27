@@ -1,4 +1,25 @@
+# Dependencies
 node_modules/
+
+# Build output
 engine/dist/
 *.tsbuildinfo
+
+# Test output
+coverage/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Environment
+.env
+.env.*
+
+# OS
 .DS_Store
+
+# Editors
+.idea/
+.vscode/
+*.swp
