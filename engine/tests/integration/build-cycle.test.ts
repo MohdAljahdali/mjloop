@@ -23,12 +23,20 @@ beforeEach(async () => {
 })
 afterEach(async () => { await project.cleanup() })
 
-/** A verifier result carrying exactly the given claims as high findings. */
-function verifierFail(claims: string[]) {
+/**
+ * A verifier result carrying exactly the given claims as high findings.
+ *
+ * The excerpt names them by default, so a cycle whose remaining work changed
+ * reports a changed verification failure too: the repeated-error guard halts on
+ * a failure that recurs verbatim, and it fires a cycle earlier than stagnation.
+ * A cycle that must repeat its findings without repeating its failure passes an
+ * excerpt of its own.
+ */
+function verifierFail(claims: string[], excerpt = `${claims.length} failing: ${claims.join('; ')}`) {
   return {
     status: 'fail' as const,
     summary: 'the suite is still red',
-    evidence: [{ kind: 'command' as const, ref: 'npm test', excerpt: `${claims.length} failing` }],
+    evidence: [{ kind: 'command' as const, ref: 'npm test', excerpt }],
     findings: claims.map((claim, index) => ({
       severity: 'high' as const,
       file: 'src/button.js',
@@ -100,7 +108,10 @@ describe('a multi-cycle build run', () => {
 
     async function runCycle(cycle: number) {
       await rosterSet(project.dir, { cycle, selected: ['builder', 'verifier'], skipped: { scout: 'area already mapped', critic: 'no new interface' } })
-      await runLog(project.dir, { agent: 'verifier', result: verifierFail(['label is wrong']) }, clock)
+      // The same defect every cycle, reported by a differently worded failure:
+      // this run is stuck on its findings, which is what stagnation names.
+      const excerpt = `1 failing at step ${String.fromCharCode(96 + cycle)}`
+      await runLog(project.dir, { agent: 'verifier', result: verifierFail(['label is wrong'], excerpt) }, clock)
       return cycleAdvance(project.dir, { agents: ['builder', 'verifier'], result: 'fail' }, clock)
     }
 

@@ -6,7 +6,7 @@ import { loadConfig } from '../store/config-store.js'
 import { resolveLoopPaths } from '../store/paths.js'
 import { readStory } from '../store/plan-store.js'
 import { StateStore, type Clock } from '../store/state-store.js'
-import { cycleFingerprint } from './fingerprint.js'
+import { cycleFingerprint, errorFingerprint } from './fingerprint.js'
 
 export class UnknownTrackError extends Error {
   constructor(track: string, known: string[]) {
@@ -140,6 +140,7 @@ export async function cycleAdvance(
     if (track === undefined) throw new UnknownTrackError(draft.track, Object.keys(config.tracks))
 
     carried = [...draft.findings]
+    const errors = [...draft.cycle_errors]
     closedCycle = draft.cycle
 
     const ref = path.join('.loop', 'runs', runDirName(draft))
@@ -150,6 +151,23 @@ export async function cycleAdvance(
       draft.current.stage = 'done'
       return
     }
+
+    // Checked before stagnation because it fires a cycle earlier and names a
+    // more specific cause. An identical command failing identically is
+    // stronger evidence than identical findings, so one repeat is enough
+    // where stagnation waits for two strikes.
+    if (errors.length > 0) {
+      const currentErrors = errorFingerprint(errors)
+      const repeated = currentErrors === draft.last_error_fingerprint
+      draft.last_error_fingerprint = currentErrors
+      if (repeated) {
+        draft.status = 'halted'
+        draft.current.stage = 'halted'
+        draft.halt_reason = `the same verification failure recurred: ${refOf(errors[0] ?? '')}`
+        return
+      }
+    }
+
     // Computed from the findings this cycle closed with, captured above
     // before they were cleared.
     fingerprint = cycleFingerprint(carried, input.result)
@@ -180,6 +198,7 @@ export async function cycleAdvance(
     // instead — they are the work it ended with, and the summary and HALT.md
     // have nothing else to report it from.
     draft.findings = []
+    draft.cycle_errors = []
     draft.cycle += 1
     draft.current.stage = 'compose'
   })
@@ -190,6 +209,11 @@ export async function cycleAdvance(
   if (after.status === 'halted') await writeHaltReport(projectDir, after, carried)
 
   return { state: after, carried_findings: carried, fingerprint, strikes: after.no_progress_count }
+}
+
+/** The command from a `<ref> :: <headline>` signature. */
+function refOf(signature: string): string {
+  return signature.split(' :: ')[0] ?? signature
 }
 
 /**

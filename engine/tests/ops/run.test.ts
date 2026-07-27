@@ -334,17 +334,36 @@ describe('stagnation guard', () => {
     next_hint: null,
   }
 
-  /** Log a failing verifier result, then close the cycle. */
+  let attempt = 0
+
+  /**
+   * Log a failing verifier result, then close the cycle.
+   *
+   * Each cycle reports a distinct verification failure. The repeated-error
+   * guard halts a cycle earlier than stagnation when the same failure recurs,
+   * so a fixture that repeated its excerpt would never reach the guard under
+   * test here — which is about findings that do not change, whatever the
+   * command output around them does.
+   */
   async function failCycle(claim = 'assertion is stale', line = 1) {
+    const excerpt = `1 failing at step ${String.fromCharCode(97 + attempt++)}`
     await runLog(
       project.dir,
-      { agent: 'verifier', result: { ...sameFailure, findings: [{ ...sameFailure.findings[0]!, claim, line }] } },
+      {
+        agent: 'verifier',
+        result: {
+          ...sameFailure,
+          evidence: [{ ...sameFailure.evidence[0]!, excerpt }],
+          findings: [{ ...sameFailure.findings[0]!, claim, line }],
+        },
+      },
       clock,
     )
     return cycleAdvance(project.dir, { agents: ['builder', 'verifier'], result: 'fail' }, clock)
   }
 
   beforeEach(async () => {
+    attempt = 0
     await runStart(project.dir, { track: 'build', goal: 'Add the endpoint' }, clock)
   })
 
@@ -443,6 +462,116 @@ describe('stagnation guard', () => {
     expect(state.status).toBe('done')
     expect(fingerprint).toBeNull()
     expect(strikes).toBe(0)
+  })
+})
+
+describe('the repeated-error guard', () => {
+  function failing(headline: string, claim: string) {
+    return {
+      status: 'fail' as const,
+      summary: 'the suite is red',
+      evidence: [{ kind: 'command' as const, ref: 'npm test', excerpt: headline }],
+      findings: [{ severity: 'high' as const, file: 'src/a.ts', line: 1, claim }],
+      files_touched: [],
+      next_hint: null,
+    }
+  }
+
+  async function failCycle(headline: string, claim: string) {
+    await runLog(project.dir, { agent: 'verifier', result: failing(headline, claim) }, clock)
+    return cycleAdvance(project.dir, { agents: ['builder', 'verifier'], result: 'fail' }, clock)
+  }
+
+  beforeEach(async () => {
+    await runStart(project.dir, { track: 'build', goal: 'Add the endpoint' }, clock)
+  })
+
+  it('does not halt on the first failure', async () => {
+    const { state } = await failCycle('1 failing: cannot resolve module', 'first')
+    expect(state.status).toBe('running')
+  })
+
+  it('halts on the first repeat, at cycle 2', async () => {
+    await failCycle('1 failing: cannot resolve module', 'first')
+    const { state } = await failCycle('1 failing: cannot resolve module', 'second')
+
+    expect(state.status).toBe('halted')
+    expect(state.cycle).toBe(2)
+    expect(state.halt_reason).toBe('the same verification failure recurred: npm test')
+  })
+
+  it('halts even when the findings changed, which stagnation would have missed', async () => {
+    await failCycle('1 failing: cannot resolve module', 'a nit')
+    const { state } = await failCycle('1 failing: cannot resolve module', 'a different nit')
+    expect(state.status).toBe('halted')
+    expect(state.halt_reason).toContain('same verification failure')
+  })
+
+  it('matches a repeat whose only difference is a count', async () => {
+    await failCycle('1 failing: cannot resolve module', 'first')
+    const { state } = await failCycle('7 failing: cannot resolve module', 'second')
+    expect(state.status).toBe('halted')
+  })
+
+  it('does not halt when the failure changes', async () => {
+    await failCycle('1 failing: cannot resolve module', 'first')
+    const { state } = await failCycle('1 failing: type error in Button', 'second')
+    expect(state.status).toBe('running')
+  })
+
+  it('never fires on a cycle with no error signatures', async () => {
+    await runLog(
+      project.dir,
+      {
+        agent: 'verifier',
+        result: {
+          status: 'fail',
+          summary: 'no commands were run',
+          evidence: [],
+          findings: [{ severity: 'high', file: 'src/a.ts', line: 1, claim: 'same' }],
+          files_touched: [],
+          next_hint: null,
+        },
+      },
+      clock,
+    )
+    const first = await cycleAdvance(project.dir, { agents: ['verifier'], result: 'fail' }, clock)
+    expect(first.state.status).toBe('running')
+  })
+
+  it('reports the error reason rather than stagnation when both would fire', async () => {
+    // Identical findings and an identical failure: stagnation needs a third
+    // cycle, so the error guard is the one that can fire here at all.
+    await failCycle('1 failing: cannot resolve module', 'same')
+    const { state } = await failCycle('1 failing: cannot resolve module', 'same')
+    expect(state.halt_reason).toContain('same verification failure')
+    expect(state.halt_reason).not.toContain('no progress')
+  })
+
+  it('clears the signatures when the next cycle opens', async () => {
+    await failCycle('1 failing: cannot resolve module', 'first')
+    expect((await new StateStore(project.dir).get()).cycle_errors).toEqual([])
+  })
+
+  it('never fires on a pass', async () => {
+    await failCycle('1 failing: cannot resolve module', 'first')
+    await runLog(
+      project.dir,
+      {
+        agent: 'verifier',
+        result: {
+          status: 'pass',
+          summary: 'green',
+          evidence: [{ kind: 'command', ref: 'npm test', excerpt: '1 failing: cannot resolve module' }],
+          findings: [],
+          files_touched: [],
+          next_hint: null,
+        },
+      },
+      clock,
+    )
+    const { state } = await cycleAdvance(project.dir, { agents: ['verifier'], result: 'pass' }, clock)
+    expect(state.status).toBe('done')
   })
 })
 
