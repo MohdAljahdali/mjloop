@@ -3,11 +3,13 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import * as z from 'zod'
 import { AgentNameSchema, AgentResultSchema } from '../schemas/contract.js'
+import { MemoryKindSchema } from '../schemas/memory.js'
 import { ApprovalDecisionSchema, StoryStatusSchema } from '../schemas/plan.js'
 import { IdSchema, ResultSchema } from '../schemas/state.js'
 import { initLoop } from '../ops/init.js'
 import { renderIndex } from '../ops/index-render.js'
 import { runLog } from '../ops/log.js'
+import { memoryAdd, memoryGet, memorySearch } from '../ops/memory.js'
 import { gateSet, planCreate, storyAdd, storyGet, storyNext, storyUpdate } from '../ops/plan.js'
 import { rosterSet } from '../ops/roster.js'
 import { cycleAdvance, halt, runStart } from '../ops/run.js'
@@ -307,6 +309,61 @@ export function buildServer(): McpServer {
       inputSchema: { project_dir: projectDirArg },
     },
     async ({ project_dir }) => guard(async () => ok(await renderIndex(resolveProjectDir(project_dir)))),
+  )
+
+  server.registerTool(
+    'loop_memory_add',
+    {
+      title: 'Record a memory',
+      description:
+        'Record a decision, a lesson, or a pattern this project should not have to relearn. Write one at the end of a run — a decision the diff will not explain, or a lesson from a halt. Not a diary: a memory per cycle buries the entries that matter.',
+      inputSchema: {
+        project_dir: projectDirArg,
+        kind: MemoryKindSchema,
+        title: z.string().min(1).describe('One line, specific enough to find later'),
+        body: z.string().min(1).describe('The reasoning, at whatever length it needs'),
+        tags: z.array(z.string().min(1)).optional(),
+        run: z.string().min(1).nullish().describe('The run that produced it, when there is one'),
+      },
+    },
+    async ({ project_dir, kind, title, body, tags, run }) =>
+      guard(async () =>
+        ok(
+          await memoryAdd(resolveProjectDir(project_dir), {
+            kind,
+            title,
+            body,
+            ...(tags === undefined ? {} : { tags }),
+            ...(run === undefined ? {} : { run }),
+          }),
+        ),
+      ),
+  )
+
+  server.registerTool(
+    'loop_memory_search',
+    {
+      title: 'Search memory',
+      description:
+        'Rank recorded memories against a query and return the best few with excerpts. Consult it when composing a cycle: a hit changes how you brief the agents, and no hit costs one call. Never returns the whole corpus.',
+      inputSchema: {
+        project_dir: projectDirArg,
+        query: z.string().min(1),
+        limit: z.number().int().positive().max(20).optional().describe('Default 5'),
+      },
+    },
+    async ({ project_dir, query, limit }) =>
+      guard(async () => ok(await memorySearch(resolveProjectDir(project_dir), query, limit))),
+  )
+
+  server.registerTool(
+    'loop_memory_get',
+    {
+      title: 'Read a memory',
+      description: 'Read one memory entry in full, by id, after a search surfaced it.',
+      inputSchema: { project_dir: projectDirArg, id: z.string().min(1).describe('Memory id, e.g. M001') },
+    },
+    async ({ project_dir, id }) => guard(async () => ok(await memoryGet(resolveProjectDir(project_dir), id))),
   )
 
   return server

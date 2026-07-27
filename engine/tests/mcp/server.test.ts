@@ -54,6 +54,9 @@ describe('MCP surface', () => {
       'loop_halt',
       'loop_index_render',
       'loop_init',
+      'loop_memory_add',
+      'loop_memory_get',
+      'loop_memory_search',
       'loop_plan_create',
       'loop_roster_set',
       'loop_run_log',
@@ -294,6 +297,45 @@ describe('tool behaviour', () => {
     const result = await client.callTool({
       name: 'loop_story_get',
       arguments: { project_dir: project.dir, story: 'P001-S01' },
+    })
+    expect((result as { isError?: boolean }).isError).toBe(true)
+  })
+
+  it('records a memory and finds it again', async () => {
+    await client.callTool({ name: 'loop_init', arguments: { project_dir: project.dir } })
+
+    const added = await client.callTool({
+      name: 'loop_memory_add',
+      arguments: {
+        project_dir: project.dir,
+        kind: 'decision',
+        title: 'Session tokens rather than server sessions',
+        body: 'The deployment target has no shared session store.',
+        tags: ['auth'],
+      },
+    })
+    expect(JSON.parse(textOf(added)).id).toBe('M001')
+
+    const found = await client.callTool({
+      name: 'loop_memory_search',
+      arguments: { project_dir: project.dir, query: 'session store' },
+    })
+    const payload = JSON.parse(textOf(found))
+    expect(payload.hits[0].id).toBe('M001')
+    expect(payload.hits[0].excerpt).toContain('session store')
+
+    const read = await client.callTool({
+      name: 'loop_memory_get',
+      arguments: { project_dir: project.dir, id: 'M001' },
+    })
+    expect(textOf(read)).toContain('no shared session store')
+  })
+
+  it('returns a tool error for a memory that does not exist', async () => {
+    await client.callTool({ name: 'loop_init', arguments: { project_dir: project.dir } })
+    const result = await client.callTool({
+      name: 'loop_memory_get',
+      arguments: { project_dir: project.dir, id: 'M404' },
     })
     expect((result as { isError?: boolean }).isError).toBe(true)
   })
