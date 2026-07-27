@@ -49,47 +49,47 @@ describe('MCP surface', () => {
   it('exposes exactly the milestone-1 tools', async () => {
     const { tools } = await client.listTools()
     expect(tools.map((t) => t.name).sort()).toEqual([
-      'loop_cycle_advance',
-      'loop_gate_set',
-      'loop_halt',
-      'loop_index_render',
-      'loop_init',
-      'loop_memory_add',
-      'loop_memory_get',
-      'loop_memory_search',
-      'loop_plan_create',
-      'loop_roster_set',
-      'loop_run_log',
-      'loop_run_start',
-      'loop_state_get',
-      'loop_story_add',
-      'loop_story_get',
-      'loop_story_update',
+      'mjloop_cycle_advance',
+      'mjloop_gate_set',
+      'mjloop_halt',
+      'mjloop_index_render',
+      'mjloop_init',
+      'mjloop_memory_add',
+      'mjloop_memory_get',
+      'mjloop_memory_search',
+      'mjloop_plan_create',
+      'mjloop_roster_set',
+      'mjloop_run_log',
+      'mjloop_run_start',
+      'mjloop_state_get',
+      'mjloop_story_add',
+      'mjloop_story_get',
+      'mjloop_story_update',
     ])
   })
 })
 
 describe('tool behaviour', () => {
   it('runs init then reports a summary', async () => {
-    const init = await client.callTool({ name: 'loop_init', arguments: { project_dir: project.dir } })
-    expect(textOf(init)).toContain('.loop/state.json')
+    const init = await client.callTool({ name: 'mjloop_init', arguments: { project_dir: project.dir } })
+    expect(textOf(init)).toContain('.mjloop/state.json')
 
-    const summary = await client.callTool({ name: 'loop_state_get', arguments: { project_dir: project.dir } })
+    const summary = await client.callTool({ name: 'mjloop_state_get', arguments: { project_dir: project.dir } })
     expect(JSON.parse(textOf(summary)).status).toBe('idle')
   })
 
   it('drives a full passing edit cycle', async () => {
-    await client.callTool({ name: 'loop_init', arguments: { project_dir: project.dir } })
+    await client.callTool({ name: 'mjloop_init', arguments: { project_dir: project.dir } })
     await client.callTool({
-      name: 'loop_run_start',
+      name: 'mjloop_run_start',
       arguments: { project_dir: project.dir, track: 'edit', goal: 'Rename submit label' },
     })
     await client.callTool({
-      name: 'loop_roster_set',
+      name: 'mjloop_roster_set',
       arguments: { project_dir: project.dir, cycle: 1, selected: ['editor', 'verifier'], skipped: {} },
     })
     await client.callTool({
-      name: 'loop_run_log',
+      name: 'mjloop_run_log',
       arguments: {
         project_dir: project.dir,
         agent: 'verifier',
@@ -103,20 +103,20 @@ describe('tool behaviour', () => {
       },
     })
     const advanced = await client.callTool({
-      name: 'loop_cycle_advance',
+      name: 'mjloop_cycle_advance',
       arguments: { project_dir: project.dir, agents: ['editor', 'verifier'], result: 'pass' },
     })
     expect(JSON.parse(textOf(advanced)).state.status).toBe('done')
   })
 
   it('returns a tool error, not a crash, when the roster drops verifier', async () => {
-    await client.callTool({ name: 'loop_init', arguments: { project_dir: project.dir } })
+    await client.callTool({ name: 'mjloop_init', arguments: { project_dir: project.dir } })
     await client.callTool({
-      name: 'loop_run_start',
+      name: 'mjloop_run_start',
       arguments: { project_dir: project.dir, track: 'edit', goal: 'Rename' },
     })
     const result = await client.callTool({
-      name: 'loop_roster_set',
+      name: 'mjloop_roster_set',
       arguments: { project_dir: project.dir, cycle: 1, selected: ['editor'], skipped: {} },
     })
     expect((result as { isError?: boolean }).isError).toBe(true)
@@ -124,17 +124,17 @@ describe('tool behaviour', () => {
   })
 
   it('refuses an agent name that would write outside the cycle directory', async () => {
-    await client.callTool({ name: 'loop_init', arguments: { project_dir: project.dir } })
+    await client.callTool({ name: 'mjloop_init', arguments: { project_dir: project.dir } })
     await client.callTool({
-      name: 'loop_run_start',
+      name: 'mjloop_run_start',
       arguments: { project_dir: project.dir, track: 'edit', goal: 'Rename' },
     })
 
-    // `.loop/state.json` is three levels up from the cycle directory, and the
+    // `.mjloop/state.json` is three levels up from the cycle directory, and the
     // PreToolUse hook that guards it never sees an MCP write.
     const outcome = await client
       .callTool({
-        name: 'loop_run_log',
+        name: 'mjloop_run_log',
         arguments: {
           project_dir: project.dir,
           agent: '../../../state',
@@ -144,35 +144,35 @@ describe('tool behaviour', () => {
       .then((result) => ((result as { isError?: boolean }).isError === true ? 'rejected' : 'accepted'), () => 'rejected')
     expect(outcome).toBe('rejected')
 
-    const summary = await client.callTool({ name: 'loop_state_get', arguments: { project_dir: project.dir } })
+    const summary = await client.callTool({ name: 'mjloop_state_get', arguments: { project_dir: project.dir } })
     expect(JSON.parse(textOf(summary)).status).toBe('running')
   })
 
   it('refuses a track name that would steer the run directory', async () => {
-    await client.callTool({ name: 'loop_init', arguments: { project_dir: project.dir } })
+    await client.callTool({ name: 'mjloop_init', arguments: { project_dir: project.dir } })
 
     // The track names the run directory alongside the story id, which this
     // surface has always constrained.
     const outcome = await client
       .callTool({
-        name: 'loop_run_start',
+        name: 'mjloop_run_start',
         arguments: { project_dir: project.dir, track: '../../../tmp/victim', goal: 'Rename' },
       })
       .then((result) => ((result as { isError?: boolean }).isError === true ? 'rejected' : 'accepted'), () => 'rejected')
     expect(outcome).toBe('rejected')
 
-    const summary = await client.callTool({ name: 'loop_state_get', arguments: { project_dir: project.dir } })
+    const summary = await client.callTool({ name: 'mjloop_state_get', arguments: { project_dir: project.dir } })
     expect(JSON.parse(textOf(summary)).status).toBe('idle')
   })
 
   it('returns a tool error when an agent result breaks the contract', async () => {
-    await client.callTool({ name: 'loop_init', arguments: { project_dir: project.dir } })
+    await client.callTool({ name: 'mjloop_init', arguments: { project_dir: project.dir } })
     await client.callTool({
-      name: 'loop_run_start',
+      name: 'mjloop_run_start',
       arguments: { project_dir: project.dir, track: 'edit', goal: 'Rename' },
     })
     const result = await client.callTool({
-      name: 'loop_run_log',
+      name: 'mjloop_run_log',
       arguments: { project_dir: project.dir, agent: 'editor', result: { status: 'pass' } },
     })
     expect((result as { isError?: boolean }).isError).toBe(true)
@@ -180,13 +180,13 @@ describe('tool behaviour', () => {
   })
 
   it('accepts an instance so parallel agents do not overwrite each other', async () => {
-    await client.callTool({ name: 'loop_init', arguments: { project_dir: project.dir } })
+    await client.callTool({ name: 'mjloop_init', arguments: { project_dir: project.dir } })
     await client.callTool({
-      name: 'loop_run_start',
+      name: 'mjloop_run_start',
       arguments: { project_dir: project.dir, track: 'fix', goal: 'Stale cache' },
     })
     const logged = await client.callTool({
-      name: 'loop_run_log',
+      name: 'mjloop_run_log',
       arguments: {
         project_dir: project.dir,
         agent: 'hypothesis-tester',
@@ -205,13 +205,13 @@ describe('tool behaviour', () => {
   })
 
   it('returns a tool error when the fixer runs before the defect is reproduced', async () => {
-    await client.callTool({ name: 'loop_init', arguments: { project_dir: project.dir } })
+    await client.callTool({ name: 'mjloop_init', arguments: { project_dir: project.dir } })
     await client.callTool({
-      name: 'loop_run_start',
+      name: 'mjloop_run_start',
       arguments: { project_dir: project.dir, track: 'fix', goal: 'Stale cache' },
     })
     const result = await client.callTool({
-      name: 'loop_run_log',
+      name: 'mjloop_run_log',
       arguments: {
         project_dir: project.dir,
         agent: 'fixer',
@@ -229,10 +229,10 @@ describe('tool behaviour', () => {
   })
 
   it('drives a plan from creation to a resolved next story', async () => {
-    await client.callTool({ name: 'loop_init', arguments: { project_dir: project.dir } })
+    await client.callTool({ name: 'mjloop_init', arguments: { project_dir: project.dir } })
 
     const created = await client.callTool({
-      name: 'loop_plan_create',
+      name: 'mjloop_plan_create',
       arguments: { project_dir: project.dir, slug: 'user-auth', title: 'User authentication' },
     })
     expect(JSON.parse(textOf(created)).id).toBe('P001')
@@ -242,50 +242,50 @@ describe('tool behaviour', () => {
     await gateSet(project.dir, { plan: 'P001', decision: 'approved', by: 'test' })
 
     await client.callTool({
-      name: 'loop_story_add',
+      name: 'mjloop_story_add',
       arguments: { project_dir: project.dir, plan: 'P001', title: 'Login form', acceptance: ['Shows an error'] },
     })
     await client.callTool({
-      name: 'loop_story_add',
+      name: 'mjloop_story_add',
       arguments: { project_dir: project.dir, plan: 'P001', title: 'Session token', depends_on: ['P001-S01'] },
     })
 
-    const next = await client.callTool({ name: 'loop_story_get', arguments: { project_dir: project.dir, next: true } })
+    const next = await client.callTool({ name: 'mjloop_story_get', arguments: { project_dir: project.dir, next: true } })
     expect(JSON.parse(textOf(next)).story.frontmatter.id).toBe('P001-S01')
 
     await client.callTool({
-      name: 'loop_story_update',
-      arguments: { project_dir: project.dir, story: 'P001-S01', status: 'done', evidence: '.loop/runs/x' },
+      name: 'mjloop_story_update',
+      arguments: { project_dir: project.dir, story: 'P001-S01', status: 'done', evidence: '.mjloop/runs/x' },
     })
 
-    const after = await client.callTool({ name: 'loop_story_get', arguments: { project_dir: project.dir, next: true } })
+    const after = await client.callTool({ name: 'mjloop_story_get', arguments: { project_dir: project.dir, next: true } })
     expect(JSON.parse(textOf(after)).story.frontmatter.id).toBe('P001-S02')
 
-    const index = await client.callTool({ name: 'loop_index_render', arguments: { project_dir: project.dir } })
+    const index = await client.callTool({ name: 'mjloop_index_render', arguments: { project_dir: project.dir } })
     expect(textOf(index)).toContain('User authentication')
   })
 
   it('records an approval and then allows a story', async () => {
-    await client.callTool({ name: 'loop_init', arguments: { project_dir: project.dir } })
+    await client.callTool({ name: 'mjloop_init', arguments: { project_dir: project.dir } })
     await client.callTool({
-      name: 'loop_plan_create',
+      name: 'mjloop_plan_create',
       arguments: { project_dir: project.dir, slug: 'user-auth', title: 'User authentication' },
     })
 
     const refused = await client.callTool({
-      name: 'loop_story_add',
+      name: 'mjloop_story_add',
       arguments: { project_dir: project.dir, plan: 'P001', title: 'Login form' },
     })
     expect((refused as { isError?: boolean }).isError).toBe(true)
-    expect(textOf(refused)).toContain('loop_gate_set')
+    expect(textOf(refused)).toContain('mjloop_gate_set')
 
     await client.callTool({
-      name: 'loop_gate_set',
+      name: 'mjloop_gate_set',
       arguments: { project_dir: project.dir, plan: 'P001', decision: 'approved', by: 'mohd', note: 'Ship it.' },
     })
 
     const added = await client.callTool({
-      name: 'loop_story_add',
+      name: 'mjloop_story_add',
       arguments: { project_dir: project.dir, plan: 'P001', title: 'Login form' },
     })
     expect((added as { isError?: boolean }).isError).not.toBe(true)
@@ -293,19 +293,19 @@ describe('tool behaviour', () => {
   })
 
   it('returns a tool error for a story that does not exist', async () => {
-    await client.callTool({ name: 'loop_init', arguments: { project_dir: project.dir } })
+    await client.callTool({ name: 'mjloop_init', arguments: { project_dir: project.dir } })
     const result = await client.callTool({
-      name: 'loop_story_get',
+      name: 'mjloop_story_get',
       arguments: { project_dir: project.dir, story: 'P001-S01' },
     })
     expect((result as { isError?: boolean }).isError).toBe(true)
   })
 
   it('records a memory and finds it again', async () => {
-    await client.callTool({ name: 'loop_init', arguments: { project_dir: project.dir } })
+    await client.callTool({ name: 'mjloop_init', arguments: { project_dir: project.dir } })
 
     const added = await client.callTool({
-      name: 'loop_memory_add',
+      name: 'mjloop_memory_add',
       arguments: {
         project_dir: project.dir,
         kind: 'decision',
@@ -317,7 +317,7 @@ describe('tool behaviour', () => {
     expect(JSON.parse(textOf(added)).id).toBe('M001')
 
     const found = await client.callTool({
-      name: 'loop_memory_search',
+      name: 'mjloop_memory_search',
       arguments: { project_dir: project.dir, query: 'session store' },
     })
     const payload = JSON.parse(textOf(found))
@@ -325,7 +325,7 @@ describe('tool behaviour', () => {
     expect(payload.hits[0].excerpt).toContain('session store')
 
     const read = await client.callTool({
-      name: 'loop_memory_get',
+      name: 'mjloop_memory_get',
       arguments: { project_dir: project.dir, id: 'M001' },
     })
     expect(textOf(read)).toContain('no shared session store')
@@ -334,9 +334,9 @@ describe('tool behaviour', () => {
   it('refuses a memory body past the ceiling at the tool boundary', async () => {
     // The ceiling is legible to the caller before it writes a transcript that
     // every later search and add would then have to read.
-    await client.callTool({ name: 'loop_init', arguments: { project_dir: project.dir } })
+    await client.callTool({ name: 'mjloop_init', arguments: { project_dir: project.dir } })
     const result = await client.callTool({
-      name: 'loop_memory_add',
+      name: 'mjloop_memory_add',
       arguments: {
         project_dir: project.dir,
         kind: 'lesson',
@@ -348,9 +348,9 @@ describe('tool behaviour', () => {
   })
 
   it('returns a tool error for a memory that does not exist', async () => {
-    await client.callTool({ name: 'loop_init', arguments: { project_dir: project.dir } })
+    await client.callTool({ name: 'mjloop_init', arguments: { project_dir: project.dir } })
     const result = await client.callTool({
-      name: 'loop_memory_get',
+      name: 'mjloop_memory_get',
       arguments: { project_dir: project.dir, id: 'M404' },
     })
     expect((result as { isError?: boolean }).isError).toBe(true)

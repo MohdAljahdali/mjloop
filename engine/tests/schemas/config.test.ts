@@ -116,7 +116,7 @@ describe('ConfigSchema', () => {
 
   it('rejects a track name that could steer a path', () => {
     // The track name is the last component of every run directory name, so a
-    // path-shaped one steers writes outside .loop/runs.
+    // path-shaped one steers writes outside .mjloop/runs.
     const bad = {
       version: 1,
       tracks: { '../../tmp/victim': { required: ['editor'], max_cycles: 1 } },

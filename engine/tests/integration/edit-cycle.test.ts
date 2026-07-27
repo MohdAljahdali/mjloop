@@ -118,11 +118,11 @@ describe('a full edit cycle', () => {
         agent: 'editor',
         result: {
           status: 'blocked',
-          summary: 'This touches 9 files and changes two exported signatures. Recommend /loop:build.',
+          summary: 'This touches 9 files and changes two exported signatures. Recommend /mjloop:build.',
           evidence: [],
           findings: [],
           files_touched: [],
-          next_hint: 'run /loop:build',
+          next_hint: 'run /mjloop:build',
         },
       },
       clock,

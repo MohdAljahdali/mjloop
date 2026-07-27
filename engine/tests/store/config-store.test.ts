@@ -24,7 +24,7 @@ describe('writeConfig / loadConfig', () => {
     expect(raw.trimStart().startsWith('{')).toBe(false)
   })
 
-  it('throws ConfigMissingError when .loop is not provisioned', async () => {
+  it('throws ConfigMissingError when .mjloop is not provisioned', async () => {
     await expect(loadConfig(project.dir)).rejects.toBeInstanceOf(ConfigMissingError)
   })
 
@@ -54,7 +54,7 @@ describe('legacy keys', () => {
     const raw = await fs.readFile(resolveLoopPaths(project.dir).config, 'utf8')
     await fs.writeFile(
       resolveLoopPaths(project.dir).config,
-      `${raw}\ncustom_dirs:\n  agents: .loop/agents\n  skills: .loop/skills\n`,
+      `${raw}\ncustom_dirs:\n  agents: .mjloop/agents\n  skills: .mjloop/skills\n`,
       'utf8',
     )
 

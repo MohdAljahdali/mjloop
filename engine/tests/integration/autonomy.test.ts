@@ -79,7 +79,7 @@ describe('an autonomous run', () => {
     // stop_hook_active once a Stop hook has already continued this turn, and
     // re-blocking on it is how a hook loops forever. So an autonomous run is
     // carried past the pause it is at, not automatically to completion — the
-    // turn can end with the run still open, and /loop:resume is the way back in.
+    // turn can end with the run still open, and /mjloop:resume is the way back in.
     await runStart(project.dir, { track: 'build', goal: 'Add the endpoint' }, clock)
     await runLog(project.dir, { agent: 'verifier', result: failing('1 failing: cannot resolve module', 'first') }, clock)
     const first = await cycleAdvance(project.dir, { agents: ['builder', 'verifier'], result: 'fail' }, clock)

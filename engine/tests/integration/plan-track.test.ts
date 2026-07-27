@@ -18,16 +18,16 @@ let project: TmpProject
 const CRITIC_FAIL = {
   status: 'fail' as const,
   summary: 'The token lifetime is never stated.',
-  evidence: [{ kind: 'file' as const, ref: '.loop/plans/P001-user-auth/PLAN.md', excerpt: 'Tokens are issued on login.' }],
+  evidence: [{ kind: 'file' as const, ref: '.mjloop/plans/P001-user-auth/PLAN.md', excerpt: 'Tokens are issued on login.' }],
   findings: [
     {
       severity: 'high' as const,
-      file: '.loop/plans/P001-user-auth/PLAN.md',
+      file: '.mjloop/plans/P001-user-auth/PLAN.md',
       line: 12,
       claim: 'the token lifetime is never stated, so no story can carry a checkable criterion for expiry',
     },
   ],
-  files_touched: ['.loop/plans/P001-user-auth/REVIEW.md'],
+  files_touched: ['.mjloop/plans/P001-user-auth/REVIEW.md'],
   next_hint: null,
 }
 
@@ -43,7 +43,7 @@ const FIT_PASS = {
 const WRITER_PASS = {
   status: 'pass' as const,
   summary: 'Two stories, in dependency order.',
-  evidence: [{ kind: 'file' as const, ref: '.loop/plans/P001-user-auth/stories', excerpt: 'two stories added' }],
+  evidence: [{ kind: 'file' as const, ref: '.mjloop/plans/P001-user-auth/stories', excerpt: 'two stories added' }],
   findings: [],
   files_touched: [],
   next_hint: null,

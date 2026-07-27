@@ -78,7 +78,7 @@ describe('runLog', () => {
 
 describe('runLog agent names', () => {
   it('refuses a name that would write outside the cycle directory', async () => {
-    // The name arrives from the leader model, and `.loop/state.json` is three
+    // The name arrives from the leader model, and `.mjloop/state.json` is three
     // levels up from the cycle directory.
     await expect(runLog(project.dir, { agent: '../../../state', result: RESULT }, clock)).rejects.toBeInstanceOf(
       InvalidAgentNameError,

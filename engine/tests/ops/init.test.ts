@@ -38,7 +38,7 @@ describe('detectVerifyCommands', () => {
 })
 
 describe('initLoop', () => {
-  it('provisions .loop with a valid state and config', async () => {
+  it('provisions .mjloop with a valid state and config', async () => {
     project = await makeTmpProject({ 'package.json': PKG })
     const result = await initLoop(project.dir, () => NOW)
 
@@ -77,12 +77,12 @@ describe('initLoop', () => {
 
   it('names every shipped command, so the in-repo reference matches README', async () => {
     // This block is what a later session reads to learn the plugin. A command
-    // missing from it — /loop:stop above all — leaves a stuck run with no
+    // missing from it — /mjloop:stop above all — leaves a stuck run with no
     // stated way out but editing state by hand, which the guard denies.
     project = await makeTmpProject()
     await initLoop(project.dir, () => NOW)
     const claudeMd = await fs.readFile(path.join(project.dir, 'CLAUDE.md'), 'utf8')
-    for (const command of ['/loop:edit', '/loop:plan', '/loop:build', '/loop:fix', '/loop:status', '/loop:stop']) {
+    for (const command of ['/mjloop:edit', '/mjloop:plan', '/mjloop:build', '/mjloop:fix', '/mjloop:status', '/mjloop:stop']) {
       expect(claudeMd).toContain(command)
     }
   })

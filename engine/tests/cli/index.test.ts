@@ -40,7 +40,7 @@ describe('runCli session-start', () => {
     expect(payload.hookSpecificOutput.additionalContext).toContain('track edit')
   })
 
-  it('emits nothing for a project without .loop', async () => {
+  it('emits nothing for a project without .mjloop', async () => {
     const { stdout, exitCode } = await runCli(['session-start'], JSON.stringify({ cwd: project.dir }))
     expect(stdout).toBe('')
     expect(exitCode).toBe(0)
@@ -48,21 +48,21 @@ describe('runCli session-start', () => {
 })
 
 describe('evaluateStateGuard', () => {
-  it('denies a write to .loop/state.json', () => {
+  it('denies a write to .mjloop/state.json', () => {
     const verdict = evaluateStateGuard({
       tool_name: 'Write',
-      tool_input: { file_path: '/repo/.loop/state.json' },
+      tool_input: { file_path: '/repo/.mjloop/state.json' },
     })
     expect(verdict.deny).toBe(true)
-    expect(verdict.reason).toContain('loop_')
+    expect(verdict.reason).toContain('mjloop_')
     // the guidance must only name tools the MCP server actually registers
-    expect(verdict.reason).not.toContain('loop_story_update')
+    expect(verdict.reason).not.toContain('mjloop_story_update')
   })
 
   it('denies a write to a plan manifest.json', () => {
     const verdict = evaluateStateGuard({
       tool_name: 'Edit',
-      tool_input: { file_path: '/repo/.loop/plans/P001-auth/manifest.json' },
+      tool_input: { file_path: '/repo/.mjloop/plans/P001-auth/manifest.json' },
     })
     expect(verdict.deny).toBe(true)
   })
@@ -70,12 +70,12 @@ describe('evaluateStateGuard', () => {
   it('allows a write to a story file', () => {
     const verdict = evaluateStateGuard({
       tool_name: 'Write',
-      tool_input: { file_path: '/repo/.loop/plans/P001-auth/stories/P001-S01-login.md' },
+      tool_input: { file_path: '/repo/.mjloop/plans/P001-auth/stories/P001-S01-login.md' },
     })
     expect(verdict.deny).toBe(false)
   })
 
-  it('allows a state.json that is not inside .loop', () => {
+  it('allows a state.json that is not inside .mjloop', () => {
     const verdict = evaluateStateGuard({
       tool_name: 'Write',
       tool_input: { file_path: '/repo/src/fixtures/state.json' },
@@ -95,7 +95,7 @@ describe('evaluateStateGuard', () => {
 
 describe('runCli state-guard', () => {
   it('emits a deny decision for a protected path', async () => {
-    const stdin = JSON.stringify({ tool_name: 'Write', tool_input: { file_path: '/repo/.loop/state.json' } })
+    const stdin = JSON.stringify({ tool_name: 'Write', tool_input: { file_path: '/repo/.mjloop/state.json' } })
     const { stdout } = await runCli(['state-guard'], stdin)
     const payload = JSON.parse(stdout)
     expect(payload.hookSpecificOutput.hookEventName).toBe('PreToolUse')
@@ -141,7 +141,7 @@ describe('evaluateStopGuard', () => {
     expect(reason).toContain('cycle 2 of 5')
     expect(reason).toContain('Add a Send button')
     expect(reason).toContain('3 open findings')
-    expect(reason).toContain('loop-leader')
+    expect(reason).toContain('mjloop-leader')
   })
 
   it('attributes the findings to the cycle that is open', () => {
@@ -253,7 +253,7 @@ describe('runCli stop-guard', () => {
     config.autonomous = true
     await writeConfig(project.dir, config)
     await runStart(project.dir, { track: 'build', goal: 'Add it' }, clock)
-    await fs.writeFile(path.join(project.dir, '.loop', 'config.yaml'), 'autonomous: true\ntracks: [unclosed', 'utf8')
+    await fs.writeFile(path.join(project.dir, '.mjloop', 'config.yaml'), 'autonomous: true\ntracks: [unclosed', 'utf8')
 
     const { stdout } = await runCli(['stop-guard'], JSON.stringify({ cwd: project.dir, stop_hook_active: false }))
     expect(stdout).toBe('')
@@ -266,7 +266,7 @@ describe('runCli stop-guard', () => {
     await writeConfig(project.dir, config)
     await runStart(project.dir, { track: 'build', goal: 'Add it' }, clock)
 
-    const statePath = path.join(project.dir, '.loop', 'state.json')
+    const statePath = path.join(project.dir, '.mjloop', 'state.json')
     await fs.copyFile(statePath, `${statePath}.bak`)
     await fs.writeFile(statePath, '<<<<<<< HEAD\nnot json', 'utf8')
 

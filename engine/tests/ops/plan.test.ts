@@ -172,9 +172,9 @@ describe('storyUpdate', () => {
   })
 
   it('records an evidence path', async () => {
-    await storyUpdate(project.dir, 'P001-S01', { status: 'done', evidence: '.loop/runs/2026-07-27-001--P001-S01--build' }, clock)
+    await storyUpdate(project.dir, 'P001-S01', { status: 'done', evidence: '.mjloop/runs/2026-07-27-001--P001-S01--build' }, clock)
     expect((await readStory(project.dir, 'P001-S01')).frontmatter.evidence).toBe(
-      '.loop/runs/2026-07-27-001--P001-S01--build',
+      '.mjloop/runs/2026-07-27-001--P001-S01--build',
     )
   })
 
@@ -216,7 +216,7 @@ describe('storyUpdate', () => {
 
     // The patch does not touch depends_on, so a dangling edge it did not
     // introduce must not make the story permanently un-updatable.
-    const updated = await storyUpdate(project.dir, 'P001-S02', { status: 'done', evidence: '.loop/runs/x' }, clock)
+    const updated = await storyUpdate(project.dir, 'P001-S02', { status: 'done', evidence: '.mjloop/runs/x' }, clock)
     expect(updated.manifest.stories[0]?.status).toBe('done')
   })
 
@@ -436,7 +436,7 @@ describe('the approval gate', () => {
 
   it('names the plan and the tool that would open it', async () => {
     await expect(storyAdd(project.dir, { plan: 'P001', title: 'Login form' }, clock)).rejects.toThrow(
-      /P001[\s\S]*loop_gate_set/,
+      /P001[\s\S]*mjloop_gate_set/,
     )
   })
 

@@ -13,13 +13,13 @@ beforeEach(async () => { project = await makeTmpProject() })
 afterEach(async () => { await project.cleanup() })
 
 describe('resolveLoopPaths', () => {
-  it('places every artefact under .loop', () => {
+  it('places every artefact under .mjloop', () => {
     const paths = resolveLoopPaths('/tmp/demo')
-    expect(paths.root).toBe('/tmp/demo/.loop')
-    expect(paths.state).toBe('/tmp/demo/.loop/state.json')
-    expect(paths.config).toBe('/tmp/demo/.loop/config.yaml')
-    expect(paths.runs).toBe('/tmp/demo/.loop/runs')
-    expect(paths.lock).toBe('/tmp/demo/.loop/.lock')
+    expect(paths.root).toBe('/tmp/demo/.mjloop')
+    expect(paths.state).toBe('/tmp/demo/.mjloop/state.json')
+    expect(paths.config).toBe('/tmp/demo/.mjloop/config.yaml')
+    expect(paths.runs).toBe('/tmp/demo/.mjloop/runs')
+    expect(paths.lock).toBe('/tmp/demo/.mjloop/.lock')
   })
 })
 

@@ -230,7 +230,7 @@ describe('cycleAdvance', () => {
     expect(state.current.stage).toBe('done')
     expect(state.cycle).toBe(1)
     expect(state.history).toEqual([
-      { cycle: 1, agents: ['editor', 'verifier'], result: 'pass', ref: '.loop/runs/2026-07-26-001--adhoc--edit' },
+      { cycle: 1, agents: ['editor', 'verifier'], result: 'pass', ref: '.mjloop/runs/2026-07-26-001--adhoc--edit' },
     ])
   })
 

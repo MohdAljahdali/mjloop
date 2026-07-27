@@ -16,11 +16,11 @@ beforeEach(async () => { project = await makeTmpProject() })
 afterEach(async () => { await project.cleanup() })
 
 describe('stateSummary', () => {
-  it('reports uninitialised for a project without .loop', async () => {
+  it('reports uninitialised for a project without .mjloop', async () => {
     const summary = await stateSummary(project.dir)
     expect(summary.initialised).toBe(false)
     expect(summary.status).toBe('uninitialised')
-    expect(renderSummaryLine(summary)).toContain('/loop:init')
+    expect(renderSummaryLine(summary)).toContain('/mjloop:init')
   })
 
   it('reports an idle loop after init', async () => {
@@ -96,7 +96,7 @@ describe('stateSummary', () => {
     await runStart(project.dir, { track: 'edit', goal: 'Rename' }, clock)
     // HALT.md explicitly directs users to edit config.yaml, so a YAML typo
     // must degrade the summary, not crash the SessionStart hook.
-    await fs.writeFile(path.join(project.dir, '.loop', 'config.yaml'), 'tracks: [unclosed', 'utf8')
+    await fs.writeFile(path.join(project.dir, '.mjloop', 'config.yaml'), 'tracks: [unclosed', 'utf8')
 
     const summary = await stateSummary(project.dir)
     expect(summary.max_cycles).toBeNull()
@@ -188,7 +188,7 @@ describe('config_error', () => {
   })
 
   it('is reported even when the state cannot be read', async () => {
-    // The /loop:add contract checks this field after an edit, and a state file
+    // The /mjloop:add contract checks this field after an edit, and a state file
     // that has gone with the config must not report the config as sound.
     await initLoop(project.dir, clock)
     await fs.writeFile(resolveLoopPaths(project.dir).config, 'version: 1\ntracks: {}\nmystery: true\n', 'utf8')
