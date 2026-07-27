@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # The seven smoke tests under tests/e2e/ are deliberately not run here: they drive the
+  # real Claude Code CLI and spend tokens. Run them locally with LOOP_E2E=1 and report the
+  # output in the pull request — see CONTRIBUTING.md.
+  engine:
+    name: Engine (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ["20", "22", "24"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+          cache-dependency-path: engine/package-lock.json
+
+      - name: Install
+        working-directory: engine
+        run: npm ci
+
+      - name: Typecheck
+        working-directory: engine
+        run: npm run typecheck
+
+      - name: Test
+        working-directory: engine
+        run: npm test
+
+      - name: Build
+        working-directory: engine
+        run: npm run build
