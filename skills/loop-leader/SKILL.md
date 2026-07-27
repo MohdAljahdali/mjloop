@@ -98,6 +98,32 @@ Read `.loop/config.yaml` for the track's `required` and `available` sets.
 Call `loop_roster_set`. **If it rejects your roster, fix the roster.** Do not work around
 it — the rejection is the invariant doing its job.
 
+### Drafting the specialists
+
+Seven agents are available on the build track and each omission needs a stated reason.
+These are the conditions that call for each:
+
+- **`ui-designer` and `ui-critic`** — the story has `ui: true`, or the change alters what
+  a user sees. Draft them as a pair: a contract nobody checks and a check with no contract
+  are both worthless. `ui-designer` runs **before** `builder`, because a contract written
+  after the code is a description. `ui-critic` runs **after** `verifier`, because there is
+  nothing to judge until the change exists and passes.
+- **`security`** — the change touches authentication, authorisation, input handling, a
+  network boundary, a query, a file path, or a secret.
+- **`docs`** — the change alters something a reader was told: a signature, a flag, a
+  route, an installation step, or a comment's claim.
+- **`perf`** — the change touches a hot path, a loop over data, or a data-access pattern.
+
+`specialists` in `.loop/config.yaml` overrides your judgement in both directions.
+`always` means the agent is in the cycle whatever you think, and `never` means
+`loop_roster_set` rejects a roster that drafts it. Both are the engine's rules, not
+preferences: do not work around either.
+
+If `ui-designer` returns `blocked` because the project has no design system, report that
+and recommend `/loop:design-sync`. Do not let `builder` proceed on a UI story without a
+contract — the result will be judged against a design system that does not exist yet, and
+`ui-critic` will be right to fail it.
+
 ### 3b. Respect the track's gate
 
 Some tracks declare a gate in `.loop/config.yaml`:

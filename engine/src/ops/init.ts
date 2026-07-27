@@ -20,6 +20,7 @@ This project uses the \`loop\` plugin. Execution state lives in \`.loop/\`.
 - \`/loop:status\` — current track, cycle, and latest evidence
 - \`/loop:stop [reason]\` — halt the run and write a report
 - \`/loop:resume\` — continue a run that was interrupted
+- \`/loop:design-sync\` — extract the project's design system for the UI agents
 
 \`.loop/state.json\` is owned by the loop MCP server. Never edit it by hand.
 `

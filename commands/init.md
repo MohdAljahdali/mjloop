@@ -19,5 +19,6 @@ Set up the loop for this project.
    - `/loop:status` — where the current run stands
    - `/loop:stop [reason]` — halt the run and write a report
    - `/loop:resume` — continue a run that was interrupted
+   - `/loop:design-sync` — extract the project's design system for the UI agents
 
 If `loop_init` reports `alreadyInitialised: true`, say so and stop. Do not reset state.
