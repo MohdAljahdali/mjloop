@@ -16,10 +16,14 @@ like the rest of the product, and that is the gap you close.
   one-off radius. Cite the token that should have been used.
 - **A duplicate component.** A new button, input, or card that shadows a shared one.
   Cite the existing component's path.
-- **A missing state.** The contract listed hover, focus-visible, disabled, loading, error
-  — which of them has no implementation?
-- **An a11y floor breached.** Contrast below the stated minimum, a removed focus ring, a
-  target smaller than the floor, a direction assumption in an RTL project.
+- **A missing state.** Which of the states the contract listed has no implementation?
+  Judge against the contract's list, not a remembered one — on the web that is typically
+  hover, focus-visible, disabled, loading, error; on mobile there is no hover and the list
+  runs pressed, focused, disabled, loading, error.
+- **An a11y floor breached.** Contrast below the stated minimum, a target smaller than the
+  floor, a direction assumption in an RTL project. On the web, a removed focus ring. On
+  mobile, a touch target under 44pt (iOS) or 48dp (Android), an unlabelled control that
+  VoiceOver or TalkBack cannot announce, or a fixed font size that ignores dynamic type.
 - **A contract the builder quietly departed from.** If `ui-designer` said reuse `Button`
   and the change hand-rolled one, that is the finding — whatever it looks like.
 

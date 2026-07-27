@@ -16,9 +16,14 @@ defines:
   existing fits
 - which tokens for colour, spacing, radius, and typography — never a raw value where a
   token exists
-- which states must be handled: hover, focus-visible, disabled, loading, error, empty
-- the a11y floors that apply: contrast, focus ring, target size, and RTL if the project
-  supports it
+- which states must be handled. On the web that is hover, focus-visible, disabled,
+  loading, error, empty. On mobile there is no hover — it is pressed, focused, disabled,
+  loading, error, empty. Name the states the project's platform actually has; the web list
+  is not the default.
+- the a11y floors that apply. Web: contrast, focus ring, target size, and RTL if the
+  project supports it. Mobile: contrast, touch target (44pt on iOS, 48dp on Android),
+  screen-reader labels for VoiceOver or TalkBack, dynamic type or font scaling, and RTL if
+  the project supports it.
 
 This is a contract, not a suggestion. `ui-critic` will judge the built result against it,
 so anything you leave unsaid is something nobody will check.
@@ -39,9 +44,24 @@ whole point.
 
 Read the project and write `.mjloop/design-system.md` describing the design that **exists**.
 
-Look for: token or theme files, a Tailwind or CSS-variable configuration, the shared
-component directory, global styles, and the two or three components most other components
-build on.
+Look for token or theme files, the theme or style configuration, the shared component
+directory, global styles, and the two or three components most other components build on.
+Where those live depends on the platform, so establish the project's platform first, then
+look:
+
+- **Web** — `tailwind.config.*`, CSS custom properties, a `theme.*` or `tokens.*` module,
+  a CSS-in-JS theme, global stylesheets, and the shared component directory.
+- **Flutter** — `ThemeData`, `ColorScheme`, `TextTheme`, any `AppTheme` / `AppColors` /
+  `AppSpacing` constants file, and the shared widget directory.
+- **Android** — `res/values/themes.xml`, `colors.xml`, `dimens.xml`, a Compose `Theme.kt`
+  / `Color.kt` / `Type.kt`, and the shared Composable directory.
+- **iOS / SwiftUI** — the Asset Catalog's colour sets, a `Color` or `Font` extension file,
+  shared `ViewModifier`s and `ButtonStyle`s, and the shared View directory.
+
+That list is a starting point, not a boundary. A project on a platform named nowhere above
+still has a design system somewhere; find where it keeps it. And absence of the web
+markers is not absence of a UI — decide by what the project renders, not by which file
+extensions it lacks.
 
 Write it with this frontmatter and these sections:
 
