@@ -64,6 +64,19 @@ describe('storyFileName', () => {
 })
 
 describe('writePlan and readPlan', () => {
+  it('writes back to the directory it was given rather than one named after the slug', async () => {
+    const dir = await writePlan(project.dir, PLAN)
+    await writeStory(project.dir, STORY)
+
+    // The slug and the directory can disagree — an agent edits one, a person
+    // renames the other. Recomputing the path forks the plan and leaves every
+    // story in the directory nothing reads any more.
+    await writePlan(project.dir, { frontmatter: { ...PLAN.frontmatter, slug: 'auth' }, body: PLAN.body }, dir)
+
+    expect(await fs.readdir(resolveLoopPaths(project.dir).plans)).toEqual(['P001-user-auth'])
+    expect((await listStories(project.dir, 'P001')).map((story) => story.frontmatter.id)).toEqual(['P001-S02'])
+  })
+
   it('round-trips a plan through disk', async () => {
     const dir = await writePlan(project.dir, PLAN)
     expect(dir).toBe(path.join(resolveLoopPaths(project.dir).plans, 'P001-user-auth'))
@@ -272,6 +285,98 @@ describe('frontmatter repair', () => {
     expect(read.repaired).toBe(true)
     expect(read.frontmatter.id).toBe('P001')
     expect(read.body).toBe('')
+  })
+
+  it('carries a recorded approval through a repair', async () => {
+    const approval = { decision: 'approved', by: 'mohd', at: '2026-07-27T11:20:00.000Z', note: 'Ship it.' }
+    await writePlan(project.dir, { frontmatter: { ...PLAN.frontmatter, approval }, body: 'Body.' })
+    const dir = await findPlanDir(project.dir, 'P001')
+    const file = path.join(dir, 'PLAN.md')
+
+    // One key the strict schema does not know is enough to fail the parse —
+    // the approval block itself is byte-for-byte intact.
+    const clobbered = (await fs.readFile(file, 'utf8')).replace('---\nid: P001', '---\nstatus: drafting\nid: P001')
+    await fs.writeFile(file, clobbered, 'utf8')
+
+    const read = await readPlan(project.dir, 'P001')
+    expect(read.repaired).toBe(true)
+    // The one field nothing else on disk records: losing it deletes a decision
+    // a person made, and no later read can put it back.
+    expect(read.frontmatter.approval).toEqual(approval)
+    expect(await fs.readFile(file, 'utf8')).toContain('decision: approved')
+  })
+
+  it('keeps a title and created_at that individually survived', async () => {
+    const dir = await findPlanDir(project.dir, 'P001')
+    await fs.writeFile(
+      path.join(dir, 'PLAN.md'),
+      `---\ntitle: User authentication\ncreated_at: ${CREATED}\nstray: true\n---\n\nBody.\n`,
+      'utf8',
+    )
+
+    const read = await readPlan(project.dir, 'P001')
+    expect(read.repaired).toBe(true)
+    expect(read.frontmatter.title).toBe('User authentication')
+    expect(read.frontmatter.created_at).toBe(CREATED)
+  })
+
+  it('repairs a slug that disagrees with the directory name', async () => {
+    const dir = await findPlanDir(project.dir, 'P001')
+    const file = path.join(dir, 'PLAN.md')
+    await fs.writeFile(file, (await fs.readFile(file, 'utf8')).replace('slug: user-auth', 'slug: auth'), 'utf8')
+
+    // The directory is where the stories are, so it is authoritative. A slug
+    // left disagreeing sends the next write to a directory of its own.
+    const read = await readPlan(project.dir, 'P001')
+    expect(read.repaired).toBe(true)
+    expect(read.frontmatter.slug).toBe('user-auth')
+  })
+
+  it('repairs rather than throws for a directory renamed out of the convention', async () => {
+    const plans = resolveLoopPaths(project.dir).plans
+    await fs.rename(path.join(plans, 'P001-user-auth'), path.join(plans, 'P001-user-auth.v2'))
+
+    const read = await readPlan(project.dir, 'P001')
+    expect(read.frontmatter.slug).toBe('user-auth-v2')
+    // Converges: the repaired slug matches what the directory now yields.
+    expect((await readPlan(project.dir, 'P001')).repaired).toBe(false)
+  })
+
+  it('repairs a directory whose slug is empty', async () => {
+    await fs.mkdir(path.join(resolveLoopPaths(project.dir).plans, 'P002-'), { recursive: true })
+    expect((await readPlan(project.dir, 'P002')).frontmatter.slug).toBe('P002')
+  })
+
+  it('ignores a manifest created_at that is not a timestamp', async () => {
+    const dir = await findPlanDir(project.dir, 'P001')
+    // A manifest is disposable, so a bad value in one must not brick the plan
+    // — least of all the render that would replace the manifest.
+    await fs.writeFile(path.join(dir, 'manifest.json'), JSON.stringify({ title: 'Billing', generated_at: 'yesterday' }), 'utf8')
+    await fs.writeFile(path.join(dir, 'PLAN.md'), 'Clobbered.\n', 'utf8')
+
+    const read = await readPlan(project.dir, 'P001')
+    expect(read.frontmatter.title).toBe('Billing')
+    expect(() => new Date(read.frontmatter.created_at).toISOString()).not.toThrow()
+  })
+
+  it('keeps a body that opens with a thematic break', async () => {
+    const dir = await findPlanDir(project.dir, 'P001')
+    const raw = '---\n# User authentication\n\nWeeks of design notes.\n\n---\n\nThe rest.\n'
+    await fs.writeFile(path.join(dir, 'PLAN.md'), raw, 'utf8')
+
+    // That leading `---` is a thematic break, not frontmatter. Stripping to
+    // the next one would delete the head of the document.
+    const read = await readPlan(project.dir, 'P001')
+    expect(read.body).toContain('Weeks of design notes.')
+    expect(read.body).toContain('The rest.')
+  })
+
+  it('names the plan and the path when PLAN.md cannot be read at all', async () => {
+    const dir = await findPlanDir(project.dir, 'P001')
+    await fs.rm(path.join(dir, 'PLAN.md'))
+    await fs.mkdir(path.join(dir, 'PLAN.md'))
+
+    await expect(readPlan(project.dir, 'P001')).rejects.toThrow(/P001[\s\S]*EISDIR/)
   })
 
   it('preserves a recorded approval through an unrelated read', async () => {

@@ -11,7 +11,7 @@ import {
   type StoryFrontmatter,
   type StoryStatus,
 } from '../schemas/plan.js'
-import { loadConfig } from '../store/config-store.js'
+import { ConfigMissingError, loadConfig } from '../store/config-store.js'
 import { withLock } from '../store/lock.js'
 import { resolveLoopPaths } from '../store/paths.js'
 import {
@@ -110,7 +110,7 @@ export async function gateSet(
   projectDir: string,
   input: GateSetInput,
   now: Clock = () => new Date(),
-): Promise<{ plan: string; approval: Approval }> {
+): Promise<{ plan: string; approval: Approval; repaired: boolean }> {
   const paths = resolveLoopPaths(projectDir)
   await findPlanDir(projectDir, input.plan)
 
@@ -124,11 +124,16 @@ export async function gateSet(
     })
     if (!approval.success) throw new InvalidPlanInputError(z.prettifyError(approval.error))
 
-    await writePlan(projectDir, {
-      frontmatter: { ...plan.frontmatter, approval: approval.data },
-      body: plan.body,
-    })
-    return { plan: input.plan, approval: approval.data }
+    // Written back to the directory the plan was read from, not to one named
+    // after the slug: the two can disagree, and the plan's stories live here.
+    await writePlan(
+      projectDir,
+      { frontmatter: { ...plan.frontmatter, approval: approval.data }, body: plan.body },
+      plan.dir,
+    )
+    // A repair is reported rather than left silent: it rewrote the file this
+    // decision is being recorded in.
+    return { plan: input.plan, approval: approval.data, repaired: plan.repaired }
   })
 }
 
@@ -148,27 +153,33 @@ export async function storyAdd(
   projectDir: string,
   input: StoryAddInput,
   now: Clock = () => new Date(),
-): Promise<{ id: string; file: string; manifest: Manifest }> {
+): Promise<{ id: string; file: string; manifest: Manifest; repaired: boolean }> {
   const paths = resolveLoopPaths(projectDir)
   // findPlanDir throws PlanNotFoundError before the lock is taken, so a bad
   // plan id fails fast instead of serialising behind unrelated work.
   await findPlanDir(projectDir, input.plan)
 
   // The approval gate. A project with no .loop/config.yaml has not opted into
-  // anything, so an unreadable config gates nothing — the same degradation
-  // stateSummary already applies to a config a user hand-edited badly.
+  // anything, so a missing config gates nothing. A config that is present and
+  // unreadable is the opposite case: somebody wrote a gate setting there and it
+  // cannot be read, so this fails closed exactly as runLog's gate does — a
+  // typo in a hand-edited config must not silently remove the human.
   let requiresApproval = false
   try {
     requiresApproval = (await loadConfig(projectDir)).gates.plan_approval === 'human'
-  } catch {
-    requiresApproval = false
-  }
-  if (requiresApproval) {
-    const plan = await readPlan(projectDir, input.plan)
-    if (plan.frontmatter.approval?.decision !== 'approved') throw new ApprovalRequiredError(input.plan)
+  } catch (error) {
+    if (!(error instanceof ConfigMissingError)) throw error
   }
 
   return withLock(paths.lock, async () => {
+    // Read under the lock. readPlan is a writer whenever the frontmatter was
+    // clobbered, and an unlocked repair racing a locked gateSet lands on top of
+    // an approval that was already reported as recorded.
+    const plan = await readPlan(projectDir, input.plan)
+    if (requiresApproval && plan.frontmatter.approval?.decision !== 'approved') {
+      throw new ApprovalRequiredError(input.plan)
+    }
+
     const existing = await listStories(projectDir, input.plan)
     // Allocated from the directory rather than from the parsed stories: a file
     // the schema can no longer read still owns its id.
@@ -199,7 +210,9 @@ export async function storyAdd(
 
     const file = await writeStory(projectDir, { frontmatter: frontmatter.data, body: input.body ?? '' })
     const manifest = await renderManifest(projectDir, input.plan, now)
-    return { id, file, manifest }
+    // Reported rather than left silent: a repair rewrote PLAN.md on the way in,
+    // and whoever wrote that file needs to know it was replaced.
+    return { id, file, manifest, repaired: plan.repaired }
   })
 }
 

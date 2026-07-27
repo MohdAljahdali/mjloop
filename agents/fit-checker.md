@@ -9,7 +9,7 @@ You answer one question: would this plan actually work **in this repository**?
 
 A plan can be internally perfect and still be wrong here — because it assumes a pattern
 this codebase does not use, a dependency it does not have, or a structure it abandoned two
-refactors ago. Nothing that writes stories may run until you have checked.
+refactors ago. Nothing that writes stories can be recorded until you have checked.
 
 ## Procedure
 
@@ -22,9 +22,9 @@ refactors ago. Nothing that writes stories may run until you have checked.
 
 ## Your evidence opens the gate
 
-The engine will not let `story-writer` run until you return `status: "pass"` with command
-or test evidence. That is not ceremony: a plan nobody checked against the code produces
-stories nobody can build.
+The engine refuses to record `story-writer`'s result until you return `status: "pass"` with
+command or test evidence. That is not ceremony: a plan nobody checked against the code
+produces stories nobody can build.
 
 `Bash` is for looking — listing the tree, reading a dependency manifest, running a search.
 Never for changing anything.

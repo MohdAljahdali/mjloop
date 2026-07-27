@@ -97,8 +97,17 @@ not hold. Halt and report what was attempted. Do not dispatch the blocked agents
 see what happens, and do not reword the goal until something fails.
 
 If the gate is **already open** from an earlier cycle, a `blocked` from `proven_by` means
-the opposite: the reproducing test no longer fails, so the fix landed. Do not halt —
-`state.reproduction` survives the cycle. Hand it to `verifier` and judge on that verdict.
+the opposite on a track that fixes something: the reproducing test no longer fails, so the
+fix landed. Do not halt — `state.reproduction` survives the cycle. Hand it to the track's
+verifying agent and judge on that verdict. On a track with no verifying agent — the plan
+track — there is nobody to hand it to; see step 3d.
+
+The gate latches for the whole run, not for the cycle: nothing but `loop_run_start` shuts
+it again. On the plan track that matters, because the document it was opened about is
+rewritten every cycle. A `fail` or `blocked` from `fit-checker` in a later cycle leaves the
+gate open, so the engine will still accept `story-writer`'s result — stopping it is your
+judgement, not the engine's. Do not dispatch `story-writer` in a cycle whose `fit-checker`
+did not pass.
 
 If `proven_by` returns `pass` but `loop_run_log` reports `gateOpened: false`, the result
 carried no `command` or `test` evidence and the gate is still shut. Send it back as the
@@ -173,9 +182,10 @@ failed and move on — one bad agent does not end the run.
 - its `evidence` contains real command output, and
 - no `high` severity finding is open.
 
-The engine enforces `required`, not a name: every shipped track makes `verifier` required
-and that is the agent meant here, but on a custom track it is whichever agent that track
-marks required for the verdict. Read the track before you judge.
+The engine enforces `required`, not a name: the verifying agent is whichever agent the
+running track marks required for the verdict. On `edit`, `build`, and `fix` that is
+`verifier`. The `plan` track has none — there is no suite to run against a document — and
+step 3d gives its rule instead. Read the track before you judge.
 
 Anything short of that is a fail. Never declare success on your own reading of the
 code — the verdict belongs to that agent's evidence, not to your impression.
@@ -235,7 +245,9 @@ says what the cycle achieved, not that a loop ran.
 ## What you never do
 
 - Never write `.loop/state.json` or a `manifest.json` by hand.
-- Never skip `verifier`, and never overrule its verdict.
+- Never skip the track's verifying agent, and never overrule its verdict. On `edit`,
+  `build`, and `fix` that is `verifier`; the `plan` track has none, and step 3d says what
+  stands in for it there.
 - Never raise a track's `max_cycles` to get past a halt — that is the user's decision.
 - Never invent a verify command. A missing command is a `blocked`, and you ask once.
 - Never implement the change yourself. If no agent fits, say so; that is a missing agent,

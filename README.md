@@ -38,8 +38,10 @@ Then add this repository as a plugin marketplace or local plugin in Claude Code.
 Each track declares a `required` set the leader cannot drop and an `available` set it
 draws from as the task warrants. Before running, the leader writes `roster.json` naming
 what it chose and why each omission was safe. Every agent a track marks `required` is a
-hard invariant — on the shipped tracks that includes `verifier`, and no success is
-declared without its evidence.
+hard invariant — on `edit`, `build`, and `fix` that includes `verifier`, and no success is
+declared without its evidence. The `plan` track has no verifier: there is no suite to run
+against a document, so its verdict comes from `fit-checker`, the approval gate, and the
+story reviews.
 
 Change a track, cap, or forced specialist in `.loop/config.yaml`. Tracks are data — a
 new one needs no code.
@@ -65,11 +67,12 @@ npm test           # unit and integration tests
 npm run typecheck
 ```
 
-Four opt-in smoke tests run against the real CLI (from `engine/`):
+Five opt-in smoke tests run against the real CLI (from `engine/`):
 
 ```bash
 LOOP_E2E=1 npm run e2e         # edit track — one cycle, then done
 LOOP_E2E=1 npm run e2e:build   # build track — findings carried forward, commit on pass
 LOOP_E2E=1 npm run e2e:fix     # fix track — the gate stays shut until the defect is proven
 LOOP_E2E=1 npm run e2e:story   # build track against a story — INDEX.md and evidence path
+LOOP_E2E=1 npm run e2e:plan    # plan track — idea to approved plan to stories, both gates
 ```

@@ -14,6 +14,7 @@ import {
   storyUpdate,
 } from '../../src/ops/plan.js'
 import { loadConfig, writeConfig } from '../../src/store/config-store.js'
+import { resolveLoopPaths } from '../../src/store/paths.js'
 import {
   PlanNotFoundError,
   StoryNotFoundError,
@@ -470,5 +471,49 @@ describe('the approval gate', () => {
 
     const added = await storyAdd(project.dir, { plan: 'P001', title: 'Login form' }, clock)
     expect(added.id).toBe('P001-S01')
+  })
+
+  it('fails closed on a config that is present but does not parse', async () => {
+    // A project with no config has opted into nothing, but a config somebody
+    // wrote and mistyped is the opposite: it says a gate is wanted and cannot
+    // be read. Degrading open there removes the human without saying so.
+    await fs.writeFile(resolveLoopPaths(project.dir).config, 'version: 1\ntracks: nope\n', 'utf8')
+    await expect(storyAdd(project.dir, { plan: 'P001', title: 'Login form' }, clock)).rejects.toThrow(/invalid/)
+  })
+
+  it('fails closed on a config that is not yaml at all', async () => {
+    await fs.writeFile(resolveLoopPaths(project.dir).config, 'not yaml: [\n', 'utf8')
+    await expect(storyAdd(project.dir, { plan: 'P001', title: 'Login form' }, clock)).rejects.toThrow()
+  })
+
+  it('still adds a story to a project that has no config', async () => {
+    await fs.rm(resolveLoopPaths(project.dir).config)
+    const added = await storyAdd(project.dir, { plan: 'P001', title: 'Login form' }, clock)
+    expect(added.id).toBe('P001-S01')
+  })
+})
+
+describe('reporting a repair', () => {
+  beforeEach(async () => {
+    await planCreate(project.dir, { slug: 'user-auth', title: 'User authentication' }, clock)
+  })
+
+  async function clobber(): Promise<void> {
+    const dir = await findPlanDir(project.dir, 'P001')
+    await fs.writeFile(path.join(dir, 'PLAN.md'), 'Clobbered by an agent.\n', 'utf8')
+  }
+
+  it('says so in the gateSet result', async () => {
+    await clobber()
+    expect((await gateSet(project.dir, { plan: 'P001', decision: 'approved', by: 'mohd' }, clock)).repaired).toBe(true)
+  })
+
+  it('says so in the storyAdd result', async () => {
+    await clobber()
+    expect((await storyAdd(project.dir, { plan: 'P001', title: 'Login form' }, clock)).repaired).toBe(true)
+  })
+
+  it('reports nothing when nothing was repaired', async () => {
+    expect((await storyAdd(project.dir, { plan: 'P001', title: 'Login form' }, clock)).repaired).toBe(false)
   })
 })
