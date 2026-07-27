@@ -25,7 +25,7 @@ describe('DEFAULT_TRACKS', () => {
   it('makes builder and verifier required for build, with scout and critic available', () => {
     expect(DEFAULT_TRACKS.build).toEqual({
       required: ['builder', 'verifier'],
-      available: ['scout', 'critic'],
+      available: ['scout', 'critic', 'ui-designer', 'ui-critic', 'security', 'docs', 'perf'],
       max_cycles: 5,
     })
   })
@@ -33,7 +33,7 @@ describe('DEFAULT_TRACKS', () => {
   it('gates the fix track on the reproducer and blocks the fixer', () => {
     expect(DEFAULT_TRACKS.fix).toEqual({
       required: ['reproducer', 'fixer', 'verifier'],
-      available: ['investigator', 'hypothesis-tester', 'critic'],
+      available: ['investigator', 'hypothesis-tester', 'critic', 'security'],
       max_cycles: 5,
       gate: { proven_by: 'reproducer', blocks: ['fixer'] },
     })
@@ -51,6 +51,42 @@ describe('DEFAULT_TRACKS', () => {
   it('leaves the ungated tracks ungated', () => {
     expect(DEFAULT_TRACKS.edit?.gate).toBeUndefined()
     expect(DEFAULT_TRACKS.build?.gate).toBeUndefined()
+  })
+
+  it('offers every specialist to the build track', () => {
+    expect(DEFAULT_TRACKS.build?.available).toEqual([
+      'scout',
+      'critic',
+      'ui-designer',
+      'ui-critic',
+      'security',
+      'docs',
+      'perf',
+    ])
+  })
+
+  it('offers security to the fix track', () => {
+    expect(DEFAULT_TRACKS.fix?.available).toContain('security')
+  })
+
+  it('leaves the edit track deliberately bare', () => {
+    expect(DEFAULT_TRACKS.edit?.available).toEqual([])
+  })
+
+  it('names only agents that exist', async () => {
+    const fs = await import('node:fs/promises')
+    const path = await import('node:path')
+    const url = await import('node:url')
+    const agentsDir = path.resolve(url.fileURLToPath(import.meta.url), '../../../../agents')
+    const shipped = new Set(
+      (await fs.readdir(agentsDir)).filter((f) => f.endsWith('.md')).map((f) => f.replace(/\.md$/, '')),
+    )
+
+    for (const [name, track] of Object.entries(DEFAULT_TRACKS)) {
+      for (const agent of [...track.required, ...track.available]) {
+        expect(shipped.has(agent), `track ${name} names ${agent}, which has no agent file`).toBe(true)
+      }
+    }
   })
 })
 

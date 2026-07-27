@@ -171,10 +171,16 @@ export const DEFAULT_TRACKS: Record<string, Track> = {
   edit: { required: ['editor', 'verifier'], available: [], max_cycles: 1 },
   // max_cycles is a ceiling, not a target: with the stagnation guard in place
   // a stuck run halts well before reaching it.
-  build: { required: ['builder', 'verifier'], available: ['scout', 'critic'], max_cycles: 5 },
+  build: {
+    required: ['builder', 'verifier'],
+    // Ordered from the general to the specific: the leader reads this list
+    // when composing, and every omission needs a stated reason.
+    available: ['scout', 'critic', 'ui-designer', 'ui-critic', 'security', 'docs', 'perf'],
+    max_cycles: 5,
+  },
   fix: {
     required: ['reproducer', 'fixer', 'verifier'],
-    available: ['investigator', 'hypothesis-tester', 'critic'],
+    available: ['investigator', 'hypothesis-tester', 'critic', 'security'],
     max_cycles: 5,
     gate: { proven_by: 'reproducer', blocks: ['fixer'] },
   },

@@ -65,7 +65,7 @@ describe('a full fix run', () => {
     await rosterSet(project.dir, {
       cycle: 1,
       selected: ['reproducer', 'investigator', 'hypothesis-tester', 'fixer', 'verifier'],
-      skipped: { critic: 'single-line change with a proven reproduction' },
+      skipped: { critic: 'single-line change with a proven reproduction', security: 'no untrusted input' },
     })
 
     const reproduced = await runLog(project.dir, { agent: 'reproducer', result: REPRODUCED }, clock)

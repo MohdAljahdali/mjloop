@@ -46,7 +46,15 @@ describe('a story-driven build', () => {
     await rosterSet(project.dir, {
       cycle: 1,
       selected: ['builder', 'verifier'],
-      skipped: { scout: 'story names the file', critic: 'single-file change' },
+      skipped: {
+        'ui-designer': 'no user-facing surface',
+        'ui-critic': 'no user-facing surface',
+        security: 'no untrusted input',
+        docs: 'no public interface changed',
+        perf: 'not a hot path',
+        scout: 'story names the file',
+        critic: 'single-file change',
+      },
     })
     await runLog(
       project.dir,
