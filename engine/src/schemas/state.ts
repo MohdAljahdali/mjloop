@@ -4,8 +4,8 @@ import * as z from 'zod'
  * Plan ids, story ids and track names are interpolated into run directory
  * names (`<run_id>--<story>--<track>`), so they must stay filename-safe: a
  * value containing `/` or `..` would steer the run directory outside
- * `.loop/runs`, and all three arrive from the leader model — the ids through an
- * MCP tool call, the track through one as well as through `.loop/config.yaml`.
+ * `.mjloop/runs`, and all three arrive from the leader model — the ids through an
+ * MCP tool call, the track through one as well as through `.mjloop/config.yaml`.
  */
 export const IdSchema = z.string().regex(/^[A-Za-z0-9_-]+$/, 'only letters, digits, "-" and "_" are allowed')
 

@@ -5,7 +5,7 @@ import { loadConfig } from '../store/config-store.js'
 import { PROTECTED_BASENAMES } from '../store/paths.js'
 import { isEntrypoint } from '../util/entrypoint.js'
 
-const USAGE = `usage: loop-cli <command>
+const USAGE = `usage: mjloop-cli <command>
 
   summary [--dir <path>] [--json]   print the current loop state
   session-start                     SessionStart hook (reads hook JSON on stdin)
@@ -45,7 +45,7 @@ async function summaryCommand(args: string[]): Promise<CliResult> {
 async function sessionStartCommand(stdin: string): Promise<CliResult> {
   const cwd = readCwd(stdin)
   const summary = await stateSummary(cwd)
-  // Say nothing in projects that do not use loop — silence beats noise.
+  // Say nothing in projects that do not use mjloop — silence beats noise.
   if (!summary.initialised) return { stdout: '', exitCode: 0 }
 
   const payload = {
@@ -91,7 +91,7 @@ export function evaluateStateGuard(input: unknown): GuardVerdict {
   if (filePath === null) return { deny: false, reason: '' }
 
   const segments = filePath.split(path.sep)
-  if (!segments.includes('.loop')) return { deny: false, reason: '' }
+  if (!segments.includes('.mjloop')) return { deny: false, reason: '' }
 
   const basename = path.basename(filePath)
   if (!PROTECTED_BASENAMES.includes(basename as (typeof PROTECTED_BASENAMES)[number])) {
@@ -100,7 +100,7 @@ export function evaluateStateGuard(input: unknown): GuardVerdict {
 
   return {
     deny: true,
-    reason: `${basename} is owned by the loop MCP server. Use the loop_* tools (loop_run_start, loop_cycle_advance, loop_run_log, ...) instead of editing it directly.`,
+    reason: `${basename} is owned by the mjloop MCP server. Use the mjloop_* tools (mjloop_run_start, mjloop_cycle_advance, mjloop_run_log, ...) instead of editing it directly.`,
   }
 }
 
@@ -159,7 +159,7 @@ export function evaluateStopGuard(input: unknown, summary: StateSummary, autonom
       `Loop is running autonomously: track ${summary.track}, cycle ${summary.cycle} of ${summary.max_cycles}, stage ${summary.stage}.`,
       `Goal: ${summary.goal ?? 'not set'}.`,
       findings,
-      'Continue the cycle with the loop-leader skill. Do not stop until the run reaches done or halted —',
+      'Continue the cycle with the mjloop-leader skill. Do not stop until the run reaches done or halted —',
       "the engine's guards end it: the cycle cap, the stagnation guard, and the repeated-error guard.",
     ].join('\n'),
   }

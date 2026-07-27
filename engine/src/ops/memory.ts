@@ -44,8 +44,8 @@ export async function memoryAdd(
 ): Promise<{ id: string; file: string }> {
   const paths = resolveLoopPaths(projectDir)
   // The lock is a directory created with a deliberately non-recursive `mkdir`,
-  // so `.loop` itself must already exist. It does for every operation that
-  // follows `loop init`, but the first memory can be recorded before anything
+  // so `.mjloop` itself must already exist. It does for every operation that
+  // follows `mjloop init`, but the first memory can be recorded before anything
   // else has written there — exactly as the first plan can.
   await fs.mkdir(paths.root, { recursive: true })
   return withLock(paths.lock, async () => {

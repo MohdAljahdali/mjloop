@@ -33,7 +33,7 @@ export const MemoryTitleSchema = z
 export const MemoryTagsSchema = z.array(z.string().trim().min(1).max(TAG_MAX)).max(TAGS_MAX)
 
 /**
- * `loop_memory_get` returns a body whole, by design. That is only safe while the
+ * `mjloop_memory_get` returns a body whole, by design. That is only safe while the
  * body has a ceiling, and `listMemories` reads every entry on every search and
  * every add — one pasted transcript taxes the whole project from then on.
  */

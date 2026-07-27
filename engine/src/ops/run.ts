@@ -17,7 +17,7 @@ export class UnknownTrackError extends Error {
 
 export class NoActiveRunError extends Error {
   constructor() {
-    super('no active run — call loop_run_start first')
+    super('no active run — call mjloop_run_start first')
     this.name = 'NoActiveRunError'
   }
 }
@@ -101,7 +101,7 @@ export async function runStart(projectDir: string, input: RunStartInput, now: Cl
 }
 
 /**
- * Why a run stopped. `manual` covers `/loop:stop` — a person deciding, which
+ * Why a run stopped. `manual` covers `/mjloop:stop` — a person deciding, which
  * needs no diagnosis. The other three are guards, and each calls for a
  * different next step from whoever reads HALT.md.
  */
@@ -168,7 +168,7 @@ export async function cycleAdvance(
     const errors = [...draft.cycle_errors].sort()
     closedCycle = draft.cycle
 
-    const ref = path.join('.loop', 'runs', runDirName(draft))
+    const ref = path.join('.mjloop', 'runs', runDirName(draft))
     draft.history.push({ cycle: draft.cycle, agents: input.agents, result: input.result, ref })
 
     if (input.result === 'pass') {
@@ -309,7 +309,7 @@ async function nextRunId(projectDir: string, now: Date, previousRunId: string | 
 const NEXT_STEP: Record<HaltCause, string> = {
   'cycle-cap': `The run used every cycle the track allows. Narrow the goal so it fits and start a
 new run — or, if the work really is that large, widen the track's \`max_cycles\` in
-\`.loop/config.yaml\` first. That second one is the user's call, not the loop's.`,
+\`.mjloop/config.yaml\` first. That second one is the user's call, not the loop's.`,
   stagnation: `The same work was still outstanding cycle after cycle, so more cycles would not
 have helped and widening \`max_cycles\` will not change the outcome. Narrow the
 goal to the finding that would not move, or fix it by hand and start a new run.`,

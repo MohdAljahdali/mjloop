@@ -13,7 +13,7 @@ export interface LoopPaths {
 }
 
 export function resolveLoopPaths(projectDir: string): LoopPaths {
-  const root = path.join(projectDir, '.loop')
+  const root = path.join(projectDir, '.mjloop')
   return {
     root,
     config: path.join(root, 'config.yaml'),

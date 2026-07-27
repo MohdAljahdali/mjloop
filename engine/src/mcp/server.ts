@@ -43,13 +43,13 @@ async function guard(fn: () => Promise<ToolResult>): Promise<ToolResult> {
 const projectDirArg = z.string().optional().describe('Project root. Defaults to CLAUDE_PROJECT_DIR or cwd.')
 
 export function buildServer(): McpServer {
-  const server = new McpServer({ name: 'loop', version: '0.1.0' })
+  const server = new McpServer({ name: 'mjloop', version: '0.1.0' })
 
   server.registerTool(
-    'loop_init',
+    'mjloop_init',
     {
-      title: 'Initialise loop',
-      description: 'Provision .loop/ in the project, detect verify commands, and register loop in CLAUDE.md. Idempotent.',
+      title: 'Initialise mjloop',
+      description: 'Provision .mjloop/ in the project, detect verify commands, and register mjloop in CLAUDE.md. Idempotent.',
       inputSchema: { project_dir: projectDirArg },
     },
     async ({ project_dir }) =>
@@ -60,7 +60,7 @@ export function buildServer(): McpServer {
   )
 
   server.registerTool(
-    'loop_state_get',
+    'mjloop_state_get',
     {
       title: 'Get loop state',
       description: 'Compact summary of the current run: track, cycle, cap, stage, findings, halt reason.',
@@ -70,13 +70,13 @@ export function buildServer(): McpServer {
   )
 
   server.registerTool(
-    'loop_run_start',
+    'mjloop_run_start',
     {
       title: 'Start a run',
       description: 'Open a new run on a track. Resets cycle, findings, and history.',
       inputSchema: {
         project_dir: projectDirArg,
-        track: IdSchema.describe('Track name as defined in .loop/config.yaml'),
+        track: IdSchema.describe('Track name as defined in .mjloop/config.yaml'),
         goal: z.string().min(1).describe('What this run must achieve'),
         plan: IdSchema.nullish().describe('Plan id, e.g. P001'),
         story: IdSchema.nullish().describe('Story id, e.g. P001-S02'),
@@ -96,7 +96,7 @@ export function buildServer(): McpServer {
   )
 
   server.registerTool(
-    'loop_roster_set',
+    'mjloop_roster_set',
     {
       title: 'Declare the cycle roster',
       description:
@@ -113,7 +113,7 @@ export function buildServer(): McpServer {
   )
 
   server.registerTool(
-    'loop_run_log',
+    'mjloop_run_log',
     {
       title: 'Log an agent result',
       description: 'Validate an agent result against the contract, persist it under the cycle, and fold findings into state.',
@@ -141,7 +141,7 @@ export function buildServer(): McpServer {
   )
 
   server.registerTool(
-    'loop_cycle_advance',
+    'mjloop_cycle_advance',
     {
       title: 'Close the cycle',
       description:
@@ -157,7 +157,7 @@ export function buildServer(): McpServer {
   )
 
   server.registerTool(
-    'loop_halt',
+    'mjloop_halt',
     {
       title: 'Halt the run',
       description: 'Stop the run and write HALT.md with the evidence gathered so far.',
@@ -167,7 +167,7 @@ export function buildServer(): McpServer {
   )
 
   server.registerTool(
-    'loop_plan_create',
+    'mjloop_plan_create',
     {
       title: 'Create a plan',
       description: 'Allocate the next plan id, create its directory with PLAN.md, and generate an empty manifest.',
@@ -191,7 +191,7 @@ export function buildServer(): McpServer {
   )
 
   server.registerTool(
-    'loop_gate_set',
+    'mjloop_gate_set',
     {
       title: 'Record a decision about a plan',
       description:
@@ -218,7 +218,7 @@ export function buildServer(): McpServer {
   )
 
   server.registerTool(
-    'loop_story_add',
+    'mjloop_story_add',
     {
       title: 'Add a story to a plan',
       description: 'Allocate the next story id in a plan, write the story file, and regenerate the manifest.',
@@ -248,7 +248,7 @@ export function buildServer(): McpServer {
   )
 
   server.registerTool(
-    'loop_story_update',
+    'mjloop_story_update',
     {
       title: 'Update a story',
       description: 'Change a story status, evidence, acceptance, ui flag, dependencies, or title, then regenerate the manifest.',
@@ -279,7 +279,7 @@ export function buildServer(): McpServer {
   )
 
   server.registerTool(
-    'loop_story_get',
+    'mjloop_story_get',
     {
       title: 'Read a story',
       description: 'Read one story by id, or with next=true resolve the lowest-id story that is ready to start.',
@@ -302,17 +302,17 @@ export function buildServer(): McpServer {
   )
 
   server.registerTool(
-    'loop_index_render',
+    'mjloop_index_render',
     {
       title: 'Regenerate INDEX.md',
-      description: 'Rebuild .loop/INDEX.md from every plan manifest. Returns the rendered markdown.',
+      description: 'Rebuild .mjloop/INDEX.md from every plan manifest. Returns the rendered markdown.',
       inputSchema: { project_dir: projectDirArg },
     },
     async ({ project_dir }) => guard(async () => ok(await renderIndex(resolveProjectDir(project_dir)))),
   )
 
   server.registerTool(
-    'loop_memory_add',
+    'mjloop_memory_add',
     {
       title: 'Record a memory',
       description:
@@ -343,7 +343,7 @@ export function buildServer(): McpServer {
   )
 
   server.registerTool(
-    'loop_memory_search',
+    'mjloop_memory_search',
     {
       title: 'Search memory',
       description:
@@ -359,7 +359,7 @@ export function buildServer(): McpServer {
   )
 
   server.registerTool(
-    'loop_memory_get',
+    'mjloop_memory_get',
     {
       title: 'Read a memory',
       description: 'Read one memory entry in full, by id, after a search surfaced it.',

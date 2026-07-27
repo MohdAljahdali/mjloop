@@ -54,10 +54,10 @@ export async function planCreate(
 ): Promise<{ id: string; dir: string; manifest: Manifest }> {
   const paths = resolveLoopPaths(projectDir)
   // The lock is a directory created with a deliberately non-recursive `mkdir`,
-  // so `.loop` itself must already exist. It does for every operation that
-  // follows `loop init`, but the first plan can be created before anything
+  // so `.mjloop` itself must already exist. It does for every operation that
+  // follows `mjloop init`, but the first plan can be created before anything
   // else has written there. `storyAdd` needs no equivalent: `findPlanDir`
-  // rejects the plan before the lock is reached if `.loop` is missing.
+  // rejects the plan before the lock is reached if `.mjloop` is missing.
   await fs.mkdir(paths.root, { recursive: true })
   return withLock(paths.lock, async () => {
     const existing = await listPlanIds(projectDir)
@@ -83,8 +83,8 @@ export class ApprovalRequiredError extends Error {
     super(
       `plan "${planId}" has no recorded approval and gates.plan_approval is "human", so no story may be added ` +
         'to it yet. Show the plan to the user, ask whether it is approved, and record their answer with ' +
-        'loop_gate_set — including their own words. Never record an approval nobody gave; set ' +
-        'gates.plan_approval to "auto" in .loop/config.yaml if this project does not want a human in the loop.',
+        'mjloop_gate_set — including their own words. Never record an approval nobody gave; set ' +
+        'gates.plan_approval to "auto" in .mjloop/config.yaml if this project does not want a human in the loop.',
     )
     this.name = 'ApprovalRequiredError'
   }
@@ -159,7 +159,7 @@ export async function storyAdd(
   // plan id fails fast instead of serialising behind unrelated work.
   await findPlanDir(projectDir, input.plan)
 
-  // The approval gate. A project with no .loop/config.yaml has not opted into
+  // The approval gate. A project with no .mjloop/config.yaml has not opted into
   // anything, so a missing config gates nothing. A config that is present and
   // unreadable is the opposite case: somebody wrote a gate setting there and it
   // cannot be read, so this fails closed exactly as runLog's gate does — a

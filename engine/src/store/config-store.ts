@@ -7,7 +7,7 @@ import { resolveLoopPaths } from './paths.js'
 
 export class ConfigMissingError extends Error {
   constructor(file: string) {
-    super(`${file} not found — run /loop:init first`)
+    super(`${file} not found — run /mjloop:init first`)
     this.name = 'ConfigMissingError'
   }
 }

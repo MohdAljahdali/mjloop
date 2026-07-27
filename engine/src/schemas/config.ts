@@ -80,10 +80,10 @@ export const VerifySchema = z.strictObject({
  *
  * The migration only removes keys — it adds nothing. A config keeps whatever
  * `tracks` it was written with, so a project provisioned before a track shipped
- * does not gain it: `/loop:build` on a milestone-1 config is refused by name
+ * does not gain it: `/mjloop:build` on a milestone-1 config is refused by name
  * ("unknown track"), and the remedy is to add the track to `tracks:`.
  *
- * `custom_dirs` pointed at `.loop/agents` and `.loop/skills`. Claude Code reads
+ * `custom_dirs` pointed at `.mjloop/agents` and `.mjloop/skills`. Claude Code reads
  * project agents from `.claude/agents` and skills from `.claude/skills`, and no
  * setting anywhere redirects that — so the field's default, and every value it
  * could be given, produced files that are never loaded.

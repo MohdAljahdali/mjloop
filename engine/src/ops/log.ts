@@ -44,7 +44,7 @@ export class ForbiddenSpecialistError extends Error {
     super(
       `"${agent}" is configured as specialists.${agent}=never — its result cannot be recorded. ` +
         'A project that switched an agent off must not have it open a gate, block a pass, or ' +
-        `reach its history. Drop it from the cycle, or change specialists.${agent} in .loop/config.yaml.`,
+        `reach its history. Drop it from the cycle, or change specialists.${agent} in .mjloop/config.yaml.`,
     )
     this.name = 'ForbiddenSpecialistError'
   }

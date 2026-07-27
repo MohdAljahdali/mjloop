@@ -36,7 +36,7 @@ export interface StateSummary {
    * proves is the track's business — on `fix` it is a reproduction.
    */
   reproduction: { proven: boolean; ref: string | null } | null
-  /** Whether `.loop/design-system.md` exists. The UI agents need one and will not invent it. */
+  /** Whether `.mjloop/design-system.md` exists. The UI agents need one and will not invent it. */
   design_system: boolean
   /**
    * The reason the config could not be read, or null. Every other field
@@ -64,7 +64,7 @@ async function hasDesignSystem(projectDir: string): Promise<boolean> {
 export async function stateSummary(projectDir: string): Promise<StateSummary> {
   // Read before the state, and reported whether or not the state reads. A
   // project whose config is broken is exactly the project whose state cannot be
-  // read — `.loop` unreadable breaks both — and the /loop:add validation
+  // read — `.mjloop` unreadable breaks both — and the /mjloop:add validation
   // contract checks this field after an edit that may have left neither usable.
   //
   // A missing config is not an error: a project may be mid-provisioning.
@@ -152,14 +152,14 @@ function configClause(summary: StateSummary): string {
   return ` · config error: ${shown}`
 }
 
-/** One line for the SessionStart hook and `/loop:status`. */
+/** One line for the SessionStart hook and `/mjloop:status`. */
 export function renderSummaryLine(summary: StateSummary): string {
   // Rendered on every branch, including both early returns: a project whose
   // config has a typo sits in exactly those states, and this line is the only
   // surface that would otherwise never say so.
   const config = configClause(summary)
   if (!summary.initialised) {
-    return `Loop: not initialised in this project — run /loop:init to set it up.${config}`
+    return `Loop: not initialised in this project — run /mjloop:init to set it up.${config}`
   }
   if (summary.status === 'idle') return `Loop: initialised, no active run.${config}`
 

@@ -11,19 +11,19 @@ export const CLAUDE_MD_SECTION = '## Loop'
 
 const CLAUDE_MD_BLOCK = `${CLAUDE_MD_SECTION}
 
-This project uses the \`loop\` plugin. Execution state lives in \`.loop/\`.
+This project uses the \`mjloop\` plugin. Execution state lives in \`.mjloop/\`.
 
-- \`/loop:edit <request>\` — small, well-scoped change (one cycle)
-- \`/loop:plan <idea>\` — turn an idea into an approved plan broken into stories
-- \`/loop:build <what to build | P001-S02 | --next>\` — multi-cycle build, optionally against a story
-- \`/loop:fix <problem>\` — reproduce a defect, find the root cause, fix it
-- \`/loop:status\` — current track, cycle, and latest evidence
-- \`/loop:stop [reason]\` — halt the run and write a report
-- \`/loop:resume\` — continue a run that was interrupted
-- \`/loop:design-sync\` — extract the project's design system for the UI agents
-- \`/loop:add agent|skill|track <name>\` — scaffold a new element
+- \`/mjloop:edit <request>\` — small, well-scoped change (one cycle)
+- \`/mjloop:plan <idea>\` — turn an idea into an approved plan broken into stories
+- \`/mjloop:build <what to build | P001-S02 | --next>\` — multi-cycle build, optionally against a story
+- \`/mjloop:fix <problem>\` — reproduce a defect, find the root cause, fix it
+- \`/mjloop:status\` — current track, cycle, and latest evidence
+- \`/mjloop:stop [reason]\` — halt the run and write a report
+- \`/mjloop:resume\` — continue a run that was interrupted
+- \`/mjloop:design-sync\` — extract the project's design system for the UI agents
+- \`/mjloop:add agent|skill|track <name>\` — scaffold a new element
 
-\`.loop/state.json\` is owned by the loop MCP server. Never edit it by hand.
+\`.mjloop/state.json\` is owned by the mjloop MCP server. Never edit it by hand.
 `
 
 export interface InitResult {

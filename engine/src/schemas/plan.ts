@@ -7,7 +7,7 @@ export const StoryStatusSchema = z.enum(['todo', 'doing', 'done', 'blocked'])
  * Ids reach the filesystem — they name directories and files — so their shape
  * is constrained rather than merely conventional. Milestone 2 shipped the same
  * constraint on run directory ids after a review found a story id could steer a
- * write outside `.loop`.
+ * write outside `.mjloop`.
  */
 export const PlanIdSchema = z.string().regex(/^P\d{3}$/, 'a plan id looks like P001')
 export const StoryIdSchema = z.string().regex(/^P\d{3}-S\d{2}$/, 'a story id looks like P001-S02')

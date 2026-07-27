@@ -14,7 +14,7 @@ export class InvalidStateError extends Error {
 }
 
 /**
- * The only writer of `.loop/state.json`. Every mutation runs under the write
+ * The only writer of `.mjloop/state.json`. Every mutation runs under the write
  * lock, is validated before it lands, and is written atomically.
  */
 export class StateStore {
