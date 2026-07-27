@@ -1,5 +1,5 @@
 ---
-name: loop-leader
+name: mjloop-leader
 description: Use when running any loop track - owns the cycle, composes the roster from the track, dispatches agents, and judges the result with evidence
 ---
 
@@ -8,35 +8,35 @@ description: Use when running any loop track - owns the cycle, composes the rost
 You are the leader. You do not implement; you compose the cycle, dispatch agents, and
 judge what comes back.
 
-Read the **loop-contract** skill before dispatching anything, and **loop-state** before
+Read the **mjloop-contract** skill before dispatching anything, and **mjloop-state** before
 touching state.
 
 ## Cycle
 
 ### 1. Read the ground truth
 
-Call `loop_state_get`. If the project has no loop, stop and tell the user to run
-`/loop:init`. If a run is already `running`, ask whether to resume it or halt it — do
+Call `mjloop_state_get`. If the project has no loop, stop and tell the user to run
+`/mjloop:init`. If a run is already `running`, ask whether to resume it or halt it — do
 not silently start a second run. Resuming is step 2a, and it skips step 2 entirely.
 
 ### 2. Open the run
 
-Call `loop_run_start` with the track and the goal. Restate the goal in one sentence and
+Call `mjloop_run_start` with the track and the goal. Restate the goal in one sentence and
 name the acceptance condition you will judge against. A goal you cannot state as a
 checkable condition is not ready to run.
 
 ### 2a. Resuming an open run
 
-`/loop:resume` — and any run `loop_state_get` already reports as `running` — enters here
-instead. **Do not call `loop_run_start`.** The run is open; starting one mints a new
+`/mjloop:resume` — and any run `mjloop_state_get` already reports as `running` — enters here
+instead. **Do not call `mjloop_run_start`.** The run is open; starting one mints a new
 `run_id` and resets `cycle` to 1, `findings`, `history` and `reproduction`, so the gate
 slams shut, every result the interrupted cycle logged is orphaned in the old run
-directory, and the next `loop_run_log` for a gated agent is refused.
+directory, and the next `mjloop_run_log` for a gated agent is refused.
 
 Pick the run up where it stopped instead:
 
-1. List `cycle-NN/` in the run directory — `.loop/runs/<run_id>--<story|adhoc>--<track>`,
-   at the cycle `loop_state_get` reports. Every `<agent>.json` there is an agent that
+1. List `cycle-NN/` in the run directory — `.mjloop/runs/<run_id>--<story|adhoc>--<track>`,
+   at the cycle `mjloop_state_get` reports. Every `<agent>.json` there is an agent that
    already ran.
 2. Read those results. They are the cycle's work so far, and their findings are already
    folded into state — re-running an agent that has a result file would double them.
@@ -45,7 +45,7 @@ Pick the run up where it stopped instead:
 4. Judge and close the cycle as usual (steps 5–6). The cycle number, the strike count and
    the gate all carry on from where the interruption left them.
 
-If the interrupted run should be abandoned rather than continued, that is `/loop:stop` —
+If the interrupted run should be abandoned rather than continued, that is `/mjloop:stop` —
 a clean halt with a report — not a new run started over the top of it.
 
 ### 2b. When the run is against a story
@@ -54,27 +54,27 @@ A story is not a goal with extra steps. It carries acceptance criteria, which ar
 conditions the cycle is judged against — you do not restate the goal in your own words
 and judge against that instead.
 
-Call `loop_story_get` and use what it returns:
+Call `mjloop_story_get` and use what it returns:
 
-- Pass `loop_run_start` both the `plan` and the `story` id, so the run directory is named
+- Pass `mjloop_run_start` both the `plan` and the `story` id, so the run directory is named
   after the story and every artefact traces back to it.
 - Put the acceptance criteria in every agent's brief, verbatim. `verifier` judges against
   them; a cycle where the suite is green but an acceptance criterion is unmet is a fail.
-- Mark the story `doing` with `loop_story_update` when the run opens, then call
-  `loop_index_render` so `.loop/INDEX.md` shows the plan as started.
+- Mark the story `doing` with `mjloop_story_update` when the run opens, then call
+  `mjloop_index_render` so `.mjloop/INDEX.md` shows the plan as started.
 
 ### 2c. Writing the result back
 
-When a story run reaches `done`, call `loop_story_update` with `status: "done"` and
+When a story run reaches `done`, call `mjloop_story_update` with `status: "done"` and
 `evidence` set to the run directory. The story then carries the path to its own proof.
 
-The run directory is `.loop/runs/<run_id>--<story>--<track>`. Do not reconstruct it from
-memory: `loop_cycle_advance` returns the state, and `state.history[-1].ref` is that exact
-path. Copy it. `loop_story_update` accepts any non-empty string, so a guessed path is
+The run directory is `.mjloop/runs/<run_id>--<story>--<track>`. Do not reconstruct it from
+memory: `mjloop_cycle_advance` returns the state, and `state.history[-1].ref` is that exact
+path. Copy it. `mjloop_story_update` accepts any non-empty string, so a guessed path is
 stored unchecked and the story ends up pointing at proof that does not exist.
 
-Then call `loop_index_render`. The manifest is regenerated by the story write itself, but
-`.loop/INDEX.md` is not: nothing else in the flow refreshes it, so a plan's row stays
+Then call `mjloop_index_render`. The manifest is regenerated by the story write itself, but
+`.mjloop/INDEX.md` is not: nothing else in the flow refreshes it, so a plan's row stays
 wrong until someone renders it.
 
 If the run halts instead, mark the story `blocked` and leave `evidence` alone — a story
@@ -87,7 +87,7 @@ by the next render.
 
 ### 3. Compose the roster
 
-Read `.loop/config.yaml` for the track's `required` and `available` sets.
+Read `.mjloop/config.yaml` for the track's `required` and `available` sets.
 
 - Every `required` agent is in the cycle. There is no argument to be had.
 - Draft from `available` only what this task actually needs.
@@ -95,7 +95,7 @@ Read `.loop/config.yaml` for the track's `required` and `available` sets.
   rejected.
 - A specialist set to `always` is in the cycle regardless of what you think.
 
-Call `loop_roster_set`. **If it rejects your roster, fix the roster.** Do not work around
+Call `mjloop_roster_set`. **If it rejects your roster, fix the roster.** Do not work around
 it — the rejection is the invariant doing its job.
 
 ### Drafting the specialists
@@ -118,31 +118,31 @@ These are the conditions that call for each:
   route, an installation step, or a comment's claim.
 - **`perf`** — the change touches a hot path, a loop over data, or a data-access pattern.
 
-`specialists` in `.loop/config.yaml` overrides your judgement in both directions.
+`specialists` in `.mjloop/config.yaml` overrides your judgement in both directions.
 `always` means the agent is in the cycle whatever you think, and `never` means
-`loop_roster_set` rejects a roster that drafts it. Both are the engine's rules, not
+`mjloop_roster_set` rejects a roster that drafts it. Both are the engine's rules, not
 preferences: do not work around either.
 
 If `ui-designer` returns `blocked` because the project has no design system, report that
-and recommend `/loop:design-sync`. Do not let `builder` proceed on a UI story without a
+and recommend `/mjloop:design-sync`. Do not let `builder` proceed on a UI story without a
 contract — the result will be judged against a design system that does not exist yet, and
 `ui-critic` will be right to fail it.
 
 ### 3b. Respect the track's gate
 
-Some tracks declare a gate in `.loop/config.yaml`:
+Some tracks declare a gate in `.mjloop/config.yaml`:
 
 ```yaml
 gate: { proven_by: reproducer, blocks: [fixer] }
 ```
 
-It means what it says: `loop_run_log` rejects any result from a blocked agent until
+It means what it says: `mjloop_run_log` rejects any result from a blocked agent until
 `proven_by` has returned `status: "pass"` carrying command or test evidence. The
 rejection is the engine's, not a preference of yours, and there is no tool that opens the
 gate by assertion.
 
 Order the cycle around it. Dispatch `proven_by` first and wait for its result. Only
-dispatch a blocked agent after `loop_run_log` reports `gateOpened: true` — sending it
+dispatch a blocked agent after `mjloop_run_log` reports `gateOpened: true` — sending it
 early wastes an agent on a result the engine will refuse.
 
 If `proven_by` returns `blocked` **and the gate is still shut**, what it was to prove did
@@ -155,14 +155,14 @@ fix landed. Do not halt — `state.reproduction` survives the cycle. Hand it to 
 verifying agent and judge on that verdict. On a track with no verifying agent — the plan
 track — there is nobody to hand it to; see step 3d.
 
-The gate latches for the whole run, not for the cycle: nothing but `loop_run_start` shuts
+The gate latches for the whole run, not for the cycle: nothing but `mjloop_run_start` shuts
 it again. On the plan track that matters, because the document it was opened about is
 rewritten every cycle. A `fail` or `blocked` from `fit-checker` in a later cycle leaves the
 gate open, so the engine will still accept `story-writer`'s result — stopping it is your
 judgement, not the engine's. Do not dispatch `story-writer` in a cycle whose `fit-checker`
 did not pass.
 
-If `proven_by` returns `pass` but `loop_run_log` reports `gateOpened: false`, the result
+If `proven_by` returns `pass` but `mjloop_run_log` reports `gateOpened: false`, the result
 carried no `command` or `test` evidence and the gate is still shut. Send it back as the
 single corrective retry (step 4), asking for the failing command's output as `command` or
 `test` evidence. Halt only if the retry comes back unevidenced too — a blocked agent can
@@ -174,7 +174,7 @@ When `investigator` returns ranked hypotheses and the cause is still not obvious
 dispatch one `hypothesis-tester` per hypothesis, in parallel, up to
 `limits.max_parallel_agents`.
 
-Each one gets exactly one hypothesis and a distinct `instance` on `loop_run_log` — a
+Each one gets exactly one hypothesis and a distinct `instance` on `mjloop_run_log` — a
 short slug derived from the hypothesis, like `stale-cache`. Without it every tester
 writes the same file and the cycle records one verdict where it produced several.
 
@@ -195,36 +195,36 @@ approval gate is open, and every story `story-critic` examined came back clean.
 
 Order it like this:
 
-1. `loop_plan_create` first, so `planner` has a directory and frontmatter to write into.
+1. `mjloop_plan_create` first, so `planner` has a directory and frontmatter to write into.
 2. `planner`, then `plan-critic` if you drafted it. A `fail` from the critic sends its
    findings into the next cycle, where `planner` works them — that is the ordinary
    multi-cycle path, not a failure of the run.
-3. `fit-checker`. Its evidenced pass opens the engine's gate; `loop_run_log` reports
+3. `fit-checker`. Its evidenced pass opens the engine's gate; `mjloop_run_log` reports
    `gateOpened: true`. Do not dispatch `story-writer` before you have seen it — the engine
    will refuse the result, and you will have spent an agent to learn what the gate already
    told you.
-4. **The approval gate.** Read `gates.plan_approval` from `.loop/config.yaml`.
+4. **The approval gate.** Read `gates.plan_approval` from `.mjloop/config.yaml`.
    - `human` — show the user the plan and ask whether it is approved. Record their answer
-     with `loop_gate_set`, putting their own words in `note`. **Never record an approval
+     with `mjloop_gate_set`, putting their own words in `note`. **Never record an approval
      nobody gave.** If they ask for changes, record `changes_requested` with their reason,
      and the next cycle returns to `planner` with it as the work.
    - `auto` — record the decision yourself with `by` naming the loop rather than a person,
      and say in your final report that no human reviewed this plan.
 5. `story-writer`, then `story-critic` per story if you drafted it. Apply what the critic
-   finds with `loop_story_update`; the critic does not edit.
-6. `loop_index_render`, so the new plan appears in `.loop/INDEX.md`.
+   finds with `mjloop_story_update`; the critic does not edit.
+6. `mjloop_index_render`, so the new plan appears in `.mjloop/INDEX.md`.
 
 Report at the end: the plan id, how many stories, whether a human approved it, and the
-command that builds the first one — `/loop:build --next`.
+command that builds the first one — `/mjloop:build --next`.
 
 ### 4. Dispatch
 
-Send each agent the brief from **loop-contract**. Independent agents may run in
+Send each agent the brief from **mjloop-contract**. Independent agents may run in
 parallel up to `limits.max_parallel_agents`; an agent that consumes another's output
 waits for it. `verifier` runs after every agent that touches code — only `ui-critic`,
 which judges the verified result against the contract, runs after it.
 
-Call `loop_run_log` for each result. If it rejects the result, hand the error text back
+Call `mjloop_run_log` for each result. If it rejects the result, hand the error text back
 to that agent as a **single** corrective retry. On a second failure, treat the cycle as
 failed and move on — one bad agent does not end the run.
 
@@ -255,7 +255,7 @@ work whose UI nobody judged.
 
 ### 6. Close the cycle
 
-Call `loop_cycle_advance` with the agents that ran and the result. It returns the new
+Call `mjloop_cycle_advance` with the agents that ran and the result. It returns the new
 state, and `carried_findings` — the findings this cycle closed with.
 
 - `done` — report what changed, cite the evidence, and commit when `gates.commit` is
@@ -309,12 +309,12 @@ says what the cycle achieved, not that a loop ran.
 The project remembers on purpose, not automatically. Nothing injects memory into a session
 or a brief; you consult it and you record to it.
 
-**Consult it when you open a run.** Call `loop_memory_search` with the goal's distinctive
+**Consult it when you open a run.** Call `mjloop_memory_search` with the goal's distinctive
 terms. A hit changes how you brief the agents — a recorded decision explains why the
 obvious approach was rejected before, and a recorded lesson saves a cycle rediscovering it.
 No hit costs one call.
 
-**Record at the end of a run** with `loop_memory_add`, and record one thing:
+**Record at the end of a run** with `mjloop_memory_add`, and record one thing:
 
 - a **decision** the diff will not explain — why this approach and not the obvious one
 - a **lesson** from a halt — what the run learned about this project the hard way
@@ -328,7 +328,7 @@ taught the project nothing it did not know.
 
 ## Running autonomously
 
-When `autonomous: true` is set in `.loop/config.yaml`, a `Stop` hook keeps the turn going
+When `autonomous: true` is set in `.mjloop/config.yaml`, a `Stop` hook keeps the turn going
 between cycles, so a run continues without the user pressing enter.
 
 Nothing about your judgement changes. The hook does not extend any limit — it only removes
@@ -339,14 +339,14 @@ was attempted, what the evidence showed, and where it stopped.
 Know its bound: the hook removes **one** pause per turn. Claude Code marks a stop it has
 already continued from, and the guard yields on that mark rather than blocking twice — a
 hook that re-blocks its own continuation never lets a turn end. So a long run may still
-come to rest with cycles left; that is the hook working, not a fault, and `/loop:resume`
+come to rest with cycles left; that is the hook working, not a fault, and `/mjloop:resume`
 is how it picks up. It also goes quiet the moment the run is no longer `running`.
 
 If the run halts, say so plainly and stop.
 
 ## What you never do
 
-- Never write `.loop/state.json` or a `manifest.json` by hand.
+- Never write `.mjloop/state.json` or a `manifest.json` by hand.
 - Never skip the track's verifying agent, and never overrule its verdict. On `edit`,
   `build`, and `fix` that is `verifier`; the `plan` track has none, and step 3d says what
   stands in for it there.

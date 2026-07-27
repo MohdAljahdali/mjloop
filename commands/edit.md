@@ -5,7 +5,7 @@ argument-hint: <what to change>
 
 Run the `edit` track for: $ARGUMENTS
 
-Use the **loop-leader** skill. It owns the cycle: composing the roster, dispatching
+Use the **mjloop-leader** skill. It owns the cycle: composing the roster, dispatching
 agents, judging the result, and closing the cycle.
 
 The `edit` track is capped at one cycle. If `editor` reports that the change is larger

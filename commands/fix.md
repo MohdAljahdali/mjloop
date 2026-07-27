@@ -5,7 +5,7 @@ argument-hint: <what is broken>
 
 Run the `fix` track for: $ARGUMENTS
 
-Use the **loop-leader** skill. It owns the cycle: composing the roster, dispatching
+Use the **mjloop-leader** skill. It owns the cycle: composing the roster, dispatching
 agents, judging the result, and committing each cycle that passes.
 
 This track has a gate. `fixer`'s result cannot be logged until `reproducer` returns

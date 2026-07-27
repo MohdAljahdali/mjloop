@@ -1,25 +1,25 @@
 ---
-description: Provision .loop/ in this project and detect its verify commands
+description: Provision .mjloop/ in this project and detect its verify commands
 ---
 
 Set up the loop for this project.
 
-1. Call `loop_init`.
+1. Call `mjloop_init`.
 2. Report what was created, and the verify commands that were detected.
 3. If any of `test`, `lint`, or `build` came back null, ask the user **once** for the
-   correct command and write it into `.loop/config.yaml`. Never invent a command —
+   correct command and write it into `.mjloop/config.yaml`. Never invent a command —
    a fabricated verify command produces false passes.
-4. Tell the user the loop is ready, and list what it offers — the same list `loop_init`
+4. Tell the user the loop is ready, and list what it offers — the same list `mjloop_init`
    writes into `CLAUDE.md`:
-   - `/loop:edit <request>` — one scoped cycle
-   - `/loop:plan <idea>` — turn an idea into an approved plan broken into stories
-   - `/loop:build <what to build | P001-S02 | --next>` — as many verified cycles as it
+   - `/mjloop:edit <request>` — one scoped cycle
+   - `/mjloop:plan <idea>` — turn an idea into an approved plan broken into stories
+   - `/mjloop:build <what to build | P001-S02 | --next>` — as many verified cycles as it
      takes, optionally against a story from a plan
-   - `/loop:fix <problem>` — reproduce the defect first, then fix the root cause
-   - `/loop:status` — where the current run stands
-   - `/loop:stop [reason]` — halt the run and write a report
-   - `/loop:resume` — continue a run that was interrupted
-   - `/loop:design-sync` — extract the project's design system for the UI agents
-   - `/loop:add agent|skill|track <name>` — scaffold a new element
+   - `/mjloop:fix <problem>` — reproduce the defect first, then fix the root cause
+   - `/mjloop:status` — where the current run stands
+   - `/mjloop:stop [reason]` — halt the run and write a report
+   - `/mjloop:resume` — continue a run that was interrupted
+   - `/mjloop:design-sync` — extract the project's design system for the UI agents
+   - `/mjloop:add agent|skill|track <name>` — scaffold a new element
 
-If `loop_init` reports `alreadyInitialised: true`, say so and stop. Do not reset state.
+If `mjloop_init` reports `alreadyInitialised: true`, say so and stop. Do not reset state.

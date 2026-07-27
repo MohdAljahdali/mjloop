@@ -1,5 +1,5 @@
 ---
-name: loop-contract
+name: mjloop-contract
 description: Use when writing, invoking, or debugging a loop agent - defines the brief every agent receives and the single output shape every agent must return
 ---
 
@@ -37,7 +37,7 @@ Return:     the loop agent contract, and nothing else
 
 ## Rules
 
-- **Exact shape.** No extra keys. `loop_run_log` rejects unknown fields, so a smuggled
+- **Exact shape.** No extra keys. `mjloop_run_log` rejects unknown fields, so a smuggled
   `confidence` field fails the whole call.
 - **`status: "pass"` needs evidence.** An empty `evidence` array with a pass is an
   unproven claim.
@@ -49,6 +49,6 @@ Return:     the loop agent contract, and nothing else
 
 ## When an agent returns the wrong shape
 
-The leader gets a readable error from `loop_run_log`, gives it back to the agent as a
+The leader gets a readable error from `mjloop_run_log`, gives it back to the agent as a
 single corrective retry, and on a second failure counts the cycle as failed. One bad
 agent does not kill the run.

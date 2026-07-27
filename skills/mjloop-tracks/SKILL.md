@@ -1,11 +1,11 @@
 ---
-name: loop-tracks
+name: mjloop-tracks
 description: Use when composing a loop cycle or changing how a track behaves - explains required and available sets, the two kinds of gate, the three specialist modes, and the guards that end a run
 ---
 
 # Loop Tracks
 
-A track is data in `.loop/config.yaml`. The engine does not know agent names, so adding a
+A track is data in `.mjloop/config.yaml`. The engine does not know agent names, so adding a
 track or an agent to one changes no code.
 
 ## Required and available
@@ -17,7 +17,7 @@ build:
   max_cycles: 5
 ```
 
-**`required`** is a guarantee, not a default. `loop_roster_set` rejects a roster that
+**`required`** is a guarantee, not a default. `mjloop_roster_set` rejects a roster that
 omits any of them, so a track's promise cannot erode one cycle at a time. `verifier` is
 required on three tracks for exactly this reason: no success is declared without evidence.
 
@@ -37,13 +37,13 @@ A gate is an ordering constraint the engine enforces at logging, not a suggestio
 gate: { proven_by: reproducer, blocks: [fixer] }
 ```
 
-`loop_run_log` refuses a result from anything in `blocks` until `proven_by` returns
+`mjloop_run_log` refuses a result from anything in `blocks` until `proven_by` returns
 `status: "pass"` carrying command or test evidence. The `fix` track uses it so no fix is
 recorded for a defect nobody demonstrated; the `plan` track uses it so no story is written
 for a plan nobody checked against the code.
 
 **A decision gate** is different in kind and lives on the artefact, not the track. The
-plan approval gate is recorded on a plan by `loop_gate_set` and enforced when a story is
+plan approval gate is recorded on a plan by `mjloop_gate_set` and enforced when a story is
 added. There is no evidence a person's decision could carry — the record is the thing —
 which is why a tool records it here and no tool records the other.
 
@@ -86,5 +86,5 @@ tracks:
     max_cycles: 5
 ```
 
-That is the whole change. `/loop:add track <name>` writes it and validates by reading the
-config back — see the **loop-extend** skill for what else a new element needs.
+That is the whole change. `/mjloop:add track <name>` writes it and validates by reading the
+config back — see the **mjloop-extend** skill for what else a new element needs.

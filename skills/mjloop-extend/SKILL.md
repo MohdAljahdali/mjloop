@@ -1,5 +1,5 @@
 ---
-name: loop-extend
+name: mjloop-extend
 description: Use when adding a new agent, skill, or track to the loop - where each lives, what a new agent must return, and why none of it requires changing the engine
 ---
 
@@ -41,7 +41,7 @@ offers can never be drafted, whatever its file says.
 
 **Do not shadow a shipped agent.** Project agents take precedence over plugin agents, so
 an agent named `verifier` replaces the one carrying the system's hardest invariant with
-whatever you wrote. `/loop:add agent` refuses such a name.
+whatever you wrote. `/mjloop:add agent` refuses such a name.
 
 ## Adding a skill
 
@@ -51,8 +51,8 @@ plugin's.
 
 ## Adding a track
 
-A few lines of YAML — see the **loop-tracks** skill for the sets, the gates, and the
-specialist modes. `/loop:add track <name>` writes it and validates by reading the config
+A few lines of YAML — see the **mjloop-tracks** skill for the sets, the gates, and the
+specialist modes. `/mjloop:add track <name>` writes it and validates by reading the config
 back.
 
 ## The constraint that explains the design

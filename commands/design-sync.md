@@ -1,10 +1,10 @@
 ---
-description: Extract or refresh the project's design system into .loop/design-system.md
+description: Extract or refresh the project's design system into .mjloop/design-system.md
 ---
 
-Produce `.loop/design-system.md` by reading what this project's UI actually is.
+Produce `.mjloop/design-system.md` by reading what this project's UI actually is.
 
-1. Call `loop_state_get`. Report whether a design system already exists — this run will
+1. Call `mjloop_state_get`. Report whether a design system already exists — this run will
    replace it.
 2. Dispatch the **ui-designer** agent with the extraction brief: read the project's
    tokens, theme or Tailwind configuration, shared components, and global styles, and

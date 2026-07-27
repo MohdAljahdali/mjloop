@@ -34,7 +34,7 @@ directory. Reject an unknown kind.
    the new agent is contract-correct on its first run rather than corrected by a retry.
 4. Read the file back to confirm it landed.
 5. Tell the user the step the scaffold cannot do for them: **add the agent to a track's
-   `required` or `available` set in `.loop/config.yaml`.** An agent no track offers can
+   `required` or `available` set in `.mjloop/config.yaml`.** An agent no track offers can
    never be drafted, whatever its file says.
 
 ### `skill`
@@ -50,7 +50,7 @@ project skill.
 ### `track`
 
 1. Ask the user for the `required` and `available` sets rather than guessing them, then
-   **edit `.loop/config.yaml`** and add the track under `tracks:`:
+   **edit `.mjloop/config.yaml`** and add the track under `tracks:`:
 
    ```yaml
      <name>:
@@ -66,7 +66,7 @@ project skill.
        gate: { proven_by: agent-a, blocks: [agent-b] }
    ```
 
-2. **Validate the edit**: call `loop_state_get` and read `config_error`. If it is not null
+2. **Validate the edit**: call `mjloop_state_get` and read `config_error`. If it is not null
    the edit broke the config — report the message and fix it before claiming anything
    succeeded.
 
