@@ -331,6 +331,22 @@ describe('tool behaviour', () => {
     expect(textOf(read)).toContain('no shared session store')
   })
 
+  it('refuses a memory body past the ceiling at the tool boundary', async () => {
+    // The ceiling is legible to the caller before it writes a transcript that
+    // every later search and add would then have to read.
+    await client.callTool({ name: 'loop_init', arguments: { project_dir: project.dir } })
+    const result = await client.callTool({
+      name: 'loop_memory_add',
+      arguments: {
+        project_dir: project.dir,
+        kind: 'lesson',
+        title: 'A pasted test log',
+        body: 'x'.repeat(20_001),
+      },
+    })
+    expect((result as { isError?: boolean }).isError).toBe(true)
+  })
+
   it('returns a tool error for a memory that does not exist', async () => {
     await client.callTool({ name: 'loop_init', arguments: { project_dir: project.dir } })
     const result = await client.callTool({

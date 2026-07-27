@@ -11,6 +11,9 @@ Call `loop_state_get` and report it in a compact form:
 - whether a design system exists (`design_system`). When it does not, say so and name
   `/loop:design-sync` — a UI story run without one stops on a `blocked` `ui-designer`,
   and this is where that is cheap to learn.
+- `config_error` when it is not null. Report the message as it stands and say that
+  `.loop/config.yaml` needs the edit before the next run: every op that loads config
+  fails until it parses, and nothing else reports it.
 
 If the run is halted, also read `HALT.md` from the run directory and summarise the
 recommended next step. If the project has no `.loop/`, say so and offer `/loop:init`.

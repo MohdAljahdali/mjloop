@@ -186,6 +186,41 @@ describe('config_error', () => {
     await fs.writeFile(resolveLoopPaths(project.dir).config, 'version: [unclosed\n', 'utf8')
     expect((await stateSummary(project.dir)).config_error).not.toBeNull()
   })
+
+  it('is reported even when the state cannot be read', async () => {
+    // The /loop:add contract checks this field after an edit, and a state file
+    // that has gone with the config must not report the config as sound.
+    await initLoop(project.dir, clock)
+    await fs.writeFile(resolveLoopPaths(project.dir).config, 'version: 1\ntracks: {}\nmystery: true\n', 'utf8')
+    await fs.rm(resolveLoopPaths(project.dir).state)
+
+    const summary = await stateSummary(project.dir)
+    expect(summary.initialised).toBe(false)
+    expect(summary.config_error).toContain('mystery')
+  })
+
+  it('is rendered on the idle line', async () => {
+    await initLoop(project.dir, clock)
+    await fs.writeFile(resolveLoopPaths(project.dir).config, 'version: 1\ntracks: {}\nmystery: true\n', 'utf8')
+    expect(renderSummaryLine(await stateSummary(project.dir))).toContain('config error')
+  })
+
+  it('is rendered on the not-initialised line', async () => {
+    await initLoop(project.dir, clock)
+    await fs.writeFile(resolveLoopPaths(project.dir).config, 'version: [unclosed\n', 'utf8')
+    await fs.rm(resolveLoopPaths(project.dir).state)
+    expect(renderSummaryLine(await stateSummary(project.dir))).toContain('config error')
+  })
+
+  it('is rendered on a running line, on one line', async () => {
+    await initLoop(project.dir, clock)
+    await runStart(project.dir, { track: 'edit', goal: 'Rename submit label' }, clock)
+    await fs.writeFile(resolveLoopPaths(project.dir).config, 'version: 1\ntracks: {}\nmystery: true\n', 'utf8')
+
+    const line = renderSummaryLine(await stateSummary(project.dir))
+    expect(line).toContain('config error')
+    expect(line).not.toContain('\n')
+  })
 })
 
 describe('the design system flag', () => {

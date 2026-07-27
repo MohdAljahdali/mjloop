@@ -314,7 +314,7 @@ terms. A hit changes how you brief the agents — a recorded decision explains w
 obvious approach was rejected before, and a recorded lesson saves a cycle rediscovering it.
 No hit costs one call.
 
-**Record at the end of a run**, and record one thing:
+**Record at the end of a run** with `loop_memory_add`, and record one thing:
 
 - a **decision** the diff will not explain — why this approach and not the obvious one
 - a **lesson** from a halt — what the run learned about this project the hard way

@@ -20,7 +20,7 @@ description: Use when reading or changing loop state - explains the .loop direct
 │   ├── REVIEW.md    plan-critic's objections — prose, authored
 │   ├── manifest.json  derived from the story files — MCP-owned
 │   └── stories/     one markdown file per story, written through the tools
-└── memory/          decisions and lessons (later milestones)
+└── memory/          decisions, lessons and patterns — written by loop_memory_add
 ```
 
 A run directory is named `<run_id>--<story|adhoc>--<track>`, and
@@ -65,12 +65,20 @@ manifest as part of the write, and a hand-edited story leaves the derived state 
 | Change a story | `loop_story_update` | the story file, its plan's `manifest.json` |
 | Read a story, or resolve `--next` | `loop_story_get` | — |
 | Rebuild the index | `loop_index_render` | `INDEX.md`, every `manifest.json` |
+| Record a memory | `loop_memory_add` | `memory/<id>-<slug>.md` |
+| Search memory | `loop_memory_search` | — |
+| Read a memory | `loop_memory_get` | — |
 
 Nothing else refreshes `INDEX.md`. A story write regenerates its own plan's manifest, so
 call `loop_index_render` after one if the index is to stay true.
 
 `loop_state_get` returns a compact summary rather than the whole file, so the leader's
 context does not grow with the cycle count. Read the run directory when you need detail.
+
+Memory entries are prose you may correct by hand, but write them with `loop_memory_add`:
+it allocates the id and names the file. An entry whose frontmatter no longer matches the
+schema is skipped by search until it is repaired — it keeps its id either way, so nothing
+overwrites it in the meantime.
 
 ## Reading a halted run
 

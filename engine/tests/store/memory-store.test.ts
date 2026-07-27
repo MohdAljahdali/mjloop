@@ -6,6 +6,7 @@ import {
   listMemories,
   memoryFileName,
   readMemory,
+  usedMemoryNumbers,
   writeMemory,
 } from '../../src/store/memory-store.js'
 import { MemoryFrontmatterSchema, MemoryIdSchema } from '../../src/schemas/memory.js'
@@ -72,6 +73,18 @@ describe('memoryFileName', () => {
   it('strips characters that do not belong in a filename', () => {
     expect(memoryFileName(entry('M002', 'Why / not  Redis?').frontmatter)).toBe('M002-why-not-redis.md')
   })
+
+  it('falls back to the kind when the title slugs to nothing', () => {
+    // A CJK or punctuation-only title leaves no ascii to slug, and `M003-.md`
+    // identifies nothing in a directory listing.
+    expect(memoryFileName(entry('M003', '决定：不用缓存集群').frontmatter)).toBe('M003-decision.md')
+    expect(memoryFileName(entry('M004', '???', { kind: 'lesson' }).frontmatter)).toBe('M004-lesson.md')
+  })
+
+  it('never ends the slug on a hyphen, however the title truncates', () => {
+    const long = `${'a'.repeat(59)} and then some more words`
+    expect(memoryFileName(entry('M005', long).frontmatter)).toBe(`M005-${'a'.repeat(59)}.md`)
+  })
 })
 
 describe('writeMemory and readMemory', () => {
@@ -87,6 +100,38 @@ describe('writeMemory and readMemory', () => {
 
   it('throws MemoryNotFoundError for an unknown id', async () => {
     await expect(readMemory(project.dir, 'M404')).rejects.toBeInstanceOf(MemoryNotFoundError)
+  })
+
+  it('refuses to overwrite an entry that is already there', async () => {
+    // Memory is only appended to. A second write to one path could only come
+    // from an id handed out twice, and overwriting would delete the first entry.
+    await writeMemory(project.dir, entry('M001', 'Session tokens'))
+    await expect(writeMemory(project.dir, entry('M001', 'Session tokens'))).rejects.toThrow()
+    expect((await readMemory(project.dir, 'M001')).body).toBe('The reasoning, at length.')
+  })
+})
+
+describe('usedMemoryNumbers', () => {
+  it('is empty before anything is recorded', async () => {
+    expect(await usedMemoryNumbers(project.dir)).toEqual([])
+  })
+
+  it('counts a file whose frontmatter no longer parses', async () => {
+    // The entry a person broke by hand still owns its id: listMemories skips it,
+    // but allocation must not hand the number out again.
+    await writeMemory(project.dir, entry('M001', 'Sound'))
+    const dir = resolveLoopPaths(project.dir).memory
+    await fs.writeFile(path.join(dir, 'M002-broken.md'), '---\nid: [unclosed\n---\n', 'utf8')
+    await fs.writeFile(path.join(dir, 'notes.md'), '# just notes\n', 'utf8')
+
+    expect((await listMemories(project.dir)).map((m) => m.frontmatter.id)).toEqual(['M001'])
+    expect((await usedMemoryNumbers(project.dir)).sort((a, b) => a - b)).toEqual([1, 2])
+  })
+
+  it('counts an entry whose file was renamed out of the convention', async () => {
+    const file = await writeMemory(project.dir, entry('M003', 'Renamed'))
+    await fs.rename(file, path.join(resolveLoopPaths(project.dir).memory, 'notes-on-redis.md'))
+    expect(await usedMemoryNumbers(project.dir)).toEqual([3])
   })
 })
 

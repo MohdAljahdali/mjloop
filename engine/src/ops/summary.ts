@@ -1,5 +1,5 @@
 import fs from 'node:fs/promises'
-import { findTrack } from '../schemas/config.js'
+import { findTrack, type Config } from '../schemas/config.js'
 import type { Severity, State } from '../schemas/state.js'
 import { ConfigMissingError, loadConfig } from '../store/config-store.js'
 import { resolveLoopPaths } from '../store/paths.js'
@@ -62,6 +62,24 @@ async function hasDesignSystem(projectDir: string): Promise<boolean> {
  * the whole state file — the leader's context must not grow with cycle count.
  */
 export async function stateSummary(projectDir: string): Promise<StateSummary> {
+  // Read before the state, and reported whether or not the state reads. A
+  // project whose config is broken is exactly the project whose state cannot be
+  // read — `.loop` unreadable breaks both — and the /loop:add validation
+  // contract checks this field after an edit that may have left neither usable.
+  //
+  // A missing config is not an error: a project may be mid-provisioning.
+  // Anything else is worth surfacing.
+  let config: Config | null = null
+  let configError: string | null = null
+  try {
+    config = await loadConfig(projectDir)
+  } catch (error) {
+    // A config that cannot be read degrades the summary; it does not fail it.
+    // The SessionStart hook renders this line on every session, and a YAML
+    // typo in a hand-edited config must not turn that into a stack trace.
+    configError = error instanceof ConfigMissingError ? null : (error as Error).message
+  }
+
   let state: State
   let recovered: boolean
   try {
@@ -84,28 +102,18 @@ export async function stateSummary(projectDir: string): Promise<StateSummary> {
       halt_reason: null,
       reproduction: null,
       design_system: false,
-      config_error: null,
+      config_error: configError,
     }
   }
 
   let maxCycles: number | null = null
   let reproduction: { proven: boolean; ref: string | null } | null = null
-  let configError: string | null = null
-  try {
-    const config = await loadConfig(projectDir)
+  if (config !== null) {
     const track = state.track === null ? undefined : findTrack(config, state.track)
     maxCycles = track?.max_cycles ?? null
     if (track?.gate !== undefined) {
       reproduction = { proven: state.reproduction !== null, ref: state.reproduction?.ref ?? null }
     }
-  } catch (error) {
-    // A config that cannot be read degrades the summary; it does not fail it.
-    // The SessionStart hook renders this line on every session, and a YAML
-    // typo in a hand-edited config must not turn that into a stack trace.
-    //
-    // A missing config is not an error: a project may be mid-provisioning.
-    // Anything else is worth surfacing.
-    configError = error instanceof ConfigMissingError ? null : (error as Error).message
   }
 
   const findings = { ...NO_FINDINGS }
@@ -134,10 +142,26 @@ export async function stateSummary(projectDir: string): Promise<StateSummary> {
   }
 }
 
+/** The line is one line: a prettified schema error arrives with newlines in it. */
+const CONFIG_ERROR_MAX = 200
+
+function configClause(summary: StateSummary): string {
+  if (summary.config_error === null) return ''
+  const flattened = summary.config_error.replace(/\s+/g, ' ').trim()
+  const shown = flattened.length > CONFIG_ERROR_MAX ? `${flattened.slice(0, CONFIG_ERROR_MAX)}…` : flattened
+  return ` · config error: ${shown}`
+}
+
 /** One line for the SessionStart hook and `/loop:status`. */
 export function renderSummaryLine(summary: StateSummary): string {
-  if (!summary.initialised) return 'Loop: not initialised in this project — run /loop:init to set it up.'
-  if (summary.status === 'idle') return 'Loop: initialised, no active run.'
+  // Rendered on every branch, including both early returns: a project whose
+  // config has a typo sits in exactly those states, and this line is the only
+  // surface that would otherwise never say so.
+  const config = configClause(summary)
+  if (!summary.initialised) {
+    return `Loop: not initialised in this project — run /loop:init to set it up.${config}`
+  }
+  if (summary.status === 'idle') return `Loop: initialised, no active run.${config}`
 
   const target = summary.story ?? 'adhoc'
   const cap = summary.max_cycles === null ? '?' : String(summary.max_cycles)
@@ -146,5 +170,5 @@ export function renderSummaryLine(summary: StateSummary): string {
   // Rendered from the gate's data, not from one track's story: a gate on a
   // custom track proves whatever that track says it proves.
   const gate = summary.reproduction === null ? '' : summary.reproduction.proven ? ' · gate open' : ' · gate shut'
-  return `Loop: ${summary.status} · track ${summary.track} · ${target} · cycle ${summary.cycle}/${cap} · stage ${summary.stage} · findings ${findings}${gate}${tail}`
+  return `Loop: ${summary.status} · track ${summary.track} · ${target} · cycle ${summary.cycle}/${cap} · stage ${summary.stage} · findings ${findings}${gate}${config}${tail}`
 }

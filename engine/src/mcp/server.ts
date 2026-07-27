@@ -3,7 +3,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import * as z from 'zod'
 import { AgentNameSchema, AgentResultSchema } from '../schemas/contract.js'
-import { MemoryKindSchema } from '../schemas/memory.js'
+import { MemoryBodySchema, MemoryKindSchema, MemoryTagsSchema, MemoryTitleSchema } from '../schemas/memory.js'
 import { ApprovalDecisionSchema, StoryStatusSchema } from '../schemas/plan.js'
 import { IdSchema, ResultSchema } from '../schemas/state.js'
 import { initLoop } from '../ops/init.js'
@@ -320,9 +320,11 @@ export function buildServer(): McpServer {
       inputSchema: {
         project_dir: projectDirArg,
         kind: MemoryKindSchema,
-        title: z.string().min(1).describe('One line, specific enough to find later'),
-        body: z.string().min(1).describe('The reasoning, at whatever length it needs'),
-        tags: z.array(z.string().min(1)).optional(),
+        title: MemoryTitleSchema.describe('One line, specific enough to find later'),
+        // Bounded here as well as in the schema so the ceiling is legible to the
+        // caller before it writes a transcript it will have to write again.
+        body: MemoryBodySchema.describe('The reasoning — the conclusion and why, not the transcript'),
+        tags: MemoryTagsSchema.optional(),
         run: z.string().min(1).nullish().describe('The run that produced it, when there is one'),
       },
     },

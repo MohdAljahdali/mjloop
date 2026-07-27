@@ -9,12 +9,17 @@ server, so no agent can corrupt it by hand.
 
 ## Status
 
-Milestone 6 — all four tracks ship: `plan`, `build`, `fix`, and `edit`, and so do all the
+Milestone 7 — all four tracks ship: `plan`, `build`, `fix`, and `edit`, and so do all the
 guards: the cycle cap, the stagnation guard, the repeated-error guard, the reproduction
 gate, and the autonomous `Stop` hook. The five conditional specialists ship with it —
 `ui-designer`, `ui-critic`, `security`, `docs`, and `perf` — along with `/loop:design-sync`
-and a `specialists` setting the engine enforces in both directions. What remains is memory.
-See `docs/superpowers/specs/2026-07-26-loop-plugin-design.md`.
+and a `specialists` setting the engine enforces in both directions.
+
+Memory ships too: `.loop/memory/` and the three `loop_memory_*` tools, so a run can record
+a decision or a lesson and a later run can find it. So does extension — `/loop:add`
+scaffolds an agent, a skill, or a track, and the `loop-tracks` and `loop-extend` skills
+document what a track is and how to add one.
+See `docs/superpowers/specs/2026-07-27-loop-milestone-7-memory-and-extension-design.md`.
 
 ## Install
 
@@ -125,7 +130,7 @@ npm test           # unit and integration tests
 npm run typecheck
 ```
 
-Six opt-in smoke tests run against the real CLI (from `engine/`):
+Seven opt-in smoke tests run against the real CLI (from `engine/`):
 
 ```bash
 LOOP_E2E=1 npm run e2e         # edit track — one cycle, then done
@@ -134,4 +139,5 @@ LOOP_E2E=1 npm run e2e:fix     # fix track — the gate stays shut until the def
 LOOP_E2E=1 npm run e2e:story   # build track against a story — INDEX.md and evidence path
 LOOP_E2E=1 npm run e2e:plan    # plan track — idea to approved plan to stories, both gates
 LOOP_E2E=1 npm run e2e:design  # design-sync — the design system is extracted, never invented
+LOOP_E2E=1 npm run e2e:add     # /loop:add — scaffolding an agent, a skill, and a track
 ```

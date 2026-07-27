@@ -72,8 +72,16 @@ export const VerifySchema = z.strictObject({
 
 /**
  * Keys earlier versions wrote that no longer exist. `loadConfig` drops them
- * before parsing, so a project initialised by an older milestone keeps working
- * and its next write is clean.
+ * before parsing, so a config written by an older milestone keeps parsing.
+ *
+ * The strip is a read, not a rewrite: nothing writes the cleaned document back,
+ * so the key stays in the hand-editable file until a person removes it, and is
+ * dropped again on every read. It is inert there, which is the point.
+ *
+ * The migration only removes keys — it adds nothing. A config keeps whatever
+ * `tracks` it was written with, so a project provisioned before a track shipped
+ * does not gain it: `/loop:build` on a milestone-1 config is refused by name
+ * ("unknown track"), and the remedy is to add the track to `tracks:`.
  *
  * `custom_dirs` pointed at `.loop/agents` and `.loop/skills`. Claude Code reads
  * project agents from `.claude/agents` and skills from `.claude/skills`, and no
