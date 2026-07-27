@@ -3,12 +3,12 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import * as z from 'zod'
 import { AgentNameSchema, AgentResultSchema } from '../schemas/contract.js'
-import { StoryStatusSchema } from '../schemas/plan.js'
+import { ApprovalDecisionSchema, StoryStatusSchema } from '../schemas/plan.js'
 import { IdSchema, ResultSchema } from '../schemas/state.js'
 import { initLoop } from '../ops/init.js'
 import { renderIndex } from '../ops/index-render.js'
 import { runLog } from '../ops/log.js'
-import { planCreate, storyAdd, storyGet, storyNext, storyUpdate } from '../ops/plan.js'
+import { gateSet, planCreate, storyAdd, storyGet, storyNext, storyUpdate } from '../ops/plan.js'
 import { rosterSet } from '../ops/roster.js'
 import { cycleAdvance, halt, runStart } from '../ops/run.js'
 import { stateSummary } from '../ops/summary.js'
@@ -183,6 +183,33 @@ export function buildServer(): McpServer {
             slug,
             title,
             ...(body === undefined ? {} : { body }),
+          }),
+        ),
+      ),
+  )
+
+  server.registerTool(
+    'loop_gate_set',
+    {
+      title: 'Record a decision about a plan',
+      description:
+        'Record a plan approval decision. Under gates.plan_approval: human this is what lets stories be added — ask the user and record their answer, including their own words in note. Never record an approval nobody gave.',
+      inputSchema: {
+        project_dir: projectDirArg,
+        plan: z.string().min(1).describe('Plan id, e.g. P001'),
+        decision: ApprovalDecisionSchema,
+        by: z.string().min(1).describe('Who decided. Use the user name or identifier, not the agent'),
+        note: z.string().min(1).nullish().describe("The approver's own words"),
+      },
+    },
+    async ({ project_dir, plan, decision, by, note }) =>
+      guard(async () =>
+        ok(
+          await gateSet(resolveProjectDir(project_dir), {
+            plan,
+            decision,
+            by,
+            ...(note === undefined ? {} : { note }),
           }),
         ),
       ),

@@ -2,7 +2,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { planStatus, renderIndex } from '../../src/ops/index-render.js'
-import { planCreate, storyAdd, storyUpdate } from '../../src/ops/plan.js'
+import { gateSet, planCreate, storyAdd, storyUpdate } from '../../src/ops/plan.js'
 import { withLock } from '../../src/store/lock.js'
 import { resolveLoopPaths } from '../../src/store/paths.js'
 import { makeTmpProject, type TmpProject } from '../helpers/tmp-project.js'
@@ -67,8 +67,8 @@ describe('renderIndex', () => {
 
     const markdown = await renderIndex(project.dir, clock)
     expect(markdown).toContain('do not edit')
-    expect(markdown).toContain('| P001 | User authentication | 2 | 1 | in-progress |')
-    expect(markdown).toContain('| P002 | Billing | 0 | 0 | planned |')
+    expect(markdown).toContain('| P001 | User authentication | 2 | 1 | in-progress | no |')
+    expect(markdown).toContain('| P002 | Billing | 0 | 0 | planned | no |')
 
     const onDisk = await fs.readFile(resolveLoopPaths(project.dir).index, 'utf8')
     expect(onDisk).toBe(markdown)
@@ -113,5 +113,30 @@ describe('renderIndex', () => {
     // readPlan repairs rather than throws, so one clobbered plan no longer
     // takes the whole index down with it.
     expect(await renderIndex(project.dir, clock)).toContain('| P002 | billing |')
+  })
+})
+
+describe('the approved column', () => {
+  it('shows no for a plan nobody has decided on', async () => {
+    await planCreate(project.dir, { slug: 'user-auth', title: 'User authentication' }, clock)
+    expect(await renderIndex(project.dir, clock)).toContain('| P001 | User authentication | 0 | 0 | planned | no |')
+  })
+
+  it('shows yes once the plan is approved', async () => {
+    await planCreate(project.dir, { slug: 'user-auth', title: 'User authentication' }, clock)
+    await gateSet(project.dir, { plan: 'P001', decision: 'approved', by: 'mohd' }, clock)
+    expect(await renderIndex(project.dir, clock)).toContain('| planned | yes |')
+  })
+
+  it('distinguishes a change request from never having been reviewed', async () => {
+    await planCreate(project.dir, { slug: 'user-auth', title: 'User authentication' }, clock)
+    await gateSet(project.dir, { plan: 'P001', decision: 'changes_requested', by: 'mohd' }, clock)
+    expect(await renderIndex(project.dir, clock)).toContain('changes requested')
+  })
+
+  it('shows rejected plainly', async () => {
+    await planCreate(project.dir, { slug: 'user-auth', title: 'User authentication' }, clock)
+    await gateSet(project.dir, { plan: 'P001', decision: 'rejected', by: 'mohd' }, clock)
+    expect(await renderIndex(project.dir, clock)).toContain('| rejected |')
   })
 })

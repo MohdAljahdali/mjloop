@@ -50,6 +50,7 @@ describe('MCP surface', () => {
     const { tools } = await client.listTools()
     expect(tools.map((t) => t.name).sort()).toEqual([
       'loop_cycle_advance',
+      'loop_gate_set',
       'loop_halt',
       'loop_index_render',
       'loop_init',
@@ -259,6 +260,33 @@ describe('tool behaviour', () => {
 
     const index = await client.callTool({ name: 'loop_index_render', arguments: { project_dir: project.dir } })
     expect(textOf(index)).toContain('User authentication')
+  })
+
+  it('records an approval and then allows a story', async () => {
+    await client.callTool({ name: 'loop_init', arguments: { project_dir: project.dir } })
+    await client.callTool({
+      name: 'loop_plan_create',
+      arguments: { project_dir: project.dir, slug: 'user-auth', title: 'User authentication' },
+    })
+
+    const refused = await client.callTool({
+      name: 'loop_story_add',
+      arguments: { project_dir: project.dir, plan: 'P001', title: 'Login form' },
+    })
+    expect((refused as { isError?: boolean }).isError).toBe(true)
+    expect(textOf(refused)).toContain('loop_gate_set')
+
+    await client.callTool({
+      name: 'loop_gate_set',
+      arguments: { project_dir: project.dir, plan: 'P001', decision: 'approved', by: 'mohd', note: 'Ship it.' },
+    })
+
+    const added = await client.callTool({
+      name: 'loop_story_add',
+      arguments: { project_dir: project.dir, plan: 'P001', title: 'Login form' },
+    })
+    expect((added as { isError?: boolean }).isError).not.toBe(true)
+    expect(JSON.parse(textOf(added)).id).toBe('P001-S01')
   })
 
   it('returns a tool error for a story that does not exist', async () => {

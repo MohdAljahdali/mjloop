@@ -2,7 +2,7 @@ import fs from 'node:fs/promises'
 import type { ManifestEntry } from '../schemas/plan.js'
 import { withLock } from '../store/lock.js'
 import { resolveLoopPaths } from '../store/paths.js'
-import { listPlanIds } from '../store/plan-store.js'
+import { listPlanIds, readPlan } from '../store/plan-store.js'
 import type { Clock } from '../store/state-store.js'
 import { renderManifest } from './manifest.js'
 
@@ -30,6 +30,14 @@ export function planStatus(stories: ManifestEntry[]): 'planned' | 'in-progress' 
 
   const started = stories.some((story) => story.status === 'done' || story.status === 'doing')
   return started ? 'in-progress' : 'planned'
+}
+
+/** Approval is a plan-level fact, so it is read from the plan rather than the manifest. */
+function approvalCell(decision: string | undefined): string {
+  if (decision === 'approved') return 'yes'
+  if (decision === 'rejected') return 'rejected'
+  if (decision === 'changes_requested') return 'changes requested'
+  return 'no'
 }
 
 /**
@@ -60,16 +68,17 @@ export async function renderIndex(projectDir: string, now: Clock = () => new Dat
         // Rendering the manifest first means the index can never be newer than
         // the manifests it summarises.
         const manifest = await renderManifest(projectDir, planId, now)
+        const plan = await readPlan(projectDir, planId)
         const done = manifest.stories.filter((story) => story.status === 'done').length
         rows.push(
-          `| ${manifest.plan} | ${manifest.title} | ${manifest.stories.length} | ${done} | ${planStatus(manifest.stories)} |`,
+          `| ${manifest.plan} | ${manifest.title} | ${manifest.stories.length} | ${done} | ${planStatus(manifest.stories)} | ${approvalCell(plan.frontmatter.approval?.decision)} |`,
         )
       }
       markdown = [
         HEADER,
         '',
-        '| Plan | Title | Stories | Done | Status |',
-        '|------|-------|---------|------|--------|',
+        '| Plan | Title | Stories | Done | Status | Approved |',
+        '|------|-------|---------|------|--------|----------|',
         ...rows,
         '',
       ].join('\n')
