@@ -125,23 +125,8 @@ picks it up from exactly where it stopped.
 
 ## Development
 
-```bash
-cd engine
-npm test           # unit and integration tests
-npm run typecheck
-```
-
-Seven opt-in smoke tests run against the real CLI (from `engine/`):
-
-```bash
-LOOP_E2E=1 npm run e2e         # edit track — one cycle, then done
-LOOP_E2E=1 npm run e2e:build   # build track — findings carried forward, commit on pass
-LOOP_E2E=1 npm run e2e:fix     # fix track — the gate stays shut until the defect is proven
-LOOP_E2E=1 npm run e2e:story   # build track against a story — INDEX.md and evidence path
-LOOP_E2E=1 npm run e2e:plan    # plan track — idea to approved plan to stories, both gates
-LOOP_E2E=1 npm run e2e:design  # design-sync — the design system is extracted, never invented
-LOOP_E2E=1 npm run e2e:add     # /mjloop:add — scaffolding an agent, a skill, and a track
-```
+Building the engine, running the tests, and what a reviewable pull request looks like:
+[CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
