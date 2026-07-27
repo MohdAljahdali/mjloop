@@ -176,6 +176,30 @@ describe('ConfigSchema', () => {
     }
   })
 
+  it('rejects a track requiring an agent the config forbids', () => {
+    const bad = {
+      version: 1,
+      tracks: { edit: { required: ['editor', 'verifier'], max_cycles: 1 } },
+      specialists: { verifier: 'never' },
+    }
+    const parsed = ConfigSchema.safeParse(bad)
+    expect(parsed.success).toBe(false)
+    if (!parsed.success) {
+      const message = z.prettifyError(parsed.error)
+      expect(message).toContain('verifier')
+      expect(message).toContain('edit')
+    }
+  })
+
+  it('allows a never specialist that no track requires', () => {
+    const good = {
+      version: 1,
+      tracks: { edit: { required: ['editor', 'verifier'], available: ['critic'], max_cycles: 1 } },
+      specialists: { critic: 'never' },
+    }
+    expect(ConfigSchema.safeParse(good).success).toBe(true)
+  })
+
   it('accepts a gate naming agents from required and available', () => {
     const good = {
       version: 1,

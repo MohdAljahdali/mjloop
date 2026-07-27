@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { findTrack, forcedSpecialists, permittedAgents } from '../schemas/config.js'
+import { findTrack, forbiddenSpecialists, forcedSpecialists, permittedAgents } from '../schemas/config.js'
 import { RosterSchema, type Roster } from '../schemas/contract.js'
 import { loadConfig } from '../store/config-store.js'
 import { StateStore } from '../store/state-store.js'
@@ -29,6 +29,7 @@ export async function rosterSet(projectDir: string, roster: Roster): Promise<{ p
   if (track === undefined) throw new UnknownTrackError(state.track, Object.keys(config.tracks))
 
   const forced = forcedSpecialists(config)
+  const forbidden = new Set(forbiddenSpecialists(config))
   const permitted = permittedAgents(config, track)
   const selected = new Set(parsed.selected)
 
@@ -50,14 +51,28 @@ export async function rosterSet(projectDir: string, roster: Roster): Promise<{ p
     }
   }
 
+  // The mirror of the forced rule above: `always` means it cannot be dropped,
+  // `never` means it cannot be drafted. Before this the config accepted three
+  // modes and enforced one, so a project asking for no security review got one
+  // whenever the leader felt like drafting it.
+  for (const agent of forbidden) {
+    if (selected.has(agent)) {
+      violations.push(`"${agent}" is configured as specialists.${agent}=never and cannot be drafted`)
+    }
+  }
+
   for (const agent of parsed.selected) {
     if (!permitted.has(agent)) {
       violations.push(`"${agent}" is not in track "${state.track}" — add it to required or available first`)
     }
   }
 
-  // Every optional agent is either drafted or explained. Silence is not an answer.
+  // Every optional agent is either drafted or explained. Silence is not an
+  // answer — except where the config has already answered: an agent configured
+  // `never` cannot be drafted, so demanding a per-cycle reason for its absence
+  // would make the project restate a decision it has already recorded.
   for (const agent of track.available) {
+    if (forbidden.has(agent)) continue
     if (!selected.has(agent) && parsed.skipped[agent] === undefined) {
       violations.push(`"${agent}" was omitted without a reason — add it to skipped`)
     }

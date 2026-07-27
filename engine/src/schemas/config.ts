@@ -69,35 +69,57 @@ export const VerifySchema = z.strictObject({
   build: z.string().min(1).nullable().default(null),
 })
 
-export const ConfigSchema = z.strictObject({
-  version: z.literal(1),
-  autonomous: z.boolean().default(false),
-  limits: z
-    .strictObject({
-      max_parallel_agents: z.number().int().positive().default(4),
-      no_progress_strikes: z.number().int().positive().default(2),
-    })
-    .default({ max_parallel_agents: 4, no_progress_strikes: 2 }),
-  verify: VerifySchema.default({ test: null, lint: null, build: null }),
-  /** A track name reaches the filesystem — it is the last component of every
-   * run directory name — so it is constrained where it is defined, exactly as
-   * the story id in the same template is. `config.yaml` is hand-editable and
-   * travels with a cloned repository, so this is the only place to catch it. */
-  tracks: z.record(IdSchema, TrackSchema),
-  specialists: z.record(z.string().min(1), SpecialistModeSchema).default({}),
-  gates: z
-    .strictObject({
-      plan_approval: z.enum(['human', 'auto']).default('human'),
-      commit: z.enum(['auto', 'human']).default('auto'),
-    })
-    .default({ plan_approval: 'human', commit: 'auto' }),
-  custom_dirs: z
-    .strictObject({
-      agents: z.string().min(1).default('.loop/agents'),
-      skills: z.string().min(1).default('.loop/skills'),
-    })
-    .default({ agents: '.loop/agents', skills: '.loop/skills' }),
-})
+export const ConfigSchema = z
+  .strictObject({
+    version: z.literal(1),
+    autonomous: z.boolean().default(false),
+    limits: z
+      .strictObject({
+        max_parallel_agents: z.number().int().positive().default(4),
+        no_progress_strikes: z.number().int().positive().default(2),
+      })
+      .default({ max_parallel_agents: 4, no_progress_strikes: 2 }),
+    verify: VerifySchema.default({ test: null, lint: null, build: null }),
+    /** A track name reaches the filesystem — it is the last component of every
+     * run directory name — so it is constrained where it is defined, exactly as
+     * the story id in the same template is. `config.yaml` is hand-editable and
+     * travels with a cloned repository, so this is the only place to catch it. */
+    tracks: z.record(IdSchema, TrackSchema),
+    specialists: z.record(z.string().min(1), SpecialistModeSchema).default({}),
+    gates: z
+      .strictObject({
+        plan_approval: z.enum(['human', 'auto']).default('human'),
+        commit: z.enum(['auto', 'human']).default('auto'),
+      })
+      .default({ plan_approval: 'human', commit: 'auto' }),
+    custom_dirs: z
+      .strictObject({
+        agents: z.string().min(1).default('.loop/agents'),
+        skills: z.string().min(1).default('.loop/skills'),
+      })
+      .default({ agents: '.loop/agents', skills: '.loop/skills' }),
+  })
+  // A track cannot see the `specialists` map, so the contradiction between a
+  // track that requires an agent and a config that forbids it can only be
+  // caught here, on the whole document.
+  .superRefine((config, ctx) => {
+    const forbidden = new Set(
+      Object.entries(config.specialists)
+        .filter(([, mode]) => mode === 'never')
+        .map(([name]) => name),
+    )
+    for (const [trackName, track] of Object.entries(config.tracks)) {
+      for (const agent of track.required) {
+        if (forbidden.has(agent)) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['tracks', trackName, 'required'],
+            message: `"${agent}" is required by track "${trackName}" but specialists.${agent} is "never" — every possible roster for that track would be rejected. Drop one of the two.`,
+          })
+        }
+      }
+    }
+  })
 
 export type SpecialistMode = z.infer<typeof SpecialistModeSchema>
 export type Gate = z.infer<typeof GateSchema>
@@ -119,6 +141,17 @@ export function findTrack(config: Config, track: string): Track | undefined {
 export function forcedSpecialists(config: Config): string[] {
   return Object.entries(config.specialists)
     .filter(([, mode]) => mode === 'always')
+    .map(([name]) => name)
+}
+
+/**
+ * Specialists the project has forbidden. The mirror image of
+ * `forcedSpecialists`: one says an agent cannot be dropped, this says it
+ * cannot be drafted. Both return names the engine never interprets.
+ */
+export function forbiddenSpecialists(config: Config): string[] {
+  return Object.entries(config.specialists)
+    .filter(([, mode]) => mode === 'never')
     .map(([name]) => name)
 }
 

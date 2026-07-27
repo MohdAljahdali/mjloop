@@ -100,3 +100,52 @@ describe('rosterSet', () => {
     await expect(rosterSet(project.dir, roster)).rejects.toThrow(/scout/)
   })
 })
+
+describe('specialists configured never', () => {
+  beforeEach(async () => {
+    const config = await loadConfig(project.dir)
+    config.tracks.edit = { required: ['editor', 'verifier'], available: ['critic', 'scout'], max_cycles: 3 }
+    config.specialists = { critic: 'never' }
+    await writeConfig(project.dir, config)
+  })
+
+  it('rejects a roster that selects one', async () => {
+    await expect(
+      rosterSet(project.dir, { cycle: 1, selected: ['editor', 'verifier', 'critic'], skipped: { scout: 'known files' } }),
+    ).rejects.toBeInstanceOf(RosterViolationError)
+  })
+
+  it('names the agent and the setting', async () => {
+    await expect(
+      rosterSet(project.dir, { cycle: 1, selected: ['editor', 'verifier', 'critic'], skipped: { scout: 'known files' } }),
+    ).rejects.toThrow(/critic[\s\S]*never/)
+  })
+
+  it('accepts a roster that omits it, with no reason required', async () => {
+    const result = await rosterSet(project.dir, {
+      cycle: 1,
+      selected: ['editor', 'verifier'],
+      skipped: { scout: 'known files' },
+    })
+    expect(result.path).toContain('roster.json')
+  })
+
+  it('leaves auto and unset specialists alone', async () => {
+    const config = await loadConfig(project.dir)
+    config.specialists = { critic: 'auto' }
+    await writeConfig(project.dir, config)
+
+    const result = await rosterSet(project.dir, {
+      cycle: 1,
+      selected: ['editor', 'verifier', 'critic'],
+      skipped: { scout: 'known files' },
+    })
+    expect(result.path).toContain('roster.json')
+  })
+
+  it('aggregates with other violations rather than short-circuiting', async () => {
+    await expect(
+      rosterSet(project.dir, { cycle: 1, selected: ['editor', 'critic'], skipped: {} }),
+    ).rejects.toThrow(/verifier[\s\S]*critic|critic[\s\S]*verifier/)
+  })
+})
