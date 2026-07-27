@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { cycleFingerprint } from '../../src/ops/fingerprint.js'
+import { cycleFingerprint, errorFingerprint, errorSignature } from '../../src/ops/fingerprint.js'
 import type { Finding } from '../../src/schemas/state.js'
 
 const A: Finding = { severity: 'high', file: 'src/a.ts', line: 12, claim: 'unused import' }
@@ -64,5 +64,68 @@ describe('cycleFingerprint', () => {
 
   it('returns a hex digest', () => {
     expect(cycleFingerprint([A], 'fail')).toMatch(/^[0-9a-f]{64}$/)
+  })
+})
+
+describe('errorSignature', () => {
+  const failing = [
+    { kind: 'command' as const, ref: 'npm test', excerpt: '1 failing: expected Send got Submit\n  at Button.tsx:14' },
+    { kind: 'file' as const, ref: 'src/Button.tsx', excerpt: "return 'Submit'" },
+  ]
+
+  it('takes only command and test evidence', () => {
+    expect(errorSignature(failing, 'fail')).toEqual(['npm test :: N failing: expected Send got Submit'])
+  })
+
+  it('keeps only the first line of the excerpt', () => {
+    const [signature] = errorSignature(failing, 'fail')
+    expect(signature).not.toContain('at Button.tsx')
+  })
+
+  it('normalises digit runs, so the same failure with a different count matches', () => {
+    const two = [{ ...failing[0]!, excerpt: '2 failing: expected Send got Submit' }]
+    expect(errorSignature(two, 'fail')).toEqual(errorSignature(failing, 'fail'))
+  })
+
+  it('distinguishes a different command', () => {
+    const other = [{ ...failing[0]!, ref: 'npm run lint' }]
+    expect(errorSignature(other, 'fail')).not.toEqual(errorSignature(failing, 'fail'))
+  })
+
+  it('distinguishes a different headline', () => {
+    const other = [{ ...failing[0]!, excerpt: '1 failing: cannot resolve module' }]
+    expect(errorSignature(other, 'fail')).not.toEqual(errorSignature(failing, 'fail'))
+  })
+
+  it('returns nothing for a passing result', () => {
+    expect(errorSignature(failing, 'pass')).toEqual([])
+  })
+
+  it('returns nothing when no evidence is a command or a test', () => {
+    expect(errorSignature([failing[1]!], 'fail')).toEqual([])
+  })
+
+  it('sorts and deduplicates, so agent order and repetition do not matter', () => {
+    const a = { kind: 'command' as const, ref: 'a', excerpt: 'boom' }
+    const b = { kind: 'test' as const, ref: 'b', excerpt: 'bang' }
+    expect(errorSignature([b, a, a], 'fail')).toEqual(errorSignature([a, b], 'fail'))
+  })
+
+  it('tolerates an empty excerpt', () => {
+    expect(errorSignature([{ kind: 'command', ref: 'npm test', excerpt: '' }], 'fail')).toEqual(['npm test :: '])
+  })
+})
+
+describe('errorFingerprint', () => {
+  it('is stable and order-independent', () => {
+    expect(errorFingerprint(['a', 'b'])).toBe(errorFingerprint(['b', 'a']))
+  })
+
+  it('changes when a signature changes', () => {
+    expect(errorFingerprint(['a'])).not.toBe(errorFingerprint(['b']))
+  })
+
+  it('returns a hex digest', () => {
+    expect(errorFingerprint(['a'])).toMatch(/^[0-9a-f]{64}$/)
   })
 })

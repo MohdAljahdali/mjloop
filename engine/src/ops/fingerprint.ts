@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import path from 'node:path'
+import type { Evidence } from '../schemas/contract.js'
 import type { Finding, Result } from '../schemas/state.js'
 
 /** `(severity, file, claim)` — what makes one piece of remaining work itself. */
@@ -60,4 +61,30 @@ function normaliseFile(file: string): string {
 
 function compareIdentities(a: FindingIdentity, b: FindingIdentity): number {
   return a[0].localeCompare(b[0]) || a[1].localeCompare(b[1]) || a[2].localeCompare(b[2])
+}
+
+/**
+ * Normalised identities for the failures a result reports.
+ *
+ * Milestone 2 established that raw excerpts cannot be hashed — they carry
+ * durations and counts that differ between runs of the same failing command,
+ * so hashing them makes every cycle look new and silently disables the guard.
+ * These are normalised first: the headline only, with digit runs collapsed, so
+ * `1 failing` and `2 failing` are one failure recurring rather than two.
+ */
+export function errorSignature(evidence: Evidence[], result: Result): string[] {
+  if (result === 'pass') return []
+  const signatures = evidence
+    .filter((entry) => entry.kind === 'command' || entry.kind === 'test')
+    .map((entry) => `${entry.ref} :: ${headline(entry.excerpt)}`)
+  return [...new Set(signatures)].sort()
+}
+
+export function errorFingerprint(signatures: string[]): string {
+  return createHash('sha256').update(JSON.stringify([...signatures].sort())).digest('hex')
+}
+
+/** The first line, with digit runs collapsed. Error output leads with the headline. */
+function headline(excerpt: string): string {
+  return (excerpt.split('\n')[0] ?? '').trim().replace(/\d+/g, 'N')
 }
