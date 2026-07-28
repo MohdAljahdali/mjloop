@@ -1,0 +1,81 @@
+import type { StateSummary } from '../ops/summary.js'
+
+/**
+ * Whether the loop run a job started has finished.
+ *
+ * This exists because process exit cannot answer the question. `claude
+ * "/mjloop:build P001-S02"` opens the interactive session, submits the command,
+ * and then *stays open* waiting for the next message — so a queue that watched
+ * for exit would wait forever on its first job. What ends a job is the run
+ * ending, and the run is `.mjloop/state.json`.
+ *
+ * Kept pure and separate from the queue so the whole decision is testable
+ * without spawning anything.
+ */
+
+export type Verdict =
+  /** No run has started yet. The session is still booting, or the command was rejected. */
+  | 'waiting'
+  /** A run is under way. */
+  | 'running'
+  /** The run this job started has reached a terminal status. */
+  | 'complete'
+
+export interface Tracker {
+  /** True once this job's run has been seen `running`. */
+  started: boolean
+  /** The run id observed when it started, kept so a later run cannot end this job. */
+  runId: string | null
+}
+
+export const NEW_TRACKER: Tracker = { started: false, runId: null }
+
+/**
+ * `paused` is deliberately absent: a paused run is one somebody intends to
+ * continue, and ending the job would kill the session they meant to return to.
+ * `idle` is present because a run that was running and is now idle is over —
+ * whatever reset the state, there is nothing left for this job to wait on.
+ */
+const TERMINAL: ReadonlySet<StateSummary['status']> = new Set(['done', 'halted', 'failed', 'idle'])
+
+export interface Observation {
+  tracker: Tracker
+  verdict: Verdict
+}
+
+export function observe(tracker: Tracker, summary: StateSummary): Observation {
+  // A recovered summary came from `.bak` — it describes the write *before* the
+  // last one, so a run it calls finished may have finished, or may have been
+  // mid-cycle when the primary went unreadable. Ending a job on it kills a live
+  // session; waiting on it costs a stall banner. The cheap mistake is the one
+  // to make, and `stateSummary` already flags the case for exactly this reason.
+  if (summary.recovered) {
+    return { tracker, verdict: tracker.started ? 'running' : 'waiting' }
+  }
+
+  if (!tracker.started) {
+    if (summary.status !== 'running') return { tracker, verdict: 'waiting' }
+    return { tracker: { started: true, runId: summary.run_id }, verdict: 'running' }
+  }
+
+  // A different run id means this job's run ended and another began between two
+  // polls — a queue advancing faster than the poller, or a human starting a run
+  // in their own terminal. Either way this job's run is over.
+  if (summary.run_id !== tracker.runId) return { tracker, verdict: 'complete' }
+
+  return { tracker, verdict: TERMINAL.has(summary.status) ? 'complete' : 'running' }
+}
+
+/**
+ * Whether a session that is running has gone quiet long enough to be worth
+ * mentioning.
+ *
+ * `config.yaml` ships `autonomous: false`, which means the Stop hook does not
+ * carry a session across cycles: it can end its turn mid-run and wait for a
+ * human who has gone to make coffee. Nothing is inferred from silence beyond
+ * "say something to the user" — the page shows a banner and a button, and the
+ * decision stays theirs.
+ */
+export function isStalled(verdict: Verdict, msSinceOutput: number, thresholdMs: number): boolean {
+  return verdict === 'running' && msSinceOutput >= thresholdMs
+}

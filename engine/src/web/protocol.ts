@@ -1,0 +1,107 @@
+import * as z from 'zod'
+import type { StateSummary } from '../ops/summary.js'
+
+/**
+ * Everything the server says to the page is a code and its parameters, never
+ * prose.
+ *
+ * The page owns the wording, which is what makes a fifteenth language cost one
+ * JSON file rather than an audit of every string in this directory. The
+ * discipline is cheap to keep and expensive to retrofit, so it is enforced by
+ * the type: there is no field here that could hold a sentence.
+ */
+export interface Message {
+  code: string
+  params?: Record<string, string | number>
+}
+
+export type JobStatus = 'queued' | 'running' | 'done' | 'failed' | 'cancelled'
+
+export interface Job {
+  id: string
+  /** The loop command, exactly as it will be handed to `claude`. */
+  command: string
+  status: JobStatus
+  /** Why it ended, for the statuses that have a reason. Null while it runs. */
+  reason: Message | null
+  startedAt: string | null
+  endedAt: string | null
+}
+
+export interface StoryView {
+  id: string
+  title: string
+  status: string
+  ui: boolean
+  depends_on: string[]
+}
+
+export interface PlanView {
+  id: string
+  title: string
+  /** The approval decision, or null when nobody has looked at the plan yet. */
+  approval: string | null
+  stories: StoryView[]
+}
+
+export interface SessionView {
+  /** The job whose terminal is live, or null when nothing is running. */
+  jobId: string | null
+  /**
+   * The queue is holding after a failure or a stop and will not start the next
+   * job until asked. Reported rather than inferred: "nothing running but jobs
+   * queued" is also what a job looks like in the moment between two sessions.
+   */
+  blocked: boolean
+  /**
+   * When the run is `running` but the session has produced no output for the
+   * idle threshold. The page turns this into a banner and a nudge button —
+   * `autonomous: false` lets a session end its turn mid-run, and a queue that
+   * cannot see that waits forever on its first job.
+   */
+  stalledSince: string | null
+}
+
+export interface Snapshot {
+  /** Absolute path of the project being driven. Shown so two servers are told apart. */
+  project: string
+  state: StateSummary
+  plans: PlanView[]
+  /** Run directory names, newest first. */
+  runs: string[]
+  queue: Job[]
+  session: SessionView
+}
+
+export type ServerMessage =
+  | { type: 'snapshot'; snapshot: Snapshot }
+  /** A chunk of terminal output. `jobId` lets a late chunk from a job the page
+   * has already navigated away from be dropped rather than drawn. */
+  | { type: 'output'; jobId: string; data: string }
+  /** The whole buffered transcript, sent on connect and on attach. */
+  | { type: 'transcript'; jobId: string; data: string }
+  | { type: 'notice'; message: Message }
+
+/**
+ * Parsed rather than cast: this arrives from a browser tab, and every branch
+ * below it either writes to a pty or spawns a process.
+ */
+export const ClientMessageSchema = z.discriminatedUnion('type', [
+  z.strictObject({ type: z.literal('input'), data: z.string() }),
+  z.strictObject({
+    type: z.literal('resize'),
+    // Bounded because they reach an ioctl. A terminal 0 columns wide is not a
+    // terminal, and an absurd one is a way to make the pty misbehave.
+    cols: z.number().int().min(1).max(1000),
+    rows: z.number().int().min(1).max(1000),
+  }),
+  z.strictObject({ type: z.literal('enqueue'), command: z.string().min(1).max(2000) }),
+  z.strictObject({ type: z.literal('cancel'), jobId: z.string().min(1) }),
+  z.strictObject({ type: z.literal('stop') }),
+  z.strictObject({ type: z.literal('resume') }),
+  z.strictObject({ type: z.literal('clear') }),
+  z.strictObject({ type: z.literal('attach'), jobId: z.string().min(1) }),
+  z.strictObject({ type: z.literal('nudge') }),
+])
+
+export type ClientMessage = z.infer<typeof ClientMessageSchema>

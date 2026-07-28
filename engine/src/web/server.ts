@@ -1,0 +1,292 @@
+import crypto from 'node:crypto'
+import fs from 'node:fs/promises'
+import http from 'node:http'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { WebSocketServer, type WebSocket } from 'ws'
+import { JobQueue } from './queue.js'
+import { ClientMessageSchema, type Message, type ServerMessage, type Snapshot } from './protocol.js'
+import { spawnPtySession, type SessionFactory } from './session.js'
+import { buildSnapshot } from './snapshot.js'
+
+/** How often `.mjloop/` is re-read. Cheap next to what a loop cycle costs. */
+export const POLL_MS = 800
+
+export interface ServerOptions {
+  projectDir: string
+  port: number
+  /** Injected by the tests. Production spawns a real pty. */
+  spawn?: SessionFactory
+  /** Injected by the tests so they need not wait out a real poll. */
+  pollMs?: number
+}
+
+export interface RunningServer {
+  url: string
+  token: string
+  port: number
+  close: () => Promise<void>
+}
+
+const MIME: Record<string, string> = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.map': 'application/json; charset=utf-8',
+}
+
+const PUBLIC_DIR = fileURLToPath(new URL('./public/', import.meta.url))
+
+/**
+ * Constant-time so the token cannot be recovered a byte at a time. Length is
+ * compared first because `timingSafeEqual` throws on a mismatch — that check
+ * leaks only the length, which the URL format publishes anyway.
+ */
+export function tokenMatches(expected: string, given: string | null): boolean {
+  if (given === null || given.length !== expected.length) return false
+  return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(given))
+}
+
+export const COOKIE = 'mjloop_token'
+
+export function readCookie(header: string | undefined, name: string): string | null {
+  if (header === undefined) return null
+  for (const part of header.split(';')) {
+    const [key, ...rest] = part.trim().split('=')
+    if (key === name) return rest.join('=')
+  }
+  return null
+}
+
+/**
+ * The token from the url, or from the cookie the url's first request set.
+ *
+ * The page's own subresources — its stylesheet, its scripts, xterm's bundles —
+ * are requested by the browser with no query string of ours attached, so the
+ * url alone authenticates exactly one request and nothing it pulls in. The
+ * cookie carries it the rest of the way.
+ *
+ * `SameSite=Strict` is what makes that safe: a page on another origin cannot
+ * cause the cookie to be sent, so this is still a door only the url opens.
+ */
+export function suppliedToken(url: URL, cookieHeader: string | undefined): string | null {
+  return url.searchParams.get('t') ?? readCookie(cookieHeader, COOKIE)
+}
+
+export async function startServer(options: ServerOptions): Promise<RunningServer> {
+  const { projectDir } = options
+  const token = crypto.randomBytes(32).toString('hex')
+  const sockets = new Set<WebSocket>()
+
+  const broadcast = (message: ServerMessage): void => {
+    const payload = JSON.stringify(message)
+    for (const socket of sockets) {
+      if (socket.readyState === socket.OPEN) socket.send(payload)
+    }
+  }
+
+  const notice = (message: Message): void => broadcast({ type: 'notice', message })
+
+  let pushSnapshot = (): void => {}
+
+  const queue = new JobQueue({
+    cwd: projectDir,
+    spawn: options.spawn ?? spawnPtySession,
+    onOutput: (jobId, data) => broadcast({ type: 'output', jobId, data }),
+    onChange: () => pushSnapshot(),
+    onNotice: notice,
+  })
+
+  let lastSent = ''
+  let latest: Snapshot | null = null
+
+  /** Sent only when it differs: the poller runs whether or not anything moved. */
+  const emit = (): void => {
+    if (latest === null) return
+    const payload = JSON.stringify({ type: 'snapshot', snapshot: latest })
+    if (payload === lastSent) return
+    lastSent = payload
+    for (const socket of sockets) {
+      if (socket.readyState === socket.OPEN) socket.send(payload)
+    }
+  }
+
+  const refresh = async (): Promise<void> => {
+    const base = await buildSnapshot(projectDir)
+    // Fed the summary the poller already read rather than reading it again:
+    // one read per tick means the queue can never decide on a different state
+    // from the one the page is about to be shown.
+    queue.observe(base.state)
+    latest = { ...base, queue: queue.jobs(), session: queue.session() }
+    emit()
+  }
+
+  // The queue changes between polls too — a job enqueued, a session closed. Its
+  // half of the snapshot is refreshed without re-reading the disk.
+  pushSnapshot = (): void => {
+    if (latest === null) return
+    latest = { ...latest, queue: queue.jobs(), session: queue.session() }
+    emit()
+  }
+
+  const server = http.createServer((request, response) => {
+    void handleRequest(request, response, token)
+  })
+
+  const wss = new WebSocketServer({ noServer: true })
+
+  server.on('upgrade', (request, socket, head) => {
+    const url = new URL(request.url ?? '/', 'http://127.0.0.1')
+    if (!tokenMatches(token, suppliedToken(url, request.headers.cookie))) {
+      // A bare 401 rather than an upgrade: this socket would otherwise be able
+      // to spawn processes on the user's machine, and any page in any tab can
+      // open a WebSocket to localhost.
+      socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n')
+      socket.destroy()
+      return
+    }
+    wss.handleUpgrade(request, socket, head, (ws) => {
+      wss.emit('connection', ws, request)
+    })
+  })
+
+  wss.on('connection', (socket: WebSocket) => {
+    sockets.add(socket)
+    if (latest !== null) socket.send(JSON.stringify({ type: 'snapshot', snapshot: latest }))
+    const active = queue.session().jobId
+    if (active !== null) {
+      socket.send(JSON.stringify({ type: 'transcript', jobId: active, data: queue.transcript(active) }))
+    }
+
+    socket.on('message', (raw) => {
+      let parsed: unknown
+      try {
+        parsed = JSON.parse(String(raw)) as unknown
+      } catch {
+        return
+      }
+      const message = ClientMessageSchema.safeParse(parsed)
+      // Silently dropped rather than answered. A malformed frame is either a
+      // bug in our own page or something that has no business here; neither is
+      // worth an error channel that tells a prober what shape to send next.
+      if (!message.success) return
+
+      switch (message.data.type) {
+        case 'input':
+          queue.write(message.data.data)
+          break
+        case 'resize':
+          queue.resize(message.data.cols, message.data.rows)
+          break
+        case 'enqueue':
+          queue.enqueue(message.data.command)
+          break
+        case 'cancel':
+          queue.cancel(message.data.jobId)
+          break
+        case 'stop':
+          queue.stop()
+          break
+        case 'resume':
+          queue.resume()
+          break
+        case 'clear':
+          queue.clear()
+          break
+        case 'attach':
+          socket.send(
+            JSON.stringify({
+              type: 'transcript',
+              jobId: message.data.jobId,
+              data: queue.transcript(message.data.jobId),
+            }),
+          )
+          break
+        case 'nudge':
+          queue.nudge()
+          break
+      }
+    })
+
+    socket.on('close', () => sockets.delete(socket))
+  })
+
+  await new Promise<void>((resolve, reject) => {
+    server.once('error', reject)
+    // 127.0.0.1, never 0.0.0.0: this process spawns `claude` with the user's
+    // credentials, so the page is a local tool and must not be reachable from
+    // the network the machine happens to be on.
+    server.listen(options.port, '127.0.0.1', () => {
+      server.removeListener('error', reject)
+      resolve()
+    })
+  })
+
+  await refresh()
+  const timer = setInterval(() => {
+    void refresh().catch(() => {
+      // A failed read is transient — `.mjloop` mid-write, a directory being
+      // replaced. The next tick is 800ms away and the page keeps the last
+      // snapshot until then.
+    })
+  }, options.pollMs ?? POLL_MS)
+  // The poller must not be what keeps the process alive: without this a server
+  // whose sockets have all closed still holds the event loop open forever.
+  timer.unref()
+
+  const address = server.address()
+  const port = typeof address === 'object' && address !== null ? address.port : options.port
+
+  return {
+    url: `http://127.0.0.1:${port}/?t=${token}`,
+    token,
+    port,
+    close: async () => {
+      clearInterval(timer)
+      queue.dispose()
+      for (const socket of sockets) socket.terminate()
+      wss.close()
+      await new Promise<void>((resolve) => server.close(() => resolve()))
+    },
+  }
+}
+
+async function handleRequest(
+  request: http.IncomingMessage,
+  response: http.ServerResponse,
+  token: string,
+): Promise<void> {
+  const url = new URL(request.url ?? '/', 'http://127.0.0.1')
+  if (!tokenMatches(token, suppliedToken(url, request.headers.cookie))) {
+    response.writeHead(401, { 'content-type': 'text/plain; charset=utf-8' })
+    response.end('unauthorized')
+    return
+  }
+
+  const requested = url.pathname === '/' ? '/index.html' : url.pathname
+  // Resolved and then re-checked against the root: `..` in a path is how a
+  // static handler serves the user's private keys.
+  const file = path.resolve(PUBLIC_DIR, `.${requested}`)
+  if (!file.startsWith(PUBLIC_DIR)) {
+    response.writeHead(403).end()
+    return
+  }
+
+  try {
+    const body = await fs.readFile(file)
+    response.writeHead(200, {
+      'content-type': MIME[path.extname(file)] ?? 'application/octet-stream',
+      // The page carries a token in its URL. Keeping it out of caches and
+      // referrers is most of what stops it leaking.
+      'cache-control': 'no-store',
+      'referrer-policy': 'no-referrer',
+      // Host-only, script-unreadable, and never sent from another origin. The
+      // browser needs it to fetch this page's own assets; nothing else does.
+      'set-cookie': `${COOKIE}=${token}; HttpOnly; SameSite=Strict; Path=/`,
+    })
+    response.end(body)
+  } catch {
+    response.writeHead(404).end()
+  }
+}

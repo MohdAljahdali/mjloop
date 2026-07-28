@@ -92,6 +92,37 @@ and `story-critic` reviews each one.
 `/mjloop:status` also reports whether a `fix` run has reproduced its defect, and whether
 the project has a design system.
 
+## The dashboard
+
+```
+/mjloop:web        a local page that queues runs and shows each one in a terminal
+```
+
+It prints a url. Open it and you get three things beside each other: the state the loop
+is in, the project's plans and stories, and a queue of commands. Click a story and it is
+queued; type any loop command into the box and it is queued too.
+
+The queue runs **one at a time**, each in its own `claude` session. `.mjloop/state.json`
+holds one run, so two at once would overwrite each other — the server enforces that
+rather than trusting whoever is clicking.
+
+The terminal is the real session, not a summary of it. You can type into it: that is how
+you approve a tool permission or answer a question without stopping the queue. When the
+run reaches `done` or `halted`, the server closes that session and starts the next job in
+a fresh one — a clean context per story, which is what makes long queues behave.
+
+Two things worth knowing:
+
+- **The url contains an access token.** Anyone who has it can run commands in your
+  project. Do not paste it anywhere. Each server start issues a new one, and the server
+  listens on `127.0.0.1` only.
+- **`autonomous: false` means a session can stop mid-run and wait for you.** The page
+  notices — after 90 quiet seconds it says so and offers a Continue button. Setting
+  `autonomous: true` in `.mjloop/config.yaml` lets cycles run on without it.
+
+The page speaks English and Arabic, picked from your browser and changeable in the
+header. The terminal is always left-to-right whatever the interface language is.
+
 ## When a run halts
 
 Three reasons are possible and they mean different things:

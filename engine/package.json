@@ -7,10 +7,11 @@
   "engines": { "node": ">=20" },
   "bin": {
     "mjloop-mcp": "./dist/mcp/server.js",
-    "mjloop-cli": "./dist/cli/index.js"
+    "mjloop-cli": "./dist/cli/index.js",
+    "mjloop-web": "./dist/web/cli.js"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && node scripts/copy-web-assets.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc -p tsconfig.json --noEmit",
@@ -24,11 +25,16 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.29.0",
+    "@xterm/addon-fit": "0.10.0",
+    "@xterm/xterm": "5.5.0",
+    "node-pty": "1.0.0",
+    "ws": "8.18.3",
     "yaml": "2.9.0",
     "zod": "4.4.3"
   },
   "devDependencies": {
     "@types/node": "24.3.0",
+    "@types/ws": "8.18.1",
     "typescript": "5.9.2",
     "vitest": "4.1.10"
   }

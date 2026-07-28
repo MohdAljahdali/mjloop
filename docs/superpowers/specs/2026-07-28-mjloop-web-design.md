@@ -95,6 +95,18 @@ The page can spawn processes. That makes its URL a credential.
 Without the token any page in the user's browser could POST to
 `localhost:4177` and run arbitrary loop commands.
 
+The URL authenticates exactly one request. The browser then asks for the page's
+stylesheet, its scripts, and xterm's bundles with no query string of ours
+attached, so an authenticated response also sets a cookie:
+
+```
+Set-Cookie: mjloop_token=<token>; HttpOnly; SameSite=Strict; Path=/
+```
+
+`SameSite=Strict` is what keeps this a door only the URL opens — no other
+origin can cause the cookie to be sent. `HttpOnly` keeps it out of reach of
+script. Requests may present the token either way; the WebSocket accepts both.
+
 ## Jobs and the queue
 
 ```ts
@@ -104,7 +116,8 @@ interface Job {
   id: string
   command: string        // "/mjloop:build P001-S02"
   status: JobStatus
-  exitCode: number | null
+  /** Why it ended, as a message code the page translates. Null while it runs. */
+  reason: { code: string; params?: Record<string, string | number> } | null
   startedAt: string | null
   endedAt: string | null
 }
@@ -180,7 +193,7 @@ interface Snapshot {
   plans: PlanView[]              // id, title, approval, stories from manifest.json
   runs: string[]                 // run directory names, newest first
   queue: Job[]
-  session: { jobId: string | null; stalledSince: string | null }
+  session: { jobId: string | null; blocked: boolean; stalledSince: string | null }
 }
 ```
 
@@ -280,8 +293,12 @@ Covered:
 - **stall** — idle threshold crossed while running, not crossed when output
   keeps arriving, never fires when the run is not `running`.
 - **snapshot** — built from a fixture `.mjloop/` including a plan with stories.
-- **auth** — no token is 401, wrong token is 401, on both HTTP and WebSocket.
-- **locales** — `ar.json` key set equals `en.json` key set.
+- **auth** — no token is 401, wrong token is 401, on both HTTP and WebSocket;
+  a malformed WebSocket frame is dropped rather than acted on.
+- **locales** — every dictionary has exactly `en.json`'s key set, leaves nothing
+  blank, keeps every `{param}` hole, is registered in the page, and covers every
+  message code the server can emit.
+- **cli** — argument parsing, including the port range and a flag with no value.
 
 Following the existing suite: vitest, `makeTmpProject` from
 `tests/helpers/tmp-project.ts`, tests under `engine/tests/web/`.
