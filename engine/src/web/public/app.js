@@ -22,6 +22,7 @@ import { dismiss, mountToasts, runAction, toast } from './ui/toasts.js'
 import { settle, submit } from './ui/writes.js'
 import { mountConfig } from './panels/config.js'
 import { mountEvidence } from './panels/evidence.js'
+import { mountMemory } from './panels/memory.js'
 import { mountLauncher } from './panels/launcher.js'
 import { mountPlans } from './panels/plans.js'
 import { mountQueue } from './panels/queue.js'
@@ -88,8 +89,9 @@ const pane = mountPane()
 const haltDialog = mountHaltDialog()
 const launcher = mountLauncher()
 mountRun()
-mountPlans()
-mountEvidence()
+const plans = mountPlans()
+const evidence = mountEvidence()
+mountMemory()
 mountConfig()
 mountQueue()
 register({ id: 'rail', node: /** @type {HTMLElement} */ (document.querySelector('.rail')), update: drawRail })
@@ -116,6 +118,21 @@ bus.on('resume', () => send({ type: 'resume' }))
 bus.on('clear', () => send({ type: 'clear' }))
 bus.on('nudge', () => send({ type: 'nudge' }))
 bus.on('build', (element) => enqueue(`/mjloop:build ${element.dataset['story'] ?? ''}`))
+bus.on('open-plan', (element) => plans.toggle(element.dataset['plan'] ?? ''))
+bus.on('open-run', (element) => evidence.toggle(element.dataset['run'] ?? ''))
+bus.on('approve', () => plans.decide('approved'))
+bus.on('request-changes', () => plans.decide('changes_requested'))
+bus.on('reject', () => plans.decide('rejected'))
+bus.on('requeue', (element) => plans.requeue(element.dataset['story'] ?? '', element.dataset['from'] ?? 'doing'))
+bus.on('new-plan', (element) => {
+  // A form, but the same execution path as everything else: it composes a loop
+  // command and enqueues it.
+  const field = /** @type {HTMLInputElement} */ (element.querySelector('#new-plan'))
+  const idea = field.value.trim()
+  if (idea.length === 0) return
+  enqueue(`/mjloop:plan ${idea}`)
+  field.value = ''
+})
 bus.on('job-cancel', (element) => send({ type: 'cancel', jobId: element.dataset['job'] ?? '' }))
 bus.on('job-attach', (element) => send({ type: 'attach', jobId: element.dataset['job'] ?? '' }))
 bus.on('view-session', () => pane.setView('session'))

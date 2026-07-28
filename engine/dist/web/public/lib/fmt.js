@@ -37,6 +37,27 @@ export function time(iso) {
   return Number.isNaN(at.getTime()) ? '' : clock().format(at)
 }
 
+/** @type {{ key: string, format: Intl.DateTimeFormat } | null} */
+let stampCache = null
+
+/**
+ * A date and a time, for something that happened once and is on record — an
+ * approval, a halt. `time()` is for "since when", which only needs a clock.
+ *
+ * @param {string | null | undefined} iso
+ * @returns {string}
+ */
+export function stamp(iso) {
+  if (iso === null || iso === undefined) return ''
+  const at = new Date(iso)
+  if (Number.isNaN(at.getTime())) return ''
+  const key = locale()
+  if (stampCache === null || stampCache.key !== key) {
+    stampCache = { key, format: new Intl.DateTimeFormat(key, { dateStyle: 'medium', timeStyle: 'short' }) }
+  }
+  return stampCache.format.format(at)
+}
+
 /**
  * How long a job ran, as a compact `1h 04m` / `3m 12s` / `9s`.
  *

@@ -103,16 +103,14 @@
           <section class="block" id="run-findings-block" hidden>
             <h2 data-i18n="run.findingsTitle"></h2>
             <div class="scroller">
-              <table class="grid">
-                <thead>
-                  <tr>
-                    <th data-i18n="run.finding.severity"></th>
-                    <th data-i18n="run.finding.where"></th>
-                    <th data-i18n="run.finding.claim"></th>
-                  </tr>
-                </thead>
-                <tbody id="run-findings-list"></tbody>
-              </table>
+              <div class="grid grid-findings" role="table">
+                <div class="grid-head" role="row">
+                  <span role="columnheader" data-i18n="run.finding.severity"></span>
+                  <span role="columnheader" data-i18n="run.finding.where"></span>
+                  <span role="columnheader" data-i18n="run.finding.claim"></span>
+                </div>
+                <div id="run-findings-list" role="rowgroup" class="grid-body"></div>
+              </div>
             </div>
           </section>
 
@@ -132,17 +130,15 @@
           <section class="block" id="run-timeline" hidden>
             <h2 data-i18n="run.timeline"></h2>
             <div class="scroller">
-              <table class="grid">
-                <thead>
-                  <tr>
-                    <th data-i18n="run.cycle.number"></th>
-                    <th data-i18n="run.cycle.agents"></th>
-                    <th data-i18n="run.cycle.result"></th>
-                    <th data-i18n="run.cycle.ref"></th>
-                  </tr>
-                </thead>
-                <tbody id="run-timeline-list"></tbody>
-              </table>
+              <div class="grid grid-cycles" role="table">
+                <div class="grid-head" role="row">
+                  <span role="columnheader" data-i18n="run.cycle.number"></span>
+                  <span role="columnheader" data-i18n="run.cycle.agents"></span>
+                  <span role="columnheader" data-i18n="run.cycle.result"></span>
+                  <span role="columnheader" data-i18n="run.cycle.ref"></span>
+                </div>
+                <div id="run-timeline-list" role="rowgroup" class="grid-body"></div>
+              </div>
             </div>
           </section>
 
@@ -155,26 +151,147 @@
 
       <section class="panel" id="panel-plans" hidden>
         <p class="empty" id="plans-empty"></p>
+
+        <section class="block" id="plans-ready" hidden>
+          <h2 data-i18n="plans.readyNext"></h2>
+          <ul class="chips" id="plans-ready-list"></ul>
+        </section>
+
         <div class="plans" id="plans-list"></div>
         <p class="more" id="plans-more" hidden></p>
+
+        <section class="block" id="plan-detail" hidden>
+          <h2 id="plan-detail-title"></h2>
+          <p class="record" id="plan-approval-record"></p>
+
+          <!-- The note is uncontrolled and written once at mount. A renderer
+               that assigned to it would eat what is being typed on the next
+               800ms tick. -->
+          <div class="approve">
+            <input
+              id="approve-note"
+              name="note"
+              maxlength="2000"
+              dir="auto"
+              autocomplete="off"
+              data-i18n-placeholder="plans.notePlaceholder"
+            />
+            <button type="button" data-act="approve" data-i18n="plans.approve"></button>
+            <button type="button" data-act="request-changes" data-i18n="plans.requestChanges"></button>
+            <button type="button" class="danger" data-act="reject" data-i18n="plans.reject"></button>
+          </div>
+
+          <details id="plan-body-details">
+            <summary data-i18n="plans.readPlan"></summary>
+            <pre class="excerpt" id="plan-body"></pre>
+          </details>
+          <details id="plan-review-details" hidden>
+            <summary data-i18n="plans.readReview"></summary>
+            <pre class="excerpt" id="plan-review"></pre>
+          </details>
+
+          <ul class="stories detail" id="plan-detail-stories"></ul>
+        </section>
+
+        <section class="block">
+          <h2 data-i18n="plans.create"></h2>
+          <!-- Both compose a loop command and enqueue it. Structured fields,
+               one execution path: there is no second, weaker way to start work. -->
+          <form class="command" data-act="new-plan">
+            <input id="new-plan" name="idea" dir="auto" autocomplete="off" data-i18n-placeholder="plans.newPlanHint" />
+            <button type="submit" data-i18n="plans.newPlan"></button>
+          </form>
+        </section>
       </section>
 
       <section class="panel" id="panel-evidence" hidden>
         <p class="empty" id="evidence-empty"></p>
-        <ul class="runs" id="evidence-list"></ul>
+        <div class="scroller">
+          <div class="grid grid-runs" role="table">
+            <div class="grid-head" role="row">
+              <span role="columnheader" data-i18n="evidence.run"></span>
+              <span role="columnheader" data-i18n="evidence.story"></span>
+              <span role="columnheader" data-i18n="evidence.track"></span>
+              <span role="columnheader" data-i18n="evidence.cycles"></span>
+              <span role="columnheader" data-i18n="evidence.outcome"></span>
+              <span role="columnheader"></span>
+            </div>
+            <div id="evidence-list" role="rowgroup" class="grid-body"></div>
+          </div>
+        </div>
         <p class="more" id="evidence-more" hidden></p>
+
+        <section class="block" id="run-open" hidden>
+          <h2 id="run-open-title"></h2>
+          <details id="run-open-halt" hidden>
+            <summary data-i18n="evidence.haltReport"></summary>
+            <pre class="excerpt" id="run-open-haltbody"></pre>
+          </details>
+          <div id="run-open-cycles"></div>
+        </section>
       </section>
 
       <section class="panel" id="panel-memory" hidden>
-        <p class="empty" data-i18n="memory.unavailable"></p>
+        <p class="empty" id="memory-empty"></p>
+        <div class="facets">
+          <!-- Faceting is client-side because it has to be: `memorySearch`
+               filters by none of kind, tag, time or run, so there is nothing to
+               push to the server. -->
+          <input
+            id="memory-query"
+            name="q"
+            dir="auto"
+            autocomplete="off"
+            data-i18n-placeholder="memory.searchHint"
+          />
+          <select id="memory-kind" name="kind"></select>
+        </div>
+        <ul class="memories" id="memory-list"></ul>
+        <p class="more" id="memory-more" hidden></p>
       </section>
 
       <section class="panel" id="panel-config" hidden>
-        <p class="empty" data-i18n="config.unavailable"></p>
+        <p class="hint" data-i18n="config.readOnly"></p>
         <dl class="facts">
           <div class="fact"><dt data-i18n="config.designSystem"></dt><dd id="config-design"></dd></div>
           <div class="fact"><dt data-i18n="config.project"></dt><dd id="config-project"></dd></div>
+          <div class="fact"><dt data-i18n="config.autonomous"></dt><dd id="config-autonomous"></dd></div>
+          <div class="fact"><dt data-i18n="config.strikes"></dt><dd id="config-strikes"></dd></div>
+          <div class="fact"><dt data-i18n="config.planApproval"></dt><dd id="config-plan-gate"></dd></div>
+          <div class="fact"><dt data-i18n="config.commitGate"></dt><dd id="config-commit-gate"></dd></div>
         </dl>
+
+        <section class="block">
+          <h2 data-i18n="config.verify"></h2>
+          <p class="hint" data-i18n="config.verifyWhy"></p>
+          <dl class="facts" id="config-verify"></dl>
+        </section>
+
+        <section class="block">
+          <h2 data-i18n="config.tracks"></h2>
+          <div class="scroller">
+            <div class="grid grid-tracks" role="table">
+              <div class="grid-head" role="row">
+                <span role="columnheader" data-i18n="config.track"></span>
+                <span role="columnheader" data-i18n="config.required"></span>
+                <span role="columnheader" data-i18n="config.available"></span>
+                <span role="columnheader" data-i18n="config.maxCycles"></span>
+                <span role="columnheader" data-i18n="config.gate"></span>
+              </div>
+              <div id="config-tracks" role="rowgroup" class="grid-body"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="block" id="config-specialists-block" hidden>
+          <h2 data-i18n="config.specialists"></h2>
+          <ul class="chips" id="config-specialists"></ul>
+        </section>
+
+        <details id="config-raw-details">
+          <summary data-i18n="config.raw"></summary>
+          <pre class="excerpt" id="config-raw"></pre>
+        </details>
       </section>
     </main>
 
@@ -269,8 +386,10 @@
         <header class="plan-head">
           <span class="plan-id" data-slot="id"></span>
           <strong class="plan-title" data-slot="title"></strong>
+          <span class="tag" data-slot="state"></span>
           <span class="tag" data-slot="approval"></span>
           <span class="count" data-slot="count"></span>
+          <button type="button" data-act="open-plan" data-slot="open"></button>
         </header>
         <p class="empty" data-slot="empty" hidden></p>
         <ul class="stories" data-slot="stories"></ul>
@@ -301,9 +420,69 @@
     </template>
 
     <template id="tpl-run">
-      <li class="run">
-        <span class="run-id" data-slot="id"></span>
+      <div class="grid-row run" role="row">
+        <span role="cell"><span class="run-id" data-slot="id"></span></span>
+        <span role="cell" data-slot="story"></span>
+        <span role="cell" data-slot="track"></span>
+        <span role="cell" data-slot="cycles"></span>
+        <span role="cell"><span class="res" data-slot="outcome"></span></span>
+        <span role="cell"><button type="button" data-act="open-run" data-slot="open"></button></span>
+      </div>
+    </template>
+
+    <template id="tpl-run-cycle">
+      <section class="cycle-block">
+        <h3 data-slot="title"></h3>
+        <ul class="chips" data-slot="roster"></ul>
+        <ul class="skipped" data-slot="skipped"></ul>
+        <ul class="agents" data-slot="agents"></ul>
+      </section>
+    </template>
+
+    <template id="tpl-skipped">
+      <li><code data-slot="agent"></code> <span data-slot="reason"></span></li>
+    </template>
+
+    <template id="tpl-agent">
+      <li class="agent">
+        <code data-slot="name"></code>
+        <span class="res" data-slot="status"></span>
+        <span data-slot="summary"></span>
+        <ul class="evidence-cards" data-slot="evidence"></ul>
+        <code class="files" data-slot="files"></code>
       </li>
+    </template>
+
+    <template id="tpl-evidence-card">
+      <li>
+        <code data-slot="ref"></code>
+        <pre class="excerpt" data-slot="excerpt"></pre>
+      </li>
+    </template>
+
+    <template id="tpl-memory">
+      <li class="memory">
+        <code class="memory-id" data-slot="id"></code>
+        <span class="tag" data-slot="kind"></span>
+        <strong data-slot="title"></strong>
+        <span class="when" data-slot="at"></span>
+        <ul class="chips" data-slot="tags"></ul>
+        <pre class="excerpt" data-slot="body"></pre>
+      </li>
+    </template>
+
+    <template id="tpl-verify">
+      <div class="fact"><dt data-slot="name"></dt><dd data-slot="command"></dd></div>
+    </template>
+
+    <template id="tpl-track">
+      <div class="grid-row" role="row">
+        <span role="cell"><code data-slot="name"></code></span>
+        <span role="cell" data-slot="required"></span>
+        <span role="cell" data-slot="available"></span>
+        <span role="cell" data-slot="max"></span>
+        <span role="cell" data-slot="gate"></span>
+      </div>
     </template>
 
     <template id="tpl-roster-agent">
@@ -311,20 +490,43 @@
     </template>
 
     <template id="tpl-finding">
-      <tr class="finding">
-        <td><span class="sev" data-slot="severity"></span></td>
-        <td><code data-slot="where"></code></td>
-        <td data-slot="claim"></td>
-      </tr>
+      <div class="grid-row finding" role="row">
+        <span role="cell"><span class="sev" data-slot="severity"></span></span>
+        <span role="cell"><code data-slot="where"></code></span>
+        <span role="cell" data-slot="claim"></span>
+      </div>
     </template>
 
     <template id="tpl-cycle">
-      <tr class="cycle">
-        <td data-slot="number"></td>
-        <td data-slot="agents"></td>
-        <td><span class="res" data-slot="result"></span></td>
-        <td><code data-slot="ref"></code></td>
-      </tr>
+      <div class="grid-row cycle" role="row">
+        <span role="cell" data-slot="number"></span>
+        <span role="cell" data-slot="agents"></span>
+        <span role="cell"><span class="res" data-slot="result"></span></span>
+        <span role="cell"><code data-slot="ref"></code></span>
+      </div>
+    </template>
+
+    <template id="tpl-ready">
+      <li class="chip ready">
+        <span data-slot="id"></span>
+        <button type="button" class="icon" data-act="build" data-slot="build">+</button>
+      </li>
+    </template>
+
+    <template id="tpl-story-detail">
+      <li class="story detail">
+        <span class="story-id" data-slot="id"></span>
+        <span class="story-title" data-slot="title"></span>
+        <span class="story-status" data-slot="status"></span>
+        <span class="waits anomaly" data-slot="anomaly" hidden></span>
+        <button type="button" data-act="requeue" data-slot="requeue" hidden></button>
+        <ul class="acceptance" data-slot="acceptance"></ul>
+        <code class="evidence" data-slot="evidence" hidden></code>
+      </li>
+    </template>
+
+    <template id="tpl-acceptance">
+      <li data-slot="text"></li>
     </template>
 
     <template id="tpl-suggestion">

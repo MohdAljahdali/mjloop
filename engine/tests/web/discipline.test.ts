@@ -131,6 +131,17 @@ describe('templates and actions', () => {
     expect([...cloned].filter((id) => !templates.includes(id))).toEqual([])
   })
 
+  it('puts no table row at a template root', () => {
+    // `<tr>`/`<td>` at the root of a `<template>` is valid HTML and works in a
+    // browser, but not every DOM implementation the suite runs on parses it —
+    // which silently leaves those row templates with no regression net. Tables
+    // here are `role="table"` grids, so every template is cloneable everywhere.
+    for (const id of templates) {
+      const body = new RegExp(`<template id="${id}"[^>]*>([\\s\\S]*?)</template>`).exec(html)?.[1] ?? ''
+      expect(body.trimStart().slice(0, 4), id).not.toMatch(/^<(tr|td|th)\b/)
+    }
+  })
+
   it('registers every data-act in the markup', () => {
     const used = new Set([...html.matchAll(/data-act="([\w-]+)"/g)].map((match) => match[1] ?? ''))
     const registered = new Set(
@@ -196,13 +207,21 @@ describe('the page never assigns to a control', () => {
     // Rule 3: every control the user types into is uncontrolled and written
     // once at mount, so an 800ms tick cannot eat a half-typed note by
     // construction rather than by a focus check somebody forgets.
-    // Three files may, and each for something a *person* did rather than
-    // something a snapshot did: `app.js` fills the language picker at boot,
-    // `dialog.js` clears the halt reason when the dialog is opened, and
-    // `launcher.js` clears the command box because Run was pressed. No
-    // renderer appears in this list, and that is the property under test.
+    // Five files may, and each for something a *person* did or for a control
+    // written once at mount: `app.js` fills the language picker at boot and
+    // clears the new-plan field on submit, `dialog.js` clears the halt reason
+    // when the dialog is opened, `launcher.js` clears the command box because
+    // Run was pressed, `plans.js` clears the approval note once the decision is
+    // recorded, and `memory.js` restores the remembered query at mount. No
+    // `update()` appears in this list, and that is the property under test.
     const writers = scripts.filter((name) => /\.value\s*=[^=]/.test(code(name)))
-    expect(writers).toEqual(['app.js', 'panels/launcher.js', 'ui/dialog.js'])
+    expect(writers).toEqual([
+      'app.js',
+      'panels/launcher.js',
+      'panels/memory.js',
+      'panels/plans.js',
+      'ui/dialog.js',
+    ])
   })
 })
 

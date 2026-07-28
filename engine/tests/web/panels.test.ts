@@ -157,11 +157,30 @@ describe('run', () => {
 })
 
 describe('evidence', () => {
-  it('draws the run list', () => {
+  it('draws the run list with its outcomes', async () => {
+    // The run list is a body, not a key: it names each run's story, track,
+    // cycle count and whether it halted, none of which is in the snapshot.
+    vi.stubGlobal('fetch', (url: string) =>
+      Promise.resolve(
+        new Response(
+          url.startsWith('/api/runs?')
+            ? JSON.stringify([
+                { id: '2026-07-28-001--P001-S01--build', story: 'P001-S01', track: 'build', cycles: 2, halted: true },
+              ])
+            : '{}',
+          { status: 200 },
+        ),
+      ),
+    )
+
     reveal('panel-evidence')
     mountEvidence()
-    draw(emptySnapshot({ runs: ['20260728T120000Z--adhoc--edit'] }))
-    expect(document.querySelectorAll('#evidence-list .run')).toHaveLength(1)
+    draw(emptySnapshot())
+    await vi.waitFor(() => expect(document.querySelectorAll('#evidence-list .run')).toHaveLength(1))
+
+    const row = document.querySelector('#evidence-list .run') as HTMLElement
+    expect(row.textContent).toContain('P001-S01')
+    expect(row.textContent).toContain('halted')
     expect((document.getElementById('evidence-empty') as HTMLElement).hidden).toBe(true)
   })
 })

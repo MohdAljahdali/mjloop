@@ -131,6 +131,9 @@ for (const name of scripts) {
   const body = (await fs.readFile(path.join(PUBLIC_DIR, name), 'utf8'))
     .replace(/\/\*[\s\S]*?\*\//g, '')
     .replace(/^\s*\/\/.*$/gm, '')
+    // A write's `kind` is a wire discriminant, not a locale key, and
+    // `story.status` happens to look like one.
+    .replace(/kind:\s*'[\w.]+'/g, '')
   // Filtered by the namespace whitelist, which is what *defines* a locale key
   // here — otherwise `'mjloop.prefs'`, the storage key, would be demanded of
   // every translation. A typo inside a real namespace (`story.buld`) still
