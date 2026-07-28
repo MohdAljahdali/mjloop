@@ -44,6 +44,7 @@ const NAMESPACES = [
   'error',
   'evidence',
   'findings',
+  'halt',
   'job',
   'lang',
   'memory',
@@ -59,6 +60,7 @@ const NAMESPACES = [
   'tabs',
   'terminal',
   'toast',
+  'write',
 ]
 
 const CATEGORIES = new Set(['zero', 'one', 'two', 'few', 'many', 'other'])

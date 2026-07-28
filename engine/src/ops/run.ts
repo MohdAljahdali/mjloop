@@ -5,6 +5,7 @@ import type { Finding, Result, State } from '../schemas/state.js'
 import { loadConfig } from '../store/config-store.js'
 import { resolveLoopPaths } from '../store/paths.js'
 import { readStory } from '../store/plan-store.js'
+import { expect as expectUnchanged } from '../store/precondition.js'
 import { StateStore, type Clock } from '../store/state-store.js'
 import { cycleFingerprint, errorFingerprint } from './fingerprint.js'
 
@@ -261,13 +262,21 @@ async function archiveFindings(
   await fs.writeFile(path.join(dir, 'findings.json'), `${JSON.stringify(findings, null, 2)}\n`, 'utf8')
 }
 
-export async function halt(projectDir: string, reason: string, now: Clock = () => new Date()): Promise<State> {
+export async function halt(
+  projectDir: string,
+  reason: string,
+  now: Clock = () => new Date(),
+  options: { expectRun?: string } = {},
+): Promise<State> {
   const store = new StateStore(projectDir, now)
   const state = await store.update((draft) => {
     // Guarded inside the locked update: with no run to halt, the mutation
     // must never land — writeHaltReport would fail right after it and leave
     // a "halted" state for a run that never existed.
     if (draft.run_id === null || draft.track === null) throw new NoActiveRunError()
+    // Same lock, same reason: halting the run that started *after* the one the
+    // caller was looking at is the exact accident this refuses.
+    expectUnchanged('run', draft.run_id, draft.run_id, options.expectRun)
     draft.status = 'halted'
     draft.current.stage = 'halted'
     draft.halt_reason = reason

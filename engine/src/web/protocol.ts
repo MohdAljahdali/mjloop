@@ -2,6 +2,7 @@ import * as z from 'zod'
 import type { StateSummary } from '../ops/summary.js'
 import type { WebCode } from './codes.js'
 import type { Revisions } from './revision.js'
+import { WriteSchema } from './writes.js'
 
 /**
  * Everything the server says to the page is a code and its parameters, never
@@ -121,6 +122,14 @@ export type ServerMessage =
   /** The whole buffered transcript, sent on connect and on attach. */
   | { type: 'transcript'; jobId: string; data: string }
   | { type: 'notice'; message: Message }
+  /**
+   * The answer to one `{type:'write'}`, in send order.
+   *
+   * The snapshot broadcast goes out *before* the receipt, so a write that
+   * receipts `ok` has already landed and is already on screen. That is why the
+   * page needs no optimistic render and no rollback.
+   */
+  | { type: 'receipt'; id: string; ok: boolean; code: Message['code'] }
 
 /**
  * Parsed rather than cast: this arrives from a browser tab, and every branch
@@ -142,6 +151,13 @@ export const ClientMessageSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('clear') }),
   z.strictObject({ type: z.literal('attach'), jobId: z.string().min(1) }),
   z.strictObject({ type: z.literal('nudge') }),
+  /**
+   * The one door for the three engine writes the browser can reach.
+   *
+   * `id` is the page's own correlation token, echoed back on the receipt; it is
+   * never used to name anything on disk.
+   */
+  z.strictObject({ type: z.literal('write'), id: z.string().min(1).max(64), write: WriteSchema }),
 ])
 
 export type ClientMessage = z.infer<typeof ClientMessageSchema>

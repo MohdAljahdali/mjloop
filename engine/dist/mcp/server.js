@@ -30249,6 +30249,24 @@ function headline(excerpt) {
 // src/ops/run.ts
 import fs7 from "node:fs/promises";
 import path8 from "node:path";
+
+// src/store/precondition.ts
+var StalePreconditionError = class extends Error {
+  constructor(subject, id, actual) {
+    super(`${subject} ${id} has moved on \u2014 it is now ${actual ?? "unset"}`);
+    this.subject = subject;
+    this.id = id;
+    this.actual = actual;
+    this.name = "StalePreconditionError";
+  }
+};
+function expect(subject, id, actual, expected) {
+  if (expected === void 0) return;
+  if (actual === expected) return;
+  throw new StalePreconditionError(subject, id, actual === null || actual === void 0 ? null : String(actual));
+}
+
+// src/ops/run.ts
 var UnknownTrackError = class extends Error {
   constructor(track, known) {
     super(`unknown track "${track}" \u2014 config defines: ${known.join(", ")}`);
@@ -30368,10 +30386,11 @@ async function archiveFindings(projectDir, state, cycle, findings) {
   await fs7.writeFile(path8.join(dir, "findings.json"), `${JSON.stringify(findings, null, 2)}
 `, "utf8");
 }
-async function halt(projectDir, reason, now = () => /* @__PURE__ */ new Date()) {
+async function halt(projectDir, reason, now = () => /* @__PURE__ */ new Date(), options = {}) {
   const store = new StateStore(projectDir, now);
   const state = await store.update((draft) => {
     if (draft.run_id === null || draft.track === null) throw new NoActiveRunError();
+    expect("run", draft.run_id, draft.run_id, options.expectRun);
     draft.status = "halted";
     draft.current.stage = "halted";
     draft.halt_reason = reason;
@@ -30736,11 +30755,12 @@ var ApprovalRequiredError = class extends Error {
     this.name = "ApprovalRequiredError";
   }
 };
-async function gateSet(projectDir, input, now = () => /* @__PURE__ */ new Date()) {
+async function gateSet(projectDir, input, now = () => /* @__PURE__ */ new Date(), options = {}) {
   const paths = resolveLoopPaths(projectDir);
   await findPlanDir(projectDir, input.plan);
   return withLock(paths.lock, async () => {
     const plan = await readPlan(projectDir, input.plan);
+    expect("plan", input.plan, plan.frontmatter.approval?.decision ?? null, options.expect);
     const approval = ApprovalSchema.safeParse({
       decision: input.decision,
       by: input.by,
@@ -30828,11 +30848,12 @@ function assertDependenciesResolve(stories, candidate) {
   };
   visit(candidate.id);
 }
-async function storyUpdate(projectDir, storyId, patch, now = () => /* @__PURE__ */ new Date()) {
+async function storyUpdate(projectDir, storyId, patch, now = () => /* @__PURE__ */ new Date(), options = {}) {
   const paths = resolveLoopPaths(projectDir);
   const planId = storyId.slice(0, 4);
   return withLock(paths.lock, async () => {
     const current = await readStory(projectDir, storyId);
+    expect("story", storyId, current.frontmatter.status, options.expectStatus);
     const merged = StoryFrontmatterSchema.safeParse({ ...current.frontmatter, ...patch });
     if (!merged.success) throw new InvalidPlanInputError(prettifyError(merged.error));
     if (patch.depends_on !== void 0) {

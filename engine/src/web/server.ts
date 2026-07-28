@@ -9,6 +9,7 @@ import { JobQueue } from './queue.js'
 import { ClientMessageSchema, type Message, type ServerMessage, type Snapshot } from './protocol.js'
 import { spawnPtySession, type SessionFactory } from './session.js'
 import { buildSnapshot, emptyCache } from './snapshot.js'
+import { applyWrite } from './writes.js'
 
 /** How often `.mjloop/` is re-read. Cheap next to what a loop cycle costs. */
 export const POLL_MS = 800
@@ -38,6 +39,13 @@ const MIME: Record<string, string> = {
 }
 
 const PUBLIC_DIR = fileURLToPath(new URL('./public/', import.meta.url))
+
+/** What a receipt says on success. One code per kind, and no parameters. */
+const OK_CODES = {
+  gate: 'write.ok.gate',
+  'story.status': 'write.ok.story',
+  halt: 'write.ok.halt',
+} as const
 
 /**
  * Constant-time so the token cannot be recovered a byte at a time. Length is
@@ -211,6 +219,30 @@ export async function startServer(options: ServerOptions): Promise<RunningServer
         case 'nudge':
           queue.nudge()
           break
+        case 'write': {
+          const frame = message.data
+          void applyWrite(projectDir, frame.write).then(async (result) => {
+            // The snapshot goes out *before* the receipt, so by the time the
+            // page is told the write landed it is already looking at the
+            // result. That is what removes the optimistic render and its
+            // rollback from the page entirely.
+            if (result.ok) {
+              await refresh().catch(() => {})
+              // A halt is authoritative on state and best-effort on the
+              // session: only once `HALT.md` exists does the pty get told.
+              if (frame.write.kind === 'halt') queue.stop()
+            }
+            socket.send(
+              JSON.stringify({
+                type: 'receipt',
+                id: frame.id,
+                ok: result.ok,
+                code: result.ok ? OK_CODES[frame.write.kind] : result.code,
+              }),
+            )
+          })
+          break
+        }
       }
     })
 

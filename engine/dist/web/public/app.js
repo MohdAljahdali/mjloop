@@ -17,7 +17,9 @@ import { draw, register } from './ui/render.js'
 import { drawRail, mountRail } from './ui/rail.js'
 import { mountTabs, showTab } from './ui/tabs.js'
 import { mountTerminal, refit, replace, write } from './ui/terminal.js'
-import { dismiss, mountToasts, toast } from './ui/toasts.js'
+import { mountHaltDialog } from './ui/dialog.js'
+import { dismiss, mountToasts, runAction, toast } from './ui/toasts.js'
+import { settle, submit } from './ui/writes.js'
 import { mountConfig } from './panels/config.js'
 import { mountEvidence } from './panels/evidence.js'
 import { mountLauncher } from './panels/launcher.js'
@@ -46,6 +48,8 @@ const token = new URLSearchParams(location.search).get('t') ?? ''
 
 /** The running job, as of the last snapshot. */
 let activeJob = /** @type {string | null} */ (null)
+/** The run id on record, so a halt names the run the user was actually looking at. */
+let currentRun = /** @type {string | null} */ (null)
 
 installStorage(localStorage)
 installToken(token)
@@ -81,6 +85,7 @@ mountTerminal({
 })
 
 const pane = mountPane()
+const haltDialog = mountHaltDialog()
 const launcher = mountLauncher()
 mountRun()
 mountPlans()
@@ -118,6 +123,15 @@ bus.on('view-queue', () => pane.setView('queue'))
 bus.on('pane-cycle', () => pane.cycle())
 bus.on('pane-full', () => pane.toggleFull())
 bus.on('toast-dismiss', (element) => dismiss(element))
+bus.on('toast-action', (element) => runAction(element))
+// Halt and Stop are not the same thing and never share a control: Stop kills
+// the pty, halt writes HALT.md and only then closes the session.
+bus.on('halt', () => haltDialog.open(currentRun))
+bus.on('halt-cancel', () => haltDialog.close())
+bus.on('halt-confirm', () => {
+  const asked = haltDialog.take()
+  if (asked !== null) submit({ kind: 'halt', run: asked.run, reason: asked.reason })
+})
 bus.on('enqueue', () => {
   const command = launcher.read()
   if (command.length === 0) return
@@ -134,6 +148,7 @@ connect({
     if (message.type === 'snapshot') {
       const previous = activeJob
       activeJob = message.snapshot.session.jobId
+      currentRun = message.snapshot.state.run_id
       followQueue(previous, activeJob)
       draw(message.snapshot)
     } else if (message.type === 'output') {
@@ -144,6 +159,8 @@ connect({
       draw()
     } else if (message.type === 'notice') {
       toast(message.message)
+    } else if (message.type === 'receipt') {
+      settle(message)
     }
   },
 })

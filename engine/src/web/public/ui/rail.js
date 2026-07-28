@@ -97,6 +97,9 @@ export function drawRail(snapshot) {
   }
 
   show(node['stop'], snapshot.session.jobId !== null)
+  // Only offered while there is a run to halt: halting a finished run is not
+  // something the engine has a meaning for.
+  show(node['halt'], state.status === 'running')
 
   // ── banners ──────────────────────────────────────────────────────────────
   const configError = node['configError']

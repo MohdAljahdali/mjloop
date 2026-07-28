@@ -119,6 +119,28 @@ describe('websocket', () => {
     await expect(open(`ws://127.0.0.1:${server.port}/`)).rejects.toThrow()
   })
 
+  it('drops a write frame the schemas refuse, with no reply at all', async () => {
+    // No error channel: a malformed frame is either a bug in our own page or
+    // something with no business here, and neither is worth telling a prober
+    // what shape to send next. The id schemas are doing filesystem duty on the
+    // wire, and every forbidden op is simply not a `kind`.
+    const client = await open(`ws://127.0.0.1:${server.port}/?t=${server.token}`)
+    const refused = [
+      { kind: 'gate', plan: '../../etc', from: null, to: 'approved' },
+      { kind: 'story.status', story: '../x', from: 'todo', to: 'done' },
+      { kind: 'cycle.advance', result: 'pass' },
+      { kind: 'run.log', agent: 'reproducer', result: {} },
+      { kind: 'run.start', track: 'fix', goal: 'x' },
+      { kind: 'roster.set', agents: ['fixer'] },
+    ]
+    for (const write of refused) {
+      client.socket.send(JSON.stringify({ type: 'write', id: 'w1', write }))
+    }
+    await new Promise((resolve) => setTimeout(resolve, 150))
+    expect(client.messages.filter((message) => message['type'] === 'receipt')).toEqual([])
+    client.socket.close()
+  })
+
   it('sends a snapshot on connect', async () => {
     const client = await open(`ws://127.0.0.1:${server.port}/?t=${server.token}`)
     await expect.poll(() => client.messages.length).toBeGreaterThan(0)

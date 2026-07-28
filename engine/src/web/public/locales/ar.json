@@ -144,11 +144,27 @@
   "session.nudge": "أكمل",
   "session.stalledHint": "اضبط ‏autonomous: true‏ في ‏.mjloop/config.yaml‏ لتمضي الدورات دون هذا.",
 
+  "controls.halt": "أوقف التشغيل",
   "controls.stop": "إيقاف",
+
+  "halt.title": "أوقف هذا التشغيل",
+  "halt.explain": "يكتب هذا ‏HALT.md‏ وينهي التشغيل. أمّا الإيقاف فيغلق الجلسة فقط ويترك التشغيل مفتوحًا.",
+  "halt.reason": "السبب",
+  "halt.cancel": "إلغاء",
+  "halt.confirm": "أوقف التشغيل",
 
   "error.notFound": "غير موجود.",
   "error.unreadable": "تعذّرت القراءة — راجع الطرفيّة التي شُغّل منها الخادم.",
   "error.badRequest": "لم يُفهم هذا الطلب.",
+
+  "write.stale.plan": "بُتّ في هذه الخطّة من مكان آخر في هذه الأثناء — لم يتغيّر شيء.",
+  "write.stale.story": "تحرّكت هذه القصّة في هذه الأثناء — لم يتغيّر شيء.",
+  "write.stale.run": "هناك تشغيل آخر نشط الآن — لم يتغيّر شيء.",
+  "write.failed": "تعذّرت الكتابة — راجع الطرفيّة التي شُغّل منها الخادم.",
+  "write.ok.gate": "سُجّل القرار.",
+  "write.ok.story": "أُعيدت القصّة إلى الطابور.",
+  "write.ok.halt": "توقّف التشغيل. ملفّ ‏HALT.md‏ في مجلّد التشغيل.",
+  "write.undo": "تراجع",
 
   "toast.dismiss": "إخفاء",
 

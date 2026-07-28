@@ -59,7 +59,11 @@
           ></span>
           <span class="bit" data-rail="gate"></span>
         </span>
-        <button type="button" class="danger" data-act="stop" data-rail="stop" hidden data-i18n="controls.stop"></button>
+        <!-- Halt and Stop, side by side and labelled distinctly. Conflating
+             them is the obvious mistake: Stop kills the pty and leaves
+             `state.json` saying `running` with no HALT.md, which is not a halt. -->
+        <button type="button" class="danger" data-act="halt" data-rail="halt" hidden data-i18n="controls.halt"></button>
+        <button type="button" data-act="stop" data-rail="stop" hidden data-i18n="controls.stop"></button>
       </div>
     </header>
 
@@ -221,6 +225,25 @@
       <small class="hint" data-i18n="command.hint"></small>
     </section>
 
+    <!-- A native <dialog>: `showModal()` traps focus and handles Escape, which
+         a hand-rolled overlay gets wrong in exactly the ways that matter. Its
+         required field *is* the reason — a halt with no stated cause is the
+         thing HALT.md exists to prevent. -->
+    <dialog id="halt-dialog">
+      <form method="dialog" data-act="halt-confirm" id="halt-form">
+        <h2 data-i18n="halt.title"></h2>
+        <p class="hint" data-i18n="halt.explain"></p>
+        <label>
+          <span data-i18n="halt.reason"></span>
+          <input id="halt-reason" name="reason" required maxlength="2000" dir="auto" autocomplete="off" />
+        </label>
+        <div class="dialog-actions">
+          <button type="button" data-act="halt-cancel" data-i18n="halt.cancel"></button>
+          <button type="submit" class="danger" data-i18n="halt.confirm"></button>
+        </div>
+      </form>
+    </dialog>
+
     <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
 
     <!-- ── templates ───────────────────────────────────────────────────────
@@ -232,6 +255,7 @@
     <template id="tpl-toast">
       <div class="toast">
         <span data-slot="text"></span>
+        <button type="button" data-act="toast-action" data-slot="action" hidden></button>
         <button type="button" class="icon" data-act="toast-dismiss" data-slot="dismiss">×</button>
       </div>
     </template>

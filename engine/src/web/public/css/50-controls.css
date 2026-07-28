@@ -92,3 +92,43 @@
   font-size: 13px;
   box-shadow: 0 6px 18px rgb(0 0 0 / 45%);
 }
+
+/* A native <dialog>: the browser owns focus trapping, Escape and the backdrop. */
+dialog {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+  max-width: min(520px, 92vw);
+}
+
+dialog::backdrop {
+  background: rgb(0 0 0 / 55%);
+}
+
+dialog h2 {
+  margin: 0 0 8px;
+  font-size: 15px;
+}
+
+dialog label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-block-start: 12px;
+  font-size: 12px;
+  color: var(--dim);
+}
+
+.dialog-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-block-start: 16px;
+}
+
+.toast button:not(.icon) {
+  padding: 2px 10px;
+  font-size: 12px;
+}

@@ -140,11 +140,27 @@
   "session.nudge": "Continue",
   "session.stalledHint": "Set autonomous: true in .mjloop/config.yaml to let cycles run on without this.",
 
+  "controls.halt": "Halt",
   "controls.stop": "Stop",
+
+  "halt.title": "Halt this run",
+  "halt.explain": "This writes HALT.md and ends the run. Stop only closes the session and leaves the run open.",
+  "halt.reason": "Why",
+  "halt.cancel": "Cancel",
+  "halt.confirm": "Halt the run",
 
   "error.notFound": "Not found.",
   "error.unreadable": "Could not read that — see the terminal the server was started from.",
   "error.badRequest": "That request was not understood.",
+
+  "write.stale.plan": "That plan was decided on somewhere else in the meantime — nothing was changed.",
+  "write.stale.story": "That story moved on in the meantime — nothing was changed.",
+  "write.stale.run": "A different run is active now — nothing was changed.",
+  "write.failed": "That could not be written — see the terminal the server was started from.",
+  "write.ok.gate": "Decision recorded.",
+  "write.ok.story": "Story requeued.",
+  "write.ok.halt": "Run halted. HALT.md is in the run directory.",
+  "write.undo": "Undo",
 
   "toast.dismiss": "Dismiss",
 

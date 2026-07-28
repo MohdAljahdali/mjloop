@@ -13,6 +13,7 @@ import {
 } from '../schemas/plan.js'
 import { ConfigMissingError, loadConfig } from '../store/config-store.js'
 import { withLock } from '../store/lock.js'
+import { expect as expectUnchanged } from '../store/precondition.js'
 import { resolveLoopPaths } from '../store/paths.js'
 import {
   findPlanDir,
@@ -110,12 +111,19 @@ export async function gateSet(
   projectDir: string,
   input: GateSetInput,
   now: Clock = () => new Date(),
+  // A **trailing option**, never a field inside `input`. `GateSetInput` is fed
+  // straight to a strict schema, so an expectation carried inside it would fail
+  // validation blaming a field the caller never sent.
+  options: { expect?: ApprovalDecision | null } = {},
 ): Promise<{ plan: string; approval: Approval; repaired: boolean }> {
   const paths = resolveLoopPaths(projectDir)
   await findPlanDir(projectDir, input.plan)
 
   return withLock(paths.lock, async () => {
     const plan = await readPlan(projectDir, input.plan)
+    // Inside the lock, and before anything is written: a precondition that
+    // threw after writing would be worse than none at all.
+    expectUnchanged('plan', input.plan, plan.frontmatter.approval?.decision ?? null, options.expect)
     const approval = ApprovalSchema.safeParse({
       decision: input.decision,
       by: input.by,
@@ -274,12 +282,17 @@ export async function storyUpdate(
   storyId: string,
   patch: StoryPatch,
   now: Clock = () => new Date(),
+  // Trailing, for the reason above and one more: `ops/plan.ts` merges
+  // `{...current.frontmatter, ...patch}` into a strict schema, so an
+  // expectation inside `patch` would be rejected as an unknown story field.
+  options: { expectStatus?: StoryStatus } = {},
 ): Promise<{ id: string; file: string; manifest: Manifest }> {
   const paths = resolveLoopPaths(projectDir)
   const planId = storyId.slice(0, 4)
 
   return withLock(paths.lock, async () => {
     const current = await readStory(projectDir, storyId)
+    expectUnchanged('story', storyId, current.frontmatter.status, options.expectStatus)
     const merged = StoryFrontmatterSchema.safeParse({ ...current.frontmatter, ...patch })
     if (!merged.success) throw new InvalidPlanInputError(z.prettifyError(merged.error))
 

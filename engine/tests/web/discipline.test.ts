@@ -196,11 +196,13 @@ describe('the page never assigns to a control', () => {
     // Rule 3: every control the user types into is uncontrolled and written
     // once at mount, so an 800ms tick cannot eat a half-typed note by
     // construction rather than by a focus check somebody forgets.
-    // Two files may, and both for something a person did rather than something
-    // a snapshot did: `app.js` fills the language picker at boot, and
-    // `launcher.js` clears the command box because Run was pressed.
+    // Three files may, and each for something a *person* did rather than
+    // something a snapshot did: `app.js` fills the language picker at boot,
+    // `dialog.js` clears the halt reason when the dialog is opened, and
+    // `launcher.js` clears the command box because Run was pressed. No
+    // renderer appears in this list, and that is the property under test.
     const writers = scripts.filter((name) => /\.value\s*=[^=]/.test(code(name)))
-    expect(writers).toEqual(['app.js', 'panels/launcher.js'])
+    expect(writers).toEqual(['app.js', 'panels/launcher.js', 'ui/dialog.js'])
   })
 })
 

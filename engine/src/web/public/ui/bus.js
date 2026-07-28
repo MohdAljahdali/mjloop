@@ -37,6 +37,11 @@ function dispatch(event) {
   if (!(target instanceof Element)) return
   const host = target.closest('[data-act]')
   if (!(host instanceof HTMLElement)) return
+  // A form acts on submit and only on submit. Without this, a click on its
+  // submit button resolves to the form through `closest()` and fires the
+  // action once — and then the submit event fires it again. That sent the halt
+  // write twice and wrote HALT.md twice.
+  if (event.type === 'click' && host instanceof HTMLFormElement) return
   const name = host.dataset['act']
   if (name === undefined) return
   const action = actions.get(name)

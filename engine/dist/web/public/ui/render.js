@@ -39,6 +39,15 @@ export function installScheduler(scheduler) {
 }
 
 /**
+ * Register a panel.
+ *
+ * **`node` must be something that is on screen whenever the panel's output
+ * needs to be right, and it must never be the thing the panel hides.** Hidden
+ * panels are skipped, so a control registered against *itself* that starts
+ * hidden never gets the chance to unhide itself and simply never appears. That
+ * has caught out the queue count and the halt button already; both now draw
+ * from a container that is always visible.
+ *
  * @param {Panel} panel
  */
 export function register(panel) {
