@@ -653,3 +653,41 @@ creation forms. Needs M2 and M3.
   empty in a fresh project, `mjloop_init` creates no `INDEX.md` and no design
   system, and this repo gitignores `.mjloop/` so there is no committed example
   to design against. Every panel needs a real empty state, written first.
+
+## As built
+
+All six milestones ship. Five things came out differently, and each is here
+because a reader of this design would otherwise be surprised by the code.
+
+- **Tables are `role="table"` grids, not `<table>`.** `<tr>` at the root of a
+  `<template>` is valid HTML and works in a browser, but happy-dom drops it —
+  which would have left every row template in the four tables with no
+  regression net, in the one part of the page that has never had one. A
+  discipline test now forbids a table row at a template root.
+
+- **`tx()` lives in `ui/dom.js`, not `lib/i18n.js`.** It produces DOM, and
+  `lib/` is DOM-free so the plural and bidi rules stay node-testable. The
+  segmentation it is built from — `parts()` — is the pure half and stays in
+  `lib/i18n.js`. `phrase()` is the memoising node-level wrapper.
+
+- **`verbatim()` wraps its value in a reused `<bdi>` child** rather than
+  setting `dir="ltr"` on the node itself. `dir` on a container also sets that
+  container's text alignment, so in Arabic every identifier jumped to the far
+  left of its column.
+
+- **M2 and M4 shipped together, as did M5 and M6.** The discipline suite
+  forbids an unreachable module, so `lib/api.js` needed its first consumer in
+  the same change that introduced it.
+
+- **`StateStore` is not on the forbidden list; `store.update` is.** `guards`
+  is read from a second `StateStore.read()`, exactly as this design specifies,
+  and `atomic.ts:55-59` says in so many words that a read performs no repair
+  write. What must never appear under `src/web/` is an *update*, and that is
+  what the test asserts — along with `readPlan`, which repairs by rewriting.
+
+Three bugs found by driving the real page rather than the tests, all of one
+shape and worth naming: **a control that hides itself must not be the node its
+own panel is registered against.** `render` skips hidden panels, so the queue
+count and the halt button could never appear. `register()` now says so. The
+third was the delegated bus firing a form's action on click *and* on submit,
+which wrote HALT.md twice.

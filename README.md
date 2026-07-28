@@ -41,7 +41,7 @@ Then add this repository as a plugin marketplace or local plugin in Claude Code.
 /mjloop:stop [reason]                      halt the run and write a report
 /mjloop:resume                             continue an interrupted run
 /mjloop:design-sync                        extract the design system the UI agents read
-/mjloop:web                                dashboard: queue runs, watch each in a terminal
+/mjloop:web                                cockpit: drive and read a run in a browser
 /mjloop:add agent|skill|track <name>       scaffold a new element
 /mjloop:release [major|minor|patch]        bump, tag, and publish a plugin release
 ```
