@@ -1,6 +1,6 @@
 {
   "name": "mjloop",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Cycle engine for Claude Code. A leader composes each cycle from a track roster of contract-bound agents; state lives in .mjloop/ and is owned by an MCP server.",
   "keywords": ["loop", "agents", "orchestration", "mcp"],
   "mcpServers": {
