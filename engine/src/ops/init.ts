@@ -21,6 +21,7 @@ This project uses the \`mjloop\` plugin. Execution state lives in \`.mjloop/\`.
 - \`/mjloop:stop [reason]\` — halt the run and write a report
 - \`/mjloop:resume\` — continue a run that was interrupted
 - \`/mjloop:design-sync\` — extract the project's design system for the UI agents
+- \`/mjloop:web\` — dashboard: queue runs and watch each one in a terminal
 - \`/mjloop:add agent|skill|track <name>\` — scaffold a new element
 
 \`.mjloop/state.json\` is owned by the mjloop MCP server. Never edit it by hand.

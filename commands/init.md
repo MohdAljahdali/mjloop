@@ -20,6 +20,7 @@ Set up the loop for this project.
    - `/mjloop:stop [reason]` — halt the run and write a report
    - `/mjloop:resume` — continue a run that was interrupted
    - `/mjloop:design-sync` — extract the project's design system for the UI agents
+   - `/mjloop:web` — dashboard: queue runs and watch each one in a terminal
    - `/mjloop:add agent|skill|track <name>` — scaffold a new element
 
 If `mjloop_init` reports `alreadyInitialised: true`, say so and stop. Do not reset state.
