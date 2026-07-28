@@ -49,3 +49,14 @@ jobs:
       - name: Build
         working-directory: engine
         run: npm run build
+
+      # The tests run against src/ with node_modules beside them, which is the
+      # one situation a user is never in. This runs what git ships, alone.
+      - name: Verify the shipped tree runs with nothing installed
+        working-directory: engine
+        run: npm run verify:ship
+
+      # dist/ is committed, so a build that changes it and is not committed
+      # means the release would ship yesterday's behaviour.
+      - name: Check dist is up to date with src
+        run: git diff --exit-code -- engine/dist

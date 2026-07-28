@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="referrer" content="no-referrer" />
+    <title>mjloop</title>
+    <!-- Inline so the page pulls in nothing external and asks for no favicon.ico. -->
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='6' fill='none' stroke='%2358a6ff' stroke-width='2'/%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="vendor/xterm.css" />
+    <link rel="stylesheet" href="app.css" />
+  </head>
+  <body>
+    <header class="bar">
+      <h1 data-i18n="app.title">mjloop</h1>
+      <span class="project" id="project"></span>
+      <label class="lang">
+        <span data-i18n="lang.label">Language</span>
+        <select id="lang" name="lang"></select>
+      </label>
+    </header>
+
+    <p class="banner offline" id="offline" hidden data-i18n="app.disconnected"></p>
+
+    <main>
+      <aside>
+        <section class="panel" id="state-panel"></section>
+
+        <section class="panel">
+          <h2 data-i18n="plans.title">Plans</h2>
+          <div id="plans"></div>
+        </section>
+
+        <section class="panel">
+          <h2 data-i18n="queue.title">Queue</h2>
+          <div id="queue"></div>
+        </section>
+      </aside>
+
+      <section class="stage">
+        <div class="stage-head">
+          <h2 data-i18n="terminal.title">Session</h2>
+          <span class="job-label" id="job-label"></span>
+          <button id="stop" data-i18n="controls.stop" hidden>Stop</button>
+        </div>
+
+        <p class="banner stalled" id="stalled" hidden>
+          <span id="stalled-text"></span>
+          <button id="nudge" data-i18n="session.nudge">Continue</button>
+          <small id="stalled-hint" data-i18n="session.stalledHint"></small>
+        </p>
+
+        <p class="empty" id="terminal-empty" data-i18n="terminal.idle"></p>
+        <!-- Pinned ltr whatever the ui language is: claude's output is box
+             drawing and aligned columns, and mirroring it destroys both. -->
+        <div class="terminal" id="terminal" dir="ltr"></div>
+
+        <form class="command" id="command-form">
+          <input id="command" name="command" autocomplete="off" spellcheck="false" dir="auto" />
+          <button type="submit" data-i18n="command.run">Run</button>
+        </form>
+        <small class="hint" data-i18n="command.hint"></small>
+      </section>
+    </main>
+
+    <script src="vendor/xterm.js"></script>
+    <script src="vendor/addon-fit.js"></script>
+    <script type="module" src="app.js"></script>
+  </body>
+</html>

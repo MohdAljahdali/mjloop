@@ -1,8 +1,10 @@
 # Dependencies
 node_modules/
 
-# Build output
-engine/dist/
+# Build output. engine/dist/ is deliberately NOT ignored: a Claude Code plugin
+# ships what is in git and runs it as-is, with no install step. Shipping only
+# src/ shipped nothing that runs — the MCP server and all three hooks point
+# into dist/. It is bundled (no node_modules needed) by `npm run build`.
 *.tsbuildinfo
 
 # Test output

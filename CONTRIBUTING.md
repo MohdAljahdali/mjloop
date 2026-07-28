@@ -18,6 +18,17 @@ To use your working copy inside Claude Code, add the repository root as a local 
 plugin marketplace. The MCP server is served from `engine/dist/mcp/server.js`, so
 `npm run build` must have run before the plugin will load.
 
+`engine/dist/` is committed, and that is deliberate. A plugin ships what is in git and
+runs it as-is — there is no install step on the user's machine — so a repository holding
+only `src/` installs a plugin whose MCP server and hooks point at files that do not
+exist. `npm run build` bundles every dependency in, so the shipped tree needs no
+`node_modules` at all. `node-pty` is the one exception: it is native, only the dashboard
+uses it, and `/mjloop:web` installs it on first run.
+
+The practical consequence: **rebuild before you commit**, and expect a release commit to
+carry `engine/dist/` changes alongside the source. A `dist/` that lags `src/` is a
+release that ships yesterday's behaviour.
+
 Enable the repository's git hooks once per clone:
 
 ```bash

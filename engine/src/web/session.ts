@@ -1,4 +1,45 @@
-import { spawn } from 'node-pty'
+import { createRequire } from 'node:module'
+import type { spawn as PtySpawn } from 'node-pty'
+
+/**
+ * `node-pty` is the one thing in this engine that cannot be bundled — it is a
+ * native module — and it is needed only by the dashboard. Loading it here, on
+ * the first session rather than at import time, is what keeps the MCP server
+ * and the three hooks free of native code: they import nothing from this file,
+ * and a machine that never runs `/mjloop:web` never needs a compiler.
+ *
+ * `createRequire` rather than `await import`, so the factory stays synchronous
+ * and the queue does not have to become async to accommodate it.
+ */
+const require = createRequire(import.meta.url)
+let cached: { spawn: typeof PtySpawn } | null = null
+
+export class PtyMissingError extends Error {
+  constructor(cause: string) {
+    super(`node-pty is not installed, so the dashboard cannot open a terminal (${cause})`)
+    this.name = 'PtyMissingError'
+  }
+}
+
+function pty(): { spawn: typeof PtySpawn } {
+  if (cached !== null) return cached
+  try {
+    cached = require('node-pty') as { spawn: typeof PtySpawn }
+  } catch (error) {
+    throw new PtyMissingError((error as Error).message)
+  }
+  return cached
+}
+
+/** Whether a terminal can be opened, asked before the server starts listening. */
+export function isPtyAvailable(): boolean {
+  try {
+    pty()
+    return true
+  } catch {
+    return false
+  }
+}
 
 /**
  * One `claude` session, seen as the four things the queue actually needs.
@@ -38,7 +79,7 @@ function claudeBinary(): string {
 }
 
 export const spawnPtySession: SessionFactory = ({ cwd, command, cols, rows }) => {
-  const child = spawn(claudeBinary(), [command], {
+  const child = pty().spawn(claudeBinary(), [command], {
     name: 'xterm-256color',
     cols,
     rows,

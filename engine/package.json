@@ -4,14 +4,16 @@
   "private": true,
   "license": "MIT",
   "type": "module",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "bin": {
     "mjloop-mcp": "./dist/mcp/server.js",
     "mjloop-cli": "./dist/cli/index.js",
     "mjloop-web": "./dist/web/cli.js"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json && node scripts/copy-web-assets.mjs",
+    "build": "node scripts/build.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc -p tsconfig.json --noEmit",
@@ -21,21 +23,23 @@
     "e2e:story": "bash ../tests/e2e/run-story.sh",
     "e2e:plan": "bash ../tests/e2e/run-plan.sh",
     "e2e:design": "bash ../tests/e2e/run-design-sync.sh",
-    "e2e:add": "bash ../tests/e2e/run-add.sh"
+    "e2e:add": "bash ../tests/e2e/run-add.sh",
+    "verify:ship": "node scripts/verify-ship.mjs"
   },
-  "dependencies": {
+  "devDependencies": {
     "@modelcontextprotocol/sdk": "1.29.0",
+    "@types/node": "24.3.0",
+    "@types/ws": "8.18.1",
     "@xterm/addon-fit": "0.10.0",
     "@xterm/xterm": "5.5.0",
-    "node-pty": "1.0.0",
+    "esbuild": "^0.25.10",
+    "typescript": "5.9.2",
+    "vitest": "4.1.10",
     "ws": "8.18.3",
     "yaml": "2.9.0",
     "zod": "4.4.3"
   },
-  "devDependencies": {
-    "@types/node": "24.3.0",
-    "@types/ws": "8.18.1",
-    "typescript": "5.9.2",
-    "vitest": "4.1.10"
+  "optionalDependencies": {
+    "node-pty": "1.0.0"
   }
 }
