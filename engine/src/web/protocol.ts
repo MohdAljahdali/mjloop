@@ -1,5 +1,7 @@
 import * as z from 'zod'
 import type { StateSummary } from '../ops/summary.js'
+import type { WebCode } from './codes.js'
+import type { Revisions } from './revision.js'
 
 /**
  * Everything the server says to the page is a code and its parameters, never
@@ -11,7 +13,7 @@ import type { StateSummary } from '../ops/summary.js'
  * the type: there is no field here that could hold a sentence.
  */
 export interface Message {
-  code: string
+  code: WebCode
   params?: Record<string, string | number>
 }
 
@@ -62,6 +64,39 @@ export interface SessionView {
   stalledSince: string | null
 }
 
+/**
+ * The stagnation counters, which say how close a halt is.
+ *
+ * Today a stagnation halt arrives without warning. Read from a second
+ * `StateStore.read()` rather than added to `StateSummary`, because that type is
+ * the compact view for the leader brief and the SessionStart hook and widening
+ * it changes what every agent sees.
+ */
+export interface GuardView {
+  strikes: number
+  /** `limits.no_progress_strikes`, or null when config is unreadable. */
+  strikesAllowed: number | null
+  /** Normalised error signatures observed this cycle. */
+  cycleErrors: string[]
+  /** The signature that will halt the run if this cycle repeats it. */
+  errorArmed: string | null
+}
+
+/**
+ * Which agents this cycle drafted, and which have landed.
+ *
+ * `roster.selected` diffed against the `cycle-NN/<agent>.json` files that
+ * exist. This is the only real intra-cycle progress signal there is:
+ * `StateSchema` permits stage `execute` and `judge`, but nothing in the engine
+ * ever sets them, so a UI that promised a stage would be promising something
+ * the engine never writes.
+ */
+export interface RosterView {
+  cycle: number
+  selected: string[]
+  landed: string[]
+}
+
 export interface Snapshot {
   /** Absolute path of the project being driven. Shown so two servers are told apart. */
   project: string
@@ -71,6 +106,11 @@ export interface Snapshot {
   runs: string[]
   queue: Job[]
   session: SessionView
+  guards: GuardView | null
+  /** Null unless a run is open. */
+  roster: RosterView | null
+  /** What each tab subscribes to. The open tab *is* the subscription. */
+  revisions: Revisions
 }
 
 export type ServerMessage =

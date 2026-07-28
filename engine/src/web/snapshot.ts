@@ -1,30 +1,100 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { stateSummary } from '../ops/summary.js'
+import { loadConfig } from '../store/config-store.js'
 import { ManifestSchema, PlanFrontmatterSchema } from '../schemas/plan.js'
 import { parseFrontmatter } from '../store/frontmatter.js'
 import { resolveLoopPaths } from '../store/paths.js'
 import { findPlanDir, listPlanIds } from '../store/plan-store.js'
-import type { PlanView, Snapshot, StoryView } from './protocol.js'
+import { StateStore } from '../store/state-store.js'
+import { readRosterProgress } from './read.js'
+import { readRevisions, type Revisions } from './revision.js'
+import type { GuardView, PlanView, RosterView, Snapshot, StoryView } from './protocol.js'
 
 /**
- * Everything the page draws, read from `.mjloop/`.
+ * Everything the page draws without asking for it, read from `.mjloop/`.
  *
- * The page parses none of the loop's formats itself: it gets `stateSummary`'s
- * output and each plan's own manifest, so a schema change in the engine cannot
- * leave a second reader behind holding the old shape.
+ * The rule: **only facts already parsed from files already opened.** Anything
+ * with a body — `PLAN.md`, `HALT.md`, an agent result, a memory entry — is
+ * fetched over the read api instead, so this stays a handful of small reads
+ * whether or not the project has forty runs in it.
  *
  * Every read here is non-destructive, which rules out `readPlan` — that one
  * repairs clobbered frontmatter by rewriting the file, and a poller running
- * eight times a second is the last thing that should be writing to a project.
+ * once a second is the last thing that should be writing to a project.
  */
-export async function buildSnapshot(projectDir: string): Promise<Omit<Snapshot, 'queue' | 'session'>> {
-  const [state, plans, runs] = await Promise.all([
-    stateSummary(projectDir),
-    readPlans(projectDir),
+
+export type SnapshotBase = Omit<Snapshot, 'queue' | 'session'>
+
+/**
+ * Carried between ticks so an idle project costs about eight stats and a
+ * readdir: the plans are re-read only when their revision has moved.
+ */
+export interface SnapshotCache {
+  tick: number
+  plansRevision: string
+  plans: PlanView[]
+}
+
+export function emptyCache(): SnapshotCache {
+  return { tick: 0, plansRevision: '', plans: [] }
+}
+
+export async function buildSnapshot(projectDir: string, cache: SnapshotCache = emptyCache()): Promise<SnapshotBase> {
+  cache.tick += 1
+
+  const [state, guards] = await Promise.all([stateSummary(projectDir), readGuards(projectDir)])
+  const running = state.status === 'running'
+
+  const revisions = await readRevisions(projectDir, cache.tick, running)
+
+  // Paid for in cash: `manifest.json` used to be read twice per plan per tick,
+  // and every plan was re-read on every tick whether or not anything had moved.
+  if (revisions.plans !== cache.plansRevision) {
+    cache.plans = await readPlans(projectDir)
+    cache.plansRevision = revisions.plans
+  }
+
+  const [runs, roster] = await Promise.all([
     listRuns(projectDir),
+    running && state.run_id !== null && state.track !== null
+      ? readRosterProgress(projectDir, runDirName(state.run_id, state.story, state.track), state.cycle)
+      : Promise.resolve(null),
   ])
-  return { project: projectDir, state, plans, runs }
+
+  return { project: projectDir, state, plans: cache.plans, runs, guards, roster, revisions }
+}
+
+/** Mirrors `ops/run.ts:runDirName`, which needs a whole `State` this never reads. */
+function runDirName(runId: string, story: string | null, track: string): string {
+  return `${runId}--${story ?? 'adhoc'}--${track}`
+}
+
+/**
+ * The stagnation counters, from a second `StateStore.read()`.
+ *
+ * Read rather than added to `StateSummary` because that type is the compact
+ * view for the leader brief and the SessionStart hook (`summary.ts:60-63`), and
+ * widening it changes what every agent sees. `atomic.ts:55-59` says in so many
+ * words that there is deliberately no repair write on a read, and 2 KB read
+ * twice a second is free next to what a loop cycle costs.
+ */
+async function readGuards(projectDir: string): Promise<GuardView | null> {
+  try {
+    const [{ state }, config] = await Promise.all([
+      new StateStore(projectDir).read(),
+      loadConfig(projectDir).catch(() => null),
+    ])
+    return {
+      strikes: state.no_progress_count,
+      strikesAllowed: config?.limits.no_progress_strikes ?? null,
+      cycleErrors: state.cycle_errors,
+      // The signature that will halt the run if this cycle repeats it.
+      errorArmed: state.last_error_fingerprint,
+    }
+  } catch {
+    return null
+  }
 }
 
 async function readPlans(projectDir: string): Promise<PlanView[]> {
@@ -50,23 +120,21 @@ async function readPlans(projectDir: string): Promise<PlanView[]> {
 
 async function readPlanView(projectDir: string, id: string): Promise<PlanView> {
   const dir = await findPlanDir(projectDir, id)
-  const [frontmatter, stories, manifestTitle] = await Promise.all([
-    readPlanFrontmatter(dir),
-    readStories(dir),
-    readManifestTitle(dir),
-  ])
+  const [frontmatter, manifest] = await Promise.all([readPlanFrontmatter(dir), readManifest(dir)])
 
   return {
     id,
     // The directory name is the last resort, and it always exists — `findPlanDir`
     // found the plan by it.
-    title: frontmatter?.title ?? manifestTitle ?? path.basename(dir),
+    title: frontmatter?.title ?? manifest?.title ?? path.basename(dir),
     approval: frontmatter?.approval?.decision ?? null,
-    stories,
+    stories: manifest?.stories ?? [],
   }
 }
 
-async function readPlanFrontmatter(dir: string): Promise<{ title: string; approval: { decision: string } | null } | null> {
+async function readPlanFrontmatter(
+  dir: string,
+): Promise<{ title: string; approval: { decision: string } | null } | null> {
   try {
     const raw = await fs.readFile(path.join(dir, 'PLAN.md'), 'utf8')
     const parsed = PlanFrontmatterSchema.safeParse(parseFrontmatter(raw).data)
@@ -77,11 +145,11 @@ async function readPlanFrontmatter(dir: string): Promise<{ title: string; approv
   }
 }
 
-async function readManifestTitle(dir: string): Promise<string | null> {
-  const manifest = await readManifest(dir)
-  return manifest?.title ?? null
-}
-
+/**
+ * The manifest is the source for stories — it is what the engine derives from
+ * the story files, so reading it keeps this in step with `INDEX.md` rather than
+ * inventing a second interpretation of the same directory.
+ */
 async function readManifest(dir: string): Promise<{ title: string; stories: StoryView[] } | null> {
   try {
     const raw = await fs.readFile(path.join(dir, 'manifest.json'), 'utf8')
@@ -102,15 +170,6 @@ async function readManifest(dir: string): Promise<{ title: string; stories: Stor
   }
 }
 
-/**
- * The manifest is the source for stories — it is what the engine derives from
- * the story files, so reading it keeps this in step with `INDEX.md` rather than
- * inventing a second interpretation of the same directory.
- */
-async function readStories(dir: string): Promise<StoryView[]> {
-  return (await readManifest(dir))?.stories ?? []
-}
-
 /** Newest first: run ids sort lexicographically because they open with a timestamp. */
 async function listRuns(projectDir: string): Promise<string[]> {
   try {
@@ -124,3 +183,5 @@ async function listRuns(projectDir: string): Promise<string[]> {
     return []
   }
 }
+
+export type { Revisions }

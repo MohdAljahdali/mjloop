@@ -12,6 +12,7 @@
   "rail.cycle": "Cycle",
   "rail.stage": "Stage",
   "rail.findings": "{high} high · {medium} medium · {low} low",
+  "rail.strikes": "Strikes",
   "rail.gate.open": "Gate open",
   "rail.gate.shut": "Gate shut",
 
@@ -41,6 +42,10 @@
   "cycle.result.fail": "failed",
   "cycle.result.blocked": "blocked",
 
+  "findings.severity.high": "high",
+  "findings.severity.medium": "medium",
+  "findings.severity.low": "low",
+
   "run.uninitialised": "No loop in this project — run /mjloop:init to set it up.",
   "run.idle": "Idle — nothing running. Queue a story or type a command below.",
   "run.goal": "Goal",
@@ -54,6 +59,20 @@
   "run.gateState.shut": "Shut — nothing proven yet",
   "run.halted": "Halted",
   "run.lastCycle": "Last cycle",
+  "run.roster": "This cycle",
+  "run.guards": "Guards",
+  "run.findingsTitle": "Findings",
+  "run.finding.severity": "Severity",
+  "run.finding.where": "Where",
+  "run.finding.claim": "Claim",
+  "run.gatePanel": "Gate",
+  "run.gateState.provenBy": "Open — proven by {agent} in cycle {cycle}",
+  "run.timeline": "Cycles",
+  "run.cycle.number": "Cycle",
+  "run.cycle.agents": "Agents",
+  "run.cycle.result": "Result",
+  "run.cycle.ref": "Evidence",
+  "run.haltReport": "Halt report",
 
   "plans.empty": "No plans yet. Start one with /mjloop:plan.",
   "plans.more": "Showing {shown} of {total} plans.",
@@ -122,6 +141,10 @@
   "session.stalledHint": "Set autonomous: true in .mjloop/config.yaml to let cycles run on without this.",
 
   "controls.stop": "Stop",
+
+  "error.notFound": "Not found.",
+  "error.unreadable": "Could not read that — see the terminal the server was started from.",
+  "error.badRequest": "That request was not understood.",
 
   "toast.dismiss": "Dismiss",
 

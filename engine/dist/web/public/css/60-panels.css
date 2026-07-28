@@ -173,3 +173,96 @@
   gap: 8px;
   margin-block-start: 10px;
 }
+
+/* Wide content scrolls inside its own box; the page body never does. */
+.scroller {
+  overflow-x: auto;
+}
+
+.grid {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 13px;
+}
+
+.grid th {
+  text-align: start;
+  color: var(--dim);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 400;
+  padding: 4px 10px 4px 0;
+  border-block-end: 1px solid var(--line);
+}
+
+.grid td {
+  padding: 5px 10px 5px 0;
+  border-block-end: 1px solid var(--line);
+  vertical-align: top;
+}
+
+.grid code {
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.sev-high {
+  color: var(--bad);
+}
+
+.sev-medium {
+  color: var(--warn);
+}
+
+.sev-low {
+  color: var(--dim);
+}
+
+.res-pass {
+  color: var(--ok);
+}
+
+.res-fail {
+  color: var(--bad);
+}
+
+.res-blocked {
+  color: var(--warn);
+}
+
+/* A halt report or a gate excerpt: verbatim output, so it wraps rather than
+   being reflowed, and it is never mirrored. */
+.excerpt {
+  direction: ltr;
+  font-family: var(--mono);
+  font-size: 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+  margin: 6px 0 0;
+  max-height: 40vh;
+  overflow-y: auto;
+}
+
+.chip.landed-yes {
+  color: var(--ok);
+  border-color: var(--ok);
+}
+
+.chip.armed-yes {
+  color: var(--bad);
+  border-color: var(--bad);
+}
+
+#run-strikes {
+  font-family: var(--mono);
+  margin: 0 0 8px;
+}
+
+.bit.warnish .v {
+  color: var(--warn);
+}

@@ -4,10 +4,11 @@ import http from 'node:http'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { WebSocketServer, type WebSocket } from 'ws'
+import { handleApi, sendApi } from './api.js'
 import { JobQueue } from './queue.js'
 import { ClientMessageSchema, type Message, type ServerMessage, type Snapshot } from './protocol.js'
 import { spawnPtySession, type SessionFactory } from './session.js'
-import { buildSnapshot } from './snapshot.js'
+import { buildSnapshot, emptyCache } from './snapshot.js'
 
 /** How often `.mjloop/` is re-read. Cheap next to what a loop cycle costs. */
 export const POLL_MS = 800
@@ -112,8 +113,12 @@ export async function startServer(options: ServerOptions): Promise<RunningServer
     }
   }
 
+  // Carried across ticks so an idle project costs about eight stats and a
+  // readdir rather than a full re-read of every plan.
+  const cache = emptyCache()
+
   const refresh = async (): Promise<void> => {
-    const base = await buildSnapshot(projectDir)
+    const base = await buildSnapshot(projectDir, cache)
     // Fed the summary the poller already read rather than reading it again:
     // one read per tick means the queue can never decide on a different state
     // from the one the page is about to be shown.
@@ -131,7 +136,7 @@ export async function startServer(options: ServerOptions): Promise<RunningServer
   }
 
   const server = http.createServer((request, response) => {
-    void handleRequest(request, response, token)
+    void handleRequest(request, response, token, projectDir)
   })
 
   const wss = new WebSocketServer({ noServer: true })
@@ -256,11 +261,20 @@ async function handleRequest(
   request: http.IncomingMessage,
   response: http.ServerResponse,
   token: string,
+  projectDir: string,
 ): Promise<void> {
   const url = new URL(request.url ?? '/', 'http://127.0.0.1')
   if (!tokenMatches(token, suppliedToken(url, request.headers.cookie))) {
     response.writeHead(401, { 'content-type': 'text/plain; charset=utf-8' })
     response.end('unauthorized')
+    return
+  }
+
+  // Matched after the token check and before the static resolver, so no `/api`
+  // path can ever reach a file on disk.
+  const api = await handleApi(projectDir, request.method ?? 'GET', url.pathname)
+  if (api !== null) {
+    sendApi(request, response, api)
     return
   }
 

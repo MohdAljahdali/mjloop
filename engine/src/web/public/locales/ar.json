@@ -12,6 +12,7 @@
   "rail.cycle": "الدورة",
   "rail.stage": "المرحلة",
   "rail.findings": "{high} عالية · {medium} متوسّطة · {low} منخفضة",
+  "rail.strikes": "الإنذارات",
   "rail.gate.open": "البوّابة مفتوحة",
   "rail.gate.shut": "البوّابة مغلقة",
 
@@ -41,6 +42,10 @@
   "cycle.result.fail": "فشلت",
   "cycle.result.blocked": "تعطّلت",
 
+  "findings.severity.high": "عالية",
+  "findings.severity.medium": "متوسّطة",
+  "findings.severity.low": "منخفضة",
+
   "run.uninitialised": "لا لوب في هذا المشروع — شغّل ‏/mjloop:init‏ لتهيئته.",
   "run.idle": "خامل — لا شيء قيد التشغيل. أضف قصّة إلى الطابور أو اكتب أمرًا في الأسفل.",
   "run.goal": "الهدف",
@@ -54,6 +59,20 @@
   "run.gateState.shut": "مغلقة — لم يُثبت شيء بعد",
   "run.halted": "متوقّف",
   "run.lastCycle": "الدورة الأخيرة",
+  "run.roster": "هذه الدورة",
+  "run.guards": "الحرّاس",
+  "run.findingsTitle": "الملاحظات",
+  "run.finding.severity": "الخطورة",
+  "run.finding.where": "الموضع",
+  "run.finding.claim": "الادّعاء",
+  "run.gatePanel": "البوّابة",
+  "run.gateState.provenBy": "مفتوحة — أثبتها {agent} في الدورة {cycle}",
+  "run.timeline": "الدورات",
+  "run.cycle.number": "الدورة",
+  "run.cycle.agents": "الوكلاء",
+  "run.cycle.result": "النتيجة",
+  "run.cycle.ref": "الدليل",
+  "run.haltReport": "تقرير التوقّف",
 
   "plans.empty": "لا خطط بعد. ابدأ واحدة بـ ‏/mjloop:plan‏.",
   "plans.more": "تعرض {shown} من {total} خطّة.",
@@ -126,6 +145,10 @@
   "session.stalledHint": "اضبط ‏autonomous: true‏ في ‏.mjloop/config.yaml‏ لتمضي الدورات دون هذا.",
 
   "controls.stop": "إيقاف",
+
+  "error.notFound": "غير موجود.",
+  "error.unreadable": "تعذّرت القراءة — راجع الطرفيّة التي شُغّل منها الخادم.",
+  "error.badRequest": "لم يُفهم هذا الطلب.",
 
   "toast.dismiss": "إخفاء",
 

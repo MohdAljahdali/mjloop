@@ -55,6 +55,24 @@ describe('http', () => {
     expect(await response.text()).toContain('mjloop')
   })
 
+  it('puts the read api behind the same token', async () => {
+    expect((await fetch(`${base()}/api/state`)).status).toBe(401)
+  })
+
+  it('answers a conditional GET with an empty 304', async () => {
+    const url = `${base()}/api/runs?t=${server.token}`
+    const first = await fetch(url)
+    expect(first.status).toBe(200)
+    const tag = first.headers.get('etag') ?? ''
+    expect(tag).not.toBe('')
+
+    const second = await fetch(url, { headers: { 'if-none-match': tag } })
+    expect(second.status).toBe(304)
+    // The empty body is the point: an open Run tab issues one of these per
+    // tick while a run is live.
+    expect(await second.text()).toBe('')
+  })
+
   it('serves the locale dictionaries', async () => {
     const response = await fetch(`${base()}/locales/ar.json?t=${server.token}`)
     expect(response.status).toBe(200)

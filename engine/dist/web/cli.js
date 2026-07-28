@@ -3722,17 +3722,17 @@ var require_visit = __commonJS({
     visit.BREAK = BREAK;
     visit.SKIP = SKIP;
     visit.REMOVE = REMOVE;
-    function visit_(key, node, visitor, path8) {
-      const ctrl = callVisitor(key, node, visitor, path8);
+    function visit_(key, node, visitor, path11) {
+      const ctrl = callVisitor(key, node, visitor, path11);
       if (identity.isNode(ctrl) || identity.isPair(ctrl)) {
-        replaceNode(key, path8, ctrl);
-        return visit_(key, ctrl, visitor, path8);
+        replaceNode(key, path11, ctrl);
+        return visit_(key, ctrl, visitor, path11);
       }
       if (typeof ctrl !== "symbol") {
         if (identity.isCollection(node)) {
-          path8 = Object.freeze(path8.concat(node));
+          path11 = Object.freeze(path11.concat(node));
           for (let i = 0; i < node.items.length; ++i) {
-            const ci = visit_(i, node.items[i], visitor, path8);
+            const ci = visit_(i, node.items[i], visitor, path11);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -3743,13 +3743,13 @@ var require_visit = __commonJS({
             }
           }
         } else if (identity.isPair(node)) {
-          path8 = Object.freeze(path8.concat(node));
-          const ck = visit_("key", node.key, visitor, path8);
+          path11 = Object.freeze(path11.concat(node));
+          const ck = visit_("key", node.key, visitor, path11);
           if (ck === BREAK)
             return BREAK;
           else if (ck === REMOVE)
             node.key = null;
-          const cv = visit_("value", node.value, visitor, path8);
+          const cv = visit_("value", node.value, visitor, path11);
           if (cv === BREAK)
             return BREAK;
           else if (cv === REMOVE)
@@ -3770,17 +3770,17 @@ var require_visit = __commonJS({
     visitAsync.BREAK = BREAK;
     visitAsync.SKIP = SKIP;
     visitAsync.REMOVE = REMOVE;
-    async function visitAsync_(key, node, visitor, path8) {
-      const ctrl = await callVisitor(key, node, visitor, path8);
+    async function visitAsync_(key, node, visitor, path11) {
+      const ctrl = await callVisitor(key, node, visitor, path11);
       if (identity.isNode(ctrl) || identity.isPair(ctrl)) {
-        replaceNode(key, path8, ctrl);
-        return visitAsync_(key, ctrl, visitor, path8);
+        replaceNode(key, path11, ctrl);
+        return visitAsync_(key, ctrl, visitor, path11);
       }
       if (typeof ctrl !== "symbol") {
         if (identity.isCollection(node)) {
-          path8 = Object.freeze(path8.concat(node));
+          path11 = Object.freeze(path11.concat(node));
           for (let i = 0; i < node.items.length; ++i) {
-            const ci = await visitAsync_(i, node.items[i], visitor, path8);
+            const ci = await visitAsync_(i, node.items[i], visitor, path11);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -3791,13 +3791,13 @@ var require_visit = __commonJS({
             }
           }
         } else if (identity.isPair(node)) {
-          path8 = Object.freeze(path8.concat(node));
-          const ck = await visitAsync_("key", node.key, visitor, path8);
+          path11 = Object.freeze(path11.concat(node));
+          const ck = await visitAsync_("key", node.key, visitor, path11);
           if (ck === BREAK)
             return BREAK;
           else if (ck === REMOVE)
             node.key = null;
-          const cv = await visitAsync_("value", node.value, visitor, path8);
+          const cv = await visitAsync_("value", node.value, visitor, path11);
           if (cv === BREAK)
             return BREAK;
           else if (cv === REMOVE)
@@ -3824,23 +3824,23 @@ var require_visit = __commonJS({
       }
       return visitor;
     }
-    function callVisitor(key, node, visitor, path8) {
+    function callVisitor(key, node, visitor, path11) {
       if (typeof visitor === "function")
-        return visitor(key, node, path8);
+        return visitor(key, node, path11);
       if (identity.isMap(node))
-        return visitor.Map?.(key, node, path8);
+        return visitor.Map?.(key, node, path11);
       if (identity.isSeq(node))
-        return visitor.Seq?.(key, node, path8);
+        return visitor.Seq?.(key, node, path11);
       if (identity.isPair(node))
-        return visitor.Pair?.(key, node, path8);
+        return visitor.Pair?.(key, node, path11);
       if (identity.isScalar(node))
-        return visitor.Scalar?.(key, node, path8);
+        return visitor.Scalar?.(key, node, path11);
       if (identity.isAlias(node))
-        return visitor.Alias?.(key, node, path8);
+        return visitor.Alias?.(key, node, path11);
       return void 0;
     }
-    function replaceNode(key, path8, node) {
-      const parent = path8[path8.length - 1];
+    function replaceNode(key, path11, node) {
+      const parent = path11[path11.length - 1];
       if (identity.isCollection(parent)) {
         parent.items[key] = node;
       } else if (identity.isPair(parent)) {
@@ -4450,10 +4450,10 @@ var require_Collection = __commonJS({
     var createNode = require_createNode();
     var identity = require_identity();
     var Node = require_Node();
-    function collectionFromPath(schema, path8, value) {
+    function collectionFromPath(schema, path11, value) {
       let v = value;
-      for (let i = path8.length - 1; i >= 0; --i) {
-        const k = path8[i];
+      for (let i = path11.length - 1; i >= 0; --i) {
+        const k = path11[i];
         if (typeof k === "number" && Number.isInteger(k) && k >= 0) {
           const a = [];
           a[k] = v;
@@ -4472,7 +4472,7 @@ var require_Collection = __commonJS({
         sourceObjects: /* @__PURE__ */ new Map()
       });
     }
-    var isEmptyPath = (path8) => path8 == null || typeof path8 === "object" && !!path8[Symbol.iterator]().next().done;
+    var isEmptyPath = (path11) => path11 == null || typeof path11 === "object" && !!path11[Symbol.iterator]().next().done;
     var Collection = class extends Node.NodeBase {
       constructor(type, schema) {
         super(type);
@@ -4502,11 +4502,11 @@ var require_Collection = __commonJS({
        * be a Pair instance or a `{ key, value }` object, which may not have a key
        * that already exists in the map.
        */
-      addIn(path8, value) {
-        if (isEmptyPath(path8))
+      addIn(path11, value) {
+        if (isEmptyPath(path11))
           this.add(value);
         else {
-          const [key, ...rest] = path8;
+          const [key, ...rest] = path11;
           const node = this.get(key, true);
           if (identity.isCollection(node))
             node.addIn(rest, value);
@@ -4520,8 +4520,8 @@ var require_Collection = __commonJS({
        * Removes a value from the collection.
        * @returns `true` if the item was found and removed.
        */
-      deleteIn(path8) {
-        const [key, ...rest] = path8;
+      deleteIn(path11) {
+        const [key, ...rest] = path11;
         if (rest.length === 0)
           return this.delete(key);
         const node = this.get(key, true);
@@ -4535,8 +4535,8 @@ var require_Collection = __commonJS({
        * scalar values from their surrounding node; to disable set `keepScalar` to
        * `true` (collections are always returned intact).
        */
-      getIn(path8, keepScalar) {
-        const [key, ...rest] = path8;
+      getIn(path11, keepScalar) {
+        const [key, ...rest] = path11;
         const node = this.get(key, true);
         if (rest.length === 0)
           return !keepScalar && identity.isScalar(node) ? node.value : node;
@@ -4554,8 +4554,8 @@ var require_Collection = __commonJS({
       /**
        * Checks if the collection includes a value with the key `key`.
        */
-      hasIn(path8) {
-        const [key, ...rest] = path8;
+      hasIn(path11) {
+        const [key, ...rest] = path11;
         if (rest.length === 0)
           return this.has(key);
         const node = this.get(key, true);
@@ -4565,8 +4565,8 @@ var require_Collection = __commonJS({
        * Sets a value in this collection. For `!!set`, `value` needs to be a
        * boolean to add/remove the item from the set.
        */
-      setIn(path8, value) {
-        const [key, ...rest] = path8;
+      setIn(path11, value) {
+        const [key, ...rest] = path11;
         if (rest.length === 0) {
           this.set(key, value);
         } else {
@@ -7081,9 +7081,9 @@ var require_Document = __commonJS({
           this.contents.add(value);
       }
       /** Adds a value to the document. */
-      addIn(path8, value) {
+      addIn(path11, value) {
         if (assertCollection(this.contents))
-          this.contents.addIn(path8, value);
+          this.contents.addIn(path11, value);
       }
       /**
        * Create a new `Alias` node, ensuring that the target `node` has the required anchor.
@@ -7158,14 +7158,14 @@ var require_Document = __commonJS({
        * Removes a value from the document.
        * @returns `true` if the item was found and removed.
        */
-      deleteIn(path8) {
-        if (Collection.isEmptyPath(path8)) {
+      deleteIn(path11) {
+        if (Collection.isEmptyPath(path11)) {
           if (this.contents == null)
             return false;
           this.contents = null;
           return true;
         }
-        return assertCollection(this.contents) ? this.contents.deleteIn(path8) : false;
+        return assertCollection(this.contents) ? this.contents.deleteIn(path11) : false;
       }
       /**
        * Returns item at `key`, or `undefined` if not found. By default unwraps
@@ -7180,10 +7180,10 @@ var require_Document = __commonJS({
        * scalar values from their surrounding node; to disable set `keepScalar` to
        * `true` (collections are always returned intact).
        */
-      getIn(path8, keepScalar) {
-        if (Collection.isEmptyPath(path8))
+      getIn(path11, keepScalar) {
+        if (Collection.isEmptyPath(path11))
           return !keepScalar && identity.isScalar(this.contents) ? this.contents.value : this.contents;
-        return identity.isCollection(this.contents) ? this.contents.getIn(path8, keepScalar) : void 0;
+        return identity.isCollection(this.contents) ? this.contents.getIn(path11, keepScalar) : void 0;
       }
       /**
        * Checks if the document includes a value with the key `key`.
@@ -7194,10 +7194,10 @@ var require_Document = __commonJS({
       /**
        * Checks if the document includes a value at `path`.
        */
-      hasIn(path8) {
-        if (Collection.isEmptyPath(path8))
+      hasIn(path11) {
+        if (Collection.isEmptyPath(path11))
           return this.contents !== void 0;
-        return identity.isCollection(this.contents) ? this.contents.hasIn(path8) : false;
+        return identity.isCollection(this.contents) ? this.contents.hasIn(path11) : false;
       }
       /**
        * Sets a value in this document. For `!!set`, `value` needs to be a
@@ -7214,13 +7214,13 @@ var require_Document = __commonJS({
        * Sets a value in this document. For `!!set`, `value` needs to be a
        * boolean to add/remove the item from the set.
        */
-      setIn(path8, value) {
-        if (Collection.isEmptyPath(path8)) {
+      setIn(path11, value) {
+        if (Collection.isEmptyPath(path11)) {
           this.contents = value;
         } else if (this.contents == null) {
-          this.contents = Collection.collectionFromPath(this.schema, Array.from(path8), value);
+          this.contents = Collection.collectionFromPath(this.schema, Array.from(path11), value);
         } else if (assertCollection(this.contents)) {
-          this.contents.setIn(path8, value);
+          this.contents.setIn(path11, value);
         }
       }
       /**
@@ -8437,8 +8437,8 @@ var require_resolve_flow_scalar = __commonJS({
     };
     function parseCharCode(source, offset, length, onError) {
       const cc = source.substr(offset, length);
-      const ok = cc.length === length && /^[0-9a-fA-F]+$/.test(cc);
-      const code = ok ? parseInt(cc, 16) : NaN;
+      const ok2 = cc.length === length && /^[0-9a-fA-F]+$/.test(cc);
+      const code = ok2 ? parseInt(cc, 16) : NaN;
       try {
         return String.fromCodePoint(code);
       } catch {
@@ -9180,9 +9180,9 @@ var require_cst_visit = __commonJS({
     visit.BREAK = BREAK;
     visit.SKIP = SKIP;
     visit.REMOVE = REMOVE;
-    visit.itemAtPath = (cst, path8) => {
+    visit.itemAtPath = (cst, path11) => {
       let item = cst;
-      for (const [field, index] of path8) {
+      for (const [field, index] of path11) {
         const tok = item?.[field];
         if (tok && "items" in tok) {
           item = tok.items[index];
@@ -9191,23 +9191,23 @@ var require_cst_visit = __commonJS({
       }
       return item;
     };
-    visit.parentCollection = (cst, path8) => {
-      const parent = visit.itemAtPath(cst, path8.slice(0, -1));
-      const field = path8[path8.length - 1][0];
+    visit.parentCollection = (cst, path11) => {
+      const parent = visit.itemAtPath(cst, path11.slice(0, -1));
+      const field = path11[path11.length - 1][0];
       const coll = parent?.[field];
       if (coll && "items" in coll)
         return coll;
       throw new Error("Parent collection not found");
     };
-    function _visit(path8, item, visitor) {
-      let ctrl = visitor(item, path8);
+    function _visit(path11, item, visitor) {
+      let ctrl = visitor(item, path11);
       if (typeof ctrl === "symbol")
         return ctrl;
       for (const field of ["key", "value"]) {
         const token = item[field];
         if (token && "items" in token) {
           for (let i = 0; i < token.items.length; ++i) {
-            const ci = _visit(Object.freeze(path8.concat([[field, i]])), token.items[i], visitor);
+            const ci = _visit(Object.freeze(path11.concat([[field, i]])), token.items[i], visitor);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -9218,10 +9218,10 @@ var require_cst_visit = __commonJS({
             }
           }
           if (typeof ctrl === "function" && field === "key")
-            ctrl = ctrl(item, path8);
+            ctrl = ctrl(item, path11);
         }
       }
-      return typeof ctrl === "function" ? ctrl(item, path8) : ctrl;
+      return typeof ctrl === "function" ? ctrl(item, path11) : ctrl;
     }
     exports.visit = visit;
   }
@@ -10523,14 +10523,14 @@ var require_parser = __commonJS({
             case "scalar":
             case "single-quoted-scalar":
             case "double-quoted-scalar": {
-              const fs10 = this.flowScalar(this.type);
+              const fs13 = this.flowScalar(this.type);
               if (atNextItem || it.value) {
-                map.items.push({ start, key: fs10, sep: [] });
+                map.items.push({ start, key: fs13, sep: [] });
                 this.onKeyLine = true;
               } else if (it.sep) {
-                this.stack.push(fs10);
+                this.stack.push(fs13);
               } else {
-                Object.assign(it, { key: fs10, sep: [] });
+                Object.assign(it, { key: fs13, sep: [] });
                 this.onKeyLine = true;
               }
               return;
@@ -10658,13 +10658,13 @@ var require_parser = __commonJS({
             case "scalar":
             case "single-quoted-scalar":
             case "double-quoted-scalar": {
-              const fs10 = this.flowScalar(this.type);
+              const fs13 = this.flowScalar(this.type);
               if (!it || it.value)
-                fc.items.push({ start: [], key: fs10, sep: [] });
+                fc.items.push({ start: [], key: fs13, sep: [] });
               else if (it.sep)
-                this.stack.push(fs10);
+                this.stack.push(fs13);
               else
-                Object.assign(it, { key: fs10, sep: [] });
+                Object.assign(it, { key: fs13, sep: [] });
               return;
             }
             case "flow-map-end":
@@ -10974,8 +10974,8 @@ var require_dist = __commonJS({
 
 // src/web/cli.ts
 import { spawn } from "node:child_process";
-import fs9 from "node:fs/promises";
-import path7 from "node:path";
+import fs12 from "node:fs/promises";
+import path10 from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 
 // src/store/paths.ts
@@ -11011,10 +11011,10 @@ async function isEntrypoint(moduleUrl) {
 }
 
 // src/web/server.ts
-import crypto from "node:crypto";
-import fs8 from "node:fs/promises";
+import crypto2 from "node:crypto";
+import fs11 from "node:fs/promises";
 import http from "node:http";
-import path6 from "node:path";
+import path9 from "node:path";
 import { fileURLToPath } from "node:url";
 
 // node_modules/ws/wrapper.mjs
@@ -11024,258 +11024,8 @@ var import_sender = __toESM(require_sender(), 1);
 var import_websocket = __toESM(require_websocket(), 1);
 var import_websocket_server = __toESM(require_websocket_server(), 1);
 
-// src/web/completion.ts
-var NEW_TRACKER = { started: false, runId: null };
-var TERMINAL = /* @__PURE__ */ new Set(["done", "halted", "failed", "idle"]);
-function observe(tracker, summary) {
-  if (summary.recovered) {
-    return { tracker, verdict: tracker.started ? "running" : "waiting" };
-  }
-  if (!tracker.started) {
-    if (summary.status !== "running") return { tracker, verdict: "waiting" };
-    return { tracker: { started: true, runId: summary.run_id }, verdict: "running" };
-  }
-  if (summary.run_id !== tracker.runId) return { tracker, verdict: "complete" };
-  return { tracker, verdict: TERMINAL.has(summary.status) ? "complete" : "running" };
-}
-function isStalled(verdict, msSinceOutput, thresholdMs) {
-  return verdict === "running" && msSinceOutput >= thresholdMs;
-}
-
-// src/web/queue.ts
-var STALL_MS = 9e4;
-var EXIT_WAIT_MS = 1e4;
-var TERM_WAIT_MS = 3e3;
-var KILL_WAIT_MS = 3e3;
-var TRANSCRIPT_MAX = 1e6;
-var TRANSCRIPT_KEEP = 20;
-var JobQueue = class {
-  options;
-  clock;
-  pending = [];
-  finished = [];
-  transcripts = /* @__PURE__ */ new Map();
-  active = null;
-  counter = 0;
-  cols = 120;
-  rows = 40;
-  stalledSince = null;
-  /**
-   * Set when a job fails. The queue stops rather than running the rest, because
-   * a person who returns to fifteen repetitions of one failure has been given
-   * less than a person who returns to one.
-   */
-  blocked = false;
-  constructor(options) {
-    this.options = options;
-    this.clock = options.clock ?? (() => /* @__PURE__ */ new Date());
-  }
-  enqueue(command) {
-    this.counter += 1;
-    const job = {
-      id: `j${this.counter}`,
-      command,
-      status: "queued",
-      reason: null,
-      startedAt: null,
-      endedAt: null
-    };
-    this.pending.push(job);
-    this.pump();
-    this.options.onChange();
-    return job;
-  }
-  /** Drop a queued job. A running one is stopped instead — see `stop`. */
-  cancel(jobId) {
-    const index = this.pending.findIndex((job2) => job2.id === jobId);
-    if (index === -1) return;
-    const [job] = this.pending.splice(index, 1);
-    if (job === void 0) return;
-    job.status = "cancelled";
-    job.endedAt = this.clock().toISOString();
-    this.finished.push(job);
-    this.options.onChange();
-  }
-  /** Stop the running job. The queue stays blocked until `resume`. */
-  stop() {
-    if (this.active === null) return;
-    this.blocked = true;
-    this.beginShutdown(this.active, { status: "cancelled", reason: { code: "job.cancelled.stopped" } });
-  }
-  clear() {
-    while (this.pending.length > 0) {
-      const job = this.pending.pop();
-      if (job === void 0) break;
-      job.status = "cancelled";
-      job.endedAt = this.clock().toISOString();
-      job.reason = { code: "job.cancelled.cleared" };
-      this.finished.push(job);
-    }
-    this.options.onChange();
-  }
-  /** Start the head again after a failure or a stop. */
-  resume() {
-    this.blocked = false;
-    this.pump();
-    this.options.onChange();
-  }
-  write(data) {
-    this.active?.session.write(data);
-  }
-  resize(cols, rows) {
-    this.cols = cols;
-    this.rows = rows;
-    this.active?.session.resize(cols, rows);
-  }
-  /**
-   * Send a newline to a session that has gone quiet mid-run.
-   *
-   * The user asks for this; the queue never does it on its own. Deciding on the
-   * user's behalf that a silent session wants input is how an agent gets told
-   * "yes" to a question nobody read.
-   */
-  nudge() {
-    this.active?.session.write("\r");
-  }
-  jobs() {
-    const active = this.active === null ? [] : [this.active.job];
-    return [...this.finished, ...active, ...this.pending];
-  }
-  session() {
-    return {
-      jobId: this.active?.job.id ?? null,
-      blocked: this.blocked && this.pending.length > 0,
-      stalledSince: this.stalledSince
-    };
-  }
-  transcript(jobId) {
-    return this.transcripts.get(jobId) ?? "";
-  }
-  /** Called by the server's poller with the summary it just read. */
-  observe(summary) {
-    const active = this.active;
-    if (active === null) return;
-    const now = this.clock().getTime();
-    if (active.shutdown !== null) {
-      this.advanceShutdown(active, now);
-      return;
-    }
-    const { tracker, verdict } = observe(active.tracker, summary);
-    active.tracker = tracker;
-    active.verdict = verdict;
-    if (verdict === "complete") {
-      this.stalledSince = null;
-      this.beginShutdown(active, { status: "done", reason: null });
-      return;
-    }
-    const stalled = isStalled(verdict, now - active.lastOutput, STALL_MS);
-    const next = stalled ? new Date(active.lastOutput + STALL_MS).toISOString() : null;
-    if (next !== this.stalledSince) {
-      this.stalledSince = next;
-      this.options.onChange();
-    }
-  }
-  /** Close every session. Called when the server shuts down. */
-  dispose() {
-    this.active?.session.kill("SIGKILL");
-    this.active = null;
-  }
-  pump() {
-    if (this.active !== null || this.blocked) return;
-    const job = this.pending.shift();
-    if (job === void 0) return;
-    job.status = "running";
-    job.startedAt = this.clock().toISOString();
-    const session = this.options.spawn({
-      cwd: this.options.cwd,
-      command: job.command,
-      cols: this.cols,
-      rows: this.rows
-    });
-    const active = {
-      job,
-      session,
-      tracker: NEW_TRACKER,
-      verdict: "waiting",
-      lastOutput: this.clock().getTime(),
-      shutdown: null,
-      outcome: null,
-      cols: this.cols,
-      rows: this.rows
-    };
-    this.active = active;
-    this.transcripts.set(job.id, "");
-    session.onData((chunk) => {
-      active.lastOutput = this.clock().getTime();
-      if (this.stalledSince !== null) {
-        this.stalledSince = null;
-        this.options.onChange();
-      }
-      this.append(job.id, chunk);
-      this.options.onOutput(job.id, chunk);
-    });
-    session.onExit((code) => this.handleExit(active, code));
-  }
-  append(jobId, chunk) {
-    const existing = this.transcripts.get(jobId) ?? "";
-    const next = existing + chunk;
-    this.transcripts.set(jobId, next.length > TRANSCRIPT_MAX ? next.slice(-TRANSCRIPT_MAX) : next);
-  }
-  beginShutdown(active, outcome) {
-    if (active.shutdown !== null) return;
-    active.outcome = outcome;
-    active.shutdown = { phase: "exit", since: this.clock().getTime() };
-    active.session.write("/exit\r");
-    this.options.onChange();
-  }
-  advanceShutdown(active, now) {
-    const shutdown = active.shutdown;
-    if (shutdown === null) return;
-    const waited = now - shutdown.since;
-    if (shutdown.phase === "exit" && waited >= EXIT_WAIT_MS) {
-      active.session.kill("SIGTERM");
-      active.shutdown = { phase: "term", since: now };
-      return;
-    }
-    if (shutdown.phase === "term" && waited >= TERM_WAIT_MS) {
-      active.session.kill("SIGKILL");
-      active.shutdown = { phase: "kill", since: now };
-      return;
-    }
-    if (shutdown.phase === "kill" && waited >= KILL_WAIT_MS) {
-      this.options.onNotice({ code: "job.abandoned", params: { job: active.job.command } });
-      this.handleExit(active, -1);
-    }
-  }
-  handleExit(active, code) {
-    if (this.active !== active) return;
-    const job = active.job;
-    const outcome = active.outcome ?? // No outcome means we did not ask it to close: the session ended on its
-    // own. That is a failure whatever the exit code says, because the run it
-    // was started for never reached a terminal status.
-    (code === 0 ? { status: "failed", reason: { code: "job.failed.early" } } : { status: "failed", reason: { code: "job.failed.exit", params: { code } } });
-    job.status = outcome.status;
-    job.reason = outcome.reason;
-    job.endedAt = this.clock().toISOString();
-    this.finished.push(job);
-    this.trimTranscripts();
-    this.active = null;
-    this.stalledSince = null;
-    if (job.status === "failed") {
-      this.blocked = true;
-      this.options.onNotice({ code: "queue.blocked", params: { job: job.command } });
-    }
-    this.pump();
-    this.options.onChange();
-  }
-  trimTranscripts() {
-    const keep = new Set(this.finished.slice(-TRANSCRIPT_KEEP).map((job) => job.id));
-    if (this.active !== null) keep.add(this.active.job.id);
-    for (const id of this.transcripts.keys()) {
-      if (!keep.has(id)) this.transcripts.delete(id);
-    }
-  }
-};
+// src/web/api.ts
+import crypto from "node:crypto";
 
 // node_modules/zod/v4/core/core.js
 var _a;
@@ -11431,9 +11181,9 @@ function assertNever(_x) {
 }
 function assert(_) {
 }
-function getEnumValues(entries) {
-  const numericValues = Object.values(entries).filter((v) => typeof v === "number");
-  const values = Object.entries(entries).filter(([k, _]) => numericValues.indexOf(+k) === -1).map(([_, v]) => v);
+function getEnumValues(entries2) {
+  const numericValues = Object.values(entries2).filter((v) => typeof v === "number");
+  const values = Object.entries(entries2).filter(([k, _]) => numericValues.indexOf(+k) === -1).map(([_, v]) => v);
   return values;
 }
 function joinValues(array2, separator = "|") {
@@ -11518,10 +11268,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj, path8) {
-  if (!path8)
+function getElementAtPath(obj, path11) {
+  if (!path11)
     return obj;
-  return path8.reduce((acc, key) => acc?.[key], obj);
+  return path11.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -11930,11 +11680,11 @@ function explicitlyAborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path8, issues) {
+function prefixIssues(path11, issues) {
   return issues.map((iss) => {
     var _a3;
     (_a3 = iss).path ?? (_a3.path = []);
-    iss.path.unshift(path8);
+    iss.path.unshift(path11);
     return iss;
   });
 }
@@ -12081,16 +11831,16 @@ function flattenError(error2, mapper = (issue2) => issue2.message) {
 }
 function formatError(error2, mapper = (issue2) => issue2.message) {
   const fieldErrors = { _errors: [] };
-  const processError = (error3, path8 = []) => {
+  const processError = (error3, path11 = []) => {
     for (const issue2 of error3.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path8, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path11, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path8, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path11, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path8, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path11, ...issue2.path]);
       } else {
-        const fullpath = [...path8, ...issue2.path];
+        const fullpath = [...path11, ...issue2.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue2));
         } else {
@@ -12117,8 +11867,8 @@ function formatError(error2, mapper = (issue2) => issue2.message) {
 }
 function toDotPath(_path) {
   const segs = [];
-  const path8 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
-  for (const seg of path8) {
+  const path11 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
+  for (const seg of path11) {
     if (typeof seg === "number")
       segs.push(`[${seg}]`);
     else if (typeof seg === "symbol")
@@ -16232,10 +15982,10 @@ var ZodEnum = /* @__PURE__ */ $constructor("ZodEnum", (inst, def) => {
   };
 });
 function _enum(values, params) {
-  const entries = Array.isArray(values) ? Object.fromEntries(values.map((v) => [v, v])) : values;
+  const entries2 = Array.isArray(values) ? Object.fromEntries(values.map((v) => [v, v])) : values;
   return new ZodEnum({
     type: "enum",
-    entries,
+    entries: entries2,
     ...util_exports.normalizeParams(params)
   });
 }
@@ -16436,100 +16186,6 @@ function superRefine(fn, params) {
 // node_modules/zod/v4/classic/external.js
 config(en_default());
 
-// src/web/protocol.ts
-var ClientMessageSchema = discriminatedUnion("type", [
-  strictObject({ type: literal("input"), data: string2() }),
-  strictObject({
-    type: literal("resize"),
-    // Bounded because they reach an ioctl. A terminal 0 columns wide is not a
-    // terminal, and an absurd one is a way to make the pty misbehave.
-    cols: number2().int().min(1).max(1e3),
-    rows: number2().int().min(1).max(1e3)
-  }),
-  strictObject({ type: literal("enqueue"), command: string2().min(1).max(2e3) }),
-  strictObject({ type: literal("cancel"), jobId: string2().min(1) }),
-  strictObject({ type: literal("stop") }),
-  strictObject({ type: literal("resume") }),
-  strictObject({ type: literal("clear") }),
-  strictObject({ type: literal("attach"), jobId: string2().min(1) }),
-  strictObject({ type: literal("nudge") })
-]);
-
-// src/web/session.ts
-import { createRequire } from "node:module";
-var require2 = createRequire(import.meta.url);
-var cached2 = null;
-var PtyMissingError = class extends Error {
-  constructor(cause) {
-    super(`node-pty is not installed, so the dashboard cannot open a terminal (${cause})`);
-    this.name = "PtyMissingError";
-  }
-};
-function pty() {
-  if (cached2 !== null) return cached2;
-  try {
-    cached2 = require2("node-pty");
-  } catch (error2) {
-    throw new PtyMissingError(error2.message);
-  }
-  return cached2;
-}
-function isPtyAvailable() {
-  try {
-    pty();
-    return true;
-  } catch {
-    return false;
-  }
-}
-function claudeBinary() {
-  const override = process.env.MJLOOP_WEB_CLAUDE_BIN;
-  return override !== void 0 && override.length > 0 ? override : "claude";
-}
-var spawnPtySession = ({ cwd, command, cols, rows }) => {
-  const child = pty().spawn(claudeBinary(), [command], {
-    name: "xterm-256color",
-    cols,
-    rows,
-    cwd,
-    env: {
-      ...process.env,
-      // The session renders into a browser terminal that understands colour.
-      // Inheriting a TERM from whatever launched the server would sometimes
-      // hand `claude` a dumb terminal and lose its whole interface.
-      TERM: "xterm-256color"
-    }
-  });
-  return {
-    write: (data) => child.write(data),
-    resize: (nextCols, nextRows) => {
-      try {
-        child.resize(nextCols, nextRows);
-      } catch {
-      }
-    },
-    kill: (signal) => {
-      try {
-        child.kill(signal);
-      } catch {
-      }
-    },
-    onData: (fn) => {
-      child.onData(fn);
-    },
-    onExit: (fn) => {
-      child.onExit(({ exitCode }) => fn(exitCode));
-    }
-  };
-};
-
-// src/web/snapshot.ts
-import fs7 from "node:fs/promises";
-import path5 from "node:path";
-
-// src/ops/summary.ts
-import fs5 from "node:fs/promises";
-
 // src/schemas/state.ts
 var IdSchema = string2().regex(/^[A-Za-z0-9_-]+$/, 'only letters, digits, "-" and "_" are allowed');
 var StatusSchema = _enum(["idle", "running", "paused", "halted", "done", "failed"]);
@@ -16601,6 +16257,75 @@ var StateSchema = strictObject({
   updated_at: iso_exports.datetime()
 });
 
+// src/schemas/plan.ts
+var StoryStatusSchema = _enum(["todo", "doing", "done", "blocked"]);
+var PlanIdSchema = string2().regex(/^P\d{3}$/, "a plan id looks like P001");
+var StoryIdSchema = string2().regex(/^P\d{3}-S\d{2}$/, "a story id looks like P001-S02");
+var ApprovalDecisionSchema = _enum(["approved", "rejected", "changes_requested"]);
+var ApprovalSchema = strictObject({
+  decision: ApprovalDecisionSchema,
+  /** Who decided. Free text: the engine cannot verify it, and pretending otherwise would be worse. */
+  by: string2().min(1),
+  at: iso_exports.datetime(),
+  /** The approver's own words, kept so the approval is auditable rather than a bare flag. */
+  note: string2().min(1).nullable().default(null)
+});
+var PlanFrontmatterSchema = strictObject({
+  id: PlanIdSchema,
+  /** Also reaches the filesystem: the directory is `<id>-<slug>`. */
+  slug: IdSchema,
+  title: string2().min(1),
+  created_at: iso_exports.datetime(),
+  /**
+   * The default is load-bearing, as it was for `last_fingerprint` and
+   * `reproduction`: the schema is strict, so without it every PLAN.md written
+   * before this field existed would fail validation on read.
+   */
+  approval: ApprovalSchema.nullable().default(null)
+});
+var StoryFrontmatterSchema = strictObject({
+  id: StoryIdSchema,
+  plan: PlanIdSchema,
+  /**
+   * Bounded because it reaches the filesystem: the story file is named
+   * `<id>-<slugified title>.md`. The slug is truncated as well, so this bound
+   * is about the caller getting a validation error naming the field rather
+   * than a title that quietly loses most of itself.
+   */
+  title: string2().min(1).max(200),
+  status: StoryStatusSchema,
+  /** Drives the conditional UI specialists in a later milestone. */
+  ui: boolean2().default(false),
+  depends_on: array(StoryIdSchema).default([]),
+  acceptance: array(string2().min(1)).default([]),
+  /** Run directory holding the proof this story is done. Null until it is. */
+  evidence: string2().min(1).nullable().default(null)
+}).refine((story) => story.id.startsWith(`${story.plan}-`), {
+  error: "a story id must begin with its plan id",
+  path: ["id"]
+});
+var ManifestEntrySchema = strictObject({
+  id: StoryIdSchema,
+  title: string2().min(1),
+  status: StoryStatusSchema,
+  ui: boolean2(),
+  depends_on: array(StoryIdSchema),
+  /** Relative to the plan directory. */
+  file: string2().min(1)
+});
+var ManifestSchema = strictObject({
+  schema: literal(1),
+  plan: PlanIdSchema,
+  slug: IdSchema,
+  title: string2().min(1),
+  generated_at: iso_exports.datetime(),
+  stories: array(ManifestEntrySchema)
+});
+
+// src/web/read.ts
+import fs7 from "node:fs/promises";
+import path6 from "node:path";
+
 // src/schemas/contract.ts
 var RESERVED_AGENT_NAMES = ["findings"];
 var AgentNameSchema = string2().regex(/^[A-Za-z0-9_-]+$/, 'only letters, digits, "-" and "_" are allowed').refine((name) => !name.includes("--"), '"--" is reserved: it separates an agent from its instance in the cycle file name').refine((name) => !RESERVED_AGENT_NAMES.includes(name), `reserved by the cycle directory: ${RESERVED_AGENT_NAMES.join(", ")}`);
@@ -16623,6 +16348,10 @@ var RosterSchema = strictObject({
   /** agent name -> why omitting it was safe */
   skipped: record(string2().min(1), string2().min(1)).default({})
 });
+
+// src/store/config-store.ts
+import fs2 from "node:fs/promises";
+var YAML = __toESM(require_dist(), 1);
 
 // src/schemas/config.ts
 var SpecialistModeSchema = _enum(["auto", "always", "never"]);
@@ -16727,8 +16456,6 @@ function findTrack(config2, track) {
 }
 
 // src/store/config-store.ts
-import fs2 from "node:fs/promises";
-var YAML = __toESM(require_dist(), 1);
 var ConfigMissingError = class extends Error {
   constructor(file) {
     super(`${file} not found \u2014 run /mjloop:init first`);
@@ -16762,10 +16489,159 @@ ${prettifyError(parsed.error)}`);
   return parsed.data;
 }
 
-// src/store/atomic.ts
-import { randomUUID } from "node:crypto";
+// src/store/frontmatter.ts
+var YAML2 = __toESM(require_dist(), 1);
+var FrontmatterError = class extends Error {
+  constructor(message) {
+    super(message);
+    this.name = "FrontmatterError";
+  }
+};
+var FRONTMATTER = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/;
+function splitFrontmatter(raw) {
+  const match = FRONTMATTER.exec(raw);
+  if (match === null) return null;
+  return { yaml: match[1] ?? "", body: (match[2] ?? "").trim() };
+}
+function parseFrontmatter(raw) {
+  const split = splitFrontmatter(raw);
+  if (split === null) {
+    throw new FrontmatterError("no frontmatter block: the file must open with a --- fenced yaml block");
+  }
+  let data;
+  try {
+    data = YAML2.parse(split.yaml);
+  } catch (error2) {
+    throw new FrontmatterError(`the frontmatter is not valid yaml: ${error2.message}`);
+  }
+  return { data, body: split.body };
+}
+
+// src/store/memory-store.ts
 import fs3 from "node:fs/promises";
 import path3 from "node:path";
+
+// src/schemas/memory.ts
+var MemoryKindSchema = _enum(["decision", "lesson", "pattern"]);
+var MemoryIdSchema = string2().regex(/^M\d{3}$/, "a memory id looks like M001");
+var TITLE_MAX = 200;
+var TAG_MAX = 40;
+var TAGS_MAX = 10;
+var MemoryTitleSchema = string2().trim().min(1).max(TITLE_MAX, "a memory title is one line \u2014 put the detail in the body");
+var MemoryTagsSchema = array(string2().trim().min(1).max(TAG_MAX)).max(TAGS_MAX);
+var MEMORY_BODY_MAX = 2e4;
+var MemoryBodySchema = string2().trim().min(1).max(
+  MEMORY_BODY_MAX,
+  `a memory body runs to ${MEMORY_BODY_MAX} characters \u2014 record the conclusion, not the transcript`
+);
+var MemoryFrontmatterSchema = strictObject({
+  id: MemoryIdSchema,
+  kind: MemoryKindSchema,
+  title: MemoryTitleSchema,
+  at: iso_exports.datetime(),
+  tags: MemoryTagsSchema.default([]),
+  /** The run that produced it, or null when a person wrote it directly. */
+  run: string2().min(1).nullable().default(null)
+});
+
+// src/store/memory-store.ts
+var MemoryNotFoundError = class extends Error {
+  constructor(id, dir) {
+    super(`no memory "${id}" under ${dir}`);
+    this.name = "MemoryNotFoundError";
+  }
+};
+async function listFiles(dir) {
+  try {
+    return await fs3.readdir(dir);
+  } catch (error2) {
+    if (error2.code !== "ENOENT") throw error2;
+    return [];
+  }
+}
+async function listMemories(projectDir) {
+  const dir = resolveLoopPaths(projectDir).memory;
+  const entries2 = await listFiles(dir);
+  const memories = [];
+  for (const name of entries2.filter((entry) => entry.endsWith(".md"))) {
+    const file = path3.join(dir, name);
+    try {
+      const { data, body } = parseFrontmatter(await fs3.readFile(file, "utf8"));
+      const parsed = MemoryFrontmatterSchema.safeParse(data);
+      if (!parsed.success) continue;
+      memories.push({ frontmatter: parsed.data, body, file });
+    } catch {
+      continue;
+    }
+  }
+  return memories.sort((a, b) => a.frontmatter.id.localeCompare(b.frontmatter.id));
+}
+async function readMemory(projectDir, id) {
+  const found = (await listMemories(projectDir)).find((memory) => memory.frontmatter.id === id);
+  if (found === void 0) throw new MemoryNotFoundError(id, resolveLoopPaths(projectDir).memory);
+  return found;
+}
+
+// src/store/plan-store.ts
+import fs4 from "node:fs/promises";
+import path4 from "node:path";
+var PlanNotFoundError = class extends Error {
+  constructor(planId, dir) {
+    super(`no plan "${planId}" under ${dir}`);
+    this.name = "PlanNotFoundError";
+  }
+};
+async function listPlanDirs(plansDir) {
+  try {
+    const entries2 = await fs4.readdir(plansDir, { withFileTypes: true });
+    return entries2.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
+  } catch (error2) {
+    if (error2.code !== "ENOENT") throw error2;
+    return [];
+  }
+}
+async function listPlanIds(projectDir) {
+  const ids = /* @__PURE__ */ new Set();
+  for (const entry of await listPlanDirs(resolveLoopPaths(projectDir).plans)) {
+    const id = /^(P\d{3})-/.exec(entry)?.[1];
+    if (id !== void 0) ids.add(id);
+  }
+  return [...ids].sort();
+}
+async function findPlanDir(projectDir, planId) {
+  const plansDir = resolveLoopPaths(projectDir).plans;
+  const entries2 = await listPlanDirs(plansDir);
+  const match = entries2.find((entry) => entry.startsWith(`${planId}-`));
+  if (match === void 0) throw new PlanNotFoundError(planId, plansDir);
+  return path4.join(plansDir, match);
+}
+async function listStories(projectDir, planId) {
+  const dir = path4.join(await findPlanDir(projectDir, planId), "stories");
+  let entries2 = [];
+  try {
+    entries2 = await fs4.readdir(dir);
+  } catch (error2) {
+    if (error2.code !== "ENOENT") throw error2;
+  }
+  const stories = [];
+  for (const entry of entries2.filter((name) => name.endsWith(".md"))) {
+    const file = path4.join(dir, entry);
+    try {
+      const { data, body } = parseFrontmatter(await fs4.readFile(file, "utf8"));
+      const parsed = StoryFrontmatterSchema.safeParse(data);
+      if (!parsed.success) continue;
+      stories.push({ frontmatter: parsed.data, body, file });
+    } catch {
+      continue;
+    }
+  }
+  return stories.sort((a, b) => a.frontmatter.id.localeCompare(b.frontmatter.id));
+}
+
+// src/store/atomic.ts
+import { randomUUID } from "node:crypto";
+import fs5 from "node:fs/promises";
+import path5 from "node:path";
 var StateCorruptedError = class extends Error {
   constructor(message) {
     super(message);
@@ -16774,18 +16650,18 @@ var StateCorruptedError = class extends Error {
 };
 async function writeJsonAtomic(file, data, options = {}) {
   const { backup = true } = options;
-  await fs3.mkdir(path3.dirname(file), { recursive: true });
+  await fs5.mkdir(path5.dirname(file), { recursive: true });
   if (backup) {
     try {
-      await fs3.copyFile(file, `${file}.bak`);
+      await fs5.copyFile(file, `${file}.bak`);
     } catch (error2) {
       if (error2.code !== "ENOENT") throw error2;
     }
   }
   const temp = `${file}.${process.pid}.${randomUUID()}.tmp`;
-  await fs3.writeFile(temp, `${JSON.stringify(data, null, 2)}
+  await fs5.writeFile(temp, `${JSON.stringify(data, null, 2)}
 `, "utf8");
-  await fs3.rename(temp, file);
+  await fs5.rename(temp, file);
 }
 async function readJsonValidated(file, schema) {
   try {
@@ -16803,14 +16679,14 @@ async function readJsonValidated(file, schema) {
   }
 }
 async function parseFile(file, schema) {
-  const raw = await fs3.readFile(file, "utf8");
+  const raw = await fs5.readFile(file, "utf8");
   const parsed = schema.safeParse(JSON.parse(raw));
   if (!parsed.success) throw new Error(prettifyError(parsed.error));
   return parsed.data;
 }
 
 // src/store/lock.ts
-import fs4 from "node:fs/promises";
+import fs6 from "node:fs/promises";
 var LockTimeoutError = class extends Error {
   constructor(message) {
     super(message);
@@ -16823,7 +16699,7 @@ async function withLock(lockDir, fn, options = {}) {
   let ownedSnapshot = null;
   while (ownedSnapshot === null) {
     try {
-      await fs4.mkdir(lockDir, { recursive: false });
+      await fs6.mkdir(lockDir, { recursive: false });
       ownedSnapshot = await statSnapshot(lockDir);
     } catch (error2) {
       if (error2.code !== "EEXIST") throw error2;
@@ -16843,19 +16719,19 @@ async function withLock(lockDir, fn, options = {}) {
   } finally {
     const current = await statSnapshot(lockDir);
     if (current !== null && isSameInstance(current, ownedSnapshot)) {
-      await fs4.rm(lockDir, { recursive: true, force: true });
+      await fs6.rm(lockDir, { recursive: true, force: true });
     }
   }
 }
 async function reclaimIfSameInstance(lockDir, observed, pollMs, staleMs) {
   const reclaimMarker = `${lockDir}.reclaiming`;
   try {
-    await fs4.mkdir(reclaimMarker);
+    await fs6.mkdir(reclaimMarker);
   } catch (error2) {
     if (error2.code === "EEXIST") {
       const marker = await statSnapshot(reclaimMarker);
       if (marker !== null && marker.ageMs >= staleMs) {
-        await fs4.rm(reclaimMarker, { recursive: true, force: true });
+        await fs6.rm(reclaimMarker, { recursive: true, force: true });
       } else {
         await new Promise((resolve) => setTimeout(resolve, pollMs));
       }
@@ -16866,9 +16742,9 @@ async function reclaimIfSameInstance(lockDir, observed, pollMs, staleMs) {
   try {
     const current = await statSnapshot(lockDir);
     if (current === null || !isSameInstance(current, observed)) return;
-    await fs4.rm(lockDir, { recursive: true, force: true });
+    await fs6.rm(lockDir, { recursive: true, force: true });
   } finally {
-    await fs4.rm(reclaimMarker, { recursive: true, force: true });
+    await fs6.rm(reclaimMarker, { recursive: true, force: true });
   }
 }
 function isSameInstance(a, b) {
@@ -16876,7 +16752,7 @@ function isSameInstance(a, b) {
 }
 async function statSnapshot(lockDir) {
   try {
-    const stats = await fs4.stat(lockDir);
+    const stats = await fs6.stat(lockDir);
     return { dev: stats.dev, ino: stats.ino, birthtimeMs: stats.birthtimeMs, ageMs: Date.now() - stats.mtimeMs };
   } catch {
     return null;
@@ -16923,11 +16799,587 @@ var StateStore = class {
   }
 };
 
+// src/web/read.ts
+var NotFoundError = class extends Error {
+  constructor(what) {
+    super(what);
+    this.name = "NotFoundError";
+  }
+};
+async function readState(projectDir) {
+  try {
+    const { state, recovered } = await new StateStore(projectDir).read();
+    return { state, recovered };
+  } catch {
+    throw new NotFoundError("state");
+  }
+}
+async function readConfigView(projectDir) {
+  const paths = resolveLoopPaths(projectDir);
+  const raw = await fs7.readFile(paths.config, "utf8").catch(() => null);
+  try {
+    return { raw, parsed: await loadConfig(projectDir), invalid: false };
+  } catch (error2) {
+    if (error2 instanceof ConfigMissingError) return { raw, parsed: null, invalid: false };
+    return { raw, parsed: null, invalid: true };
+  }
+}
+async function readPlanDetail(projectDir, planId) {
+  let dir;
+  try {
+    dir = await findPlanDir(projectDir, planId);
+  } catch {
+    throw new NotFoundError("plan");
+  }
+  const raw = await fs7.readFile(path6.join(dir, "PLAN.md"), "utf8").catch(() => null);
+  const parsed = raw === null ? null : PlanFrontmatterSchema.safeParse(parseFrontmatter(raw).data);
+  const frontmatter = parsed?.success === true ? parsed.data : null;
+  const [review, stories, manifestTitle] = await Promise.all([
+    fs7.readFile(path6.join(dir, "REVIEW.md"), "utf8").catch(() => null),
+    readStoryDetails(projectDir, planId),
+    readManifestTitle(dir)
+  ]);
+  return {
+    id: planId,
+    title: frontmatter?.title ?? manifestTitle ?? path6.basename(dir),
+    // The whole record — `decision`, `by`, `at`, `note` — where the snapshot
+    // carries only the decision. An approval is auditable or it is a flag.
+    approval: frontmatter?.approval ?? null,
+    body: raw === null ? "" : parseFrontmatter(raw).body,
+    review,
+    stories
+  };
+}
+async function readStoryDetails(projectDir, planId) {
+  const stories = await listStories(projectDir, planId).catch(() => []);
+  return stories.map((story) => toStoryDetail(story.frontmatter));
+}
+function toStoryDetail(frontmatter) {
+  return {
+    id: frontmatter.id,
+    title: frontmatter.title,
+    status: frontmatter.status,
+    ui: frontmatter.ui,
+    depends_on: frontmatter.depends_on,
+    acceptance: frontmatter.acceptance,
+    evidence: frontmatter.evidence
+  };
+}
+async function readStoryDetail(projectDir, storyId) {
+  const found = (await readStoryDetails(projectDir, storyId.slice(0, 4))).find((story) => story.id === storyId);
+  if (found === void 0) throw new NotFoundError("story");
+  return found;
+}
+async function readManifestTitle(dir) {
+  try {
+    const parsed = ManifestSchema.safeParse(JSON.parse(await fs7.readFile(path6.join(dir, "manifest.json"), "utf8")));
+    return parsed.success ? parsed.data.title : null;
+  } catch {
+    return null;
+  }
+}
+async function readRuns(projectDir) {
+  const runs = resolveLoopPaths(projectDir).runs;
+  const names = await fs7.readdir(runs, { withFileTypes: true }).then((found) => found.filter((entry) => entry.isDirectory()).map((entry) => entry.name)).catch(() => []);
+  const out = [];
+  for (const name of names.sort().reverse()) {
+    const inside = await fs7.readdir(path6.join(runs, name)).catch(() => []);
+    const [, story, track] = name.split("--");
+    out.push({
+      id: name,
+      story: story === void 0 || story === "adhoc" ? null : story,
+      track: track ?? null,
+      cycles: inside.filter((entry) => entry.startsWith("cycle-")).length,
+      halted: inside.includes("HALT.md")
+    });
+  }
+  return out;
+}
+async function readRunDetail(projectDir, runId) {
+  const dir = path6.join(resolveLoopPaths(projectDir).runs, runId);
+  const inside = await fs7.readdir(dir).catch(() => null);
+  if (inside === null) throw new NotFoundError("run");
+  return {
+    id: runId,
+    halt: await fs7.readFile(path6.join(dir, "HALT.md"), "utf8").catch(() => null),
+    cycles: inside.filter((entry) => /^cycle-\d+$/.test(entry)).map((entry) => Number(entry.slice("cycle-".length))).sort((a, b) => a - b)
+  };
+}
+async function readCycleDetail(projectDir, runId, cycle) {
+  const dir = path6.join(resolveLoopPaths(projectDir).runs, runId, `cycle-${String(cycle).padStart(2, "0")}`);
+  const inside = await fs7.readdir(dir).catch(() => null);
+  if (inside === null) throw new NotFoundError("cycle");
+  const roster = await readJson(path6.join(dir, "roster.json"), RosterSchema);
+  const findings = await readJson(path6.join(dir, "findings.json"), FindingSchema.array());
+  const agents = [];
+  for (const entry of inside.filter((name) => name.endsWith(".json")).sort()) {
+    if (entry === "roster.json" || entry === "findings.json") continue;
+    const result = await readJson(path6.join(dir, entry), AgentResultSchema);
+    if (result !== null) agents.push({ agent: entry.replace(/\.json$/, ""), result });
+  }
+  return {
+    cycle,
+    roster: roster === null ? null : {
+      selected: roster.selected,
+      skipped: Object.entries(roster.skipped).map(([agent, reason]) => ({ agent, reason }))
+    },
+    findings: findings ?? [],
+    agents
+  };
+}
+async function readRosterProgress(projectDir, runId, cycle) {
+  const dir = path6.join(resolveLoopPaths(projectDir).runs, runId, `cycle-${String(cycle).padStart(2, "0")}`);
+  const roster = await readJson(path6.join(dir, "roster.json"), RosterSchema);
+  if (roster === null) return null;
+  const inside = await fs7.readdir(dir).catch(() => []);
+  const landed = roster.selected.filter((agent) => inside.includes(`${agent}.json`));
+  return { cycle, selected: roster.selected, landed };
+}
+async function readMemories(projectDir) {
+  const memories = await listMemories(projectDir).catch(() => []);
+  return memories.map((memory) => ({ ...memory.frontmatter, body: memory.body }));
+}
+async function readMemoryEntry(projectDir, id) {
+  try {
+    const memory = await readMemory(projectDir, id);
+    return { ...memory.frontmatter, body: memory.body };
+  } catch {
+    throw new NotFoundError("memory");
+  }
+}
+async function readJson(file, schema) {
+  try {
+    const parsed = schema.safeParse(JSON.parse(await fs7.readFile(file, "utf8")));
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
+}
+
+// src/web/api.ts
+var RUN_ID = /^[\w-]+$/;
+var MEMORY_ID = /^M\d{3}$/;
+var ok = (body) => ({ status: 200, body });
+var fail = (status, code) => ({ status, body: { error: { code } } });
+async function handleApi(projectDir, method, pathname) {
+  if (!pathname.startsWith("/api/") && pathname !== "/api") return null;
+  if (method !== "GET") return fail(405, "error.badRequest");
+  const segments = pathname.split("/").filter((part) => part.length > 0).slice(1);
+  try {
+    return await route(projectDir, segments);
+  } catch (error2) {
+    if (error2 instanceof NotFoundError) return fail(404, "error.notFound");
+    process.stderr.write(`mjloop web: ${String(error2)}
+`);
+    return fail(500, "error.unreadable");
+  }
+}
+async function route(projectDir, segments) {
+  const [head, first, second] = segments;
+  switch (head) {
+    case "state":
+      if (segments.length !== 1) break;
+      return ok(await readState(projectDir));
+    case "config":
+      if (segments.length !== 1) break;
+      return ok(await readConfigView(projectDir));
+    case "plans":
+      if (segments.length !== 2 || first === void 0) break;
+      if (!PlanIdSchema.safeParse(first).success) return fail(400, "error.badRequest");
+      return ok(await readPlanDetail(projectDir, first));
+    case "stories":
+      if (segments.length !== 2 || first === void 0) break;
+      if (!StoryIdSchema.safeParse(first).success) return fail(400, "error.badRequest");
+      return ok(await readStoryDetail(projectDir, first));
+    case "runs":
+      if (segments.length === 1) return ok(await readRuns(projectDir));
+      if (first === void 0 || !RUN_ID.test(first)) return fail(400, "error.badRequest");
+      if (segments.length === 2) return ok(await readRunDetail(projectDir, first));
+      if (segments.length === 3) {
+        const cycle = Number(second);
+        if (!Number.isInteger(cycle) || cycle < 1 || cycle > 999) return fail(400, "error.badRequest");
+        return ok(await readCycleDetail(projectDir, first, cycle));
+      }
+      break;
+    case "memory":
+      if (segments.length === 1) return ok(await readMemories(projectDir));
+      if (segments.length !== 2 || first === void 0) break;
+      if (!MEMORY_ID.test(first)) return fail(400, "error.badRequest");
+      return ok(await readMemoryEntry(projectDir, first));
+  }
+  return fail(404, "error.notFound");
+}
+function etag(body) {
+  return `W/"${crypto.createHash("sha1").update(body).digest("base64url")}"`;
+}
+function sendApi(request, response, result) {
+  const body = JSON.stringify(result.body);
+  const tag = etag(body);
+  if (request.headers["if-none-match"] === tag) {
+    response.writeHead(304, { etag: tag, "cache-control": "no-store" }).end();
+    return;
+  }
+  response.writeHead(result.status, {
+    "content-type": "application/json; charset=utf-8",
+    etag: tag,
+    // The page carries a token in its url. Keeping it out of caches and
+    // referrers is most of what stops it leaking.
+    "cache-control": "no-store",
+    "referrer-policy": "no-referrer"
+  });
+  response.end(body);
+}
+
+// src/web/completion.ts
+var NEW_TRACKER = { started: false, runId: null };
+var TERMINAL = /* @__PURE__ */ new Set(["done", "halted", "failed", "idle"]);
+function observe(tracker, summary) {
+  if (summary.recovered) {
+    return { tracker, verdict: tracker.started ? "running" : "waiting" };
+  }
+  if (!tracker.started) {
+    if (summary.status !== "running") return { tracker, verdict: "waiting" };
+    return { tracker: { started: true, runId: summary.run_id }, verdict: "running" };
+  }
+  if (summary.run_id !== tracker.runId) return { tracker, verdict: "complete" };
+  return { tracker, verdict: TERMINAL.has(summary.status) ? "complete" : "running" };
+}
+function isStalled(verdict, msSinceOutput, thresholdMs) {
+  return verdict === "running" && msSinceOutput >= thresholdMs;
+}
+
+// src/web/queue.ts
+var STALL_MS = 9e4;
+var EXIT_WAIT_MS = 1e4;
+var TERM_WAIT_MS = 3e3;
+var KILL_WAIT_MS = 3e3;
+var TRANSCRIPT_MAX = 1e6;
+var TRANSCRIPT_KEEP = 20;
+var JobQueue = class {
+  options;
+  clock;
+  pending = [];
+  finished = [];
+  transcripts = /* @__PURE__ */ new Map();
+  active = null;
+  counter = 0;
+  cols = 120;
+  rows = 40;
+  stalledSince = null;
+  /**
+   * Set when a job fails. The queue stops rather than running the rest, because
+   * a person who returns to fifteen repetitions of one failure has been given
+   * less than a person who returns to one.
+   */
+  blocked = false;
+  constructor(options) {
+    this.options = options;
+    this.clock = options.clock ?? (() => /* @__PURE__ */ new Date());
+  }
+  enqueue(command) {
+    this.counter += 1;
+    const job = {
+      id: `j${this.counter}`,
+      command,
+      status: "queued",
+      reason: null,
+      startedAt: null,
+      endedAt: null
+    };
+    this.pending.push(job);
+    this.pump();
+    this.options.onChange();
+    return job;
+  }
+  /** Drop a queued job. A running one is stopped instead — see `stop`. */
+  cancel(jobId) {
+    const index = this.pending.findIndex((job2) => job2.id === jobId);
+    if (index === -1) return;
+    const [job] = this.pending.splice(index, 1);
+    if (job === void 0) return;
+    job.status = "cancelled";
+    job.endedAt = this.clock().toISOString();
+    this.finished.push(job);
+    this.options.onChange();
+  }
+  /** Stop the running job. The queue stays blocked until `resume`. */
+  stop() {
+    if (this.active === null) return;
+    this.blocked = true;
+    this.beginShutdown(this.active, { status: "cancelled", reason: { code: "job.cancelled.stopped" } });
+  }
+  clear() {
+    while (this.pending.length > 0) {
+      const job = this.pending.pop();
+      if (job === void 0) break;
+      job.status = "cancelled";
+      job.endedAt = this.clock().toISOString();
+      job.reason = { code: "job.cancelled.cleared" };
+      this.finished.push(job);
+    }
+    this.options.onChange();
+  }
+  /** Start the head again after a failure or a stop. */
+  resume() {
+    this.blocked = false;
+    this.pump();
+    this.options.onChange();
+  }
+  write(data) {
+    this.active?.session.write(data);
+  }
+  resize(cols, rows) {
+    this.cols = cols;
+    this.rows = rows;
+    this.active?.session.resize(cols, rows);
+  }
+  /**
+   * Send a newline to a session that has gone quiet mid-run.
+   *
+   * The user asks for this; the queue never does it on its own. Deciding on the
+   * user's behalf that a silent session wants input is how an agent gets told
+   * "yes" to a question nobody read.
+   */
+  nudge() {
+    this.active?.session.write("\r");
+  }
+  jobs() {
+    const active = this.active === null ? [] : [this.active.job];
+    return [...this.finished, ...active, ...this.pending];
+  }
+  session() {
+    return {
+      jobId: this.active?.job.id ?? null,
+      blocked: this.blocked && this.pending.length > 0,
+      stalledSince: this.stalledSince
+    };
+  }
+  transcript(jobId) {
+    return this.transcripts.get(jobId) ?? "";
+  }
+  /** Called by the server's poller with the summary it just read. */
+  observe(summary) {
+    const active = this.active;
+    if (active === null) return;
+    const now = this.clock().getTime();
+    if (active.shutdown !== null) {
+      this.advanceShutdown(active, now);
+      return;
+    }
+    const { tracker, verdict } = observe(active.tracker, summary);
+    active.tracker = tracker;
+    active.verdict = verdict;
+    if (verdict === "complete") {
+      this.stalledSince = null;
+      this.beginShutdown(active, { status: "done", reason: null });
+      return;
+    }
+    const stalled = isStalled(verdict, now - active.lastOutput, STALL_MS);
+    const next = stalled ? new Date(active.lastOutput + STALL_MS).toISOString() : null;
+    if (next !== this.stalledSince) {
+      this.stalledSince = next;
+      this.options.onChange();
+    }
+  }
+  /** Close every session. Called when the server shuts down. */
+  dispose() {
+    this.active?.session.kill("SIGKILL");
+    this.active = null;
+  }
+  pump() {
+    if (this.active !== null || this.blocked) return;
+    const job = this.pending.shift();
+    if (job === void 0) return;
+    job.status = "running";
+    job.startedAt = this.clock().toISOString();
+    const session = this.options.spawn({
+      cwd: this.options.cwd,
+      command: job.command,
+      cols: this.cols,
+      rows: this.rows
+    });
+    const active = {
+      job,
+      session,
+      tracker: NEW_TRACKER,
+      verdict: "waiting",
+      lastOutput: this.clock().getTime(),
+      shutdown: null,
+      outcome: null,
+      cols: this.cols,
+      rows: this.rows
+    };
+    this.active = active;
+    this.transcripts.set(job.id, "");
+    session.onData((chunk) => {
+      active.lastOutput = this.clock().getTime();
+      if (this.stalledSince !== null) {
+        this.stalledSince = null;
+        this.options.onChange();
+      }
+      this.append(job.id, chunk);
+      this.options.onOutput(job.id, chunk);
+    });
+    session.onExit((code) => this.handleExit(active, code));
+  }
+  append(jobId, chunk) {
+    const existing = this.transcripts.get(jobId) ?? "";
+    const next = existing + chunk;
+    this.transcripts.set(jobId, next.length > TRANSCRIPT_MAX ? next.slice(-TRANSCRIPT_MAX) : next);
+  }
+  beginShutdown(active, outcome) {
+    if (active.shutdown !== null) return;
+    active.outcome = outcome;
+    active.shutdown = { phase: "exit", since: this.clock().getTime() };
+    active.session.write("/exit\r");
+    this.options.onChange();
+  }
+  advanceShutdown(active, now) {
+    const shutdown = active.shutdown;
+    if (shutdown === null) return;
+    const waited = now - shutdown.since;
+    if (shutdown.phase === "exit" && waited >= EXIT_WAIT_MS) {
+      active.session.kill("SIGTERM");
+      active.shutdown = { phase: "term", since: now };
+      return;
+    }
+    if (shutdown.phase === "term" && waited >= TERM_WAIT_MS) {
+      active.session.kill("SIGKILL");
+      active.shutdown = { phase: "kill", since: now };
+      return;
+    }
+    if (shutdown.phase === "kill" && waited >= KILL_WAIT_MS) {
+      this.options.onNotice({ code: "job.abandoned", params: { job: active.job.command } });
+      this.handleExit(active, -1);
+    }
+  }
+  handleExit(active, code) {
+    if (this.active !== active) return;
+    const job = active.job;
+    const outcome = active.outcome ?? // No outcome means we did not ask it to close: the session ended on its
+    // own. That is a failure whatever the exit code says, because the run it
+    // was started for never reached a terminal status.
+    (code === 0 ? { status: "failed", reason: { code: "job.failed.early" } } : { status: "failed", reason: { code: "job.failed.exit", params: { code } } });
+    job.status = outcome.status;
+    job.reason = outcome.reason;
+    job.endedAt = this.clock().toISOString();
+    this.finished.push(job);
+    this.trimTranscripts();
+    this.active = null;
+    this.stalledSince = null;
+    if (job.status === "failed") {
+      this.blocked = true;
+      this.options.onNotice({ code: "queue.blocked", params: { job: job.command } });
+    }
+    this.pump();
+    this.options.onChange();
+  }
+  trimTranscripts() {
+    const keep = new Set(this.finished.slice(-TRANSCRIPT_KEEP).map((job) => job.id));
+    if (this.active !== null) keep.add(this.active.job.id);
+    for (const id of this.transcripts.keys()) {
+      if (!keep.has(id)) this.transcripts.delete(id);
+    }
+  }
+};
+
+// src/web/protocol.ts
+var ClientMessageSchema = discriminatedUnion("type", [
+  strictObject({ type: literal("input"), data: string2() }),
+  strictObject({
+    type: literal("resize"),
+    // Bounded because they reach an ioctl. A terminal 0 columns wide is not a
+    // terminal, and an absurd one is a way to make the pty misbehave.
+    cols: number2().int().min(1).max(1e3),
+    rows: number2().int().min(1).max(1e3)
+  }),
+  strictObject({ type: literal("enqueue"), command: string2().min(1).max(2e3) }),
+  strictObject({ type: literal("cancel"), jobId: string2().min(1) }),
+  strictObject({ type: literal("stop") }),
+  strictObject({ type: literal("resume") }),
+  strictObject({ type: literal("clear") }),
+  strictObject({ type: literal("attach"), jobId: string2().min(1) }),
+  strictObject({ type: literal("nudge") })
+]);
+
+// src/web/session.ts
+import { createRequire } from "node:module";
+var require2 = createRequire(import.meta.url);
+var cached2 = null;
+var PtyMissingError = class extends Error {
+  constructor(cause) {
+    super(`node-pty is not installed, so the dashboard cannot open a terminal (${cause})`);
+    this.name = "PtyMissingError";
+  }
+};
+function pty() {
+  if (cached2 !== null) return cached2;
+  try {
+    cached2 = require2("node-pty");
+  } catch (error2) {
+    throw new PtyMissingError(error2.message);
+  }
+  return cached2;
+}
+function isPtyAvailable() {
+  try {
+    pty();
+    return true;
+  } catch {
+    return false;
+  }
+}
+function claudeBinary() {
+  const override = process.env.MJLOOP_WEB_CLAUDE_BIN;
+  return override !== void 0 && override.length > 0 ? override : "claude";
+}
+var spawnPtySession = ({ cwd, command, cols, rows }) => {
+  const child = pty().spawn(claudeBinary(), [command], {
+    name: "xterm-256color",
+    cols,
+    rows,
+    cwd,
+    env: {
+      ...process.env,
+      // The session renders into a browser terminal that understands colour.
+      // Inheriting a TERM from whatever launched the server would sometimes
+      // hand `claude` a dumb terminal and lose its whole interface.
+      TERM: "xterm-256color"
+    }
+  });
+  return {
+    write: (data) => child.write(data),
+    resize: (nextCols, nextRows) => {
+      try {
+        child.resize(nextCols, nextRows);
+      } catch {
+      }
+    },
+    kill: (signal) => {
+      try {
+        child.kill(signal);
+      } catch {
+      }
+    },
+    onData: (fn) => {
+      child.onData(fn);
+    },
+    onExit: (fn) => {
+      child.onExit(({ exitCode }) => fn(exitCode));
+    }
+  };
+};
+
+// src/web/snapshot.ts
+import fs10 from "node:fs/promises";
+import path8 from "node:path";
+
 // src/ops/summary.ts
+import fs8 from "node:fs/promises";
 var NO_FINDINGS = { high: 0, medium: 0, low: 0 };
 async function hasDesignSystem(projectDir) {
   try {
-    return (await fs5.stat(resolveLoopPaths(projectDir).designSystem)).isFile();
+    return (await fs8.stat(resolveLoopPaths(projectDir).designSystem)).isFile();
   } catch {
     return false;
   }
@@ -16999,141 +17451,92 @@ async function stateSummary(projectDir) {
   };
 }
 
-// src/schemas/plan.ts
-var StoryStatusSchema = _enum(["todo", "doing", "done", "blocked"]);
-var PlanIdSchema = string2().regex(/^P\d{3}$/, "a plan id looks like P001");
-var StoryIdSchema = string2().regex(/^P\d{3}-S\d{2}$/, "a story id looks like P001-S02");
-var ApprovalDecisionSchema = _enum(["approved", "rejected", "changes_requested"]);
-var ApprovalSchema = strictObject({
-  decision: ApprovalDecisionSchema,
-  /** Who decided. Free text: the engine cannot verify it, and pretending otherwise would be worse. */
-  by: string2().min(1),
-  at: iso_exports.datetime(),
-  /** The approver's own words, kept so the approval is auditable rather than a bare flag. */
-  note: string2().min(1).nullable().default(null)
-});
-var PlanFrontmatterSchema = strictObject({
-  id: PlanIdSchema,
-  /** Also reaches the filesystem: the directory is `<id>-<slug>`. */
-  slug: IdSchema,
-  title: string2().min(1),
-  created_at: iso_exports.datetime(),
-  /**
-   * The default is load-bearing, as it was for `last_fingerprint` and
-   * `reproduction`: the schema is strict, so without it every PLAN.md written
-   * before this field existed would fail validation on read.
-   */
-  approval: ApprovalSchema.nullable().default(null)
-});
-var StoryFrontmatterSchema = strictObject({
-  id: StoryIdSchema,
-  plan: PlanIdSchema,
-  /**
-   * Bounded because it reaches the filesystem: the story file is named
-   * `<id>-<slugified title>.md`. The slug is truncated as well, so this bound
-   * is about the caller getting a validation error naming the field rather
-   * than a title that quietly loses most of itself.
-   */
-  title: string2().min(1).max(200),
-  status: StoryStatusSchema,
-  /** Drives the conditional UI specialists in a later milestone. */
-  ui: boolean2().default(false),
-  depends_on: array(StoryIdSchema).default([]),
-  acceptance: array(string2().min(1)).default([]),
-  /** Run directory holding the proof this story is done. Null until it is. */
-  evidence: string2().min(1).nullable().default(null)
-}).refine((story) => story.id.startsWith(`${story.plan}-`), {
-  error: "a story id must begin with its plan id",
-  path: ["id"]
-});
-var ManifestEntrySchema = strictObject({
-  id: StoryIdSchema,
-  title: string2().min(1),
-  status: StoryStatusSchema,
-  ui: boolean2(),
-  depends_on: array(StoryIdSchema),
-  /** Relative to the plan directory. */
-  file: string2().min(1)
-});
-var ManifestSchema = strictObject({
-  schema: literal(1),
-  plan: PlanIdSchema,
-  slug: IdSchema,
-  title: string2().min(1),
-  generated_at: iso_exports.datetime(),
-  stories: array(ManifestEntrySchema)
-});
-
-// src/store/frontmatter.ts
-var YAML2 = __toESM(require_dist(), 1);
-var FrontmatterError = class extends Error {
-  constructor(message) {
-    super(message);
-    this.name = "FrontmatterError";
-  }
-};
-var FRONTMATTER = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/;
-function splitFrontmatter(raw) {
-  const match = FRONTMATTER.exec(raw);
-  if (match === null) return null;
-  return { yaml: match[1] ?? "", body: (match[2] ?? "").trim() };
-}
-function parseFrontmatter(raw) {
-  const split = splitFrontmatter(raw);
-  if (split === null) {
-    throw new FrontmatterError("no frontmatter block: the file must open with a --- fenced yaml block");
-  }
-  let data;
+// src/web/revision.ts
+import fs9 from "node:fs/promises";
+import path7 from "node:path";
+async function stamp(file) {
   try {
-    data = YAML2.parse(split.yaml);
-  } catch (error2) {
-    throw new FrontmatterError(`the frontmatter is not valid yaml: ${error2.message}`);
+    const stats = await fs9.stat(file);
+    return `${Math.trunc(stats.mtimeMs)}.${stats.size}`;
+  } catch {
+    return "-";
   }
-  return { data, body: split.body };
 }
-
-// src/store/plan-store.ts
-import fs6 from "node:fs/promises";
-import path4 from "node:path";
-var PlanNotFoundError = class extends Error {
-  constructor(planId, dir) {
-    super(`no plan "${planId}" under ${dir}`);
-    this.name = "PlanNotFoundError";
-  }
-};
-async function listPlanDirs(plansDir) {
+async function stampDir(dir, documents) {
+  const parts = [await stamp(dir)];
+  for (const document of documents) parts.push(await stamp(path7.join(dir, document)));
+  return parts.join(":");
+}
+async function entries(dir) {
   try {
-    const entries = await fs6.readdir(plansDir, { withFileTypes: true });
-    return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
-  } catch (error2) {
-    if (error2.code !== "ENOENT") throw error2;
+    return (await fs9.readdir(dir)).sort();
+  } catch {
     return [];
   }
 }
-async function listPlanIds(projectDir) {
-  const ids = /* @__PURE__ */ new Set();
-  for (const entry of await listPlanDirs(resolveLoopPaths(projectDir).plans)) {
-    const id = /^(P\d{3})-/.exec(entry)?.[1];
-    if (id !== void 0) ids.add(id);
+var PLAN_DOCUMENTS = ["PLAN.md", "REVIEW.md", "manifest.json"];
+async function readRevisions(projectDir, tick, running) {
+  const paths = resolveLoopPaths(projectDir);
+  const planIds = await entries(paths.plans);
+  const plans = [];
+  for (const id of planIds) {
+    plans.push(`${id}=${await stampDir(path7.join(paths.plans, id), PLAN_DOCUMENTS)}`);
+    plans.push(await stamp(path7.join(paths.plans, id, "stories")));
   }
-  return [...ids].sort();
-}
-async function findPlanDir(projectDir, planId) {
-  const plansDir = resolveLoopPaths(projectDir).plans;
-  const entries = await listPlanDirs(plansDir);
-  const match = entries.find((entry) => entry.startsWith(`${planId}-`));
-  if (match === void 0) throw new PlanNotFoundError(planId, plansDir);
-  return path4.join(plansDir, match);
+  const [state, config2, memory, runs] = await Promise.all([
+    stamp(paths.state),
+    stamp(paths.config),
+    (async () => (await entries(paths.memory)).join(",") + await stamp(paths.memory))(),
+    (async () => (await entries(paths.runs)).join(",") + await stamp(paths.runs))()
+  ]);
+  return {
+    state,
+    config: config2,
+    plans: plans.join("|"),
+    runs,
+    cycle: running ? String(tick) : "idle",
+    memory
+  };
 }
 
 // src/web/snapshot.ts
-async function buildSnapshot(projectDir) {
-  const [state, plans, runs] = await Promise.all([
-    stateSummary(projectDir),
-    readPlans(projectDir),
-    listRuns(projectDir)
+function emptyCache() {
+  return { tick: 0, plansRevision: "", plans: [] };
+}
+async function buildSnapshot(projectDir, cache = emptyCache()) {
+  cache.tick += 1;
+  const [state, guards] = await Promise.all([stateSummary(projectDir), readGuards(projectDir)]);
+  const running = state.status === "running";
+  const revisions = await readRevisions(projectDir, cache.tick, running);
+  if (revisions.plans !== cache.plansRevision) {
+    cache.plans = await readPlans(projectDir);
+    cache.plansRevision = revisions.plans;
+  }
+  const [runs, roster] = await Promise.all([
+    listRuns(projectDir),
+    running && state.run_id !== null && state.track !== null ? readRosterProgress(projectDir, runDirName(state.run_id, state.story, state.track), state.cycle) : Promise.resolve(null)
   ]);
-  return { project: projectDir, state, plans, runs };
+  return { project: projectDir, state, plans: cache.plans, runs, guards, roster, revisions };
+}
+function runDirName(runId, story, track) {
+  return `${runId}--${story ?? "adhoc"}--${track}`;
+}
+async function readGuards(projectDir) {
+  try {
+    const [{ state }, config2] = await Promise.all([
+      new StateStore(projectDir).read(),
+      loadConfig(projectDir).catch(() => null)
+    ]);
+    return {
+      strikes: state.no_progress_count,
+      strikesAllowed: config2?.limits.no_progress_strikes ?? null,
+      cycleErrors: state.cycle_errors,
+      // The signature that will halt the run if this cycle repeats it.
+      errorArmed: state.last_error_fingerprint
+    };
+  } catch {
+    return null;
+  }
 }
 async function readPlans(projectDir) {
   let ids = [];
@@ -17154,23 +17557,19 @@ async function readPlans(projectDir) {
 }
 async function readPlanView(projectDir, id) {
   const dir = await findPlanDir(projectDir, id);
-  const [frontmatter, stories, manifestTitle] = await Promise.all([
-    readPlanFrontmatter(dir),
-    readStories(dir),
-    readManifestTitle(dir)
-  ]);
+  const [frontmatter, manifest] = await Promise.all([readPlanFrontmatter(dir), readManifest(dir)]);
   return {
     id,
     // The directory name is the last resort, and it always exists — `findPlanDir`
     // found the plan by it.
-    title: frontmatter?.title ?? manifestTitle ?? path5.basename(dir),
+    title: frontmatter?.title ?? manifest?.title ?? path8.basename(dir),
     approval: frontmatter?.approval?.decision ?? null,
-    stories
+    stories: manifest?.stories ?? []
   };
 }
 async function readPlanFrontmatter(dir) {
   try {
-    const raw = await fs7.readFile(path5.join(dir, "PLAN.md"), "utf8");
+    const raw = await fs10.readFile(path8.join(dir, "PLAN.md"), "utf8");
     const parsed = PlanFrontmatterSchema.safeParse(parseFrontmatter(raw).data);
     if (!parsed.success) return null;
     return { title: parsed.data.title, approval: parsed.data.approval };
@@ -17178,13 +17577,9 @@ async function readPlanFrontmatter(dir) {
     return null;
   }
 }
-async function readManifestTitle(dir) {
-  const manifest = await readManifest(dir);
-  return manifest?.title ?? null;
-}
 async function readManifest(dir) {
   try {
-    const raw = await fs7.readFile(path5.join(dir, "manifest.json"), "utf8");
+    const raw = await fs10.readFile(path8.join(dir, "manifest.json"), "utf8");
     const parsed = ManifestSchema.safeParse(JSON.parse(raw));
     if (!parsed.success) return null;
     return {
@@ -17201,13 +17596,10 @@ async function readManifest(dir) {
     return null;
   }
 }
-async function readStories(dir) {
-  return (await readManifest(dir))?.stories ?? [];
-}
 async function listRuns(projectDir) {
   try {
-    const entries = await fs7.readdir(resolveLoopPaths(projectDir).runs, { withFileTypes: true });
-    return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort().reverse();
+    const entries2 = await fs10.readdir(resolveLoopPaths(projectDir).runs, { withFileTypes: true });
+    return entries2.filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort().reverse();
   } catch {
     return [];
   }
@@ -17225,7 +17617,7 @@ var MIME = {
 var PUBLIC_DIR = fileURLToPath(new URL("./public/", import.meta.url));
 function tokenMatches(expected, given) {
   if (given === null || given.length !== expected.length) return false;
-  return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(given));
+  return crypto2.timingSafeEqual(Buffer.from(expected), Buffer.from(given));
 }
 var COOKIE = "mjloop_token";
 function readCookie(header, name) {
@@ -17241,7 +17633,7 @@ function suppliedToken(url, cookieHeader) {
 }
 async function startServer(options) {
   const { projectDir } = options;
-  const token = crypto.randomBytes(32).toString("hex");
+  const token = crypto2.randomBytes(32).toString("hex");
   const sockets = /* @__PURE__ */ new Set();
   const broadcast = (message) => {
     const payload = JSON.stringify(message);
@@ -17270,8 +17662,9 @@ async function startServer(options) {
       if (socket.readyState === socket.OPEN) socket.send(payload);
     }
   };
+  const cache = emptyCache();
   const refresh = async () => {
-    const base = await buildSnapshot(projectDir);
+    const base = await buildSnapshot(projectDir, cache);
     queue.observe(base.state);
     latest = { ...base, queue: queue.jobs(), session: queue.session() };
     emit();
@@ -17282,7 +17675,7 @@ async function startServer(options) {
     emit();
   };
   const server = http.createServer((request, response) => {
-    void handleRequest(request, response, token);
+    void handleRequest(request, response, token, projectDir);
   });
   const wss = new import_websocket_server.default({ noServer: true });
   server.on("upgrade", (request, socket, head) => {
@@ -17378,23 +17771,28 @@ async function startServer(options) {
     }
   };
 }
-async function handleRequest(request, response, token) {
+async function handleRequest(request, response, token, projectDir) {
   const url = new URL(request.url ?? "/", "http://127.0.0.1");
   if (!tokenMatches(token, suppliedToken(url, request.headers.cookie))) {
     response.writeHead(401, { "content-type": "text/plain; charset=utf-8" });
     response.end("unauthorized");
     return;
   }
+  const api = await handleApi(projectDir, request.method ?? "GET", url.pathname);
+  if (api !== null) {
+    sendApi(request, response, api);
+    return;
+  }
   const requested = url.pathname === "/" ? "/index.html" : url.pathname;
-  const file = path6.resolve(PUBLIC_DIR, `.${requested}`);
+  const file = path9.resolve(PUBLIC_DIR, `.${requested}`);
   if (!file.startsWith(PUBLIC_DIR)) {
     response.writeHead(403).end();
     return;
   }
   try {
-    const body = await fs8.readFile(file);
+    const body = await fs11.readFile(file);
     response.writeHead(200, {
-      "content-type": MIME[path6.extname(file)] ?? "application/octet-stream",
+      "content-type": MIME[path9.extname(file)] ?? "application/octet-stream",
       // The page carries a token in its URL. Keeping it out of caches and
       // referrers is most of what stops it leaking.
       "cache-control": "no-store",
@@ -17426,7 +17824,7 @@ function parseArgs(argv, cwd) {
       case "--dir": {
         const value = argv[++index];
         if (value === void 0) throw new UsageError("--dir needs a path");
-        args.dir = path7.resolve(cwd, value);
+        args.dir = path10.resolve(cwd, value);
         break;
       }
       case "--port": {
@@ -17489,7 +17887,7 @@ ${USAGE}`);
     return 1;
   }
   try {
-    await fs9.stat(resolveLoopPaths(args.dir).root);
+    await fs12.stat(resolveLoopPaths(args.dir).root);
   } catch {
     process.stderr.write(`no .mjloop/ in ${args.dir} \u2014 run /mjloop:init there first.
 `);

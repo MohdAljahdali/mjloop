@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { installForTest } from '../../src/web/public/lib/i18n.js'
 import { installStorage } from '../../src/web/public/lib/local.js'
 import { draw, installScheduler } from '../../src/web/public/ui/render.js'
@@ -44,6 +44,10 @@ const memoryStorage = (): Pick<Storage, 'getItem' | 'setItem'> => {
 }
 
 beforeEach(async () => {
+  // The Run panel's feeds issue conditional GETs. There is no server here, and
+  // a real request would only add a torn-down-fetch warning to every run; the
+  // read api has its own suite.
+  vi.stubGlobal('fetch', () => Promise.resolve(new Response('{}', { status: 200 })))
   await loadPage()
   installForTest({ code: 'en', strings: english })
   installStorage(memoryStorage())

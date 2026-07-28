@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { ResultSchema, StageSchema, StatusSchema } from '../../src/schemas/state.js'
 import { ApprovalDecisionSchema, StoryStatusSchema } from '../../src/schemas/plan.js'
+import { WEB_CODES } from '../../src/web/codes.js'
 
 /**
  * The guard that keeps fifteen languages maintainable.
@@ -40,7 +41,9 @@ const NAMESPACES = [
   'config',
   'controls',
   'cycle',
+  'error',
   'evidence',
+  'findings',
   'job',
   'lang',
   'memory',
@@ -140,17 +143,13 @@ for (const name of scripts) {
 }
 
 /**
- * The codes the server can emit. Every one of them has to have a key here or
- * the user reads a raw identifier where a sentence belongs.
+ * The codes the server can emit, imported rather than grepped.
  *
- * Grepped out of `queue.ts` for now. M2 replaces this with an import of the
- * closed `WebCode` union, at which point an untranslated code becomes a compile
- * error rather than a test failure.
+ * `WebCode` is a closed union, so a call site cannot invent one: an
+ * untranslated code is now a compile error, and this only has to check that
+ * every declared code has a key.
  */
-const serverCodes = [
-  ...(await fs.readFile(path.join(ENGINE, 'src', 'web', 'queue.ts'), 'utf8')).matchAll(/code: '([\w.]+)'/g),
-].map((match) => match[1] ?? '')
-for (const code of serverCodes) literals.add(code)
+for (const code of WEB_CODES) literals.add(code)
 
 const used = (key: string): boolean =>
   literals.has(key) || literals.has(stemOf(key)) || [...prefixes].some((prefix) => key.startsWith(prefix))

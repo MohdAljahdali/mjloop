@@ -79,6 +79,16 @@ export function drawRail(snapshot) {
     // The counts are only worth a slot when there is something to count.
     show(node['findings'], state.findings.high + state.findings.medium + state.findings.low > 0)
 
+    // The halt-imminent meter. A stagnation halt arrives without warning
+    // today; this says how many strikes are left before it does.
+    const strikes = node['strikes']
+    const guards = snapshot.guards
+    if (strikes !== undefined && guards !== null) {
+      // Two identifiers, not a prose count: `1/2` must not become `١/٢`.
+      verbatim(strikes, `${guards.strikes}/${guards.strikesAllowed ?? '?'}`)
+    }
+    show(node['strikesBit'], guards !== null && guards.strikes > 0)
+
     const gate = node['gate']
     if (gate !== undefined && state.reproduction !== null) {
       phrase(gate, state.reproduction.proven ? 'rail.gate.open' : 'rail.gate.shut')

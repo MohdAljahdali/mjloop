@@ -20,7 +20,7 @@
     <header class="top">
       <div class="brand">
         <h1 data-i18n="app.title">mjloop</h1>
-        <span class="project" id="project" dir="ltr"></span>
+        <span class="project" id="project"></span>
         <label class="lang">
           <span data-i18n="lang.label">Language</span>
           <select id="lang" name="lang"></select>
@@ -34,7 +34,7 @@
         <p class="banner offline" data-rail="offlineBanner" hidden data-i18n="app.disconnected"></p>
         <p class="banner error" data-rail="configBanner" hidden>
           <strong data-i18n="banner.configError"></strong>
-          <code data-rail="configError" dir="ltr"></code>
+          <code data-rail="configError"></code>
         </p>
         <p class="banner warn" data-rail="staleBanner" hidden data-i18n="banner.stale"></p>
         <p class="banner note" data-rail="designBanner" hidden data-i18n="banner.designSystem"></p>
@@ -54,6 +54,9 @@
           <span class="bit" data-rail="target"></span>
           <span class="bit" data-rail="run"></span>
           <span class="bit" data-rail="findings"></span>
+          <span class="bit warnish" data-rail="strikesBit" hidden
+            ><span class="k" data-i18n="rail.strikes"></span><span class="v" data-rail="strikes"></span
+          ></span>
           <span class="bit" data-rail="gate"></span>
         </span>
         <button type="button" class="danger" data-act="stop" data-rail="stop" hidden data-i18n="controls.stop"></button>
@@ -82,10 +85,66 @@
             <div class="fact" id="run-halt-fact"><dt data-i18n="run.halted"></dt><dd id="run-halt"></dd></div>
           </dl>
 
+          <section class="block" id="run-roster" hidden>
+            <h2 data-i18n="run.roster"></h2>
+            <ul class="chips" id="run-roster-agents"></ul>
+          </section>
+
+          <section class="block" id="run-guards" hidden>
+            <h2 data-i18n="run.guards"></h2>
+            <p id="run-strikes"></p>
+            <ul class="chips" id="run-cycle-errors"></ul>
+          </section>
+
+          <section class="block" id="run-findings-block" hidden>
+            <h2 data-i18n="run.findingsTitle"></h2>
+            <div class="scroller">
+              <table class="grid">
+                <thead>
+                  <tr>
+                    <th data-i18n="run.finding.severity"></th>
+                    <th data-i18n="run.finding.where"></th>
+                    <th data-i18n="run.finding.claim"></th>
+                  </tr>
+                </thead>
+                <tbody id="run-findings-list"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="block" id="run-gate-block" hidden>
+            <h2 data-i18n="run.gatePanel"></h2>
+            <p id="run-gate-state"></p>
+            <p><code id="run-gate-ref"></code></p>
+            <pre class="excerpt" id="run-gate-excerpt"></pre>
+          </section>
+
           <section class="block" id="run-last" hidden>
             <h2 data-i18n="run.lastCycle"></h2>
             <p><span id="run-last-result"></span></p>
             <ul class="chips" id="run-last-agents"></ul>
+          </section>
+
+          <section class="block" id="run-timeline" hidden>
+            <h2 data-i18n="run.timeline"></h2>
+            <div class="scroller">
+              <table class="grid">
+                <thead>
+                  <tr>
+                    <th data-i18n="run.cycle.number"></th>
+                    <th data-i18n="run.cycle.agents"></th>
+                    <th data-i18n="run.cycle.result"></th>
+                    <th data-i18n="run.cycle.ref"></th>
+                  </tr>
+                </thead>
+                <tbody id="run-timeline-list"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="block" id="run-haltreport" hidden>
+            <h2 data-i18n="run.haltReport"></h2>
+            <pre class="excerpt" id="run-halt-report"></pre>
           </section>
         </div>
       </section>
@@ -120,7 +179,7 @@
         <button type="button" class="icon" data-act="pane-cycle" data-i18n-label="pane.toggle">▼</button>
         <button type="button" class="view-tab" id="view-session" data-act="view-session" data-i18n="terminal.title"></button>
         <button type="button" class="view-tab" id="view-queue" data-act="view-queue"></button>
-        <span class="job-label" id="job-label" dir="ltr"></span>
+        <span class="job-label" id="job-label"></span>
         <span class="viewing" id="job-viewing" hidden></span>
         <button type="button" class="icon" data-act="pane-full" data-i18n-label="pane.fullscreen">⤢</button>
         <button type="button" class="danger" data-act="stop" id="pane-stop" hidden data-i18n="controls.stop"></button>
@@ -221,6 +280,27 @@
       <li class="run">
         <span class="run-id" data-slot="id"></span>
       </li>
+    </template>
+
+    <template id="tpl-roster-agent">
+      <li class="chip roster"><span data-slot="mark"></span><span data-slot="name"></span></li>
+    </template>
+
+    <template id="tpl-finding">
+      <tr class="finding">
+        <td><span class="sev" data-slot="severity"></span></td>
+        <td><code data-slot="where"></code></td>
+        <td data-slot="claim"></td>
+      </tr>
+    </template>
+
+    <template id="tpl-cycle">
+      <tr class="cycle">
+        <td data-slot="number"></td>
+        <td data-slot="agents"></td>
+        <td><span class="res" data-slot="result"></span></td>
+        <td><code data-slot="ref"></code></td>
+      </tr>
     </template>
 
     <template id="tpl-suggestion">

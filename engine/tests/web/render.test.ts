@@ -53,7 +53,20 @@ describe('verbatim', () => {
     verbatim(node, 'P001-S02')
     // `Intl` would render this `P٠٠١-S٠٢` in Arabic, and an unisolated Latin
     // run inside an Arabic sentence drags the punctuation around it.
-    expect(node.getAttribute('dir')).toBe('ltr')
+    expect(node.firstElementChild?.tagName).toBe('BDI')
+    expect(node.firstElementChild?.getAttribute('dir')).toBe('ltr')
+    expect(node.textContent).toBe('P001-S02')
+    // The container keeps the page's own direction, or a right-aligned value
+    // would jump to the far left of its column in Arabic.
+    expect(node.hasAttribute('dir')).toBe(false)
+  })
+
+  it('reuses its wrapper across redraws', () => {
+    const node = document.createElement('span')
+    verbatim(node, 'P001-S01')
+    const held = node.firstElementChild
+    verbatim(node, 'P001-S02')
+    expect(node.firstElementChild).toBe(held)
     expect(node.textContent).toBe('P001-S02')
   })
 })

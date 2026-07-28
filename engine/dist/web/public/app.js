@@ -5,6 +5,7 @@
  * `ui/` owns the retained-DOM layer, `net/` owns the socket, `panels/` own one
  * tab each. This file wires them together once and gets out of the way.
  */
+import { installToken } from './lib/api.js'
 import { direction, installLocales, loadFallback, locale, pickLocale, setLocale } from './lib/i18n.js'
 import { installStorage, read as prefs, write as remember } from './lib/local.js'
 import { routeFrom, startRouter } from './lib/router.js'
@@ -47,6 +48,7 @@ const token = new URLSearchParams(location.search).get('t') ?? ''
 let activeJob = /** @type {string | null} */ (null)
 
 installStorage(localStorage)
+installToken(token)
 installLocales(LOCALES, FALLBACK, {
   load: async (code) => {
     const response = await fetch(`locales/${code}.json?t=${encodeURIComponent(token)}`, { cache: 'no-store' })
