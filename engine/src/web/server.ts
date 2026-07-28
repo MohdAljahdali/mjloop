@@ -232,6 +232,11 @@ export async function startServer(options: ServerOptions): Promise<RunningServer
               // session: only once `HALT.md` exists does the pty get told.
               if (frame.write.kind === 'halt') queue.stop()
             }
+            // Guarded, unlike the sends above it: this one happens after an
+            // await, so the tab may well have gone. `ws` treats a send on a
+            // closed socket as an error event, and an unhandled one on a
+            // socket with no error listener takes the server down with it.
+            if (socket.readyState !== socket.OPEN) return
             socket.send(
               JSON.stringify({
                 type: 'receipt',
@@ -240,12 +245,20 @@ export async function startServer(options: ServerOptions): Promise<RunningServer
                 code: result.ok ? OK_CODES[frame.write.kind] : result.code,
               }),
             )
+          }).catch(() => {
+            // `applyWrite` reports its own failures as codes and never
+            // rejects; this catches a send that raced a closing socket.
           })
           break
         }
       }
     })
 
+    // A socket that errors with no listener is an uncaught exception in `ws`,
+    // and this process is a server the user leaves running. A dropped
+    // connection is not something to recover from — it is something not to
+    // crash on; `close` follows and removes it.
+    socket.on('error', () => {})
     socket.on('close', () => sockets.delete(socket))
   })
 

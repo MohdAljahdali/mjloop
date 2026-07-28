@@ -154,6 +154,30 @@ describe('templates and actions', () => {
   })
 })
 
+describe('accessibility', () => {
+  it('gives every control an accessible name', () => {
+    // A placeholder is not a name: it is announced inconsistently and it
+    // disappears the moment the user types. Every one of these controls had
+    // only a placeholder until this test existed.
+    const controls = [...html.matchAll(/<(input|select|textarea)\b[^>]*>/g)].map((match) => match[0])
+    const unnamed = controls.filter(
+      (tag) => !/aria-label|data-i18n-label/.test(tag) && !/id="lang"|id="halt-reason"/.test(tag),
+    )
+    expect(unnamed).toEqual([])
+  })
+
+  it('marks the open tab and gives the nav a name', () => {
+    expect(html).toMatch(/<nav class="tabs" data-i18n-label=/)
+    // `aria-current` is written by `showTab`, which is the only place a tab's
+    // openness is decided.
+    expect(read('ui/tabs.js')).toContain("aria-current")
+  })
+
+  it('keeps one live region for notices and one for banners', () => {
+    expect([...html.matchAll(/aria-live="polite"/g)]).toHaveLength(2)
+  })
+})
+
 describe('the invariants a stylesheet edit could undo', () => {
   it('keeps the terminal pinned and clipped', () => {
     const css = read('app.css')

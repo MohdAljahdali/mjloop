@@ -63,11 +63,6 @@ export function installLocales(locales, fallback, ports) {
   io = ports
 }
 
-/** @returns {LocaleRegistry} */
-export function locales() {
-  return registry
-}
-
 /** @returns {string} */
 export function locale() {
   return current
@@ -201,17 +196,6 @@ export function tn(stem, count, params) {
 export function pluralKey(stem, count) {
   const candidate = `${stem}.${plurals.select(count)}`
   return candidate in strings || candidate in fallbackStrings ? candidate : `${stem}.other`
-}
-
-/**
- * A message the server sent, as a key and its parameters.
- *
- * @param {{ code: string, params?: Params } | null | undefined} message
- * @returns {{ key: string, params: Params | undefined } | null}
- */
-export function messageKey(message) {
-  if (message === null || message === undefined) return null
-  return { key: message.code, params: message.params }
 }
 
 /**

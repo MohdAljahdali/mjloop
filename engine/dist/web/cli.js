@@ -18160,6 +18160,7 @@ async function startServer(options) {
               });
               if (frame.write.kind === "halt") queue.stop();
             }
+            if (socket.readyState !== socket.OPEN) return;
             socket.send(
               JSON.stringify({
                 type: "receipt",
@@ -18168,10 +18169,13 @@ async function startServer(options) {
                 code: result.ok ? OK_CODES[frame.write.kind] : result.code
               })
             );
+          }).catch(() => {
           });
           break;
         }
       }
+    });
+    socket.on("error", () => {
     });
     socket.on("close", () => sockets.delete(socket));
   });

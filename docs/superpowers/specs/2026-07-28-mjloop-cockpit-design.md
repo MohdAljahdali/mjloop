@@ -685,9 +685,24 @@ because a reader of this design would otherwise be surprised by the code.
   write. What must never appear under `src/web/` is an *update*, and that is
   what the test asserts — along with `readPlan`, which repairs by rewriting.
 
-Three bugs found by driving the real page rather than the tests, all of one
-shape and worth naming: **a control that hides itself must not be the node its
-own panel is registered against.** `render` skips hidden panels, so the queue
-count and the halt button could never appear. `register()` now says so. The
-third was the delegated bus firing a form's action on click *and* on submit,
-which wrote HALT.md twice.
+Bugs found by driving the real page rather than the tests. Three were of one
+shape, worth naming: **a control that hides itself must not be the node its own
+panel is registered against.** `render` skips hidden panels, so the queue count
+and the halt button could never appear. `register()` now says so. The third was
+the delegated bus firing a form's action on click *and* on submit, which wrote
+HALT.md twice.
+
+Two more came out of a verification pass:
+
+- **An actionable toast no longer expires.** A toast that only says something
+  goes away after eight seconds; one offering an Undo now stays until it is
+  used or dismissed. An Undo the user has to notice, read and reach for inside
+  eight seconds is an Undo that is not really there.
+- **`hidden` stops a pointer, not a programmatic activation.** Requeue now
+  refuses a story that is not `doing` or `blocked`, rather than rewriting a
+  story file to say what it already said.
+
+Accessibility was also short of what this design asked for: five controls
+carried a placeholder and no accessible name. A placeholder is announced
+inconsistently and vanishes on typing, so every control now has a translated
+`aria-label` and a discipline test refuses one that does not.

@@ -121,19 +121,34 @@ export function mountEvidence() {
     verbatim(haltBody, view.halt ?? '')
     flag(haltDetails, 'hidden', view.halt === null)
 
+    // Only the run's last cycle can still be written to, and only while that
+    // run is the live one. Every earlier cycle directory is inert, so it is
+    // fetched once and then follows `revisions.runs` — otherwise opening a run
+    // with eight cycles would issue eight conditional GETs a second forever.
+    const openCycle = state.state.run_id !== null && view.id.startsWith(`${state.state.run_id}--`) ? view.cycles.at(-1) : undefined
+
     for (const cycle of view.cycles) {
       const key = `${view.id}/${cycle}`
       if (!cycles.has(key)) {
         cycles.set(
           key,
           feed({
-            dep: (snapshot) => (opened === view.id ? `${key}:${snapshot.revisions.cycle}` : null),
+            dep: (snapshot) =>
+              opened !== view.id
+                ? null
+                : `${key}:${cycle === openCycle ? snapshot.revisions.cycle : snapshot.revisions.runs}`,
             path: () => `/api/runs/${encodeURIComponent(view.id)}/${cycle}`,
             onChange: () => draw(),
           }),
         )
       }
       cycles.get(key)?.update(state)
+    }
+
+    // Feeds for a run nobody is looking at are dropped rather than left to
+    // accumulate for as long as the tab stays open.
+    for (const key of [...cycles.keys()]) {
+      if (!key.startsWith(`${view.id}/`)) cycles.delete(key)
     }
 
     const loaded = view.cycles

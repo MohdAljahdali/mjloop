@@ -389,6 +389,11 @@ export function mountPlans() {
      * @param {string} from
      */
     requeue(story, from) {
+      // `hidden` stops a pointer, not a programmatic activation, and a story
+      // that is already `todo` has nothing to requeue. Without this a stray
+      // click rewrites the story file and re-renders the manifest to say
+      // exactly what they already said.
+      if (from !== 'doing' && from !== 'blocked') return
       submit(
         { kind: 'story.status', story, from: /** @type {'doing' | 'blocked'} */ (from), to: 'todo' },
         // Safe to offer precisely because the undo is conditional too: one

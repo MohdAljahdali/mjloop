@@ -7,7 +7,9 @@
  * real RTL bug waiting to happen for no gain.
  *
  * Ports are injected so the whole thing is node-testable; nothing here touches
- * `location` or `document` directly.
+ * `location` or `document` directly. There is no `go()`: navigation is what the
+ * anchors already do, and a second way to change the route would be a second
+ * thing to keep in step with the browser's history.
  */
 
 /**
@@ -30,8 +32,6 @@ export function routeFrom(hash, routes, fallback) {
   return routes.includes(id) ? id : fallback
 }
 
-/** @type {RouterPorts | null} */
-let ports = null
 /** @type {readonly string[]} */
 let known = []
 let fallbackRoute = ''
@@ -46,7 +46,6 @@ let listener = () => {}
  * @param {(route: string) => void} onRoute
  */
 export function startRouter(injected, routes, fallback, onRoute) {
-  ports = injected
   known = routes
   fallbackRoute = fallback
   listener = onRoute
@@ -66,14 +65,3 @@ export function startRouter(injected, routes, fallback, onRoute) {
   apply()
 }
 
-/** @returns {string} */
-export function route() {
-  return active
-}
-
-/**
- * @param {string} id
- */
-export function go(id) {
-  ports?.setHash(`#${routeFrom(`#${id}`, known, fallbackRoute)}`)
-}

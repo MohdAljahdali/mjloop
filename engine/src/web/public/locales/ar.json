@@ -94,10 +94,12 @@
   "plans.requestChanges": "اطلب تعديلات",
   "plans.reject": "ارفض",
   "plans.notePlaceholder": "لماذا، بكلماتك أنت",
+  "plans.noteLabel": "ملاحظة على هذا القرار",
   "plans.readPlan": "‏PLAN.md‏",
   "plans.readReview": "‏REVIEW.md‏ — ناقد الخطّة",
   "plans.create": "ابدأ شيئًا",
   "plans.newPlan": "خطّط له",
+  "plans.newPlanLabel": "الفكرة المراد تخطيطها",
   "plans.newPlanHint": "فكرة تتحوّل إلى خطّة",
   "plans.storiesEmpty": "لا قصص.",
 
@@ -134,6 +136,8 @@
   "memory.noMatch": "لا ذاكرة تطابق ذلك.",
   "memory.more": "تعرض {shown} من {total} مدخلة.",
   "memory.searchHint": "ابحث في العناوين والوسوم والنصوص",
+  "memory.searchLabel": "ابحث في الذاكرة",
+  "memory.kindLabel": "رشّح حسب النوع",
   "memory.allKinds": "كلّ الأنواع",
 
   "config.readOnly": "للقراءة فقط. كلّ قيمة أدناه تحمل اسم مفتاحها في ‏config.yaml‏؛ عدّل الملفّ لتغييرها.",
@@ -221,6 +225,7 @@
   "toast.dismiss": "إخفاء",
 
   "command.placeholder": "‏/mjloop:fix حلقة إعادة توجيه الدخول",
+  "command.label": "أمر لوب يُضاف إلى الطابور",
   "command.run": "شغّل",
   "command.hint": "أي أمر لوب: ‏/mjloop:build‏، ‏/mjloop:fix‏، ‏/mjloop:plan‏، ‏/mjloop:edit‏."
 }

@@ -65,14 +65,3 @@ export function reconcile(host, items, keyOf, factory, limit = 200) {
   states.set(host, next)
   return { shown: visible.length, total: items.length }
 }
-
-/**
- * Forget a host's rows, for a container torn down by something other than the
- * reconciler — otherwise the next pass tries to place nodes that are no longer
- * anywhere.
- *
- * @param {HTMLElement} host
- */
-export function forget(host) {
-  states.delete(host)
-}

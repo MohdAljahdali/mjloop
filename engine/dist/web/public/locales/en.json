@@ -94,10 +94,12 @@
   "plans.requestChanges": "Request changes",
   "plans.reject": "Reject",
   "plans.notePlaceholder": "Why, in your own words",
+  "plans.noteLabel": "Note on this decision",
   "plans.readPlan": "PLAN.md",
   "plans.readReview": "REVIEW.md — the plan-critic",
   "plans.create": "Start something",
   "plans.newPlan": "Plan it",
+  "plans.newPlanLabel": "The idea to plan",
   "plans.newPlanHint": "An idea to turn into a plan",
   "plans.storiesEmpty": "No stories.",
 
@@ -134,6 +136,8 @@
   "memory.noMatch": "No memory matches that.",
   "memory.more": "Showing {shown} of {total} entries.",
   "memory.searchHint": "Search titles, tags and bodies",
+  "memory.searchLabel": "Search memory",
+  "memory.kindLabel": "Filter by kind",
   "memory.allKinds": "Every kind",
 
   "config.readOnly": "Read-only. Every value below names the config.yaml key that sets it; edit the file to change one.",
@@ -217,6 +221,7 @@
   "toast.dismiss": "Dismiss",
 
   "command.placeholder": "/mjloop:fix the login redirect loop",
+  "command.label": "Loop command to queue",
   "command.run": "Run",
   "command.hint": "Any loop command: /mjloop:build, /mjloop:fix, /mjloop:plan, /mjloop:edit."
 }

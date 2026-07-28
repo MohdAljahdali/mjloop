@@ -5,9 +5,10 @@ import { installStorage } from '../../src/web/public/lib/local.js'
 import { draw, installScheduler } from '../../src/web/public/ui/render.js'
 import { drawRail, mountRail } from '../../src/web/public/ui/rail.js'
 import { mountEvidence } from '../../src/web/public/panels/evidence.js'
-import { mountPlans, statusIndex, unmet } from '../../src/web/public/panels/plans.js'
+import { mountPlans, planStatus, ready, statusIndex, unmet } from '../../src/web/public/panels/plans.js'
 import { mountQueue } from '../../src/web/public/panels/queue.js'
 import { mountRun } from '../../src/web/public/panels/run.js'
+import { facet } from '../../src/web/public/panels/memory.js'
 import { suggestions } from '../../src/web/public/panels/launcher.js'
 import { mountToasts, toast } from '../../src/web/public/ui/toasts.js'
 import { emptySnapshot, loadPage, readLocale } from './helpers/page.js'
@@ -126,6 +127,59 @@ describe('plans', () => {
       ],
     })
     expect(suggestions(snapshot)).toEqual(['/mjloop:build P001-S02'])
+  })
+})
+
+describe('derived state', () => {
+  it("reads a plan's state off its stories and nothing else", () => {
+    expect(planStatus(plan({ id: 'P001' }))).toBe('empty')
+    expect(planStatus(plan({ id: 'P001', stories: [story({ id: 'P001-S01', status: 'done' })] }))).toBe('done')
+    expect(planStatus(plan({ id: 'P001', stories: [story({ id: 'P001-S01' })] }))).toBe('todo')
+    expect(
+      planStatus(plan({ id: 'P001', stories: [story({ id: 'P001-S01', status: 'doing' })] })),
+    ).toBe('doing')
+    // Blocked outranks doing: one blocked story is the thing worth saying.
+    expect(
+      planStatus(
+        plan({
+          id: 'P001',
+          stories: [story({ id: 'P001-S01', status: 'doing' }), story({ id: 'P001-S02', status: 'blocked' })],
+        }),
+      ),
+    ).toBe('blocked')
+  })
+
+  it('finds what is ready across every plan', () => {
+    const plans = [
+      plan({ id: 'P001', stories: [story({ id: 'P001-S01', status: 'done' }), story({ id: 'P001-S02', depends_on: ['P001-S01'] })] }),
+      plan({ id: 'P002', stories: [story({ id: 'P002-S01', depends_on: ['P001-S02'] })] }),
+    ]
+    // A dependency reaching across plans is still a dependency.
+    expect(ready(plans).map((entry) => entry.id)).toEqual(['P001-S02'])
+  })
+})
+
+describe('memory faceting', () => {
+  const entry = (patch: { id: string; kind?: string; title?: string; tags?: string[]; body?: string }) => ({
+    id: patch.id,
+    kind: patch.kind ?? 'decision',
+    title: patch.title ?? 'A decision',
+    tags: patch.tags ?? [],
+    at: '2026-07-28T09:00:00.000Z',
+    run: null,
+    body: patch.body ?? '',
+  })
+
+  it('matches every term across id, title, tags and body', () => {
+    const all = [
+      entry({ id: 'M001', title: 'Cookies over tokens', body: 'Because of SSR.' }),
+      entry({ id: 'M002', kind: 'lesson', title: 'Retry the flake', tags: ['ci'] }),
+    ]
+    expect(facet(all, 'cookies ssr', '').map((memory) => memory.id)).toEqual(['M001'])
+    expect(facet(all, 'ci', '').map((memory) => memory.id)).toEqual(['M002'])
+    expect(facet(all, '', 'lesson').map((memory) => memory.id)).toEqual(['M002'])
+    expect(facet(all, 'cookies', 'lesson')).toEqual([])
+    expect(facet(all, '', '')).toHaveLength(2)
   })
 })
 

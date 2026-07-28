@@ -175,6 +175,7 @@
               dir="auto"
               autocomplete="off"
               data-i18n-placeholder="plans.notePlaceholder"
+              data-i18n-label="plans.noteLabel"
             />
             <button type="button" data-act="approve" data-i18n="plans.approve"></button>
             <button type="button" data-act="request-changes" data-i18n="plans.requestChanges"></button>
@@ -198,7 +199,14 @@
           <!-- Both compose a loop command and enqueue it. Structured fields,
                one execution path: there is no second, weaker way to start work. -->
           <form class="command" data-act="new-plan">
-            <input id="new-plan" name="idea" dir="auto" autocomplete="off" data-i18n-placeholder="plans.newPlanHint" />
+            <input
+              id="new-plan"
+              name="idea"
+              dir="auto"
+              autocomplete="off"
+              data-i18n-placeholder="plans.newPlanHint"
+              data-i18n-label="plans.newPlanLabel"
+            />
             <button type="submit" data-i18n="plans.newPlan"></button>
           </form>
         </section>
@@ -243,8 +251,9 @@
             dir="auto"
             autocomplete="off"
             data-i18n-placeholder="memory.searchHint"
+            data-i18n-label="memory.searchLabel"
           />
-          <select id="memory-kind" name="kind"></select>
+          <select id="memory-kind" name="kind" data-i18n-label="memory.kindLabel"></select>
         </div>
         <ul class="memories" id="memory-list"></ul>
         <p class="more" id="memory-more" hidden></p>
@@ -332,6 +341,7 @@
           name="command"
           list="command-suggestions"
           data-i18n-placeholder="command.placeholder"
+          data-i18n-label="command.label"
           autocomplete="off"
           spellcheck="false"
           dir="auto"

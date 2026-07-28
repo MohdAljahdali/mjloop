@@ -50,7 +50,10 @@ export function toast(message, action) {
   }
 
   region.append(root)
-  setTimeout(() => root.remove(), LIFETIME_MS)
+  // A toast that only *says* something goes away on its own. One that offers an
+  // action stays until it is used or dismissed: an Undo the user has to notice,
+  // read and reach for in eight seconds is an Undo that is not really there.
+  if (action === undefined) setTimeout(() => root.remove(), LIFETIME_MS)
 }
 
 /**
