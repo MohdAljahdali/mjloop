@@ -1,0 +1,129 @@
+/* The status rail and the page-level banners above it.
+   A banner here is an outage, not a row: it is meant to be louder than the
+   cycle count, which is exactly what the old sidebar could not do. */
+
+.banners {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-inline: 16px;
+}
+
+.banners:empty {
+  display: none;
+}
+
+.banner {
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.banner small {
+  color: var(--dim);
+  flex-basis: 100%;
+}
+
+.banner code {
+  font-family: var(--mono);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.banner.error {
+  background: #2d1214;
+  border: 1px solid var(--bad);
+}
+
+.banner.warn {
+  background: #2b2412;
+  border: 1px solid var(--warn);
+}
+
+.banner.note {
+  background: #10203a;
+  border: 1px solid var(--accent);
+}
+
+.banner.offline {
+  background: #2d1214;
+  border: 1px solid var(--bad);
+}
+
+.rail {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: var(--rail-h);
+  padding: 4px 16px;
+  border-block-start: 1px solid var(--line);
+  font-size: 13px;
+}
+
+.rail-detail {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: 1;
+  flex-wrap: wrap;
+}
+
+.bit {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+}
+
+.bit:empty {
+  display: none;
+}
+
+.bit .k {
+  color: var(--dim);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.bit .v {
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.pill {
+  border-radius: 999px;
+  padding: 1px 10px;
+  font-size: 12px;
+  border: 1px solid var(--line);
+  color: var(--dim);
+}
+
+.pill[data-status="running"] {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.pill[data-status="halted"],
+.pill[data-status="failed"] {
+  color: var(--bad);
+  border-color: var(--bad);
+}
+
+.pill[data-status="done"] {
+  color: var(--ok);
+  border-color: var(--ok);
+}
+
+.danger {
+  color: var(--bad);
+  border-color: var(--bad);
+}
+
+.danger:hover:not(:disabled) {
+  border-color: var(--bad);
+  background: #2d1214;
+}

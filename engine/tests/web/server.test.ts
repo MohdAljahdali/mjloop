@@ -58,7 +58,7 @@ describe('http', () => {
   it('serves the locale dictionaries', async () => {
     const response = await fetch(`${base()}/locales/ar.json?t=${server.token}`)
     expect(response.status).toBe(200)
-    expect(((await response.json()) as Record<string, string>)['queue.title']).toBe('الطابور')
+    expect(((await response.json()) as Record<string, string>)['queue.tab']).toBe('الطابور')
   })
 
   it('keeps the tokened page out of caches and referrers', async () => {

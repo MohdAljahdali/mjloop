@@ -19,6 +19,9 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
+// Browser bundles the page loads. Pure JavaScript, so they ship in `dist` too.
+// Shared with `verify-ship.mjs` so the two cannot drift.
+import { VENDOR } from './vendor.mjs'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
 const require = createRequire(import.meta.url)
@@ -27,13 +30,6 @@ const ENTRIES = [
   ['src/mcp/server.ts', 'dist/mcp/server.js'],
   ['src/cli/index.ts', 'dist/cli/index.js'],
   ['src/web/cli.ts', 'dist/web/cli.js'],
-]
-
-/** Browser bundles the page loads. Pure JavaScript, so they ship in `dist` too. */
-const VENDOR = [
-  ['@xterm/xterm/lib/xterm.js', 'xterm.js'],
-  ['@xterm/xterm/css/xterm.css', 'xterm.css'],
-  ['@xterm/addon-fit/lib/addon-fit.js', 'addon-fit.js'],
 ]
 
 const SHEBANG = '#!/usr/bin/env node'

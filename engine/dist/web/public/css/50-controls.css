@@ -1,0 +1,94 @@
+/* Buttons, tags, chips and toasts — the small parts that repeat everywhere. */
+
+.tag {
+  font-size: 11px;
+  color: var(--dim);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0 7px;
+  white-space: nowrap;
+}
+
+.tag.approval-approved {
+  color: var(--ok);
+  border-color: var(--ok);
+}
+
+.tag.approval-rejected {
+  color: var(--bad);
+  border-color: var(--bad);
+}
+
+.tag.approval-changes_requested {
+  color: var(--warn);
+  border-color: var(--warn);
+}
+
+.tag.ui {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.chip {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--dim);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 1px 7px;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--dim);
+}
+
+.dot.status-done {
+  background: var(--ok);
+}
+
+.dot.status-doing {
+  background: var(--accent);
+}
+
+.dot.status-blocked {
+  background: var(--bad);
+}
+
+/* Appended into a live region that has been in the document since boot: a
+   screen reader announces an insertion into an existing region, not the arrival
+   of a new one. */
+.toasts {
+  position: fixed;
+  inset-block-end: 12px;
+  inset-inline-end: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 10;
+  max-width: min(420px, 90vw);
+}
+
+.toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: var(--panel);
+  border: 1px solid var(--warn);
+  border-radius: var(--radius);
+  padding: 9px 12px;
+  font-size: 13px;
+  box-shadow: 0 6px 18px rgb(0 0 0 / 45%);
+}

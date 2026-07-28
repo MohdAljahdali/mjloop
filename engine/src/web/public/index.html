@@ -9,59 +9,223 @@
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='6' fill='none' stroke='%2358a6ff' stroke-width='2'/%3E%3C/svg%3E" />
     <link rel="stylesheet" href="vendor/xterm.css" />
     <link rel="stylesheet" href="app.css" />
+    <link rel="stylesheet" href="css/10-layout.css" />
+    <link rel="stylesheet" href="css/20-rail.css" />
+    <link rel="stylesheet" href="css/30-tabs.css" />
+    <link rel="stylesheet" href="css/40-terminal.css" />
+    <link rel="stylesheet" href="css/50-controls.css" />
+    <link rel="stylesheet" href="css/60-panels.css" />
   </head>
-  <body>
-    <header class="bar">
-      <h1 data-i18n="app.title">mjloop</h1>
-      <span class="project" id="project"></span>
-      <label class="lang">
-        <span data-i18n="lang.label">Language</span>
-        <select id="lang" name="lang"></select>
-      </label>
+  <body data-pane="docked">
+    <header class="top">
+      <div class="brand">
+        <h1 data-i18n="app.title">mjloop</h1>
+        <span class="project" id="project" dir="ltr"></span>
+        <label class="lang">
+          <span data-i18n="lang.label">Language</span>
+          <select id="lang" name="lang"></select>
+        </label>
+      </div>
+
+      <!-- Page-level, above everything, and never inside a reconciled
+           container: `config_error` is a total outage and must not read at the
+           weight of a normal row. -->
+      <div class="banners" role="status" aria-live="polite">
+        <p class="banner offline" data-rail="offlineBanner" hidden data-i18n="app.disconnected"></p>
+        <p class="banner error" data-rail="configBanner" hidden>
+          <strong data-i18n="banner.configError"></strong>
+          <code data-rail="configError" dir="ltr"></code>
+        </p>
+        <p class="banner warn" data-rail="staleBanner" hidden data-i18n="banner.stale"></p>
+        <p class="banner note" data-rail="designBanner" hidden data-i18n="banner.designSystem"></p>
+        <p class="banner warn" data-rail="stalledBanner" hidden>
+          <span data-rail="stalledText"></span>
+          <button type="button" data-act="nudge" data-i18n="session.nudge"></button>
+          <small data-i18n="session.stalledHint"></small>
+        </p>
+      </div>
+
+      <div class="rail">
+        <span class="pill" data-rail="status"></span>
+        <span class="rail-detail" data-rail="detail" hidden>
+          <span class="bit"><span class="k" data-i18n="rail.track"></span><span class="v" data-rail="track"></span></span>
+          <span class="bit"><span class="k" data-i18n="rail.cycle"></span><span class="v" data-rail="cycle"></span></span>
+          <span class="bit"><span class="k" data-i18n="rail.stage"></span><span class="v" data-rail="stage"></span></span>
+          <span class="bit" data-rail="target"></span>
+          <span class="bit" data-rail="run"></span>
+          <span class="bit" data-rail="findings"></span>
+          <span class="bit" data-rail="gate"></span>
+        </span>
+        <button type="button" class="danger" data-act="stop" data-rail="stop" hidden data-i18n="controls.stop"></button>
+      </div>
     </header>
 
-    <p class="banner offline" id="offline" hidden data-i18n="app.disconnected"></p>
+    <nav class="tabs" data-i18n-label="tabs.label">
+      <a id="tab-run" href="#run" data-i18n="tabs.run"></a>
+      <a id="tab-plans" href="#plans" data-i18n="tabs.plans"></a>
+      <a id="tab-evidence" href="#evidence" data-i18n="tabs.evidence"></a>
+      <a id="tab-memory" href="#memory" data-i18n="tabs.memory"></a>
+      <a id="tab-config" href="#config" data-i18n="tabs.config"></a>
+    </nav>
 
     <main>
-      <aside>
-        <section class="panel" id="state-panel"></section>
+      <section class="panel" id="panel-run" hidden>
+        <p class="empty" id="run-empty"></p>
+        <div id="run-body" hidden>
+          <dl class="facts">
+            <div class="fact"><dt data-i18n="run.goal"></dt><dd id="run-goal"></dd></div>
+            <div class="fact" id="run-story-fact"><dt data-i18n="run.story"></dt><dd id="run-story"></dd></div>
+            <div class="fact" id="run-plan-fact"><dt data-i18n="run.plan"></dt><dd id="run-plan"></dd></div>
+            <div class="fact" id="run-runid-fact"><dt data-i18n="run.runId"></dt><dd id="run-runid"></dd></div>
+            <div class="fact"><dt data-i18n="run.findings"></dt><dd id="run-findings"></dd></div>
+            <div class="fact" id="run-gate-fact"><dt data-i18n="run.gate"></dt><dd id="run-gate"></dd></div>
+            <div class="fact" id="run-halt-fact"><dt data-i18n="run.halted"></dt><dd id="run-halt"></dd></div>
+          </dl>
 
-        <section class="panel">
-          <h2 data-i18n="plans.title">Plans</h2>
-          <div id="plans"></div>
-        </section>
-
-        <section class="panel">
-          <h2 data-i18n="queue.title">Queue</h2>
-          <div id="queue"></div>
-        </section>
-      </aside>
-
-      <section class="stage">
-        <div class="stage-head">
-          <h2 data-i18n="terminal.title">Session</h2>
-          <span class="job-label" id="job-label"></span>
-          <button id="stop" data-i18n="controls.stop" hidden>Stop</button>
+          <section class="block" id="run-last" hidden>
+            <h2 data-i18n="run.lastCycle"></h2>
+            <p><span id="run-last-result"></span></p>
+            <ul class="chips" id="run-last-agents"></ul>
+          </section>
         </div>
+      </section>
 
-        <p class="banner stalled" id="stalled" hidden>
-          <span id="stalled-text"></span>
-          <button id="nudge" data-i18n="session.nudge">Continue</button>
-          <small id="stalled-hint" data-i18n="session.stalledHint"></small>
-        </p>
+      <section class="panel" id="panel-plans" hidden>
+        <p class="empty" id="plans-empty"></p>
+        <div class="plans" id="plans-list"></div>
+        <p class="more" id="plans-more" hidden></p>
+      </section>
 
-        <p class="empty" id="terminal-empty" data-i18n="terminal.idle"></p>
-        <!-- Pinned ltr whatever the ui language is: claude's output is box
-             drawing and aligned columns, and mirroring it destroys both. -->
-        <div class="terminal" id="terminal" dir="ltr"></div>
+      <section class="panel" id="panel-evidence" hidden>
+        <p class="empty" id="evidence-empty"></p>
+        <ul class="runs" id="evidence-list"></ul>
+        <p class="more" id="evidence-more" hidden></p>
+      </section>
 
-        <form class="command" id="command-form">
-          <input id="command" name="command" autocomplete="off" spellcheck="false" dir="auto" />
-          <button type="submit" data-i18n="command.run">Run</button>
-        </form>
-        <small class="hint" data-i18n="command.hint"></small>
+      <section class="panel" id="panel-memory" hidden>
+        <p class="empty" data-i18n="memory.unavailable"></p>
+      </section>
+
+      <section class="panel" id="panel-config" hidden>
+        <p class="empty" data-i18n="config.unavailable"></p>
+        <dl class="facts">
+          <div class="fact"><dt data-i18n="config.designSystem"></dt><dd id="config-design"></dd></div>
+          <div class="fact"><dt data-i18n="config.project"></dt><dd id="config-project"></dd></div>
+        </dl>
       </section>
     </main>
+
+    <section class="pane">
+      <div class="pane-head">
+        <button type="button" class="icon" data-act="pane-cycle" data-i18n-label="pane.toggle">▼</button>
+        <button type="button" class="view-tab" id="view-session" data-act="view-session" data-i18n="terminal.title"></button>
+        <button type="button" class="view-tab" id="view-queue" data-act="view-queue"></button>
+        <span class="job-label" id="job-label" dir="ltr"></span>
+        <span class="viewing" id="job-viewing" hidden></span>
+        <button type="button" class="icon" data-act="pane-full" data-i18n-label="pane.fullscreen">⤢</button>
+        <button type="button" class="danger" data-act="stop" id="pane-stop" hidden data-i18n="controls.stop"></button>
+      </div>
+
+      <div class="pane-body">
+        <div class="view" id="view-session-body">
+          <p class="empty" id="terminal-empty" data-i18n="terminal.idle"></p>
+          <!-- Pinned ltr whatever the ui language is: claude's output is box
+               drawing and aligned columns, and mirroring it destroys both. -->
+          <div class="terminal" id="terminal" dir="ltr"></div>
+        </div>
+
+        <div class="view" id="panel-queue" hidden>
+          <p class="banner warn" id="queue-blocked" hidden data-i18n="queue.blockedBanner"></p>
+          <p class="empty" id="queue-empty" data-i18n="queue.empty"></p>
+          <ul class="jobs" id="queue-list"></ul>
+          <p class="more" id="queue-more" hidden></p>
+          <div class="queue-actions">
+            <button type="button" id="queue-resume" data-act="resume" hidden data-i18n="queue.resume"></button>
+            <button type="button" id="queue-clear" data-act="clear" hidden data-i18n="queue.clear"></button>
+          </div>
+        </div>
+      </div>
+
+      <form class="command" id="command-form" data-act="enqueue">
+        <input
+          id="command"
+          name="command"
+          list="command-suggestions"
+          data-i18n-placeholder="command.placeholder"
+          autocomplete="off"
+          spellcheck="false"
+          dir="auto"
+        />
+        <datalist id="command-suggestions"></datalist>
+        <button type="submit" data-i18n="command.run"></button>
+      </form>
+      <small class="hint" data-i18n="command.hint"></small>
+    </section>
+
+    <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
+
+    <!-- ── templates ───────────────────────────────────────────────────────
+         Every repeatable row is cloned from here. Nothing on this page is
+         built from a string, which is what makes `escape()` — and the XSS
+         surface it existed to hold back — unnecessary rather than merely
+         absent. -->
+
+    <template id="tpl-toast">
+      <div class="toast">
+        <span data-slot="text"></span>
+        <button type="button" class="icon" data-act="toast-dismiss" data-slot="dismiss">×</button>
+      </div>
+    </template>
+
+    <template id="tpl-chip">
+      <li class="chip"><span data-slot="text"></span></li>
+    </template>
+
+    <template id="tpl-plan">
+      <article class="plan">
+        <header class="plan-head">
+          <span class="plan-id" data-slot="id"></span>
+          <strong class="plan-title" data-slot="title"></strong>
+          <span class="tag" data-slot="approval"></span>
+          <span class="count" data-slot="count"></span>
+        </header>
+        <p class="empty" data-slot="empty" hidden></p>
+        <ul class="stories" data-slot="stories"></ul>
+      </article>
+    </template>
+
+    <template id="tpl-story">
+      <li class="story">
+        <span class="dot" data-slot="dot"></span>
+        <span class="story-id" data-slot="id"></span>
+        <span class="story-title" data-slot="title"></span>
+        <span class="tag ui" data-slot="ui" hidden></span>
+        <span class="story-status" data-slot="status"></span>
+        <span class="waits" data-slot="waits" hidden></span>
+        <button type="button" class="icon" data-act="build" data-slot="build">+</button>
+      </li>
+    </template>
+
+    <template id="tpl-job">
+      <li class="job">
+        <span class="cmd" data-slot="command"></span>
+        <span class="st" data-slot="status"></span>
+        <span class="dur" data-slot="duration"></span>
+        <span class="reason" data-slot="reason" hidden></span>
+        <button type="button" class="icon" data-act="job-cancel" data-slot="cancel" hidden>×</button>
+        <button type="button" class="icon" data-act="job-attach" data-slot="attach" hidden>↗</button>
+      </li>
+    </template>
+
+    <template id="tpl-run">
+      <li class="run">
+        <span class="run-id" data-slot="id"></span>
+      </li>
+    </template>
+
+    <template id="tpl-suggestion">
+      <option data-slot="option"></option>
+    </template>
 
     <script src="vendor/xterm.js"></script>
     <script src="vendor/addon-fit.js"></script>

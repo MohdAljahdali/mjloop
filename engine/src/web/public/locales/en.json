@@ -2,21 +2,25 @@
   "app.title": "mjloop",
   "app.disconnected": "Connection lost — retrying…",
 
-  "state.uninitialised": "No loop in this project.",
-  "state.idle": "Idle — nothing running.",
-  "state.track": "Track",
-  "state.cycle": "Cycle",
-  "state.cycleOf": "{cycle} of {max}",
-  "state.stage": "Stage",
-  "state.goal": "Goal",
-  "state.story": "Story",
-  "state.findings": "Findings",
-  "state.findingsCounts": "{high} high · {medium} medium · {low} low",
-  "state.gate.open": "Gate open",
-  "state.gate.shut": "Gate shut",
-  "state.halted": "Halted",
-  "state.designSystemMissing": "No design system — run /mjloop:design-sync before a UI story.",
-  "state.configError": "Config error: {error}",
+  "lang.label": "Language",
+
+  "banner.configError": "Config error",
+  "banner.stale": "Recovered state — state.json was unreadable, so this describes the write before the last one.",
+  "banner.designSystem": "No design system — run /mjloop:design-sync before a UI story.",
+
+  "rail.track": "Track",
+  "rail.cycle": "Cycle",
+  "rail.stage": "Stage",
+  "rail.findings": "{high} high · {medium} medium · {low} low",
+  "rail.gate.open": "Gate open",
+  "rail.gate.shut": "Gate shut",
+
+  "tabs.label": "Sections",
+  "tabs.run": "Run",
+  "tabs.plans": "Plans",
+  "tabs.evidence": "Evidence",
+  "tabs.memory": "Memory",
+  "tabs.config": "Config",
 
   "status.idle": "idle",
   "status.running": "running",
@@ -33,8 +37,26 @@
   "stage.halted": "halted",
   "stage.done": "done",
 
-  "plans.title": "Plans",
+  "cycle.result.pass": "passed",
+  "cycle.result.fail": "failed",
+  "cycle.result.blocked": "blocked",
+
+  "run.uninitialised": "No loop in this project — run /mjloop:init to set it up.",
+  "run.idle": "Idle — nothing running. Queue a story or type a command below.",
+  "run.goal": "Goal",
+  "run.story": "Story",
+  "run.plan": "Plan",
+  "run.runId": "Run",
+  "run.findings": "Findings",
+  "run.findingsCounts": "{high} high · {medium} medium · {low} low",
+  "run.gate": "Gate",
+  "run.gateState.open": "Open — proven",
+  "run.gateState.shut": "Shut — nothing proven yet",
+  "run.halted": "Halted",
+  "run.lastCycle": "Last cycle",
+
   "plans.empty": "No plans yet. Start one with /mjloop:plan.",
+  "plans.more": "Showing {shown} of {total} plans.",
   "plans.approval.approved": "approved",
   "plans.approval.rejected": "rejected",
   "plans.approval.changes_requested": "changes requested",
@@ -48,10 +70,27 @@
   "story.ui": "UI",
   "story.build": "Build this story",
   "story.blockedBy": "Waits on {ids}",
+  "story.notBuildable.todo": "Build this story",
+  "story.notBuildable.doing": "Already being built. Requeue it if the run was cancelled.",
+  "story.notBuildable.done": "Already done.",
+  "story.notBuildable.blocked": "Blocked — the last run could not finish it.",
 
-  "queue.title": "Queue",
+  "evidence.empty": "No runs yet.",
+  "evidence.more": "Showing {shown} of {total} runs.",
+
+  "memory.unavailable": "This page does not read memory yet.",
+
+  "config.unavailable": "Read-only, and not read here yet — open .mjloop/config.yaml.",
+  "config.designSystem": "Design system",
+  "config.design.present": "present",
+  "config.design.missing": "missing — run /mjloop:design-sync",
+  "config.project": "Project",
+
+  "queue.tab": "Queue",
+  "queue.tabCount.one": "Queue ({count})",
+  "queue.tabCount.other": "Queue ({count})",
   "queue.empty": "Nothing queued.",
-  "queue.count": "{count} queued",
+  "queue.more": "Showing {shown} of {total} jobs.",
   "queue.clear": "Clear queue",
   "queue.resume": "Resume",
   "queue.blockedBanner": "Queue stopped after a failure. Look at the transcript, then resume.",
@@ -61,7 +100,7 @@
   "job.status.done": "done",
   "job.status.failed": "failed",
   "job.status.cancelled": "cancelled",
-  "job.cancel": "Remove",
+  "job.cancel": "Remove from the queue",
   "job.view": "View transcript",
 
   "job.failed.exit": "The session exited with code {code} before the run finished.",
@@ -73,7 +112,10 @@
 
   "terminal.title": "Session",
   "terminal.idle": "Nothing running. Queue a story or type a command below.",
-  "terminal.viewing": "Viewing a finished job — read only.",
+  "terminal.viewing": "Reading a finished job — typing goes nowhere.",
+
+  "pane.toggle": "Collapse or expand the session pane",
+  "pane.fullscreen": "Fullscreen the session pane",
 
   "session.stalled": "The session has been quiet since {time}. It may be waiting on you.",
   "session.nudge": "Continue",
@@ -81,9 +123,9 @@
 
   "controls.stop": "Stop",
 
+  "toast.dismiss": "Dismiss",
+
   "command.placeholder": "/mjloop:fix the login redirect loop",
   "command.run": "Run",
-  "command.hint": "Any loop command: /mjloop:build, /mjloop:fix, /mjloop:plan, /mjloop:edit.",
-
-  "lang.label": "Language"
+  "command.hint": "Any loop command: /mjloop:build, /mjloop:fix, /mjloop:plan, /mjloop:edit."
 }

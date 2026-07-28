@@ -1,0 +1,31 @@
+{
+  /*
+   * Type checking for the page.
+   *
+   * There is no bundler and no build step for `src/web/public/`, so without
+   * this the browser JavaScript is the one part of the engine a compiler never
+   * looks at — and it is the part that reads `Snapshot` field by field. JSDoc
+   * plus `checkJs` gives it `protocol.ts`'s real types: a typo in
+   * `snapshot.state.track` is a compile error rather than a blank slot on
+   * screen six months from now.
+   *
+   * It emits nothing and changes nothing at runtime. It is wired into the
+   * `typecheck` script rather than given one of its own — a separate script
+   * becomes decoration within two months.
+   */
+  "compilerOptions": {
+    "target": "ES2023",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["node"],
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "skipLibCheck": true
+  },
+  "include": ["src/web/public/**/*.js", "src/web/page-globals.d.ts"]
+}

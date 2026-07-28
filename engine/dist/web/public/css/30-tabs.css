@@ -1,0 +1,28 @@
+/* Anchors in a <nav>, not a role="tablist": these panels are URL-addressable,
+   back and forward move between them, and there is no arrow-key handler that
+   has to work out which way "next" points in an rtl document. */
+
+.tabs {
+  display: flex;
+  gap: 2px;
+  padding-inline: 12px;
+  border-block-end: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.tabs a {
+  padding: 8px 14px;
+  color: var(--dim);
+  text-decoration: none;
+  font-size: 13px;
+  border-block-end: 2px solid transparent;
+}
+
+.tabs a:hover {
+  color: var(--text);
+}
+
+.tabs a[aria-current="page"] {
+  color: var(--text);
+  border-block-end-color: var(--accent);
+}

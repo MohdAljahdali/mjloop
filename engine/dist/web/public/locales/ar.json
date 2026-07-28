@@ -2,21 +2,25 @@
   "app.title": "mjloop",
   "app.disconnected": "انقطع الاتصال — تجري إعادة المحاولة…",
 
-  "state.uninitialised": "لا لوب في هذا المشروع.",
-  "state.idle": "خامل — لا شيء قيد التشغيل.",
-  "state.track": "المسار",
-  "state.cycle": "الدورة",
-  "state.cycleOf": "{cycle} من {max}",
-  "state.stage": "المرحلة",
-  "state.goal": "الهدف",
-  "state.story": "القصّة",
-  "state.findings": "الملاحظات",
-  "state.findingsCounts": "{high} عالية · {medium} متوسّطة · {low} منخفضة",
-  "state.gate.open": "البوّابة مفتوحة",
-  "state.gate.shut": "البوّابة مغلقة",
-  "state.halted": "متوقّف",
-  "state.designSystemMissing": "لا يوجد نظام تصميم — شغّل ‏/mjloop:design-sync‏ قبل أي قصّة واجهة.",
-  "state.configError": "خطأ في الإعداد: {error}",
+  "lang.label": "اللغة",
+
+  "banner.configError": "خطأ في الإعداد",
+  "banner.stale": "حالة مستردّة — تعذّرت قراءة ‏state.json‏، فهذا يصف الكتابة التي سبقت الأخيرة.",
+  "banner.designSystem": "لا يوجد نظام تصميم — شغّل ‏/mjloop:design-sync‏ قبل أي قصّة واجهة.",
+
+  "rail.track": "المسار",
+  "rail.cycle": "الدورة",
+  "rail.stage": "المرحلة",
+  "rail.findings": "{high} عالية · {medium} متوسّطة · {low} منخفضة",
+  "rail.gate.open": "البوّابة مفتوحة",
+  "rail.gate.shut": "البوّابة مغلقة",
+
+  "tabs.label": "الأقسام",
+  "tabs.run": "التشغيل",
+  "tabs.plans": "الخطط",
+  "tabs.evidence": "الأدلّة",
+  "tabs.memory": "الذاكرة",
+  "tabs.config": "الإعداد",
 
   "status.idle": "خامل",
   "status.running": "يعمل",
@@ -33,8 +37,26 @@
   "stage.halted": "متوقّف",
   "stage.done": "تمّ",
 
-  "plans.title": "الخطط",
+  "cycle.result.pass": "نجحت",
+  "cycle.result.fail": "فشلت",
+  "cycle.result.blocked": "تعطّلت",
+
+  "run.uninitialised": "لا لوب في هذا المشروع — شغّل ‏/mjloop:init‏ لتهيئته.",
+  "run.idle": "خامل — لا شيء قيد التشغيل. أضف قصّة إلى الطابور أو اكتب أمرًا في الأسفل.",
+  "run.goal": "الهدف",
+  "run.story": "القصّة",
+  "run.plan": "الخطّة",
+  "run.runId": "التشغيل",
+  "run.findings": "الملاحظات",
+  "run.findingsCounts": "{high} عالية · {medium} متوسّطة · {low} منخفضة",
+  "run.gate": "البوّابة",
+  "run.gateState.open": "مفتوحة — مُثبتة بدليل",
+  "run.gateState.shut": "مغلقة — لم يُثبت شيء بعد",
+  "run.halted": "متوقّف",
+  "run.lastCycle": "الدورة الأخيرة",
+
   "plans.empty": "لا خطط بعد. ابدأ واحدة بـ ‏/mjloop:plan‏.",
+  "plans.more": "تعرض {shown} من {total} خطّة.",
   "plans.approval.approved": "معتمدة",
   "plans.approval.rejected": "مرفوضة",
   "plans.approval.changes_requested": "طُلبت تعديلات",
@@ -48,20 +70,41 @@
   "story.ui": "واجهة",
   "story.build": "ابنِ هذه القصّة",
   "story.blockedBy": "تنتظر {ids}",
+  "story.notBuildable.todo": "ابنِ هذه القصّة",
+  "story.notBuildable.doing": "قيد البناء أصلًا. أعدها إلى الطابور إن أُلغي التشغيل.",
+  "story.notBuildable.done": "تمّت بالفعل.",
+  "story.notBuildable.blocked": "معطّلة — لم يستطع التشغيل الأخير إنهاءها.",
 
-  "queue.title": "الطابور",
+  "evidence.empty": "لا عمليات تشغيل بعد.",
+  "evidence.more": "تعرض {shown} من {total} تشغيلة.",
+
+  "memory.unavailable": "هذه الصفحة لا تقرأ الذاكرة بعد.",
+
+  "config.unavailable": "للقراءة فقط، ولا تُقرأ هنا بعد — افتح ‏.mjloop/config.yaml‏.",
+  "config.designSystem": "نظام التصميم",
+  "config.design.present": "موجود",
+  "config.design.missing": "غير موجود — شغّل ‏/mjloop:design-sync‏",
+  "config.project": "المشروع",
+
+  "queue.tab": "الطابور",
+  "queue.tabCount.zero": "الطابور ({count})",
+  "queue.tabCount.one": "الطابور ({count})",
+  "queue.tabCount.two": "الطابور ({count})",
+  "queue.tabCount.few": "الطابور ({count})",
+  "queue.tabCount.many": "الطابور ({count})",
+  "queue.tabCount.other": "الطابور ({count})",
   "queue.empty": "الطابور فارغ.",
-  "queue.count": "{count} في الطابور",
+  "queue.more": "تعرض {shown} من {total} مهمّة.",
   "queue.clear": "إفراغ الطابور",
   "queue.resume": "استئناف",
   "queue.blockedBanner": "توقّف الطابور بعد فشل. راجع النص، ثم استأنف.",
 
   "job.status.queued": "في الطابور",
-  "job.status.running": "يعمل",
+  "job.status.running": "تعمل",
   "job.status.done": "تمّت",
   "job.status.failed": "فشلت",
   "job.status.cancelled": "أُلغيت",
-  "job.cancel": "إزالة",
+  "job.cancel": "إزالة من الطابور",
   "job.view": "عرض النص",
 
   "job.failed.exit": "خرجت الجلسة بالرمز {code} قبل أن ينتهي التشغيل.",
@@ -73,7 +116,10 @@
 
   "terminal.title": "الجلسة",
   "terminal.idle": "لا شيء يعمل. أضف قصّة إلى الطابور أو اكتب أمرًا في الأسفل.",
-  "terminal.viewing": "تعرض مهمّة منتهية — للقراءة فقط.",
+  "terminal.viewing": "تقرأ مهمّة منتهية — ما تكتبه لا يذهب إلى أي مكان.",
+
+  "pane.toggle": "طيّ لوحة الجلسة أو بسطها",
+  "pane.fullscreen": "ملء الشاشة بلوحة الجلسة",
 
   "session.stalled": "الجلسة صامتة منذ {time}. قد تكون تنتظرك.",
   "session.nudge": "أكمل",
@@ -81,9 +127,9 @@
 
   "controls.stop": "إيقاف",
 
+  "toast.dismiss": "إخفاء",
+
   "command.placeholder": "‏/mjloop:fix حلقة إعادة توجيه الدخول",
   "command.run": "شغّل",
-  "command.hint": "أي أمر لوب: ‏/mjloop:build‏، ‏/mjloop:fix‏، ‏/mjloop:plan‏، ‏/mjloop:edit‏.",
-
-  "lang.label": "اللغة"
+  "command.hint": "أي أمر لوب: ‏/mjloop:build‏، ‏/mjloop:fix‏، ‏/mjloop:plan‏، ‏/mjloop:edit‏."
 }
