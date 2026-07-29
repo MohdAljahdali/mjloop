@@ -49,6 +49,39 @@
   gap: 16px;
 }
 
+.plans-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(360px, 0.85fr);
+  align-items: start;
+  gap: 18px;
+}
+
+.plan-detail {
+  position: sticky;
+  inset-block-start: 0;
+  max-height: calc(100vh - var(--pane-h) - 180px);
+  overflow-y: auto;
+  margin-block-start: 0;
+  padding: 12px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--panel);
+}
+
+.plan-detail-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.plan-detail-head h2 {
+  margin: 0;
+}
+
+.plan-back {
+  display: none;
+}
+
 .plan {
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -262,6 +295,25 @@
 
 .grid-telemetry {
   grid-template-columns: 1fr repeat(8, max-content);
+}
+
+@media (max-width: 800px) {
+  .plans-workspace {
+    display: block;
+  }
+
+  .plans-workspace[data-detail-open="true"] .plans-master {
+    display: none;
+  }
+
+  .plan-detail {
+    position: static;
+    max-height: none;
+  }
+
+  .plan-back {
+    display: inline-flex;
+  }
 }
 
 .sev-high {

@@ -99,6 +99,47 @@ const cells = (selector: string): (string | null)[] =>
   [...document.querySelectorAll(selector)].map((node) => node.textContent)
 
 describe('plans', () => {
+  it('opens plan detail in context and exposes the state to keyboard users', async () => {
+    serve({
+      '/api/plans/P001': {
+        id: 'P001',
+        title: 'Large plan',
+        approval: null,
+        body: '# Large plan',
+        review: null,
+        stories: [],
+      },
+    })
+    reveal('panel-plans')
+    const mounted = mountPlans()
+    draw(
+      emptySnapshot({
+        plans: [
+          plan({
+            id: 'P001',
+            title: 'Large plan',
+            stories: Array.from({ length: 22 }, (_, index) =>
+              story({ id: `P001-S${String(index + 1).padStart(2, '0')}` }),
+            ),
+          }),
+        ],
+      }),
+    )
+
+    const open = document.querySelector('[data-act="open-plan"]') as HTMLButtonElement
+    expect(open.getAttribute('aria-expanded')).toBe('false')
+
+    mounted.toggle('P001')
+    await vi.waitFor(() => expect((document.getElementById('plan-detail') as HTMLElement).hidden).toBe(false))
+
+    expect(open.getAttribute('aria-expanded')).toBe('true')
+    expect(open.getAttribute('aria-controls')).toBe('plan-detail')
+    expect(document.activeElement).toBe(document.getElementById('plan-detail-title'))
+    expect(document.getElementById('plans-workspace')?.dataset['detailOpen']).toBe('true')
+
+    mounted.toggle('P001')
+  })
+
   it('draws the status as a word and names what a story waits on', () => {
     reveal('panel-plans')
     mountPlans()

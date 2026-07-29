@@ -112,6 +112,7 @@
   "plans.readyNext": "الجاهز للبناء",
   "plans.open": "افتح",
   "plans.close": "أغلق",
+  "plans.back": "العودة إلى الخطط",
   "plans.state.empty": "لا قصص",
   "plans.state.todo": "لم تبدأ",
   "plans.state.doing": "قيد التقدّم",

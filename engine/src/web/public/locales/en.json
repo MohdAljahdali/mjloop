@@ -108,6 +108,7 @@
   "plans.readyNext": "Ready next",
   "plans.open": "Open",
   "plans.close": "Close",
+  "plans.back": "Back to plans",
   "plans.state.empty": "no stories",
   "plans.state.todo": "not started",
   "plans.state.doing": "in progress",
