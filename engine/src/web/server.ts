@@ -45,6 +45,7 @@ const OK_CODES = {
   gate: 'write.ok.gate',
   'story.status': 'write.ok.story',
   halt: 'write.ok.halt',
+  'config.patch': 'write.ok.config',
 } as const
 
 /**

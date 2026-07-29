@@ -4,11 +4,16 @@ import { ApprovalDecisionSchema, PlanIdSchema, StoryIdSchema, StoryStatusSchema 
 import { gateSet } from '../ops/plan.js'
 import { storyUpdate } from '../ops/plan.js'
 import { halt } from '../ops/run.js'
+import {
+  ConfigChangeSchema,
+  ConfigMutationError,
+  mutateConfig,
+} from '../store/config-mutation.js'
 import { StalePreconditionError } from '../store/precondition.js'
 import type { WebCode } from './codes.js'
 
 /**
- * The only three engine writes the browser can reach, and the only door they
+ * The only engine writes the browser can reach, and the only door they
  * come through.
  *
  * Everything else on the page either reads, or composes a loop command and
@@ -43,7 +48,8 @@ import type { WebCode } from './codes.js'
  *  2. **Schema.** `strictObject` throughout, so an undeclared wire field is
  *     rejected before `applyWrite` is reached.
  *  3. **An import allowlist**, asserted from source text: this file may import
- *     exactly the three ops; `server.ts` may import none.
+ *     exactly the three ops and the guarded config mutator; `server.ts` may
+ *     import none.
  *  4. **A forbidden list**, asserted to appear nowhere under `src/web/`.
  */
 
@@ -81,6 +87,11 @@ export const WriteSchema = z.discriminatedUnion('kind', [
     kind: z.literal('halt'),
     run: z.string().min(1).max(200),
     reason: z.string().min(1).max(2000),
+  }),
+  z.strictObject({
+    kind: z.literal('config.patch'),
+    revision: z.string().regex(/^[a-f0-9]{64}$/),
+    changes: z.array(ConfigChangeSchema).min(1).max(100),
   }),
 ])
 
@@ -130,6 +141,9 @@ const HANDLERS: Handlers = {
     // throws, the pty is untouched and nothing happened.
     await halt(projectDir, write.reason, undefined, { expectRun: write.run })
   },
+  'config.patch': async (projectDir, write) => {
+    await mutateConfig(projectDir, { revision: write.revision, changes: write.changes })
+  },
 }
 
 export async function applyWrite(projectDir: string, write: Write): Promise<WriteResult> {
@@ -137,6 +151,12 @@ export async function applyWrite(projectDir: string, write: Write): Promise<Writ
     await HANDLERS[write.kind](projectDir, write as never)
     return { ok: true }
   } catch (error) {
+    if (error instanceof ConfigMutationError) {
+      return {
+        ok: false,
+        code: error.kind === 'stale' ? 'write.stale.config' : 'write.invalid.config',
+      }
+    }
     if (error instanceof StalePreconditionError) {
       return { ok: false, code: STALE[error.subject] }
     }

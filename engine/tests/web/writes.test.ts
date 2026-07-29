@@ -5,13 +5,15 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { initLoop } from '../../src/ops/init.js'
 import { gateSet, planCreate, storyAdd, storyUpdate } from '../../src/ops/plan.js'
 import { runStart } from '../../src/ops/run.js'
+import { configRevision } from '../../src/store/config-mutation.js'
+import { resolveLoopPaths } from '../../src/store/paths.js'
 import { WEB_CODES } from '../../src/web/codes.js'
 import { buildSnapshot } from '../../src/web/snapshot.js'
 import { applyWrite, WriteSchema } from '../../src/web/writes.js'
 import { makeTmpProject, type TmpProject } from '../helpers/tmp-project.js'
 
 /**
- * The three writes, and the property that makes an 800ms-stale page safe to
+ * The guarded writes, and the property that makes an 800ms-stale page safe to
  * click: a write that arrives with an out-of-date expectation is **refused**
  * rather than obeyed.
  */
@@ -144,6 +146,36 @@ describe('applyWrite', () => {
     const late = await applyWrite(project.dir, { kind: 'story.status', story: 'P001-S01', from: 'doing', to: 'todo' })
     expect(late).toEqual({ ok: false, code: 'write.stale.story' })
   })
+
+  it('edits config through the conditional web door without losing comments', async () => {
+    const file = resolveLoopPaths(project.dir).config
+    const source = (await fs.readFile(file, 'utf8'))
+      .replace('version: 1', '# project policy\nversion: 1')
+      .replace('autonomous: false', 'autonomous: false # supervised')
+    await fs.writeFile(file, source, 'utf8')
+
+    const result = await applyWrite(project.dir, {
+      kind: 'config.patch',
+      revision: configRevision(source),
+      changes: [{ kind: 'root', key: 'autonomous', value: true }],
+    })
+
+    expect(result).toEqual({ ok: true })
+    const written = await fs.readFile(file, 'utf8')
+    expect(written).toContain('# project policy')
+    expect(written).toContain('autonomous: true # supervised')
+  })
+
+  it('refuses stale config edits without changing a byte', async () => {
+    const before = await hashTree()
+    const result = await applyWrite(project.dir, {
+      kind: 'config.patch',
+      revision: '0'.repeat(64),
+      changes: [{ kind: 'root', key: 'verify_cache', value: true }],
+    })
+    expect(result).toEqual({ ok: false, code: 'write.stale.config' })
+    expect(await hashTree()).toEqual(before)
+  })
 })
 
 describe('WriteSchema', () => {
@@ -159,9 +191,27 @@ describe('WriteSchema', () => {
     expect(WriteSchema.safeParse({ kind: 'story.status', story: '../x', from: 'todo', to: 'done' }).success).toBe(false)
   })
 
-  it('refuses a kind that is not one of the three', () => {
+  it('refuses a kind outside the guarded write set', () => {
     expect(WriteSchema.safeParse({ kind: 'cycle.advance', result: 'pass' }).success).toBe(false)
     expect(WriteSchema.safeParse({ kind: 'run.log', agent: 'reproducer' }).success).toBe(false)
+  })
+
+  it('accepts only typed config changes, never arbitrary yaml paths', () => {
+    const revision = 'a'.repeat(64)
+    expect(
+      WriteSchema.safeParse({
+        kind: 'config.patch',
+        revision,
+        changes: [{ kind: 'root', key: 'autonomous', value: true }],
+      }).success,
+    ).toBe(true)
+    expect(
+      WriteSchema.safeParse({
+        kind: 'config.patch',
+        revision,
+        changes: [{ kind: 'raw', path: '../state.json', value: 'x' }],
+      }).success,
+    ).toBe(false)
   })
 })
 

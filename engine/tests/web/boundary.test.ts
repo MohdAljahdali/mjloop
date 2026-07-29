@@ -77,11 +77,16 @@ describe('the engine surface the browser can reach', () => {
     }
   })
 
-  it('reaches the three ops from exactly one file', () => {
+  it('reaches the three operational writes from exactly one file', () => {
     for (const op of ['gateSet', 'storyUpdate', 'halt']) {
       const importers = files.filter((file) => imported(read(file)).has(op))
       expect(importers, op).toEqual(['writes.ts'])
     }
+  })
+
+  it('reaches the guarded config mutator from exactly one file', () => {
+    const importers = files.filter((file) => imported(read(file)).has('mutateConfig'))
+    expect(importers).toEqual(['writes.ts'])
   })
 
   it('keeps the server itself unable to write', () => {

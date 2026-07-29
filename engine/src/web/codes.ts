@@ -26,15 +26,18 @@ export const WEB_CODES = [
   'error.unreadable',
   'error.badRequest',
 
-  /* the three writes. A refusal names what moved, and nothing else — the codes
+  /* the guarded writes. A refusal names what moved, and nothing else — the codes
      carry no parameters, so there is no hole for a sentence to arrive in. */
   'write.stale.plan',
   'write.stale.story',
   'write.stale.run',
+  'write.stale.config',
+  'write.invalid.config',
   'write.failed',
   'write.ok.gate',
   'write.ok.story',
   'write.ok.halt',
+  'write.ok.config',
 ] as const
 
 export type WebCode = (typeof WEB_CODES)[number]

@@ -152,7 +152,7 @@ export const ClientMessageSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('attach'), jobId: z.string().min(1) }),
   z.strictObject({ type: z.literal('nudge') }),
   /**
-   * The one door for the three engine writes the browser can reach.
+   * The one door for the guarded engine writes the browser can reach.
    *
    * `id` is the page's own correlation token, echoed back on the receipt; it is
    * never used to name anything on disk.
