@@ -8,18 +8,23 @@ import { gateSet, planCreate, storyAdd } from '../../src/ops/plan.js'
 import { rosterSet } from '../../src/ops/roster.js'
 import { runLog } from '../../src/ops/log.js'
 import { runStart } from '../../src/ops/run.js'
+import { LedgerEntrySchema, type LedgerEntry } from '../../src/schemas/verify.js'
 import {
+  CYCLE_HANDOFF_MAX,
+  CYCLE_VERIFY_MAX,
   NotFoundError,
   readConfigView,
   readCycleDetail,
   readMemories,
   readMemoryEntry,
   readPlanDetail,
+  readPreflightEstimate,
   readRosterProgress,
   readRunDetail,
   readRuns,
   readState,
   readStoryDetail,
+  readTelemetryReport,
 } from '../../src/web/read.js'
 import { makeTmpProject, type TmpProject } from '../helpers/tmp-project.js'
 
@@ -54,6 +59,32 @@ async function hashTree(dir: string): Promise<Map<string, string>> {
   return out
 }
 
+/**
+ * A ledger row, built through the schema the executor writes through rather
+ * than typed out as a literal. `ops/verify.ts` cannot be called from here — it
+ * spawns the project's own commands — so the schema is what keeps this fixture
+ * and the real file the same shape: a field added to `LedgerEntrySchema` that
+ * these rows cannot satisfy fails here rather than in a browser.
+ */
+function ledgerRow(patch: Partial<LedgerEntry> = {}): LedgerEntry {
+  return LedgerEntrySchema.parse({
+    slot: 'test',
+    command: 'cd engine && npm test',
+    source: 'pinned',
+    log: 'test.log',
+    phase: 'complete',
+    exit_code: 0,
+    at: NOW.toISOString(),
+    ...patch,
+  })
+}
+
+async function writeLedger(runId: string, cycle: number, entries: LedgerEntry[]): Promise<void> {
+  const dir = path.join(project.dir, '.mjloop', 'runs', runId, `cycle-${String(cycle).padStart(2, '0')}`, 'verify')
+  await fs.mkdir(dir, { recursive: true })
+  await fs.writeFile(path.join(dir, 'index.json'), `${JSON.stringify(entries, null, 2)}\n`, 'utf8')
+}
+
 async function seed(): Promise<void> {
   await initLoop(project.dir, clock)
   await planCreate(project.dir, { slug: 'user-auth', title: 'User authentication' }, clock)
@@ -67,6 +98,8 @@ describe('read', () => {
   it('writes nothing, including against a clobbered PLAN.md', async () => {
     await seed()
     await runStart(project.dir, { track: 'edit', goal: 'Rename the submit label' }, clock)
+    await rosterSet(project.dir, { cycle: 1, selected: ['editor', 'verifier'], skipped: {} })
+    const runId = (await readRuns(project.dir))[0]?.id ?? ''
 
     // `readPlan` would repair this by rewriting the file. Nothing here may.
     const planFile = path.join(project.dir, '.mjloop', 'plans', 'P001-user-auth', 'PLAN.md')
@@ -79,8 +112,15 @@ describe('read', () => {
       readPlanDetail(project.dir, 'P001'),
       readStoryDetail(project.dir, 'P001-S01'),
       readRuns(project.dir),
+      readCycleDetail(project.dir, runId, 1),
       readMemories(project.dir),
       readMemoryEntry(project.dir, 'M001'),
+      // Both cross-run reports walk every run directory in the project. A walk
+      // is still a read, and the property this test defends is the whole reason
+      // they are projections over `readRunHistory` rather than anything that
+      // could repair what it opens.
+      readTelemetryReport(project.dir),
+      readPreflightEstimate(project.dir, 'edit'),
     ])
     expect(await hashTree(project.dir)).toEqual(before)
   })
@@ -171,6 +211,111 @@ describe('read', () => {
 
     const cycle = await readCycleDetail(project.dir, runId, 1)
     expect(cycle.agents.map((entry) => entry.agent)).toEqual(['editor'])
+  })
+
+  it('carries the cycle ledger, drift and queued rows included', async () => {
+    await seed()
+    await runStart(project.dir, { track: 'edit', goal: 'Rename the submit label' }, clock)
+    await rosterSet(project.dir, { cycle: 1, selected: ['editor', 'verifier'], skipped: {} })
+    const runId = (await readRuns(project.dir))[0]?.id ?? ''
+
+    await writeLedger(runId, 1, [
+      // The pin ran one command while `config.yaml` now holds another. This is
+      // the whole reason drift was put on the ledger entry: it reaches the
+      // Evidence tab through the reader the tab already has, with no second
+      // channel and nothing here reading the pin.
+      ledgerRow({ live_command: 'cd engine && npm run test:fast' }),
+      // Nothing ran: another verify command in the project held the lock. It
+      // must read as queued rather than as nothing.
+      ledgerRow({ slot: 'lint', command: 'cd engine && npm run typecheck', log: 'lint.log', phase: 'queued', exit_code: null }),
+    ])
+
+    const cycle = await readCycleDetail(project.dir, runId, 1)
+    expect(cycle.verify_total).toBe(2)
+    expect(cycle.verify[0]).toMatchObject({
+      slot: 'test',
+      source: 'pinned',
+      live_command: 'cd engine && npm run test:fast',
+      exit_code: 0,
+    })
+    expect(cycle.verify[1]).toMatchObject({ phase: 'queued', exit_code: null })
+  })
+
+  it('reports an empty ledger for a cycle that predates it', async () => {
+    await seed()
+    await runStart(project.dir, { track: 'edit', goal: 'Rename the submit label' }, clock)
+    await rosterSet(project.dir, { cycle: 1, selected: ['editor', 'verifier'], skipped: {} })
+    const runId = (await readRuns(project.dir))[0]?.id ?? ''
+
+    // Every cycle of every run written before this milestone has no `verify/`
+    // directory at all, and that is not an error the Evidence tab should show.
+    const cycle = await readCycleDetail(project.dir, runId, 1)
+    expect(cycle.verify).toEqual([])
+    expect(cycle.verify_total).toBe(0)
+    expect(cycle.handoff).toBe(null)
+  })
+
+  it('caps the ledger it serves and says how many rows there were', async () => {
+    await seed()
+    await runStart(project.dir, { track: 'edit', goal: 'Rename the submit label' }, clock)
+    await rosterSet(project.dir, { cycle: 1, selected: ['editor', 'verifier'], skipped: {} })
+    const runId = (await readRuns(project.dir))[0]?.id ?? ''
+
+    const overflow = CYCLE_VERIFY_MAX + 10
+    await writeLedger(
+      runId,
+      1,
+      Array.from({ length: overflow }, (_, index) => ledgerRow({ log: `test--${index}.log` })),
+    )
+
+    const cycle = await readCycleDetail(project.dir, runId, 1)
+    // The tab re-fetches this document every time `revisions.cycle` moves. An
+    // unbounded array here is a payload that grows for the length of the cycle
+    // and is re-serialised roughly once a second.
+    expect(cycle.verify).toHaveLength(CYCLE_VERIFY_MAX)
+    expect(cycle.verify_total).toBe(overflow)
+    // The newest rows survive: they are what the cycle's verdict rests on.
+    expect(cycle.verify.at(-1)?.log).toBe(`test--${overflow - 1}.log`)
+  })
+
+  it('carries the handoff body, and bounds one it did not write', async () => {
+    await seed()
+    await runStart(project.dir, { track: 'edit', goal: 'Rename the submit label' }, clock)
+    await rosterSet(project.dir, { cycle: 1, selected: ['editor', 'verifier'], skipped: {} })
+    const runId = (await readRuns(project.dir))[0]?.id ?? ''
+    const dir = path.join(project.dir, '.mjloop', 'runs', runId, 'cycle-01')
+
+    await fs.writeFile(path.join(dir, 'handoff.md'), '# Handoff — cycle 1\n\nThe label is renamed.\n', 'utf8')
+    const written = await readCycleDetail(project.dir, runId, 1)
+    expect(written.handoff).toContain('The label is renamed.')
+    expect(written.handoff_truncated).toBe(false)
+
+    // `writeHandoff` truncates at its own ceiling, so this case is the file the
+    // engine did not write — an ordinary file a person or an agent can replace.
+    await fs.writeFile(path.join(dir, 'handoff.md'), 'x'.repeat(CYCLE_HANDOFF_MAX + 500), 'utf8')
+    const replaced = await readCycleDetail(project.dir, runId, 1)
+    expect(replaced.handoff).toHaveLength(CYCLE_HANDOFF_MAX)
+    expect(replaced.handoff_truncated).toBe(true)
+  })
+
+  it('reports a project that has never run without inventing a basis for it', async () => {
+    await initLoop(project.dir, clock)
+
+    const telemetry = await readTelemetryReport(project.dir)
+    expect(telemetry).toMatchObject({ runs: 0, cycles: 0, specialists: [], truncated: 0, flagged: [] })
+
+    const preflight = await readPreflightEstimate(project.dir, 'edit')
+    expect(preflight.track).toBe('edit')
+    expect(preflight.dispatches_per_cycle).toBe(2)
+    // *No basis* is an answer, and an invented one is not.
+    expect(preflight.comparable).toBe(null)
+  })
+
+  it('raises NotFound for a track this project does not define', async () => {
+    await initLoop(project.dir, clock)
+    // An unknown track is the operator asking about something that is not
+    // there, not this server failing to read something it should have read.
+    await expect(readPreflightEstimate(project.dir, 'nonsense')).rejects.toBeInstanceOf(NotFoundError)
   })
 
   it('keeps the raw config, comments and all', async () => {

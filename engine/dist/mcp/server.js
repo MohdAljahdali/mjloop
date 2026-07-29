@@ -3233,8 +3233,8 @@ var require_utils = __commonJS({
       }
       return ind;
     }
-    function removeDotSegments(path14) {
-      let input = path14;
+    function removeDotSegments(path17) {
+      let input = path17;
       const output = [];
       let nextSlash = -1;
       let len = 0;
@@ -3486,8 +3486,8 @@ var require_schemes = __commonJS({
         wsComponent.secure = void 0;
       }
       if (wsComponent.resourceName) {
-        const [path14, query] = wsComponent.resourceName.split("?");
-        wsComponent.path = path14 && path14 !== "/" ? path14 : void 0;
+        const [path17, query] = wsComponent.resourceName.split("?");
+        wsComponent.path = path17 && path17 !== "/" ? path17 : void 0;
         wsComponent.query = query;
         wsComponent.resourceName = void 0;
       }
@@ -6886,12 +6886,12 @@ var require_dist = __commonJS({
         throw new Error(`Unknown format "${name}"`);
       return f;
     };
-    function addFormats(ajv, list, fs15, exportName) {
+    function addFormats(ajv, list, fs17, exportName) {
       var _a3;
       var _b;
       (_a3 = (_b = ajv.opts.code).formats) !== null && _a3 !== void 0 ? _a3 : _b.formats = (0, codegen_1._)`require("ajv-formats/dist/formats").${exportName}`;
       for (const f of list)
-        ajv.addFormat(f, fs15[f]);
+        ajv.addFormat(f, fs17[f]);
     }
     module.exports = exports = formatsPlugin;
     Object.defineProperty(exports, "__esModule", { value: true });
@@ -6976,17 +6976,17 @@ var require_visit = __commonJS({
     visit.BREAK = BREAK;
     visit.SKIP = SKIP;
     visit.REMOVE = REMOVE;
-    function visit_(key, node, visitor, path14) {
-      const ctrl = callVisitor(key, node, visitor, path14);
+    function visit_(key, node, visitor, path17) {
+      const ctrl = callVisitor(key, node, visitor, path17);
       if (identity.isNode(ctrl) || identity.isPair(ctrl)) {
-        replaceNode(key, path14, ctrl);
-        return visit_(key, ctrl, visitor, path14);
+        replaceNode(key, path17, ctrl);
+        return visit_(key, ctrl, visitor, path17);
       }
       if (typeof ctrl !== "symbol") {
         if (identity.isCollection(node)) {
-          path14 = Object.freeze(path14.concat(node));
+          path17 = Object.freeze(path17.concat(node));
           for (let i = 0; i < node.items.length; ++i) {
-            const ci = visit_(i, node.items[i], visitor, path14);
+            const ci = visit_(i, node.items[i], visitor, path17);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -6997,13 +6997,13 @@ var require_visit = __commonJS({
             }
           }
         } else if (identity.isPair(node)) {
-          path14 = Object.freeze(path14.concat(node));
-          const ck = visit_("key", node.key, visitor, path14);
+          path17 = Object.freeze(path17.concat(node));
+          const ck = visit_("key", node.key, visitor, path17);
           if (ck === BREAK)
             return BREAK;
           else if (ck === REMOVE)
             node.key = null;
-          const cv = visit_("value", node.value, visitor, path14);
+          const cv = visit_("value", node.value, visitor, path17);
           if (cv === BREAK)
             return BREAK;
           else if (cv === REMOVE)
@@ -7024,17 +7024,17 @@ var require_visit = __commonJS({
     visitAsync.BREAK = BREAK;
     visitAsync.SKIP = SKIP;
     visitAsync.REMOVE = REMOVE;
-    async function visitAsync_(key, node, visitor, path14) {
-      const ctrl = await callVisitor(key, node, visitor, path14);
+    async function visitAsync_(key, node, visitor, path17) {
+      const ctrl = await callVisitor(key, node, visitor, path17);
       if (identity.isNode(ctrl) || identity.isPair(ctrl)) {
-        replaceNode(key, path14, ctrl);
-        return visitAsync_(key, ctrl, visitor, path14);
+        replaceNode(key, path17, ctrl);
+        return visitAsync_(key, ctrl, visitor, path17);
       }
       if (typeof ctrl !== "symbol") {
         if (identity.isCollection(node)) {
-          path14 = Object.freeze(path14.concat(node));
+          path17 = Object.freeze(path17.concat(node));
           for (let i = 0; i < node.items.length; ++i) {
-            const ci = await visitAsync_(i, node.items[i], visitor, path14);
+            const ci = await visitAsync_(i, node.items[i], visitor, path17);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -7045,13 +7045,13 @@ var require_visit = __commonJS({
             }
           }
         } else if (identity.isPair(node)) {
-          path14 = Object.freeze(path14.concat(node));
-          const ck = await visitAsync_("key", node.key, visitor, path14);
+          path17 = Object.freeze(path17.concat(node));
+          const ck = await visitAsync_("key", node.key, visitor, path17);
           if (ck === BREAK)
             return BREAK;
           else if (ck === REMOVE)
             node.key = null;
-          const cv = await visitAsync_("value", node.value, visitor, path14);
+          const cv = await visitAsync_("value", node.value, visitor, path17);
           if (cv === BREAK)
             return BREAK;
           else if (cv === REMOVE)
@@ -7078,23 +7078,23 @@ var require_visit = __commonJS({
       }
       return visitor;
     }
-    function callVisitor(key, node, visitor, path14) {
+    function callVisitor(key, node, visitor, path17) {
       if (typeof visitor === "function")
-        return visitor(key, node, path14);
+        return visitor(key, node, path17);
       if (identity.isMap(node))
-        return visitor.Map?.(key, node, path14);
+        return visitor.Map?.(key, node, path17);
       if (identity.isSeq(node))
-        return visitor.Seq?.(key, node, path14);
+        return visitor.Seq?.(key, node, path17);
       if (identity.isPair(node))
-        return visitor.Pair?.(key, node, path14);
+        return visitor.Pair?.(key, node, path17);
       if (identity.isScalar(node))
-        return visitor.Scalar?.(key, node, path14);
+        return visitor.Scalar?.(key, node, path17);
       if (identity.isAlias(node))
-        return visitor.Alias?.(key, node, path14);
+        return visitor.Alias?.(key, node, path17);
       return void 0;
     }
-    function replaceNode(key, path14, node) {
-      const parent = path14[path14.length - 1];
+    function replaceNode(key, path17, node) {
+      const parent = path17[path17.length - 1];
       if (identity.isCollection(parent)) {
         parent.items[key] = node;
       } else if (identity.isPair(parent)) {
@@ -7704,10 +7704,10 @@ var require_Collection = __commonJS({
     var createNode = require_createNode();
     var identity = require_identity();
     var Node = require_Node();
-    function collectionFromPath(schema, path14, value) {
+    function collectionFromPath(schema, path17, value) {
       let v = value;
-      for (let i = path14.length - 1; i >= 0; --i) {
-        const k = path14[i];
+      for (let i = path17.length - 1; i >= 0; --i) {
+        const k = path17[i];
         if (typeof k === "number" && Number.isInteger(k) && k >= 0) {
           const a = [];
           a[k] = v;
@@ -7726,7 +7726,7 @@ var require_Collection = __commonJS({
         sourceObjects: /* @__PURE__ */ new Map()
       });
     }
-    var isEmptyPath = (path14) => path14 == null || typeof path14 === "object" && !!path14[Symbol.iterator]().next().done;
+    var isEmptyPath = (path17) => path17 == null || typeof path17 === "object" && !!path17[Symbol.iterator]().next().done;
     var Collection = class extends Node.NodeBase {
       constructor(type, schema) {
         super(type);
@@ -7756,11 +7756,11 @@ var require_Collection = __commonJS({
        * be a Pair instance or a `{ key, value }` object, which may not have a key
        * that already exists in the map.
        */
-      addIn(path14, value) {
-        if (isEmptyPath(path14))
+      addIn(path17, value) {
+        if (isEmptyPath(path17))
           this.add(value);
         else {
-          const [key, ...rest] = path14;
+          const [key, ...rest] = path17;
           const node = this.get(key, true);
           if (identity.isCollection(node))
             node.addIn(rest, value);
@@ -7774,8 +7774,8 @@ var require_Collection = __commonJS({
        * Removes a value from the collection.
        * @returns `true` if the item was found and removed.
        */
-      deleteIn(path14) {
-        const [key, ...rest] = path14;
+      deleteIn(path17) {
+        const [key, ...rest] = path17;
         if (rest.length === 0)
           return this.delete(key);
         const node = this.get(key, true);
@@ -7789,8 +7789,8 @@ var require_Collection = __commonJS({
        * scalar values from their surrounding node; to disable set `keepScalar` to
        * `true` (collections are always returned intact).
        */
-      getIn(path14, keepScalar) {
-        const [key, ...rest] = path14;
+      getIn(path17, keepScalar) {
+        const [key, ...rest] = path17;
         const node = this.get(key, true);
         if (rest.length === 0)
           return !keepScalar && identity.isScalar(node) ? node.value : node;
@@ -7808,8 +7808,8 @@ var require_Collection = __commonJS({
       /**
        * Checks if the collection includes a value with the key `key`.
        */
-      hasIn(path14) {
-        const [key, ...rest] = path14;
+      hasIn(path17) {
+        const [key, ...rest] = path17;
         if (rest.length === 0)
           return this.has(key);
         const node = this.get(key, true);
@@ -7819,8 +7819,8 @@ var require_Collection = __commonJS({
        * Sets a value in this collection. For `!!set`, `value` needs to be a
        * boolean to add/remove the item from the set.
        */
-      setIn(path14, value) {
-        const [key, ...rest] = path14;
+      setIn(path17, value) {
+        const [key, ...rest] = path17;
         if (rest.length === 0) {
           this.set(key, value);
         } else {
@@ -10335,9 +10335,9 @@ var require_Document = __commonJS({
           this.contents.add(value);
       }
       /** Adds a value to the document. */
-      addIn(path14, value) {
+      addIn(path17, value) {
         if (assertCollection(this.contents))
-          this.contents.addIn(path14, value);
+          this.contents.addIn(path17, value);
       }
       /**
        * Create a new `Alias` node, ensuring that the target `node` has the required anchor.
@@ -10412,14 +10412,14 @@ var require_Document = __commonJS({
        * Removes a value from the document.
        * @returns `true` if the item was found and removed.
        */
-      deleteIn(path14) {
-        if (Collection.isEmptyPath(path14)) {
+      deleteIn(path17) {
+        if (Collection.isEmptyPath(path17)) {
           if (this.contents == null)
             return false;
           this.contents = null;
           return true;
         }
-        return assertCollection(this.contents) ? this.contents.deleteIn(path14) : false;
+        return assertCollection(this.contents) ? this.contents.deleteIn(path17) : false;
       }
       /**
        * Returns item at `key`, or `undefined` if not found. By default unwraps
@@ -10434,10 +10434,10 @@ var require_Document = __commonJS({
        * scalar values from their surrounding node; to disable set `keepScalar` to
        * `true` (collections are always returned intact).
        */
-      getIn(path14, keepScalar) {
-        if (Collection.isEmptyPath(path14))
+      getIn(path17, keepScalar) {
+        if (Collection.isEmptyPath(path17))
           return !keepScalar && identity.isScalar(this.contents) ? this.contents.value : this.contents;
-        return identity.isCollection(this.contents) ? this.contents.getIn(path14, keepScalar) : void 0;
+        return identity.isCollection(this.contents) ? this.contents.getIn(path17, keepScalar) : void 0;
       }
       /**
        * Checks if the document includes a value with the key `key`.
@@ -10448,10 +10448,10 @@ var require_Document = __commonJS({
       /**
        * Checks if the document includes a value at `path`.
        */
-      hasIn(path14) {
-        if (Collection.isEmptyPath(path14))
+      hasIn(path17) {
+        if (Collection.isEmptyPath(path17))
           return this.contents !== void 0;
-        return identity.isCollection(this.contents) ? this.contents.hasIn(path14) : false;
+        return identity.isCollection(this.contents) ? this.contents.hasIn(path17) : false;
       }
       /**
        * Sets a value in this document. For `!!set`, `value` needs to be a
@@ -10468,13 +10468,13 @@ var require_Document = __commonJS({
        * Sets a value in this document. For `!!set`, `value` needs to be a
        * boolean to add/remove the item from the set.
        */
-      setIn(path14, value) {
-        if (Collection.isEmptyPath(path14)) {
+      setIn(path17, value) {
+        if (Collection.isEmptyPath(path17)) {
           this.contents = value;
         } else if (this.contents == null) {
-          this.contents = Collection.collectionFromPath(this.schema, Array.from(path14), value);
+          this.contents = Collection.collectionFromPath(this.schema, Array.from(path17), value);
         } else if (assertCollection(this.contents)) {
-          this.contents.setIn(path14, value);
+          this.contents.setIn(path17, value);
         }
       }
       /**
@@ -12434,9 +12434,9 @@ var require_cst_visit = __commonJS({
     visit.BREAK = BREAK;
     visit.SKIP = SKIP;
     visit.REMOVE = REMOVE;
-    visit.itemAtPath = (cst, path14) => {
+    visit.itemAtPath = (cst, path17) => {
       let item = cst;
-      for (const [field, index] of path14) {
+      for (const [field, index] of path17) {
         const tok = item?.[field];
         if (tok && "items" in tok) {
           item = tok.items[index];
@@ -12445,23 +12445,23 @@ var require_cst_visit = __commonJS({
       }
       return item;
     };
-    visit.parentCollection = (cst, path14) => {
-      const parent = visit.itemAtPath(cst, path14.slice(0, -1));
-      const field = path14[path14.length - 1][0];
+    visit.parentCollection = (cst, path17) => {
+      const parent = visit.itemAtPath(cst, path17.slice(0, -1));
+      const field = path17[path17.length - 1][0];
       const coll = parent?.[field];
       if (coll && "items" in coll)
         return coll;
       throw new Error("Parent collection not found");
     };
-    function _visit(path14, item, visitor) {
-      let ctrl = visitor(item, path14);
+    function _visit(path17, item, visitor) {
+      let ctrl = visitor(item, path17);
       if (typeof ctrl === "symbol")
         return ctrl;
       for (const field of ["key", "value"]) {
         const token = item[field];
         if (token && "items" in token) {
           for (let i = 0; i < token.items.length; ++i) {
-            const ci = _visit(Object.freeze(path14.concat([[field, i]])), token.items[i], visitor);
+            const ci = _visit(Object.freeze(path17.concat([[field, i]])), token.items[i], visitor);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -12472,10 +12472,10 @@ var require_cst_visit = __commonJS({
             }
           }
           if (typeof ctrl === "function" && field === "key")
-            ctrl = ctrl(item, path14);
+            ctrl = ctrl(item, path17);
         }
       }
-      return typeof ctrl === "function" ? ctrl(item, path14) : ctrl;
+      return typeof ctrl === "function" ? ctrl(item, path17) : ctrl;
     }
     exports.visit = visit;
   }
@@ -13777,14 +13777,14 @@ var require_parser = __commonJS({
             case "scalar":
             case "single-quoted-scalar":
             case "double-quoted-scalar": {
-              const fs15 = this.flowScalar(this.type);
+              const fs17 = this.flowScalar(this.type);
               if (atNextItem || it.value) {
-                map.items.push({ start, key: fs15, sep: [] });
+                map.items.push({ start, key: fs17, sep: [] });
                 this.onKeyLine = true;
               } else if (it.sep) {
-                this.stack.push(fs15);
+                this.stack.push(fs17);
               } else {
-                Object.assign(it, { key: fs15, sep: [] });
+                Object.assign(it, { key: fs17, sep: [] });
                 this.onKeyLine = true;
               }
               return;
@@ -13912,13 +13912,13 @@ var require_parser = __commonJS({
             case "scalar":
             case "single-quoted-scalar":
             case "double-quoted-scalar": {
-              const fs15 = this.flowScalar(this.type);
+              const fs17 = this.flowScalar(this.type);
               if (!it || it.value)
-                fc.items.push({ start: [], key: fs15, sep: [] });
+                fc.items.push({ start: [], key: fs17, sep: [] });
               else if (it.sep)
-                this.stack.push(fs15);
+                this.stack.push(fs17);
               else
-                Object.assign(it, { key: fs15, sep: [] });
+                Object.assign(it, { key: fs17, sep: [] });
               return;
             }
             case "flow-map-end":
@@ -14585,8 +14585,8 @@ function getErrorMap() {
 
 // node_modules/zod/v3/helpers/parseUtil.js
 var makeIssue = (params) => {
-  const { data, path: path14, errorMaps, issueData } = params;
-  const fullPath = [...path14, ...issueData.path || []];
+  const { data, path: path17, errorMaps, issueData } = params;
+  const fullPath = [...path17, ...issueData.path || []];
   const fullIssue = {
     ...issueData,
     path: fullPath
@@ -14701,11 +14701,11 @@ var errorUtil;
 
 // node_modules/zod/v3/types.js
 var ParseInputLazyPath = class {
-  constructor(parent, value, path14, key) {
+  constructor(parent, value, path17, key) {
     this._cachedPath = [];
     this.parent = parent;
     this.data = value;
-    this._path = path14;
+    this._path = path17;
     this._key = key;
   }
   get path() {
@@ -18344,10 +18344,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj, path14) {
-  if (!path14)
+function getElementAtPath(obj, path17) {
+  if (!path17)
     return obj;
-  return path14.reduce((acc, key) => acc?.[key], obj);
+  return path17.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -18756,11 +18756,11 @@ function explicitlyAborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path14, issues) {
+function prefixIssues(path17, issues) {
   return issues.map((iss) => {
     var _a3;
     (_a3 = iss).path ?? (_a3.path = []);
-    iss.path.unshift(path14);
+    iss.path.unshift(path17);
     return iss;
   });
 }
@@ -18907,16 +18907,16 @@ function flattenError(error2, mapper = (issue2) => issue2.message) {
 }
 function formatError(error2, mapper = (issue2) => issue2.message) {
   const fieldErrors = { _errors: [] };
-  const processError = (error3, path14 = []) => {
+  const processError = (error3, path17 = []) => {
     for (const issue2 of error3.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path14, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path17, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path14, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path17, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path14, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path17, ...issue2.path]);
       } else {
-        const fullpath = [...path14, ...issue2.path];
+        const fullpath = [...path17, ...issue2.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue2));
         } else {
@@ -18943,8 +18943,8 @@ function formatError(error2, mapper = (issue2) => issue2.message) {
 }
 function toDotPath(_path) {
   const segs = [];
-  const path14 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
-  for (const seg of path14) {
+  const path17 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
+  for (const seg of path17) {
     if (typeof seg === "number")
       segs.push(`[${seg}]`);
     else if (typeof seg === "symbol")
@@ -22917,14 +22917,14 @@ function _installLazyMethods(inst, group, methods) {
       configurable: true,
       enumerable: false,
       get() {
-        const bound = fn.bind(this);
+        const bound2 = fn.bind(this);
         Object.defineProperty(this, key, {
           configurable: true,
           writable: true,
           enumerable: true,
-          value: bound
+          value: bound2
         });
-        return bound;
+        return bound2;
       },
       set(v) {
         Object.defineProperty(this, key, {
@@ -29251,7 +29251,18 @@ var HistoryEntrySchema = strictObject({
   cycle: number2().int().positive(),
   agents: array(string2().min(1)).min(1),
   result: ResultSchema2,
-  ref: string2().min(1)
+  ref: string2().min(1),
+  /**
+   * When the cycle closed, so a run can be measured in minutes rather than
+   * only in cycles.
+   *
+   * Nullable and defaulted for the reason `last_fingerprint` is: `StateSchema`
+   * is strict, so without the default every history entry written before this
+   * field existed would fail validation on read rather than gaining the field
+   * on its next write. Its only writer is `cycleAdvance`, inside the update it
+   * already takes the lock for.
+   */
+  at: iso_exports2.datetime().nullable().default(null)
 });
 var ReproductionSchema = strictObject({
   /** The agent whose result opened the gate. */
@@ -29272,6 +29283,20 @@ var StateSchema = strictObject({
   status: StatusSchema,
   cycle: number2().int().nonnegative(),
   goal: string2().min(1).nullable(),
+  /**
+   * When the run opened. Nullable and defaulted: a state file written before
+   * this field existed must gain it on its next write rather than fail to read.
+   *
+   * It carries a second load, and the two readers never write it. Because
+   * `runStart` is its only writer and it landed in the same change as the
+   * verify pin, `started_at === null` identifies a run that predates the pin —
+   * which is the one question `verifyRun` must answer to tell a legacy run
+   * (fall back to the live config, and say so) apart from a run whose pin was
+   * deleted (refuse). Without a marker the two absences are indistinguishable,
+   * and falling back on both would make `rm` the downgrade attack the pin
+   * exists to prevent.
+   */
+  started_at: iso_exports2.datetime().nullable().default(null),
   current: strictObject({
     plan: IdSchema.nullable(),
     story: IdSchema.nullable(),
@@ -29313,6 +29338,10 @@ function initialState(now) {
     status: "idle",
     cycle: 0,
     goal: null,
+    // Spelled out because `State` is the output type, in which a
+    // `.nullable().default(null)` field is required — the same reason
+    // `last_fingerprint`, `cycle_errors` and `reproduction` are written here.
+    started_at: null,
     current: { plan: null, story: null, stage: "idle" },
     findings: [],
     no_progress_count: 0,
@@ -29327,7 +29356,7 @@ function initialState(now) {
 }
 
 // src/schemas/contract.ts
-var RESERVED_AGENT_NAMES = ["findings"];
+var RESERVED_AGENT_NAMES = ["findings", "roster", "verify", "evidence", "handoff", "map"];
 var AgentNameSchema = string2().regex(/^[A-Za-z0-9_-]+$/, 'only letters, digits, "-" and "_" are allowed').refine((name) => !name.includes("--"), '"--" is reserved: it separates an agent from its instance in the cycle file name').refine((name) => !RESERVED_AGENT_NAMES.includes(name), `reserved by the cycle directory: ${RESERVED_AGENT_NAMES.join(", ")}`);
 var EvidenceSchema = strictObject({
   kind: _enum(["command", "file", "test"]),
@@ -29348,6 +29377,43 @@ var RosterSchema = strictObject({
   /** agent name -> why omitting it was safe */
   skipped: record(string2().min(1), string2().min(1)).default({})
 });
+var EVIDENCE_EXCERPT_MAX = 2e3;
+var FINDING_CLAIM_MAX = 2e3;
+var EVIDENCE_REF_MAX = 1e3;
+var CLAMP_MARKER = "\u2026 (truncated)";
+function capEvidence(result, spillPath) {
+  const spills = [];
+  const evidence = result.evidence.map((entry, index) => {
+    const ref = clamp(entry.ref, EVIDENCE_REF_MAX);
+    if (entry.excerpt.length <= EVIDENCE_EXCERPT_MAX) return { ...entry, ref };
+    const excerpt = spillExcerpt(entry.excerpt, spillPath(index));
+    spills.push({ index, text: entry.excerpt });
+    return { ...entry, ref, excerpt };
+  });
+  const findings = result.findings.map((finding) => ({
+    ...finding,
+    file: clamp(finding.file, EVIDENCE_REF_MAX),
+    claim: clamp(finding.claim, FINDING_CLAIM_MAX)
+  }));
+  return { result: { ...result, evidence, findings }, spills };
+}
+function spillExcerpt(text, spill) {
+  let kept = text.length;
+  let marker = "";
+  for (let pass = 0; pass < 4; pass += 1) {
+    marker = `
+\u2026 truncated: ${kept} of ${text.length} characters kept. Full output:
+${spill}`;
+    const next = Math.max(0, EVIDENCE_EXCERPT_MAX - marker.length);
+    if (next === kept) break;
+    kept = next;
+  }
+  return text.slice(0, kept) + marker;
+}
+function clamp(text, max) {
+  if (text.length <= max) return text;
+  return text.slice(0, Math.max(0, max - CLAMP_MARKER.length)) + CLAMP_MARKER;
+}
 function parseAgentResult(input) {
   const parsed = AgentResultSchema.safeParse(input);
   if (parsed.success) return { ok: true, value: parsed.data };
@@ -29443,10 +29509,6 @@ var ManifestSchema = strictObject({
   stories: array(ManifestEntrySchema)
 });
 
-// src/ops/init.ts
-import fs3 from "node:fs/promises";
-import path4 from "node:path";
-
 // src/schemas/config.ts
 var SpecialistModeSchema = _enum(["auto", "always", "never"]);
 var GateSchema = strictObject({
@@ -29455,18 +29517,44 @@ var GateSchema = strictObject({
   /** Agents that may not be logged until it is open. */
   blocks: array(string2().min(1)).min(1)
 });
+var MapSchema = strictObject({
+  /** Whose passing result becomes the run's map. */
+  drafted_by: string2().min(1)
+});
 var TrackSchema = strictObject({
   /** Agents the leader may never drop from a cycle. */
   required: array(string2().min(1)).min(1),
   /** Agents the leader may draft when the task calls for them. */
   available: array(string2().min(1)).default([]),
+  /**
+   * Agents that run once, after the run passes — never inside a working
+   * cycle.
+   *
+   * The default is load-bearing in the same way `available`'s is: `Track` is
+   * the output type, so every literal in `DEFAULT_TRACKS` must spell the key
+   * out, while an existing hand-written `config.yaml` gains `closing: []` on
+   * read and keeps parsing untouched.
+   */
+  closing: array(string2().min(1)).default([]),
   max_cycles: number2().int().positive(),
   /** Optional precondition. A track without one behaves as it always has. */
-  gate: GateSchema.optional()
+  gate: GateSchema.optional(),
+  /** Optional. A track that hands a map forward names who drafts it. */
+  map: MapSchema.optional()
 }).superRefine((track, ctx) => {
+  const known = /* @__PURE__ */ new Set([...track.required, ...track.available, ...track.closing]);
+  const remedy = `add it to required, available or closing first (this track has: ${[...known].join(", ")})`;
+  if (track.map !== void 0) {
+    const draftable = /* @__PURE__ */ new Set([...track.required, ...track.available]);
+    if (!draftable.has(track.map.drafted_by)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["map", "drafted_by"],
+        message: `"${track.map.drafted_by}" is not draftable in a working cycle on this track \u2014 a map drafted by an agent the leader can never draft is a map that is never written, and silently. Check the spelling, or add it to required or available first (this track draws cycles from: ${[...draftable].join(", ")})`
+      });
+    }
+  }
   if (track.gate === void 0) return;
-  const known = /* @__PURE__ */ new Set([...track.required, ...track.available]);
-  const remedy = `add it to required or available first (this track has: ${[...known].join(", ")})`;
   if (!known.has(track.gate.proven_by)) {
     ctx.addIssue({
       code: "custom",
@@ -29494,17 +29582,56 @@ var TrackSchema = strictObject({
 var VerifySchema = strictObject({
   test: string2().min(1).nullable().default(null),
   lint: string2().min(1).nullable().default(null),
-  build: string2().min(1).nullable().default(null)
+  build: string2().min(1).nullable().default(null),
+  /** Hard ceiling per invocation. The child is killed, and the kill is reported. */
+  timeout_ms: number2().int().positive().default(9e5),
+  /**
+   * How long an invocation waits for the project verify lock before returning
+   * a terminal `phase: 'queued'`. Two full ceilings by default, so a waiter
+   * never gives up on a suite that is still legitimately running: one holder
+   * may legitimately hold for `timeout_ms`, and a waiter that abandoned sooner
+   * would report a queue where there was only a slow test suite.
+   */
+  lock_timeout_ms: number2().int().positive().default(18e5),
+  /**
+   * Optional per-slot overrides for the digest's failure patterns. Compiled
+   * with `new RegExp` at use, inside a `try` — a typo in a regex must not stop
+   * a project verifying, so an invalid pattern falls back to the documented
+   * default and is reported in the digest.
+   */
+  failure_patterns: strictObject({
+    test: array(string2().min(1)).default([]),
+    lint: array(string2().min(1)).default([]),
+    build: array(string2().min(1)).default([])
+  }).prefault({})
 });
 var LEGACY_CONFIG_KEYS = ["custom_dirs"];
 var ConfigSchema = strictObject({
   version: literal(1),
   autonomous: boolean2().default(false),
+  /**
+   * Whether an identical verify command may reuse an earlier green result
+   * within the same run.
+   *
+   * Off by default. A suite that is not a pure function of the worktree —
+   * one that touches the network, the clock, a shared database or a port —
+   * has flakes, and re-running is how a loop finds them; a cache hides
+   * exactly that class of failure. A project whose build inputs live outside
+   * git (an ignored `.env`, generated code, `node_modules`) must leave it
+   * off, because the digest the cache keys on cannot see any of them.
+   */
+  verify_cache: boolean2().default(false),
   limits: strictObject({
     max_parallel_agents: number2().int().positive().default(4),
     no_progress_strikes: number2().int().positive().default(2)
   }).default({ max_parallel_agents: 4, no_progress_strikes: 2 }),
-  verify: VerifySchema.default({ test: null, lint: null, build: null }),
+  // `.prefault({})` rather than a literal default object: `.default()` takes
+  // the schema's *output*, in which every `.default()`ed field is required,
+  // so a literal here is a hand-maintained duplicate of the schema's own
+  // defaults that has to be edited twice every time `VerifySchema` gains a
+  // key. `.prefault` re-parses its argument, so each field arrives with its
+  // own default and the duplicate is retired.
+  verify: VerifySchema.prefault({}),
   /** A track name reaches the filesystem — it is the last component of every
    * run directory name — so it is constrained where it is defined, exactly as
    * the story id in the same template is. `config.yaml` is hand-editable and
@@ -29520,8 +29647,14 @@ var ConfigSchema = strictObject({
   specialists: record(AgentNameSchema, SpecialistModeSchema).default({}),
   gates: strictObject({
     plan_approval: _enum(["human", "auto"]).default("human"),
-    commit: _enum(["auto", "human"]).default("auto")
-  }).default({ plan_approval: "human", commit: "auto" })
+    commit: _enum(["auto", "human"]).default("auto"),
+    /**
+     * Does a person see the run's estimate before the first dispatch?
+     * `auto` by default: an estimate shown before every run that then
+     * always proceeds is a prompt nobody reads.
+     */
+    preflight: _enum(["human", "auto"]).default("auto")
+  }).default({ plan_approval: "human", commit: "auto", preflight: "auto" })
 }).superRefine((config2, ctx) => {
   const forbidden = new Set(
     Object.entries(config2.specialists).filter(([, mode]) => mode === "never").map(([name]) => name)
@@ -29535,6 +29668,22 @@ var ConfigSchema = strictObject({
           message: `"${agent}" is required by track "${trackName}" but specialists.${agent} is "never" \u2014 every possible roster for that track would be rejected. Drop one of the two.`
         });
       }
+    }
+    for (const agent of track.closing) {
+      if (forbidden.has(agent)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["tracks", trackName, "closing"],
+          message: `"${agent}" closes track "${trackName}" but specialists.${agent} is "never" \u2014 it could never be dispatched, and a closing agent needs no skip reason, so nothing would record that the run shipped without it. Drop one of the two.`
+        });
+      }
+    }
+    if (track.map !== void 0 && forbidden.has(track.map.drafted_by)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["tracks", trackName, "map", "drafted_by"],
+        message: `"${track.map.drafted_by}" drafts the map on track "${trackName}" but specialists.${track.map.drafted_by} is "never" \u2014 the only result that becomes a map could never be produced, so every cycle would re-derive the ground. Drop one of the two.`
+      });
     }
     if (track.gate !== void 0 && forbidden.has(track.gate.proven_by)) {
       ctx.addIssue({
@@ -29554,29 +29703,47 @@ function forcedSpecialists(config2) {
 function forbiddenSpecialists(config2) {
   return Object.entries(config2.specialists).filter(([, mode]) => mode === "never").map(([name]) => name);
 }
+function pinnedAgents(track) {
+  const pinned = [...track.required, ...track.closing];
+  if (track.map !== void 0) pinned.push(track.map.drafted_by);
+  if (track.gate !== void 0) pinned.push(track.gate.proven_by);
+  return pinned;
+}
 function permittedAgents(config2, track) {
-  return /* @__PURE__ */ new Set([...track.required, ...track.available, ...forcedSpecialists(config2)]);
+  return /* @__PURE__ */ new Set([...track.required, ...track.available, ...track.closing, ...forcedSpecialists(config2)]);
 }
 var DEFAULT_TRACKS = {
-  edit: { required: ["editor", "verifier"], available: [], max_cycles: 1 },
+  // Every literal spells `closing` out, including the three that declare none.
+  // `Track` is the output type, in which a `.default()`ed field is required —
+  // the same reason `available: []` has always been written here.
+  edit: { required: ["editor", "verifier"], available: [], closing: [], max_cycles: 1 },
   // max_cycles is a ceiling, not a target: with the stagnation guard in place
   // a stuck run halts well before reaching it.
   build: {
     required: ["builder", "verifier"],
     // Ordered from the general to the specific: the leader reads this list
     // when composing, and every omission needs a stated reason.
-    available: ["scout", "critic", "ui-designer", "ui-critic", "security", "docs", "perf"],
-    max_cycles: 5
+    available: ["scout", "critic", "ui-designer", "ui-critic", "security", "perf"],
+    // `docs` closes the run rather than joining a cycle. Documentation drafted
+    // in cycle 2 describes code cycle 4 replaces, and the alternative under the
+    // old rule was four cycles of boilerplate skip reasons.
+    closing: ["docs"],
+    max_cycles: 5,
+    // The only track with ground worth handing forward: `edit` is one cycle,
+    // `fix` has a reproduction, and `plan` produces a document.
+    map: { drafted_by: "scout" }
   },
   fix: {
     required: ["reproducer", "fixer", "verifier"],
     available: ["investigator", "hypothesis-tester", "critic", "security"],
+    closing: [],
     max_cycles: 5,
     gate: { proven_by: "reproducer", blocks: ["fixer"] }
   },
   plan: {
     required: ["planner", "fit-checker", "story-writer"],
     available: ["plan-critic", "story-critic"],
+    closing: [],
     max_cycles: 6,
     // An evidence gate: whether a plan fits the project that exists is a fact,
     // and fit-checker demonstrates it. The approval gate is a different kind
@@ -29587,6 +29754,69 @@ var DEFAULT_TRACKS = {
 function defaultConfig(verify) {
   return ConfigSchema.parse({ version: 1, verify, tracks: DEFAULT_TRACKS });
 }
+
+// src/schemas/verify.ts
+var VerifySlotSchema = _enum(["test", "lint", "build"]);
+var VerifyPhaseSchema = _enum(["queued", "running", "complete"]);
+var LedgerEntrySchema = strictObject({
+  slot: VerifySlotSchema,
+  /** What was executed — the pinned string, byte for byte. */
+  command: string2().min(1),
+  /**
+   * Which copy of the verify block this invocation executed. `'live'` occurs
+   * only for a run started before the pin existed (`state.started_at === null`).
+   */
+  source: _enum(["pinned", "live"]),
+  /**
+   * What `.mjloop/config.yaml` holds for this slot *now*, when it differs from
+   * the command that ran. `null` when they agree, and when there is no pin.
+   *
+   * Drift is recorded and never obeyed, and never refuses anything: a rule that
+   * halted a run on drift would hand any agent holding `Write` a way to stop
+   * the run by editing a file this project deliberately leaves hand-editable.
+   */
+  live_command: string2().min(1).nullable().default(null),
+  /** Log file name within `cycle-NN/verify/`. Empty when nothing was written. */
+  log: string2(),
+  phase: VerifyPhaseSchema,
+  /** `null` while queued or running, and on a timeout or a kill. */
+  exit_code: number2().int().nullable(),
+  timed_out: boolean2().default(false),
+  /**
+   * The cache fingerprint (`verifyFingerprint`). `null` when the cache is off
+   * or the worktree could not be digested. It is **not** the in-flight
+   * de-duplication key — that one is `slot::label::command` and always exists.
+   */
+  fingerprint: string2().min(1).nullable().default(null),
+  /** Set when this entry reused an earlier cycle's green result. */
+  cached_from_cycle: number2().int().positive().nullable().default(null),
+  /** Filled in by the amendment; `null` until the child exits. */
+  duration_ms: number2().int().nonnegative().nullable().default(null),
+  /**
+   * When the entry was first written. The amendment matches on this and the
+   * log name, both of which are known before the file exists — which is what
+   * lets a queued entry be written before there is anything else to say.
+   */
+  at: iso_exports2.datetime()
+});
+var LedgerSchema = array(LedgerEntrySchema);
+var PinnedVerifySchema = strictObject({
+  /**
+   * Bumped only if this wrapper's own shape changes. The block inside it needs
+   * no version of its own: it is re-parsed through the live `VerifySchema`, so
+   * a pin written before a key existed gains that key's default on read. That
+   * is the whole reason this wraps `VerifySchema` rather than restating the
+   * three command strings — every future `verify.*` key is pinned
+   * automatically, and every older pin keeps parsing.
+   */
+  version: literal(1),
+  pinned_at: string2().min(1),
+  verify: VerifySchema
+});
+
+// src/ops/init.ts
+import fs3 from "node:fs/promises";
+import path4 from "node:path";
 
 // src/store/atomic.ts
 import { randomUUID } from "node:crypto";
@@ -29653,7 +29883,24 @@ function resolveLoopPaths(projectDir) {
     plans: path2.join(root, "plans"),
     runs: path2.join(root, "runs"),
     memory: path2.join(root, "memory"),
-    lock: path2.join(root, ".lock")
+    lock: path2.join(root, ".lock"),
+    /**
+     * Mutual exclusion for verify *execution*, and never the same directory as
+     * `lock`.
+     *
+     * The two answer different questions and must not share a directory. The
+     * state lock is held for a read-modify-write measured in milliseconds; this
+     * one is held for as long as a test suite runs. A subprocess held inside
+     * `.lock` would starve every other tool in the session, since `withLock`'s
+     * default acquire timeout is 5 000 ms.
+     *
+     * Keyed on the project rather than the slot, because the contended resource
+     * is the machine — a port, a fixture database, a build output directory —
+     * and the engine cannot know which two commands share one. Two suites on
+     * one port both go red, and a red digest arms the repeated-error guard, so
+     * a run making progress can halt over a port nobody was fighting for.
+     */
+    verifyLock: path2.join(root, ".verify-lock")
   };
 }
 
@@ -29784,8 +30031,9 @@ var LockTimeoutError = class extends Error {
   }
 };
 async function withLock(lockDir, fn, options = {}) {
-  const { timeoutMs = 5e3, staleMs = 3e4, pollMs = 25 } = options;
+  const { timeoutMs = 5e3, staleMs = 3e4, pollMs = 25, onWait } = options;
   const deadline = Date.now() + timeoutMs;
+  let announced = false;
   let ownedSnapshot = null;
   while (ownedSnapshot === null) {
     try {
@@ -29793,6 +30041,10 @@ async function withLock(lockDir, fn, options = {}) {
       ownedSnapshot = await statSnapshot(lockDir);
     } catch (error2) {
       if (error2.code !== "EEXIST") throw error2;
+      if (!announced) {
+        announced = true;
+        onWait?.();
+      }
       if (Date.now() >= deadline) {
         throw new LockTimeoutError(`could not acquire ${lockDir} within ${timeoutMs}ms`);
       }
@@ -30170,8 +30422,84 @@ No plans yet.
 }
 
 // src/ops/log.ts
-import fs8 from "node:fs/promises";
-import path9 from "node:path";
+import fs9 from "node:fs/promises";
+import path10 from "node:path";
+
+// src/store/git.ts
+import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
+var UNTRACKED_MAX = 5e3;
+var EXCLUDE_LOOP = ":(exclude).mjloop/";
+async function worktreeDigest(projectDir, signal) {
+  const hash = createHash("sha256");
+  const head = await capture(["rev-parse", "HEAD"], projectDir, signal);
+  if (head === null) return null;
+  hash.update("head\0").update(head.trim()).update("\0");
+  hash.update("diff\0");
+  const diffed = await stream(
+    [
+      "diff",
+      "HEAD",
+      "--binary",
+      "--no-textconv",
+      "--ignore-submodules=none",
+      "--submodule=diff",
+      "--",
+      ".",
+      EXCLUDE_LOOP
+    ],
+    projectDir,
+    hash,
+    signal
+  );
+  if (!diffed) return null;
+  hash.update("\0");
+  const listed = await capture(["ls-files", "--others", "--exclude-standard", "-z", "--", ".", EXCLUDE_LOOP], projectDir, signal);
+  if (listed === null) return null;
+  const untracked = listed.split("\0").filter((entry) => entry.length > 0).sort();
+  if (untracked.length > UNTRACKED_MAX) return null;
+  hash.update("untracked\0");
+  for (const file of untracked) hash.update(file).update("\0");
+  if (untracked.length > 0) {
+    if (untracked.some((file) => file.includes("\n"))) return null;
+    const hashed = await stream(["hash-object", "--stdin-paths"], projectDir, hash, signal, `${untracked.join("\n")}
+`);
+    if (!hashed) return null;
+  }
+  return hash.digest("hex");
+}
+async function headSha(projectDir, signal) {
+  const out = await capture(["rev-parse", "--short", "HEAD"], projectDir, signal);
+  if (out === null) return null;
+  const sha = out.trim();
+  return sha === "" ? null : sha;
+}
+async function run(args, cwd, sink, signal, stdin) {
+  return await new Promise((resolve) => {
+    let child;
+    try {
+      child = spawn("git", args, { cwd, signal, stdio: [stdin === void 0 ? "ignore" : "pipe", "pipe", "ignore"] });
+    } catch {
+      return resolve(false);
+    }
+    child.stdout?.on("data", sink);
+    child.on("error", () => resolve(false));
+    child.on("close", (code) => resolve(code === 0));
+    if (stdin !== void 0) {
+      child.stdin?.on("error", () => {
+      });
+      child.stdin?.end(stdin);
+    }
+  });
+}
+async function stream(args, cwd, hash, signal, stdin) {
+  return await run(args, cwd, (chunk) => hash.update(chunk), signal, stdin);
+}
+async function capture(args, cwd, signal) {
+  const chunks = [];
+  const ok2 = await run(args, cwd, (chunk) => chunks.push(chunk), signal);
+  return ok2 ? Buffer.concat(chunks).toString("utf8") : null;
+}
 
 // src/store/state-store.ts
 var InvalidStateError = class extends Error {
@@ -30214,7 +30542,7 @@ var StateStore = class {
 };
 
 // src/ops/fingerprint.ts
-import { createHash } from "node:crypto";
+import { createHash as createHash2 } from "node:crypto";
 import path7 from "node:path";
 function cycleFingerprint(findings, result) {
   const sorted = findings.map(identify).sort(compareIdentities);
@@ -30223,10 +30551,23 @@ function cycleFingerprint(findings, result) {
     return previous === void 0 || compareIdentities(identity, previous) !== 0;
   });
   const payload = JSON.stringify({ result, findings: distinct });
-  return createHash("sha256").update(payload).digest("hex");
+  return createHash2("sha256").update(payload).digest("hex");
 }
 function identify(finding) {
   return [finding.severity, normaliseFile(finding.file), finding.claim];
+}
+function distinctFindings(findings) {
+  const sorted = findings.map((finding) => ({ identity: identifyWork(finding), finding })).sort((a, b) => compareWork(a.identity, b.identity));
+  return sorted.filter((entry, index) => {
+    const previous = sorted[index - 1];
+    return previous === void 0 || compareWork(entry.identity, previous.identity) !== 0;
+  }).map((entry) => entry.finding);
+}
+function identifyWork(finding) {
+  return [finding.severity, normaliseFile(finding.file), finding.claim, finding.line];
+}
+function compareWork(a, b) {
+  return a[0].localeCompare(b[0]) || a[1].localeCompare(b[1]) || a[2].localeCompare(b[2]) || a[3] - b[3];
 }
 function normaliseFile(file) {
   return path7.posix.normalize(file.replaceAll("\\", "/"));
@@ -30240,10 +30581,13 @@ function errorSignature(evidence, result) {
   return [...new Set(signatures)].sort();
 }
 function errorFingerprint(signatures) {
-  return createHash("sha256").update(JSON.stringify([...signatures].sort())).digest("hex");
+  return createHash2("sha256").update(JSON.stringify([...signatures].sort())).digest("hex");
 }
 function headline(excerpt) {
   return (excerpt.split("\n")[0] ?? "").trim().replace(/\d+/g, "N");
+}
+function verifyFingerprint(command, worktree) {
+  return createHash2("sha256").update(JSON.stringify([command, worktree])).digest("hex");
 }
 
 // src/ops/run.ts
@@ -30287,7 +30631,10 @@ function runDirPath(projectDir, state) {
   return path8.join(resolveLoopPaths(projectDir).runs, runDirName(state));
 }
 function cycleDirPath(projectDir, state, cycle = state.cycle) {
-  return path8.join(runDirPath(projectDir, state), `cycle-${String(cycle).padStart(2, "0")}`);
+  return path8.join(runDirPath(projectDir, state), cycleDirName(cycle));
+}
+function cycleDirName(cycle) {
+  return `cycle-${String(cycle).padStart(2, "0")}`;
 }
 async function runStart(projectDir, input, now = () => /* @__PURE__ */ new Date()) {
   const config2 = await loadConfig(projectDir);
@@ -30301,6 +30648,7 @@ async function runStart(projectDir, input, now = () => /* @__PURE__ */ new Date(
     draft.status = "running";
     draft.cycle = 1;
     draft.goal = input.goal;
+    draft.started_at = now().toISOString();
     draft.current = {
       plan: input.plan ?? null,
       story: input.story ?? null,
@@ -30316,7 +30664,25 @@ async function runStart(projectDir, input, now = () => /* @__PURE__ */ new Date(
     draft.halt_reason = null;
   });
   await fs7.mkdir(runDirPath(projectDir, state), { recursive: true });
+  await pinVerifyBlock(projectDir, state, config2, now);
   return state;
+}
+var VERIFY_PIN_FILE = "verify-pinned.json";
+async function pinVerifyBlock(projectDir, state, config2, now) {
+  const pin = PinnedVerifySchema.parse({
+    version: 1,
+    pinned_at: now().toISOString(),
+    verify: config2.verify
+  });
+  try {
+    await fs7.writeFile(path8.join(runDirPath(projectDir, state), VERIFY_PIN_FILE), `${JSON.stringify(pin, null, 2)}
+`, {
+      encoding: "utf8",
+      flag: "wx"
+    });
+  } catch (error2) {
+    if (error2.code !== "EEXIST") throw error2;
+  }
 }
 async function cycleAdvance(projectDir, input, now = () => /* @__PURE__ */ new Date()) {
   const store = new StateStore(projectDir, now);
@@ -30324,19 +30690,30 @@ async function cycleAdvance(projectDir, input, now = () => /* @__PURE__ */ new D
   let carried = [];
   let closedCycle = 0;
   let fingerprint = null;
+  let errors = [];
+  let closing = [];
+  let maxCycles = 0;
   let cause = "manual";
   const after = await store.update((draft) => {
     if (draft.status !== "running" || draft.track === null) throw new NoActiveRunError();
     const track = findTrack(config2, draft.track);
     if (track === void 0) throw new UnknownTrackError(draft.track, Object.keys(config2.tracks));
-    carried = [...draft.findings];
-    const errors = [...draft.cycle_errors].sort();
+    carried = distinctFindings(draft.findings);
+    errors = [...draft.cycle_errors].sort();
     closedCycle = draft.cycle;
+    maxCycles = track.max_cycles;
     const ref = path8.join(".mjloop", "runs", runDirName(draft));
-    draft.history.push({ cycle: draft.cycle, agents: input.agents, result: input.result, ref });
+    draft.history.push({
+      cycle: draft.cycle,
+      agents: input.agents,
+      result: input.result,
+      ref,
+      at: now().toISOString()
+    });
     if (input.result === "pass") {
       draft.status = "done";
       draft.current.stage = "done";
+      closing = [...track.closing];
       return;
     }
     if (errors.length > 0) {
@@ -30374,8 +30751,22 @@ async function cycleAdvance(projectDir, input, now = () => /* @__PURE__ */ new D
     draft.current.stage = "compose";
   });
   await archiveFindings(projectDir, after, closedCycle, carried);
+  let handoff = null;
+  try {
+    handoff = await writeHandoff(projectDir, after, closedCycle, input.result, input.agents, carried, errors, maxCycles);
+  } catch (error2) {
+    process.stderr.write(`mjloop: cycle ${closedCycle} handoff was not written: ${String(error2)}
+`);
+  }
   if (after.status === "halted") await writeHaltReport(projectDir, after, cause, carried);
-  return { state: after, carried_findings: carried, fingerprint, strikes: after.no_progress_count };
+  return {
+    state: after,
+    carried_findings: carried,
+    fingerprint,
+    strikes: after.no_progress_count,
+    handoff,
+    closing_agents: closing
+  };
 }
 function refOf(signature) {
   return signature.split(" :: ")[0] ?? signature;
@@ -30386,6 +30777,162 @@ async function archiveFindings(projectDir, state, cycle, findings) {
   await fs7.writeFile(path8.join(dir, "findings.json"), `${JSON.stringify(findings, null, 2)}
 `, "utf8");
 }
+var HANDOFF_MAX_BYTES = 6e3;
+var HANDOFF_SUMMARY_MAX = 200;
+var HANDOFF_FINDINGS_MAX = 20;
+var HANDOFF_FILES_MAX = 30;
+var HANDOFF_ERRORS_MAX = 10;
+var SEVERITY_ORDER = { high: 0, medium: 1, low: 2 };
+async function writeHandoff(projectDir, state, cycle, result, agents, carried, errors, maxCycles) {
+  const dir = cycleDirPath(projectDir, state, cycle);
+  const cycleRef = cycleDirName(cycle);
+  const reports = await readAgentReports(dir);
+  const roster = await readOptionalJson(path8.join(dir, "roster.json"), RosterSchema);
+  const ledger = await readOptionalJson(path8.join(dir, "verify", "index.json"), LedgerSchema);
+  const document = bound(
+    [
+      `# Handoff \u2014 cycle ${cycle} of ${state.run_id}`,
+      "",
+      resultLine(state, result, maxCycles),
+      "",
+      "## What each agent reported",
+      "",
+      ...agentTable(roster?.selected ?? agents, reports),
+      ...skippedLines(roster?.skipped ?? {}),
+      "",
+      "## Files touched",
+      "",
+      ...filesSection(reports, cycleRef),
+      "",
+      "## Verification",
+      "",
+      ...verificationSection(ledger, cycle),
+      "",
+      "## Open findings",
+      "",
+      ...findingsSection(carried, cycleRef),
+      "",
+      "## Failures that could recur",
+      "",
+      ...errorsSection(errors),
+      ""
+    ].join("\n"),
+    cycleRef
+  );
+  await fs7.mkdir(dir, { recursive: true });
+  await fs7.writeFile(path8.join(dir, "handoff.md"), document, "utf8");
+  return path8.join(".mjloop", "runs", runDirName(state), cycleRef, "handoff.md");
+}
+function resultLine(state, result, maxCycles) {
+  if (state.status === "done") return `**Result:** ${result} \u2014 the run is done.`;
+  if (state.status === "halted") return `**Result:** ${result} \u2014 halted: ${state.halt_reason ?? "no reason recorded"}`;
+  return `**Result:** ${result} \u2014 next: cycle ${state.cycle} of ${maxCycles}`;
+}
+function agentTable(drafted, reports) {
+  const rows = ["| Agent | Status | Summary |", "|---|---|---|"];
+  const shown = /* @__PURE__ */ new Set();
+  for (const agent of drafted) {
+    const mine = reports.filter((report) => report.agent === agent);
+    for (const report of mine) shown.add(report.basename);
+    rows.push(...mine.length === 0 ? [`| ${cell(agent)} | \u2014 | no result recorded |`] : mine.map(reportRow));
+  }
+  rows.push(...reports.filter((report) => !shown.has(report.basename)).map(reportRow));
+  return rows;
+}
+function reportRow(report) {
+  const summary = cell(truncate(report.result.summary, HANDOFF_SUMMARY_MAX));
+  return `| ${cell(report.basename)} | ${report.result.status} | ${summary} |`;
+}
+function skippedLines(skipped) {
+  const entries = Object.entries(skipped);
+  if (entries.length === 0) return [];
+  return ["", `Skipped: ${entries.map(([agent, reason]) => `\`${agent}\` \u2014 ${oneLine(reason)}`).join("; ")}`];
+}
+function filesSection(reports, cycleRef) {
+  const lines = reports.flatMap((report) => report.result.files_touched.map((file) => `- \`${oneLine(file)}\` \u2014 ${report.basename}`)).filter((line, index, all) => all.indexOf(line) === index).sort();
+  if (lines.length === 0) return ["_none recorded_"];
+  return elide(lines, HANDOFF_FILES_MAX, (rest) => `*${rest} more in ${cycleRef}/<agent>.json*`);
+}
+function verificationSection(ledger, cycle) {
+  if (ledger === null || ledger.length === 0) return ["_nothing was verified through the engine_"];
+  return [
+    "| Command | Exit | Log |",
+    "|---|---|---|",
+    ...ledger.map((entry) => `| \`${cell(entry.command)}\` | ${exitCell(entry)} | ${logCell(entry, cycle)} |`)
+  ];
+}
+function exitCell(entry) {
+  if (entry.timed_out) return "\u2014 (timed out)";
+  return entry.exit_code === null ? `\u2014 (${entry.phase})` : String(entry.exit_code);
+}
+function logCell(entry, cycle) {
+  const notes = [];
+  if (entry.cached_from_cycle !== null) notes.push(`cached, cycle ${entry.cached_from_cycle}`);
+  if (entry.live_command !== null) notes.push(`config.yaml now says \`${oneLine(entry.live_command)}\``);
+  const tail = notes.length === 0 ? "" : ` (${notes.join("; ")})`;
+  if (entry.log === "") return `\u2014${tail}`;
+  const source = entry.cached_from_cycle ?? cycle;
+  const ref = entry.log.includes("/") ? entry.log : `${cycleDirName(source)}/verify/${entry.log}`;
+  return `\`${oneLine(ref)}\`${tail}`;
+}
+function findingsSection(carried, cycleRef) {
+  if (carried.length === 0) return ["_none recorded_"];
+  const lines = [...carried].sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]).map((finding) => `- **${finding.severity}** \`${oneLine(finding.file)}:${finding.line}\` \u2014 ${oneLine(finding.claim)}`);
+  return elide(lines, HANDOFF_FINDINGS_MAX, (rest) => `*${rest} more in ${cycleRef}/findings.json*`);
+}
+function errorsSection(errors) {
+  if (errors.length === 0) return ["_none recorded_"];
+  return elide(
+    errors.map((signature) => `- \`${oneLine(signature)}\``),
+    HANDOFF_ERRORS_MAX,
+    (rest) => `*${rest} more*`
+  );
+}
+function elide(lines, max, marker) {
+  if (lines.length <= max) return lines;
+  return [...lines.slice(0, max), "", marker(lines.length - max)];
+}
+function bound(document, cycleRef) {
+  if (Buffer.byteLength(document, "utf8") <= HANDOFF_MAX_BYTES) return document;
+  const marker = `
+
+*Truncated at ${HANDOFF_MAX_BYTES} bytes \u2014 the whole cycle is in \`${cycleRef}/\`.*
+`;
+  const budget = HANDOFF_MAX_BYTES - Buffer.byteLength(marker, "utf8");
+  let kept = document.slice(0, budget);
+  while (Buffer.byteLength(kept, "utf8") > budget) kept = kept.slice(0, -1);
+  return kept + marker;
+}
+async function readAgentReports(dir) {
+  const entries = await fs7.readdir(dir, { withFileTypes: true }).catch(() => []);
+  const reports = [];
+  for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+    if (!entry.isFile() || !entry.name.endsWith(".json")) continue;
+    if (entry.name === "roster.json" || entry.name === "findings.json") continue;
+    const result = await readOptionalJson(path8.join(dir, entry.name), AgentResultSchema);
+    if (result === null) continue;
+    const basename = entry.name.slice(0, -".json".length);
+    reports.push({ basename, agent: basename.split("--")[0] ?? basename, result });
+  }
+  return reports;
+}
+async function readOptionalJson(file, schema) {
+  try {
+    const parsed = schema.safeParse(JSON.parse(await fs7.readFile(file, "utf8")));
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
+}
+function cell(text) {
+  return oneLine(text).replaceAll("|", "\\|");
+}
+function oneLine(text) {
+  return text.replace(/\s+/g, " ").trim();
+}
+function truncate(text, max) {
+  return text.length <= max ? text : `${text.slice(0, max - 1)}\u2026`;
+}
 async function halt(projectDir, reason, now = () => /* @__PURE__ */ new Date(), options = {}) {
   const store = new StateStore(projectDir, now);
   const state = await store.update((draft) => {
@@ -30395,7 +30942,7 @@ async function halt(projectDir, reason, now = () => /* @__PURE__ */ new Date(), 
     draft.current.stage = "halted";
     draft.halt_reason = reason;
   });
-  await writeHaltReport(projectDir, state, "manual");
+  await writeHaltReport(projectDir, state, "manual", distinctFindings(state.findings));
   return state;
 }
 async function nextRunId(projectDir, now, previousRunId) {
@@ -30426,7 +30973,7 @@ the command named in the reason yourself, fix what it reports, then start a new
 run.`,
   manual: `The run was stopped by hand. Start a new one when the work is ready to continue.`
 };
-async function writeHaltReport(projectDir, state, cause, open = state.findings) {
+async function writeHaltReport(projectDir, state, cause, open) {
   const dir = runDirPath(projectDir, state);
   await fs7.mkdir(dir, { recursive: true });
   const cycles = state.history.map((entry) => `| ${entry.cycle} | ${entry.agents.join(", ")} | ${entry.result} |`).join("\n");
@@ -30457,6 +31004,555 @@ ${NEXT_STEP[cause]}
   await fs7.writeFile(path8.join(dir, "HALT.md"), report, "utf8");
 }
 
+// src/ops/verify.ts
+import { spawn as spawn2 } from "node:child_process";
+import { createHash as createHash3 } from "node:crypto";
+import fs8 from "node:fs/promises";
+import path9 from "node:path";
+var FAILURES_MAX = 20;
+var HEADLINE_MAX = 240;
+var DEFAULT_WAIT_MS = 45e3;
+var VERIFY_LOCK_STALE_MARGIN_MS = 6e4;
+var VERIFY_LOCK_POLL_MS = 250;
+var KILL_GRACE_MS = 5e3;
+var DRAIN_GRACE_MS = 2e3;
+var SKIP_PATTERNS = [/^>\s/, /^\s*RUN\s+v[\d.]/];
+var SUMMARY_PATTERNS = [/^\s*(Tests|Test Files|Snapshots)\s/, /\b\d+\s+(failed|passed|errors?)\b/];
+var FAILURE_PATTERNS = {
+  test: [/^\s*(FAIL|×|✗|✕)\s/, /^\s*\d+\)\s/, /\bAssertionError\b/, /^\s*Error:\s/],
+  lint: [/^[^\s].*\(\d+,\d+\):\s+error\s+TS\d+/, /^\s*error\s/i],
+  build: [/^\s*(error|ERROR)\b/, /\bfailed\b/i]
+};
+var NoRunToVerifyError = class extends Error {
+  constructor(status) {
+    super(
+      `no run to verify \u2014 this project's status is "${status}". mjloop_verify_run executes against a run that is running, or one that is done and still closing. Call mjloop_run_start first.`
+    );
+    this.name = "NoRunToVerifyError";
+  }
+};
+var PinnedVerifyMissingError = class extends Error {
+  constructor(file) {
+    super(
+      `${file} is missing \u2014 this run pinned its verify block at run start and the pin is gone. The engine will not fall back to .mjloop/config.yaml: that fallback is exactly the downgrade the pin exists to prevent. Start a new run.`
+    );
+    this.name = "PinnedVerifyMissingError";
+  }
+};
+var PinnedVerifyInvalidError = class extends Error {
+  constructor(file, detail) {
+    super(
+      `${file} will not parse and the engine will not fall back to .mjloop/config.yaml:
+${detail}`
+    );
+    this.name = "PinnedVerifyInvalidError";
+  }
+};
+var UnknownVerifySlotError = class extends Error {
+  constructor(slot) {
+    super(`"${slot}" is not a verify slot \u2014 the configured slots are test, lint and build`);
+    this.name = "UnknownVerifySlotError";
+  }
+};
+var InvalidVerifyLabelError = class extends Error {
+  constructor(label, detail) {
+    super(`"${label}" is not a usable verify label \u2014 it names a file in the run's verify directory:
+${detail}`);
+    this.name = "InvalidVerifyLabelError";
+  }
+};
+var inFlight = /* @__PURE__ */ new Map();
+function verifyLedgerPath(cycleDir) {
+  return path9.join(cycleDir, "verify", "index.json");
+}
+async function readVerifyLedger(cycleDir) {
+  const raw = await fs8.readFile(verifyLedgerPath(cycleDir), "utf8").catch(() => null);
+  if (raw === null) return [];
+  try {
+    const parsed = LedgerSchema.safeParse(JSON.parse(raw));
+    return parsed.success ? parsed.data : [];
+  } catch {
+    return [];
+  }
+}
+var CacheEntrySchema = strictObject({
+  fingerprint: string2().min(1),
+  slot: VerifySlotSchema,
+  command: string2().min(1),
+  cycle: number2().int().positive(),
+  /** Run-relative, e.g. `cycle-02/verify/test.log`. */
+  log: string2().min(1),
+  /**
+   * The identity of the log **as it was when the entry was green**, checked
+   * again on every hit.
+   *
+   * The entry stores a path, and that path is not immutable: a second
+   * invocation of the same slot in the same cycle opens the very same file with
+   * flag `'w'`. So a green run, a red re-run and a revert put the green entry's
+   * fingerprint back in reach while the file it names holds the red output — and
+   * a hit would then return `exit_code: 0` beside a headline and failures
+   * extracted from a failing run. Existence is not identity; these two fields
+   * are. A mismatch is a miss, which costs one re-run and can never be wrong.
+   */
+  bytes: number2().int().nonnegative(),
+  sha256: string2().length(64),
+  at: iso_exports2.datetime()
+});
+var CacheSchema = array(CacheEntrySchema);
+var fileQueues = /* @__PURE__ */ new Map();
+async function serialise(file, fn) {
+  const previous = fileQueues.get(file) ?? Promise.resolve();
+  const result = previous.then(fn, fn);
+  const tail = result.then(
+    () => void 0,
+    () => void 0
+  );
+  fileQueues.set(file, tail);
+  void tail.then(() => {
+    if (fileQueues.get(file) === tail) fileQueues.delete(file);
+  });
+  return await result;
+}
+async function appendLedgerEntry(cycleDir, entry) {
+  const file = verifyLedgerPath(cycleDir);
+  await serialise(file, async () => {
+    const entries = await readVerifyLedger(cycleDir);
+    entries.push(entry);
+    await writeJsonAtomic(file, entries, { backup: false });
+  });
+}
+async function amendLedgerEntry(cycleDir, at, log, patch) {
+  const file = verifyLedgerPath(cycleDir);
+  await serialise(file, async () => {
+    const entries = await readVerifyLedger(cycleDir);
+    const target = entries.filter((entry) => entry.at === at && entry.log === log).at(-1);
+    if (target === void 0) return;
+    Object.assign(target, patch);
+    await writeJsonAtomic(file, entries, { backup: false });
+  });
+}
+async function readCache(runDir) {
+  const raw = await fs8.readFile(path9.join(runDir, "verify-cache.json"), "utf8").catch(() => null);
+  if (raw === null) return [];
+  try {
+    const parsed = CacheSchema.safeParse(JSON.parse(raw));
+    return parsed.success ? parsed.data : [];
+  } catch {
+    return [];
+  }
+}
+async function appendCacheEntry(runDir, entry) {
+  const file = path9.join(runDir, "verify-cache.json");
+  await serialise(file, async () => {
+    const entries = await readCache(runDir);
+    entries.push(entry);
+    await writeJsonAtomic(file, entries, { backup: false });
+  });
+}
+function workDirectory(projectDir, state) {
+  if (state.status === "done") return path9.join(runDirPath(projectDir, state), "closing");
+  return cycleDirPath(projectDir, state);
+}
+async function verifyRun(projectDir, input, now = () => /* @__PURE__ */ new Date(), waitSignal) {
+  const slotParsed = VerifySlotSchema.safeParse(input.slot);
+  if (!slotParsed.success) throw new UnknownVerifySlotError(String(input.slot));
+  const slot = slotParsed.data;
+  let label = null;
+  if (input.label !== void 0) {
+    const parsed = AgentNameSchema.safeParse(input.label);
+    if (!parsed.success) throw new InvalidVerifyLabelError(input.label, prettifyError(parsed.error));
+    label = parsed.data;
+  }
+  const state = await new StateStore(projectDir).get();
+  if (state.run_id === null || state.track === null || state.status !== "running" && state.status !== "done") {
+    throw new NoRunToVerifyError(state.status);
+  }
+  const runDir = runDirPath(projectDir, state);
+  const workDir = workDirectory(projectDir, state);
+  const verifyDir = path9.join(workDir, "verify");
+  const logName = label === null ? slot : `${slot}--${label}`;
+  const logFile = path9.join(verifyDir, `${logName}.log`);
+  const pinFile = path9.join(runDir, "verify-pinned.json");
+  const pinned = await readPin(pinFile);
+  if (pinned === null && state.started_at !== null) throw new PinnedVerifyMissingError(pinFile);
+  let verify;
+  let live;
+  if (pinned === null) {
+    live = await loadConfig(projectDir);
+    verify = live.verify;
+  } else {
+    live = await loadConfig(projectDir).catch(() => null);
+    verify = pinned.verify;
+  }
+  const source = pinned === null ? "live" : "pinned";
+  const command = verify[slot];
+  const liveSlot = live === null ? null : live.verify[slot];
+  const liveCommand = source === "pinned" && liveSlot !== command ? liveSlot : null;
+  if (command === null) {
+    return {
+      phase: "complete",
+      slot,
+      command: "",
+      source,
+      live_command: liveSlot,
+      log: "",
+      exit_code: null,
+      timed_out: false,
+      cached: false,
+      cached_from_cycle: null,
+      headline: "slot is null in config \u2014 nothing to run",
+      failures: [],
+      failures_total: 0,
+      lines: 0,
+      bytes: 0,
+      duration_ms: 0,
+      fingerprint: null
+    };
+  }
+  const { patterns, patternNotice } = resolvePatterns(slot, verify.failure_patterns[slot]);
+  const plan = {
+    projectDir,
+    state,
+    slot,
+    command,
+    source,
+    liveCommand,
+    verify,
+    // `verify_cache` is top-level and deliberately **not** pinned: it decides
+    // whether a proven-green result may be reused, not what runs.
+    cacheOn: live?.verify_cache === true,
+    patterns,
+    patternNotice,
+    runDir,
+    workDir,
+    verifyDir,
+    logName,
+    logFile,
+    now
+  };
+  const waitMs = input.wait_ms ?? DEFAULT_WAIT_MS;
+  const key = `${slot}::${label ?? ""}::${command}`;
+  const existing = inFlight.get(key);
+  if (existing !== void 0) return await raceTheWait(existing, plan, waitMs, waitSignal);
+  const progress = { spawned: false, contended: false, logFile, startedAt: Date.now() };
+  const entry = { promise: execute(plan, progress), progress };
+  inFlight.set(key, entry);
+  void entry.promise.finally(() => {
+    inFlight.delete(key);
+  }).catch(() => {
+  });
+  return await raceTheWait(entry, plan, waitMs, waitSignal);
+}
+async function raceTheWait(entry, plan, waitMs, waitSignal) {
+  let timer;
+  const waited = new Promise((resolve) => {
+    timer = setTimeout(() => resolve(null), waitMs);
+    if (waitSignal?.aborted === true) resolve(null);
+    else waitSignal?.addEventListener("abort", () => resolve(null), { once: true });
+  });
+  try {
+    const settled = await Promise.race([entry.promise, waited]);
+    if (settled !== null) return settled;
+    return await interimDigest(entry.progress, plan);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+async function interimDigest(progress, plan) {
+  const duration3 = Date.now() - progress.startedAt;
+  if (!progress.spawned) {
+    return {
+      ...emptyDigest(plan),
+      phase: "queued",
+      // `queued` either way — nothing ran — but only one of these two sentences
+      // is true at a time, and the lock is the only thing that knows which.
+      headline: progress.contended ? "another verify command is running in this project \u2014 call again" : "the command has not started yet \u2014 call again",
+      duration_ms: duration3
+    };
+  }
+  const text = await fs8.readFile(progress.logFile, "utf8").catch(() => "");
+  const extracted = extract(text, plan.patterns, plan.patternNotice);
+  return {
+    ...emptyDigest(plan),
+    ...extracted,
+    phase: "running",
+    log: path9.relative(plan.projectDir, progress.logFile),
+    headline: extracted.headline === "" ? "the command is still running \u2014 call again for the exit code" : extracted.headline,
+    duration_ms: duration3
+  };
+}
+function emptyDigest(plan) {
+  return {
+    phase: "running",
+    slot: plan.slot,
+    command: plan.command,
+    source: plan.source,
+    live_command: plan.liveCommand,
+    log: "",
+    exit_code: null,
+    timed_out: false,
+    cached: false,
+    cached_from_cycle: null,
+    headline: "",
+    failures: [],
+    failures_total: 0,
+    lines: 0,
+    bytes: 0,
+    duration_ms: 0,
+    fingerprint: null
+  };
+}
+async function execute(plan, progress) {
+  const at = plan.now().toISOString();
+  if (plan.cacheOn) {
+    const worktree = await worktreeDigest(plan.projectDir);
+    if (worktree !== null) {
+      const fingerprint = verifyFingerprint(plan.command, worktree);
+      const hit = await findCacheHit(plan.runDir, fingerprint);
+      if (hit !== null) return await reuse(plan, hit, fingerprint, at);
+    }
+  }
+  await appendLedgerEntry(plan.workDir, {
+    slot: plan.slot,
+    command: plan.command,
+    source: plan.source,
+    live_command: plan.liveCommand,
+    log: `${plan.logName}.log`,
+    phase: "queued",
+    exit_code: null,
+    timed_out: false,
+    fingerprint: null,
+    cached_from_cycle: null,
+    duration_ms: null,
+    at
+  });
+  try {
+    return await withLock(resolveLoopPaths(plan.projectDir).verifyLock, () => spawnAndDigest(plan, progress, at), {
+      timeoutMs: plan.verify.lock_timeout_ms,
+      staleMs: plan.verify.timeout_ms + VERIFY_LOCK_STALE_MARGIN_MS,
+      pollMs: VERIFY_LOCK_POLL_MS,
+      onWait: () => {
+        progress.contended = true;
+      }
+    });
+  } catch (error2) {
+    if (!(error2 instanceof LockTimeoutError)) throw error2;
+    return {
+      ...emptyDigest(plan),
+      phase: "queued",
+      headline: `gave up waiting for the project verify lock after ${plan.verify.lock_timeout_ms}ms \u2014 another verify command is still running in this project`,
+      duration_ms: Date.now() - progress.startedAt
+    };
+  }
+}
+async function findCacheHit(runDir, fingerprint) {
+  const entries = await readCache(runDir);
+  for (const entry of [...entries].reverse()) {
+    if (entry.fingerprint !== fingerprint) continue;
+    const raw = await fs8.readFile(path9.join(runDir, entry.log)).catch(() => null);
+    if (raw === null) continue;
+    if (raw.byteLength !== entry.bytes || logIdentity(raw) !== entry.sha256) continue;
+    return { entry, text: raw.toString("utf8") };
+  }
+  return null;
+}
+function logIdentity(raw) {
+  return createHash3("sha256").update(raw).digest("hex");
+}
+async function reuse(plan, hit, fingerprint, at) {
+  const original = path9.join(plan.runDir, hit.entry.log);
+  const extracted = extract(hit.text, plan.patterns, plan.patternNotice);
+  await appendLedgerEntry(plan.workDir, {
+    slot: plan.slot,
+    command: plan.command,
+    source: plan.source,
+    live_command: plan.liveCommand,
+    // Run-relative rather than a bare name, because this log is not in this
+    // cycle's directory. `cached_from_cycle` is what tells the reader to expect
+    // that, and the output is never copied.
+    log: hit.entry.log,
+    phase: "complete",
+    exit_code: 0,
+    timed_out: false,
+    fingerprint,
+    cached_from_cycle: hit.entry.cycle,
+    duration_ms: 0,
+    at
+  });
+  return {
+    ...emptyDigest(plan),
+    ...extracted,
+    phase: "complete",
+    log: path9.relative(plan.projectDir, original),
+    exit_code: 0,
+    cached: true,
+    cached_from_cycle: hit.entry.cycle,
+    fingerprint
+  };
+}
+async function spawnAndDigest(plan, progress, at) {
+  await fs8.mkdir(plan.verifyDir, { recursive: true });
+  const before = plan.cacheOn ? await worktreeDigest(plan.projectDir) : null;
+  const fingerprint = before === null ? null : verifyFingerprint(plan.command, before);
+  const started = Date.now();
+  const handle = await fs8.open(plan.logFile, "w");
+  let open = true;
+  let writes = Promise.resolve();
+  const sink = (chunk) => {
+    if (!open) return;
+    writes = writes.then(() => open ? handle.write(chunk) : void 0).catch(() => void 0);
+  };
+  const child = spawn2(plan.command, {
+    cwd: plan.projectDir,
+    shell: true,
+    detached: process.platform !== "win32",
+    stdio: ["ignore", "pipe", "pipe"]
+  });
+  progress.spawned = true;
+  const settling = new Promise((resolve) => {
+    let timedOut = false;
+    let done = false;
+    let killer;
+    let drain;
+    const ceiling = setTimeout(() => {
+      timedOut = true;
+      killTree(child, "SIGTERM");
+      killer = setTimeout(() => killTree(child, "SIGKILL"), KILL_GRACE_MS);
+    }, plan.verify.timeout_ms);
+    const finish = (code) => {
+      if (done) return;
+      done = true;
+      clearTimeout(ceiling);
+      if (killer !== void 0) clearTimeout(killer);
+      if (drain !== void 0) clearTimeout(drain);
+      child.stdout?.destroy();
+      child.stderr?.destroy();
+      resolve({ code, timedOut });
+    };
+    child.on("error", () => finish(null));
+    child.on("close", (code) => finish(code));
+    child.on("exit", (code) => {
+      clearTimeout(ceiling);
+      const killed = timedOut;
+      drain ??= setTimeout(() => {
+        if (killed) killTree(child, "SIGKILL");
+        finish(code);
+      }, DRAIN_GRACE_MS);
+    });
+  });
+  child.stdout?.on("data", sink);
+  child.stderr?.on("data", sink);
+  await amendLedgerEntry(plan.workDir, at, `${plan.logName}.log`, { phase: "running", fingerprint });
+  const outcome = await settling;
+  await writes;
+  open = false;
+  await handle.close();
+  const duration3 = Date.now() - started;
+  const after = plan.cacheOn ? await worktreeDigest(plan.projectDir) : null;
+  const raw = await fs8.readFile(plan.logFile).catch(() => Buffer.alloc(0));
+  const text = raw.toString("utf8");
+  const extracted = extract(text, plan.patterns, plan.patternNotice);
+  const exitCode = outcome.timedOut ? null : outcome.code;
+  if (exitCode === 0 && !outcome.timedOut && fingerprint !== null && after !== null && after === before) {
+    await appendCacheEntry(plan.runDir, {
+      fingerprint,
+      slot: plan.slot,
+      command: plan.command,
+      cycle: plan.state.cycle,
+      log: path9.relative(plan.runDir, plan.logFile),
+      // The log is not immutable — the next invocation of this slot in this
+      // cycle truncates it — so the entry carries what it looked like green.
+      bytes: raw.byteLength,
+      sha256: logIdentity(raw),
+      at
+    });
+  }
+  await amendLedgerEntry(plan.workDir, at, `${plan.logName}.log`, {
+    phase: "complete",
+    exit_code: exitCode,
+    timed_out: outcome.timedOut,
+    duration_ms: duration3,
+    fingerprint
+  });
+  return {
+    ...emptyDigest(plan),
+    ...extracted,
+    phase: "complete",
+    log: path9.relative(plan.projectDir, plan.logFile),
+    exit_code: exitCode,
+    timed_out: outcome.timedOut,
+    duration_ms: duration3,
+    fingerprint
+  };
+}
+function killTree(child, signal) {
+  const pid = child.pid;
+  if (pid === void 0) return;
+  try {
+    process.kill(-pid, signal);
+  } catch {
+    try {
+      child.kill(signal);
+    } catch {
+    }
+  }
+}
+async function readPin(file) {
+  const raw = await fs8.readFile(file, "utf8").catch((error2) => {
+    if (error2.code === "ENOENT") return null;
+    throw error2;
+  });
+  if (raw === null) return null;
+  let document;
+  try {
+    document = JSON.parse(raw);
+  } catch (error2) {
+    throw new PinnedVerifyInvalidError(file, error2.message);
+  }
+  const parsed = PinnedVerifySchema.safeParse(document);
+  if (!parsed.success) throw new PinnedVerifyInvalidError(file, prettifyError(parsed.error));
+  return parsed.data;
+}
+function resolvePatterns(slot, configured) {
+  if (configured.length === 0) return { patterns: FAILURE_PATTERNS[slot], patternNotice: null };
+  const compiled = [];
+  for (const pattern of configured) {
+    try {
+      compiled.push(new RegExp(pattern));
+    } catch {
+      return {
+        patterns: FAILURE_PATTERNS[slot],
+        patternNotice: `verify.failure_patterns.${slot}: "${pattern}" will not compile \u2014 using the defaults. `
+      };
+    }
+  }
+  return { patterns: compiled, patternNotice: null };
+}
+function extract(text, patterns, notice) {
+  const all = text.split(/\r?\n/);
+  if (all.at(-1) === "") all.pop();
+  const candidates = [];
+  for (const [index, line] of all.entries()) {
+    if (line.trim() === "") continue;
+    if (SKIP_PATTERNS.some((pattern) => pattern.test(line))) continue;
+    candidates.push({ raw: line, at: index + 1 });
+  }
+  const failures = candidates.filter((candidate) => patterns.some((pattern) => pattern.test(candidate.raw)));
+  const summary = candidates.filter((candidate) => SUMMARY_PATTERNS.some((pattern) => pattern.test(candidate.raw))).at(-1);
+  const headline2 = summary?.raw ?? failures[0]?.raw ?? candidates[0]?.raw ?? "";
+  return {
+    headline: cap(`${notice ?? ""}${headline2.trim()}`),
+    failures: failures.slice(0, FAILURES_MAX).map((candidate) => ({ line: cap(candidate.raw), at: candidate.at })),
+    failures_total: failures.length,
+    lines: all.length,
+    bytes: Buffer.byteLength(text)
+  };
+}
+function cap(line) {
+  const trimmed = line.trim();
+  return trimmed.length > HEADLINE_MAX ? trimmed.slice(0, HEADLINE_MAX) : trimmed;
+}
+
 // src/ops/log.ts
 var InvalidAgentNameError = class extends Error {
   constructor(agent, detail) {
@@ -30475,7 +31571,7 @@ ${detail}`);
 var UnknownAgentError = class extends Error {
   constructor(agent, track, permitted) {
     super(
-      `"${agent}" is not in track "${track}" \u2014 add it to required or available first (this track runs: ${permitted.join(", ")}). A name no track defines is how a gated agent gets logged under a spelling the gate does not recognise.`
+      `"${agent}" is not in track "${track}" \u2014 add it to required, available or closing first (this track runs: ${permitted.join(", ")}). A name no track defines is how a gated agent gets logged under a spelling the gate does not recognise.`
     );
     this.name = "UnknownAgentError";
   }
@@ -30486,6 +31582,14 @@ var ForbiddenSpecialistError = class extends Error {
       `"${agent}" is configured as specialists.${agent}=never \u2014 its result cannot be recorded. A project that switched an agent off must not have it open a gate, block a pass, or reach its history. Drop it from the cycle, or change specialists.${agent} in .mjloop/config.yaml.`
     );
     this.name = "ForbiddenSpecialistError";
+  }
+};
+var ClosingAgentError = class extends Error {
+  constructor(agent, track) {
+    super(
+      `"${agent}" is a closing agent on track "${track}" \u2014 it runs once, after the run passes, and never inside a working cycle. Logging it now would file its findings against a cycle it did not work and document code this run has not finished changing. Dispatch it from the closing_agents mjloop_cycle_advance returns.`
+    );
+    this.name = "ClosingAgentError";
   }
 };
 var CycleClosedError = class extends Error {
@@ -30512,44 +31616,89 @@ var GateClosedError = class extends Error {
     this.name = "GateClosedError";
   }
 };
+var ContradictedEvidenceError = class extends Error {
+  constructor(agent, entry, log) {
+    super(
+      `"${agent}" returned status "pass" citing "${entry.command}", but the verify ledger this result is logged against records that the engine ran that command and ${outcomeOf(entry)}. A pass resting on it rests on nothing. ` + (log === null ? "" : `What actually happened is in ${log}. `) + "Re-run this command through `mjloop_verify_run` so the ledger carries a newer entry, then log again."
+    );
+    this.name = "ContradictedEvidenceError";
+  }
+};
+function outcomeOf(entry) {
+  if (entry.phase === "queued") return "it never started \u2014 it was still waiting for the project verify lock";
+  if (entry.phase === "running") return "it had not finished";
+  if (entry.timed_out) return "it was killed at the configured ceiling";
+  if (entry.exit_code === null) return "it reported no exit code";
+  return `it exited ${entry.exit_code}`;
+}
 async function runLog(projectDir, input, now = () => /* @__PURE__ */ new Date()) {
   const agent = AgentNameSchema.safeParse(input.agent);
   if (!agent.success) throw new InvalidAgentNameError(input.agent, prettifyError(agent.error));
-  const parsed = parseAgentResult(input.result);
-  if (!parsed.ok) throw new InvalidAgentResultError(agent.data, parsed.error);
-  const store = new StateStore(projectDir, now);
-  const state = await store.get();
-  if (state.status !== "running" || state.track === null) throw new NoActiveRunError();
-  const config2 = await loadConfig(projectDir);
-  const track = findTrack(config2, state.track);
-  if (track === void 0) throw new UnknownTrackError(state.track, Object.keys(config2.tracks));
-  const permitted = permittedAgents(config2, track);
-  if (!permitted.has(agent.data)) throw new UnknownAgentError(agent.data, state.track, [...permitted]);
-  if (forbiddenSpecialists(config2).includes(agent.data)) throw new ForbiddenSpecialistError(agent.data);
-  const gate = track.gate;
-  if (gate !== void 0 && state.reproduction === null) {
-    const blocked = gate.blocks.some((name) => name.toLowerCase() === agent.data.toLowerCase());
-    if (blocked) throw new GateClosedError(agent.data, gate.proven_by);
-  }
-  const proof = gate !== void 0 && agent.data === gate.proven_by && parsed.value.status === "pass" ? parsed.value.evidence.find((entry) => entry.kind === "command" || entry.kind === "test") : void 0;
-  const signatures = errorSignature(parsed.value.evidence, parsed.value.status);
   let basename = agent.data;
   if (input.instance !== void 0) {
     const instance = AgentNameSchema.safeParse(input.instance);
     if (!instance.success) throw new InvalidAgentNameError(input.instance, prettifyError(instance.error));
     basename = `${agent.data}--${instance.data}`;
   }
-  const cycleDir = cycleDirPath(projectDir, state);
-  await fs8.mkdir(cycleDir, { recursive: true });
-  const file = path9.join(cycleDir, `${basename}.json`);
-  await fs8.writeFile(file, `${JSON.stringify(parsed.value, null, 2)}
+  const parsed = parseAgentResult(input.result);
+  if (!parsed.ok) throw new InvalidAgentResultError(agent.data, parsed.error);
+  const store = new StateStore(projectDir, now);
+  const state = await store.get();
+  if (input.run_id !== void 0 && input.run_id !== null && input.run_id !== state.run_id) {
+    throw new RunReplacedError(agent.data, input.run_id, state.run_id);
+  }
+  if (state.status === "done" && state.track !== null) {
+    const config3 = await loadConfig(projectDir);
+    const track2 = findTrack(config3, state.track);
+    if (track2 !== void 0 && track2.closing.includes(agent.data)) {
+      const dir = path10.join(runDirPath(projectDir, state), "closing");
+      const closingLedger = await readVerifyLedger(dir);
+      refuseContradicted(projectDir, dir, agent.data, parsed.value, closingLedger, track2.gate?.proven_by);
+      await fs9.mkdir(dir, { recursive: true });
+      const capped2 = await capAndSpill(projectDir, dir, basename, parsed.value, closingLedger);
+      const file2 = path10.join(dir, `${basename}.json`);
+      await fs9.writeFile(file2, `${JSON.stringify(capped2, null, 2)}
 `, "utf8");
-  if (parsed.value.findings.length > 0 || proof !== void 0 || signatures.length > 0) {
+      return { path: file2, findingsAdded: 0, gateOpened: false };
+    }
+  }
+  if (state.status !== "running" || state.track === null) throw new NoActiveRunError();
+  const config2 = await loadConfig(projectDir);
+  const track = findTrack(config2, state.track);
+  if (track === void 0) throw new UnknownTrackError(state.track, Object.keys(config2.tracks));
+  const permitted = permittedAgents(config2, track);
+  if (!permitted.has(agent.data)) throw new UnknownAgentError(agent.data, state.track, [...permitted]);
+  if (track.closing.includes(agent.data)) throw new ClosingAgentError(agent.data, state.track);
+  if (forbiddenSpecialists(config2).includes(agent.data)) throw new ForbiddenSpecialistError(agent.data);
+  const gate = track.gate;
+  if (gate !== void 0 && state.reproduction === null) {
+    const blocked = gate.blocks.some((name) => name.toLowerCase() === agent.data.toLowerCase());
+    if (blocked) throw new GateClosedError(agent.data, gate.proven_by);
+  }
+  const cycleDir = cycleDirPath(projectDir, state);
+  const ledger = await readVerifyLedger(cycleDir);
+  refuseContradicted(projectDir, cycleDir, agent.data, parsed.value, ledger, gate?.proven_by);
+  const capped = await capAndSpill(projectDir, cycleDir, basename, parsed.value, ledger);
+  const proof = gate !== void 0 && agent.data === gate.proven_by && capped.status === "pass" ? capped.evidence.find((entry) => entry.kind === "command" || entry.kind === "test") : void 0;
+  const signatures = errorSignature(capped.evidence, capped.status);
+  await fs9.mkdir(cycleDir, { recursive: true });
+  const file = path10.join(cycleDir, `${basename}.json`);
+  await fs9.writeFile(file, `${JSON.stringify(capped, null, 2)}
+`, "utf8");
+  if (track.map !== void 0 && agent.data === track.map.drafted_by && capped.status === "pass") {
+    try {
+      await writeRunMap(projectDir, state, agent.data, capped);
+    } catch (error2) {
+      process.stderr.write(`mjloop: the run map was not written: ${String(error2)}
+`);
+    }
+  }
+  if (capped.findings.length > 0 || proof !== void 0 || signatures.length > 0) {
     await store.update((draft) => {
       if (draft.status !== "running") throw new NoActiveRunError();
       if (draft.run_id !== state.run_id) throw new RunReplacedError(agent.data, state.run_id, draft.run_id);
       if (draft.cycle !== state.cycle) throw new CycleClosedError(agent.data, state.cycle, draft.cycle);
-      draft.findings.push(...parsed.value.findings);
+      draft.findings.push(...capped.findings);
       if (proof !== void 0) {
         draft.reproduction = { agent: agent.data, cycle: draft.cycle, ref: proof.ref, excerpt: proof.excerpt };
       }
@@ -30558,15 +31707,195 @@ async function runLog(projectDir, input, now = () => /* @__PURE__ */ new Date())
       }
     });
   }
-  return { path: file, findingsAdded: parsed.value.findings.length, gateOpened: proof !== void 0 };
+  return { path: file, findingsAdded: capped.findings.length, gateOpened: proof !== void 0 };
+}
+function refuseContradicted(projectDir, workDir, agent, result, ledger, provenBy) {
+  if (result.status !== "pass" || provenBy === agent) return;
+  for (const entry of result.evidence) {
+    const recorded = latestEntry(ledger, entry.ref);
+    if (recorded === null || exitedZero(recorded)) continue;
+    const log = recorded.log === "" ? null : path10.relative(projectDir, ledgerLogFile(workDir, recorded));
+    throw new ContradictedEvidenceError(agent, recorded, log);
+  }
+}
+function latestEntry(ledger, command) {
+  for (let index = ledger.length - 1; index >= 0; index -= 1) {
+    const entry = ledger[index];
+    if (entry !== void 0 && entry.command === command) return entry;
+  }
+  return null;
+}
+function exitedZero(entry) {
+  if (entry.phase !== "complete") return false;
+  if (entry.timed_out) return false;
+  return entry.exit_code === 0;
+}
+function ledgerLogFile(workDir, entry) {
+  return path10.dirname(entry.log) === "." ? path10.join(workDir, "verify", entry.log) : path10.join(workDir, "..", entry.log);
+}
+async function capAndSpill(projectDir, workDir, basename, result, ledger) {
+  const evidenceDir = path10.join(workDir, "evidence");
+  const engineLog = /* @__PURE__ */ new Map();
+  result.evidence.forEach((entry, index) => {
+    const recorded = latestEntry(ledger, entry.ref);
+    if (recorded === null || recorded.log === "") return;
+    engineLog.set(index, path10.relative(projectDir, ledgerLogFile(workDir, recorded)));
+  });
+  const { result: capped, spills } = capEvidence(
+    result,
+    (index) => engineLog.get(index) ?? path10.relative(projectDir, spillFile(evidenceDir, basename, index))
+  );
+  const fresh = spills.filter((spill) => !engineLog.has(spill.index));
+  if (fresh.length > 0) {
+    await fs9.mkdir(evidenceDir, { recursive: true });
+    for (const spill of fresh) {
+      await fs9.writeFile(spillFile(evidenceDir, basename, spill.index), spill.text, "utf8");
+    }
+  }
+  return capped;
+}
+function spillFile(evidenceDir, basename, index) {
+  return path10.join(evidenceDir, `${basename}--${index}.txt`);
+}
+var MAP_FILE = "map.md";
+var MAP_MAX_BYTES = 8e3;
+var MAP_MAX_SECTIONS = 3;
+var MAP_MAX_FILES = 40;
+var SECTION_HEADING = /^## Cycle (\d+) — (\S+) \(HEAD (.+)\)$/;
+var SECTION_FILE = /^- `(.+)`$/;
+var NO_GIT = "no git";
+async function writeRunMap(projectDir, state, agent, result) {
+  const file = path10.join(runDirPath(projectDir, state), MAP_FILE);
+  const existing = await fs9.readFile(file, "utf8").catch(() => null);
+  const sections = existing === null ? [] : parseSections(existing);
+  const files = mappedFiles(result);
+  sections.push({
+    cycle: state.cycle,
+    agent,
+    head: await headSha(projectDir) ?? NO_GIT,
+    body: renderBody(result.summary, files, supersededBy(sections, files), resultRef(state.cycle, agent)),
+    files
+  });
+  await fs9.writeFile(file, render(state, sections, agent), "utf8");
+}
+function mappedFiles(result) {
+  const refs = result.evidence.filter((entry) => entry.kind === "file").map((entry) => entry.ref);
+  return [.../* @__PURE__ */ new Set([...result.files_touched, ...refs])];
+}
+function supersededBy(earlier, files) {
+  const named = new Set(files);
+  const cycles = [];
+  const shared = /* @__PURE__ */ new Set();
+  for (const section of earlier) {
+    const overlap = section.files.filter((file) => named.has(file));
+    if (overlap.length === 0) continue;
+    cycles.push(section.cycle);
+    for (const file of overlap) shared.add(file);
+  }
+  return { cycles, files: [...shared] };
+}
+function renderBody(summary, files, superseded, ref) {
+  const lines = [];
+  if (superseded.cycles.length > 0) {
+    const which = superseded.cycles.length === 1 ? `cycle ${superseded.cycles[0]}` : `cycles ${superseded.cycles.join(", ")}`;
+    lines.push(`*Superseding ${which} for:* ${superseded.files.map((file) => `\`${file}\``).join(", ")}`, "");
+  }
+  lines.push(summary.trim(), "");
+  const shown = files.slice(0, MAP_MAX_FILES);
+  for (const file of shown) lines.push(`- \`${file}\``);
+  if (files.length > shown.length) {
+    lines.push(`- *(${files.length - shown.length} more files elided \u2014 see ${ref})*`);
+  }
+  return lines.join("\n").trimEnd();
+}
+function render(state, sections, agent) {
+  const header = [
+    `# Map \u2014 ${state.run_id ?? "unknown"}`,
+    "",
+    `**Track:** ${state.track ?? "unknown"}`,
+    `**Goal:** ${state.goal}`,
+    "",
+    "> Sections are in cycle order. **Where two sections name the same file, the later one wins** \u2014 the run",
+    "> changes the tree it mapped.",
+    "",
+    ""
+  ].join("\n");
+  const bodies = sections.map(
+    (section, index) => index === 0 || index >= sections.length - (MAP_MAX_SECTIONS - 1) ? section.body : elided(section)
+  );
+  return fit(header, sections, bodies, resultRef(state.cycle, agent));
+}
+function elided(section) {
+  return `*(cycle ${section.cycle} elided \u2014 see ${resultRef(section.cycle, section.agent)})*`;
+}
+function sectionText(section, body) {
+  return `## Cycle ${section.cycle} \u2014 ${section.agent} (HEAD ${section.head})
+
+${body}
+
+`;
+}
+function fit(header, sections, bodies, ref) {
+  const assemble = () => {
+    const parts = sections.map((section, index) => sectionText(section, bodies[index] ?? ""));
+    return `${`${header}${parts.join("")}`.trimEnd()}
+`;
+  };
+  let document = assemble();
+  while (Buffer.byteLength(document) > MAP_MAX_BYTES) {
+    const next = bodies.findIndex((body, index) => index < bodies.length - 1 && body !== elided(sections[index]));
+    if (next === -1) break;
+    bodies[next] = elided(sections[next]);
+    document = assemble();
+  }
+  if (Buffer.byteLength(document) <= MAP_MAX_BYTES) return document;
+  const marker = `
+
+*(map truncated at ${MAP_MAX_BYTES} bytes \u2014 see ${ref})*
+`;
+  return `${cutToBytes(document, MAP_MAX_BYTES - Buffer.byteLength(marker)).trimEnd()}${marker}`;
+}
+function resultRef(cycle, agent) {
+  return `cycle-${String(cycle).padStart(2, "0")}/${agent}.json`;
+}
+function cutToBytes(text, maxBytes) {
+  const buffer = Buffer.from(text, "utf8");
+  if (buffer.length <= maxBytes) return text;
+  let end = Math.max(0, maxBytes);
+  while (end > 0 && ((buffer[end] ?? 0) & 192) === 128) end -= 1;
+  return buffer.subarray(0, end).toString("utf8");
+}
+function parseSections(text) {
+  const sections = [];
+  let body = [];
+  const close = () => {
+    const section = sections[sections.length - 1];
+    if (section !== void 0) section.body = body.join("\n").trim();
+  };
+  for (const line of text.split("\n")) {
+    const heading = SECTION_HEADING.exec(line);
+    if (heading !== null) {
+      close();
+      body = [];
+      sections.push({ cycle: Number(heading[1]), agent: heading[2] ?? "", head: heading[3] ?? "", body: "", files: [] });
+      continue;
+    }
+    if (sections.length === 0) continue;
+    body.push(line);
+    const file = SECTION_FILE.exec(line);
+    const section = sections[sections.length - 1];
+    if (file !== null && section !== void 0) section.files.push(file[1] ?? "");
+  }
+  close();
+  return sections;
 }
 
 // src/ops/memory.ts
-import fs10 from "node:fs/promises";
+import fs11 from "node:fs/promises";
 
 // src/store/memory-store.ts
-import fs9 from "node:fs/promises";
-import path10 from "node:path";
+import fs10 from "node:fs/promises";
+import path11 from "node:path";
 var MemoryNotFoundError = class extends Error {
   constructor(id, dir) {
     super(`no memory "${id}" under ${dir}`);
@@ -30580,7 +31909,7 @@ function memoryFileName(frontmatter) {
 }
 async function listFiles(dir) {
   try {
-    return await fs9.readdir(dir);
+    return await fs10.readdir(dir);
   } catch (error2) {
     if (error2.code !== "ENOENT") throw error2;
     return [];
@@ -30591,9 +31920,9 @@ async function listMemories(projectDir) {
   const entries = await listFiles(dir);
   const memories = [];
   for (const name of entries.filter((entry) => entry.endsWith(".md"))) {
-    const file = path10.join(dir, name);
+    const file = path11.join(dir, name);
     try {
-      const { data, body } = parseFrontmatter(await fs9.readFile(file, "utf8"));
+      const { data, body } = parseFrontmatter(await fs10.readFile(file, "utf8"));
       const parsed = MemoryFrontmatterSchema.safeParse(data);
       if (!parsed.success) continue;
       memories.push({ frontmatter: parsed.data, body, file });
@@ -30621,9 +31950,9 @@ async function readMemory(projectDir, id) {
 }
 async function writeMemory(projectDir, memory) {
   const dir = resolveLoopPaths(projectDir).memory;
-  await fs9.mkdir(dir, { recursive: true });
-  const file = path10.join(dir, memoryFileName(memory.frontmatter));
-  await fs9.writeFile(file, serialiseFrontmatter(memory.frontmatter, memory.body), { encoding: "utf8", flag: "wx" });
+  await fs10.mkdir(dir, { recursive: true });
+  const file = path11.join(dir, memoryFileName(memory.frontmatter));
+  await fs10.writeFile(file, serialiseFrontmatter(memory.frontmatter, memory.body), { encoding: "utf8", flag: "wx" });
   return file;
 }
 
@@ -30636,7 +31965,7 @@ var InvalidMemoryInputError = class extends Error {
 };
 async function memoryAdd(projectDir, input, now = () => /* @__PURE__ */ new Date()) {
   const paths = resolveLoopPaths(projectDir);
-  await fs10.mkdir(paths.root, { recursive: true });
+  await fs11.mkdir(paths.root, { recursive: true });
   return withLock(paths.lock, async () => {
     const used = await usedMemoryNumbers(projectDir);
     const next = used.length === 0 ? 1 : Math.max(...used) + 1;
@@ -30720,8 +32049,8 @@ function score(memory, terms) {
 }
 
 // src/ops/plan.ts
-import fs11 from "node:fs/promises";
-import path11 from "node:path";
+import fs12 from "node:fs/promises";
+import path12 from "node:path";
 var InvalidPlanInputError = class extends Error {
   constructor(detail) {
     super(detail);
@@ -30730,7 +32059,7 @@ var InvalidPlanInputError = class extends Error {
 };
 async function planCreate(projectDir, input, now = () => /* @__PURE__ */ new Date()) {
   const paths = resolveLoopPaths(projectDir);
-  await fs11.mkdir(paths.root, { recursive: true });
+  await fs12.mkdir(paths.root, { recursive: true });
   return withLock(paths.lock, async () => {
     const existing = await listPlanIds(projectDir);
     const next = existing.length === 0 ? 1 : Math.max(...existing.map((id2) => Number(id2.slice(1)))) + 1;
@@ -30862,8 +32191,8 @@ async function storyUpdate(projectDir, storyId, patch, now = () => /* @__PURE__ 
       );
       assertDependenciesResolve(siblings, merged.data);
     }
-    const renamed = path11.join(path11.dirname(current.file), storyFileName(merged.data));
-    if (renamed !== current.file) await fs11.rename(current.file, renamed);
+    const renamed = path12.join(path12.dirname(current.file), storyFileName(merged.data));
+    if (renamed !== current.file) await fs12.rename(current.file, renamed);
     const file = await writeStory(projectDir, { frontmatter: merged.data, body: current.body });
     const manifest = await renderManifest(projectDir, planId, now);
     return { id: storyId, file, manifest };
@@ -30898,9 +32227,211 @@ async function storyNext(projectDir, planId) {
   return { story: null, reason: "no story is todo \u2014 the remainder is doing or blocked" };
 }
 
+// src/ops/history.ts
+import fs13 from "node:fs/promises";
+import path13 from "node:path";
+var HISTORY_DEFAULT_LIMIT = 50;
+async function readRunHistory(projectDir, options = {}) {
+  const limit = options.limit ?? HISTORY_DEFAULT_LIMIT;
+  if (limit <= 0) return [];
+  const runsDir = resolveLoopPaths(projectDir).runs;
+  const entries = await fs13.readdir(runsDir, { withFileTypes: true }).catch(() => []);
+  const names = entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort().reverse();
+  const live = await readLiveRun(projectDir);
+  const runs = [];
+  for (const name of names) {
+    const parts = name.split("--");
+    if (parts.length !== 3) continue;
+    const [runId, story, track] = parts;
+    if (options.track !== void 0 && track !== options.track) continue;
+    runs.push(
+      await readRun(path13.join(runsDir, name), {
+        id: name,
+        run_id: runId,
+        track,
+        story: story === "adhoc" ? null : story,
+        live
+      })
+    );
+    if (runs.length >= limit) break;
+  }
+  return runs;
+}
+async function readLiveRun(projectDir) {
+  const state = await new StateStore(projectDir).get().catch(() => null);
+  if (state === null || state.run_id === null || state.track === null) return null;
+  return {
+    // Composed by `runDirName` rather than re-spelled here, so this walk and
+    // the writers cannot drift apart on the separator or the `adhoc` fallback.
+    dir: runDirName(state),
+    started_at: state.started_at,
+    running: state.status === "running",
+    closedAt: new Map(state.history.map((entry) => [entry.cycle, entry.at]))
+  };
+}
+async function readRun(dir, identity) {
+  const inside = await fs13.readdir(dir, { withFileTypes: true }).catch(() => []);
+  const timing = identity.live !== null && identity.live.dir === identity.id ? identity.live : null;
+  const cycleDirs = inside.filter((entry) => entry.isDirectory() && /^cycle-\d+$/.test(entry.name)).map((entry) => ({ name: entry.name, cycle: Number(entry.name.slice("cycle-".length)) })).sort((a, b) => a.cycle - b.cycle);
+  const cycles = [];
+  for (const { name, cycle } of cycleDirs) {
+    cycles.push(await readCycle(path13.join(dir, name), cycle, timing?.closedAt.get(cycle) ?? null));
+  }
+  const hasClosing = inside.some((entry) => entry.isDirectory() && entry.name === "closing");
+  return {
+    id: identity.id,
+    run_id: identity.run_id,
+    track: identity.track,
+    story: identity.story,
+    halted: inside.some((entry) => entry.name === "HALT.md"),
+    running: timing?.running ?? false,
+    started_at: timing?.started_at ?? null,
+    cycles,
+    // The closing pass has no cycle number and `state.history` has no entry for
+    // it: it happens after the run's last cycle closed.
+    closing: hasClosing ? await readCycle(path13.join(dir, "closing"), 0, null) : null
+  };
+}
+async function readCycle(dir, cycle, at) {
+  const inside = await fs13.readdir(dir).catch(() => []);
+  const roster = await readJson(path13.join(dir, "roster.json"), RosterFields);
+  const verify = await readJson(path13.join(dir, "verify", "index.json"), LedgerSchema);
+  const agents = [];
+  for (const entry of inside.filter((name) => name.endsWith(".json")).sort()) {
+    if (entry === "roster.json" || entry === "findings.json") continue;
+    const result = await readJson(path13.join(dir, entry), ResultFields);
+    if (result === null) continue;
+    const [name, instance] = splitInstance(entry.slice(0, -".json".length));
+    agents.push({
+      name,
+      instance,
+      status: result.status,
+      findings: result.findings,
+      files: result.files_touched.length
+    });
+  }
+  return {
+    cycle,
+    // A cycle whose roster is missing or unreadable keeps its agents and loses
+    // only its drafted/skipped counts. Dropping the cycle instead would shorten
+    // the run, and a run's length is what the preflight estimate rests on.
+    selected: roster?.selected ?? [],
+    skipped: roster?.skipped ?? {},
+    agents,
+    verify: verify ?? [],
+    at
+  };
+}
+function splitInstance(base) {
+  const at = base.indexOf("--");
+  if (at === -1) return [base, null];
+  return [base.slice(0, at), base.slice(at + 2)];
+}
+var RosterFields = object2({
+  selected: array(string2().min(1)).default([]),
+  skipped: record(string2().min(1), string2().min(1)).default({})
+});
+var ResultFields = object2({
+  status: ResultSchema2,
+  findings: array(FindingSchema).default([]),
+  files_touched: array(string2()).default([])
+});
+async function readJson(file, schema) {
+  try {
+    const parsed = schema.safeParse(JSON.parse(await fs13.readFile(file, "utf8")));
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
+}
+
+// src/ops/preflight.ts
+async function preflightEstimate(projectDir, input) {
+  const config2 = await loadConfig(projectDir);
+  const track = findTrack(config2, input.track);
+  if (track === void 0) throw new UnknownTrackError(input.track, Object.keys(config2.tracks));
+  const forced = forcedSpecialists(config2);
+  const forbidden = new Set(forbiddenSpecialists(config2));
+  const closing = new Set(track.closing);
+  const perCycle = /* @__PURE__ */ new Set([...track.required, ...track.available, ...forced]);
+  for (const agent of forbidden) perCycle.delete(agent);
+  for (const agent of closing) perCycle.delete(agent);
+  const dispatchesPerCycle = perCycle.size;
+  return {
+    track: input.track,
+    max_cycles: track.max_cycles,
+    roster: {
+      required: [...track.required],
+      available: [...track.available],
+      forced,
+      // Only the names this track would otherwise draft. A `never` on an agent
+      // this track never runs is a fact about another track.
+      forbidden: [...track.required, ...track.available, ...track.closing].filter((agent) => forbidden.has(agent)),
+      closing: [...track.closing]
+    },
+    dispatches_per_cycle: dispatchesPerCycle,
+    ceiling: {
+      cycles: track.max_cycles,
+      // The closing set is added once rather than per cycle, and it is added:
+      // a closing agent is a real dispatch the run makes, and leaving it out
+      // would understate the widest run by exactly the agent idea 9 introduced.
+      dispatches: track.max_cycles * dispatchesPerCycle + closing.size
+    },
+    comparable: await readComparable(projectDir, input)
+  };
+}
+async function readComparable(projectDir, input) {
+  const storyBound = (input.story ?? null) !== null;
+  const history = await readRunHistory(projectDir, { track: input.track });
+  const comparable = history.filter(
+    (run2) => !run2.halted && !run2.running && run2.cycles.length > 0 && run2.story !== null === storyBound
+  );
+  if (comparable.length === 0) return null;
+  const timed = comparable.map(minutesOf).filter((value) => value !== null);
+  return {
+    runs: comparable.length,
+    cycles: rangeOf(comparable.map((run2) => run2.cycles.length)),
+    dispatches: rangeOf(comparable.map(dispatchesIn)),
+    // An existing project sees cycles and dispatches immediately and durations
+    // from its next run: nothing archives a finished run's clock, so only the
+    // run `state.json` still describes can be timed.
+    minutes: timed.length === 0 ? null : rangeOf(timed, 1)
+  };
+}
+function dispatchesIn(run2) {
+  const passes = run2.closing === null ? run2.cycles : [...run2.cycles, run2.closing];
+  let total = 0;
+  for (const cycle of passes) {
+    total += (/* @__PURE__ */ new Set([...cycle.selected, ...cycle.agents.map((agent) => agent.name)])).size;
+  }
+  return total;
+}
+function minutesOf(run2) {
+  const last = run2.cycles.at(-1);
+  if (run2.started_at === null || last === void 0 || last.at === null) return null;
+  const elapsed = Date.parse(last.at) - Date.parse(run2.started_at);
+  if (!Number.isFinite(elapsed) || elapsed < 0) return null;
+  return elapsed / 6e4;
+}
+function rangeOf(values, decimals) {
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  const median = sorted.length % 2 === 1 ? sorted[middle] ?? 0 : ((sorted[middle - 1] ?? 0) + (sorted[middle] ?? 0)) / 2;
+  return {
+    median: round(median, decimals),
+    min: round(sorted[0] ?? 0, decimals),
+    max: round(sorted.at(-1) ?? 0, decimals)
+  };
+}
+function round(value, decimals) {
+  if (decimals === void 0) return value;
+  const scale = 10 ** decimals;
+  return Math.round(value * scale) / scale;
+}
+
 // src/ops/roster.ts
-import fs12 from "node:fs/promises";
-import path12 from "node:path";
+import fs14 from "node:fs/promises";
+import path14 from "node:path";
 var RosterViolationError = class extends Error {
   constructor(violations) {
     super(`roster rejected:
@@ -30908,16 +32439,40 @@ ${violations.map((v) => `- ${v}`).join("\n")}`);
     this.name = "RosterViolationError";
   }
 };
+var RunNotClosedError = class extends Error {
+  constructor(status) {
+    super(
+      `a closing roster records the pass that ended the run, and this run is "${status}" \u2014 declare it after mjloop_cycle_advance returns "pass", which is the call that reports the closing set.`
+    );
+    this.name = "RunNotClosedError";
+  }
+};
+var ClosingRosterSchema = strictObject({
+  /**
+   * Which kind of roster this is. A literal rather than a boolean: `false`
+   * carries no meaning here, and a caller that passes it is answering a
+   * question this function does not ask — better a loud parse failure than a
+   * cycle roster silently validated against the wrong set of agents.
+   */
+  closing: literal(true),
+  selected: array(string2().min(1)).default([]),
+  /** agent name -> why closing the run without it was safe */
+  skipped: record(string2().min(1), string2().min(1)).default({})
+});
 async function rosterSet(projectDir, roster) {
-  const parsed = RosterSchema.parse(roster);
+  return isClosingRoster(roster) ? closingRosterSet(projectDir, ClosingRosterSchema.parse(roster)) : cycleRosterSet(projectDir, RosterSchema.parse(roster));
+}
+function isClosingRoster(roster) {
+  return "closing" in roster && roster.closing === true;
+}
+async function cycleRosterSet(projectDir, parsed) {
   const state = await new StateStore(projectDir).get();
   if (state.status !== "running" || state.track === null) throw new NoActiveRunError();
-  const config2 = await loadConfig(projectDir);
-  const track = findTrack(config2, state.track);
-  if (track === void 0) throw new UnknownTrackError(state.track, Object.keys(config2.tracks));
+  const { config: config2, track } = await loadTrack(projectDir, state.track);
   const forced = forcedSpecialists(config2);
   const forbidden = new Set(forbiddenSpecialists(config2));
   const permitted = permittedAgents(config2, track);
+  const closing = new Set(track.closing);
   const selected = new Set(parsed.selected);
   const violations = [];
   if (parsed.cycle !== state.cycle) {
@@ -30929,6 +32484,7 @@ async function rosterSet(projectDir, roster) {
     }
   }
   for (const agent of forced) {
+    if (closing.has(agent)) continue;
     if (!selected.has(agent)) {
       violations.push(`"${agent}" is configured as specialists.${agent}=always and cannot be dropped`);
     }
@@ -30939,38 +32495,99 @@ async function rosterSet(projectDir, roster) {
     }
   }
   for (const agent of parsed.selected) {
+    if (closing.has(agent)) {
+      violations.push(
+        `"${agent}" is a closing agent on track "${state.track}" and runs after the run passes \u2014 drafting it into a working cycle is what \`closing\` exists to prevent`
+      );
+      continue;
+    }
     if (!permitted.has(agent)) {
       violations.push(`"${agent}" is not in track "${state.track}" \u2014 add it to required or available first`);
     }
   }
-  for (const agent of Object.keys(parsed.skipped)) {
-    if (selected.has(agent)) {
-      violations.push(`"${agent}" is both drafted and skipped \u2014 a roster must say one or the other`);
-    }
-  }
+  violations.push(...contradictions(selected, parsed.skipped));
   for (const agent of track.available) {
     if (forbidden.has(agent)) continue;
+    if (closing.has(agent)) continue;
     if (!selected.has(agent) && parsed.skipped[agent] === void 0) {
       violations.push(`"${agent}" was omitted without a reason \u2014 add it to skipped`);
     }
   }
   if (violations.length > 0) throw new RosterViolationError(violations);
-  const file = path12.join(cycleDirPath(projectDir, state), "roster.json");
-  await fs12.mkdir(path12.dirname(file), { recursive: true });
-  await fs12.writeFile(file, `${JSON.stringify(parsed, null, 2)}
+  return write(path14.join(cycleDirPath(projectDir, state), "roster.json"), parsed);
+}
+async function closingRosterSet(projectDir, parsed) {
+  const state = await new StateStore(projectDir).get();
+  if (state.status !== "done" || state.track === null) throw new RunNotClosedError(state.status);
+  const { config: config2, track } = await loadTrack(projectDir, state.track);
+  const forced = new Set(forcedSpecialists(config2));
+  const closing = new Set(track.closing);
+  const selected = new Set(parsed.selected);
+  const violations = [];
+  if (closing.size === 0) {
+    violations.push(
+      `track "${state.track}" declares no closing agents \u2014 there is no closing pass to record. Move the agent to \`closing\` under this track first, or log it inside a cycle`
+    );
+  }
+  for (const agent of parsed.selected) {
+    if (!closing.has(agent)) {
+      violations.push(
+        `"${agent}" does not close track "${state.track}" \u2014 a closing roster draws only from that track's closing set (this one closes with: ${track.closing.join(", ") || "nothing"})`
+      );
+    }
+  }
+  violations.push(...contradictions(selected, parsed.skipped));
+  for (const agent of track.closing) {
+    if (selected.has(agent)) continue;
+    if (forced.has(agent)) {
+      violations.push(
+        `"${agent}" is configured as specialists.${agent}=always and cannot be dropped from the closing pass`
+      );
+      continue;
+    }
+    if (parsed.skipped[agent] === void 0) {
+      violations.push(`"${agent}" closes this track and was not dispatched \u2014 add it to skipped with a reason`);
+    }
+  }
+  if (violations.length > 0) throw new RosterViolationError(violations);
+  return write(path14.join(runDirPath(projectDir, state), "closing", "roster.json"), parsed);
+}
+function contradictions(selected, skipped) {
+  return Object.keys(skipped).filter((agent) => selected.has(agent)).map((agent) => `"${agent}" is both drafted and skipped \u2014 a roster must say one or the other`);
+}
+async function loadTrack(projectDir, name) {
+  const config2 = await loadConfig(projectDir);
+  const track = findTrack(config2, name);
+  if (track === void 0) throw new UnknownTrackError(name, Object.keys(config2.tracks));
+  return { config: config2, track };
+}
+async function write(file, roster) {
+  await fs14.mkdir(path14.dirname(file), { recursive: true });
+  await fs14.writeFile(file, `${JSON.stringify(roster, null, 2)}
 `, "utf8");
   return { path: file };
 }
 
 // src/ops/summary.ts
-import fs13 from "node:fs/promises";
+import fs15 from "node:fs/promises";
+import path15 from "node:path";
 var NO_FINDINGS = { high: 0, medium: 0, low: 0 };
+var MAP_FILE2 = "map.md";
 async function hasDesignSystem(projectDir) {
   try {
-    return (await fs13.stat(resolveLoopPaths(projectDir).designSystem)).isFile();
+    return (await fs15.stat(resolveLoopPaths(projectDir).designSystem)).isFile();
   } catch {
     return false;
   }
+}
+async function runMap(projectDir, state) {
+  if (state.run_id === null || state.track === null) return null;
+  try {
+    if (!(await fs15.stat(path15.join(runDirPath(projectDir, state), MAP_FILE2))).isFile()) return null;
+  } catch {
+    return null;
+  }
+  return path15.join(".mjloop", "runs", runDirName(state), MAP_FILE2);
 }
 async function stateSummary(projectDir) {
   let config2 = null;
@@ -31003,6 +32620,7 @@ async function stateSummary(projectDir) {
       halt_reason: null,
       reproduction: null,
       design_system: false,
+      map: null,
       config_error: configError
     };
   }
@@ -31035,20 +32653,97 @@ async function stateSummary(projectDir) {
     halt_reason: state.halt_reason,
     reproduction,
     design_system: await hasDesignSystem(projectDir),
+    map: await runMap(projectDir, state),
     config_error: configError
   };
 }
 
+// src/ops/telemetry.ts
+var TELEMETRY_MAX_ROWS = 40;
+var TELEMETRY_FLAG_DRAFTS = 5;
+async function readTelemetry(projectDir, options = {}) {
+  const history = await readRunHistory(projectDir, options);
+  const config2 = await loadConfig(projectDir).catch(() => null);
+  const modes = new Map(Object.entries(config2?.specialists ?? {}));
+  const rows = /* @__PURE__ */ new Map();
+  const rowFor = (agent) => {
+    const existing = rows.get(agent);
+    if (existing !== void 0) return existing;
+    const created = {
+      agent,
+      mode: modes.get(agent) ?? null,
+      drafted: 0,
+      skipped: 0,
+      landed: 0,
+      results: { pass: 0, fail: 0, blocked: 0 },
+      findings: { high: 0, medium: 0, low: 0 },
+      runs: 0,
+      last_seen: null
+    };
+    rows.set(agent, created);
+    return created;
+  };
+  let cycles = 0;
+  for (const run2 of history) {
+    cycles += run2.cycles.length;
+    const mentioned = /* @__PURE__ */ new Set();
+    const passes = run2.closing === null ? run2.cycles : [...run2.cycles, run2.closing];
+    for (const cycle of passes) {
+      for (const agent of new Set(cycle.selected)) {
+        rowFor(agent).drafted += 1;
+        mentioned.add(agent);
+      }
+      for (const agent of Object.keys(cycle.skipped)) {
+        rowFor(agent).skipped += 1;
+        mentioned.add(agent);
+      }
+      const landed = /* @__PURE__ */ new Set();
+      for (const record2 of cycle.agents) {
+        const row = rowFor(record2.name);
+        row.results[record2.status] += 1;
+        for (const finding of record2.findings) row.findings[finding.severity] += 1;
+        landed.add(record2.name);
+        mentioned.add(record2.name);
+      }
+      for (const agent of landed) rowFor(agent).landed += 1;
+    }
+    for (const agent of mentioned) {
+      const row = rowFor(agent);
+      row.runs += 1;
+      row.last_seen ??= run2.run_id;
+    }
+  }
+  if (config2 !== null && history.length > 0) {
+    for (const track of Object.values(config2.tracks)) for (const agent of track.closing) rowFor(agent);
+  }
+  const pinned = /* @__PURE__ */ new Set();
+  if (config2 !== null) for (const track of Object.values(config2.tracks)) for (const agent of pinnedAgents(track)) pinned.add(agent);
+  const ordered = [...rows.values()].sort(byDraftedThenName);
+  const flagged = ordered.filter(
+    (row) => !pinned.has(row.agent) && row.drafted >= TELEMETRY_FLAG_DRAFTS && row.findings.high === 0 && row.findings.medium === 0
+  ).map((row) => row.agent);
+  return {
+    runs: history.length,
+    cycles,
+    specialists: ordered.slice(0, TELEMETRY_MAX_ROWS),
+    truncated: Math.max(0, ordered.length - TELEMETRY_MAX_ROWS),
+    flagged
+  };
+}
+function byDraftedThenName(a, b) {
+  return b.drafted - a.drafted || a.agent.localeCompare(b.agent);
+}
+
 // src/util/entrypoint.ts
-import fs14 from "node:fs/promises";
-import path13 from "node:path";
+import fs16 from "node:fs/promises";
+import path16 from "node:path";
 import { pathToFileURL } from "node:url";
 async function isEntrypoint(moduleUrl) {
   const argv1 = process.argv[1];
   if (argv1 === void 0) return false;
-  let resolved = path13.resolve(argv1);
+  let resolved = path16.resolve(argv1);
   try {
-    resolved = await fs14.realpath(resolved);
+    resolved = await fs16.realpath(resolved);
   } catch {
   }
   return moduleUrl === pathToFileURL(resolved).href;
@@ -31124,15 +32819,35 @@ function buildServer() {
     "mjloop_roster_set",
     {
       title: "Declare the cycle roster",
-      description: "Record which agents this cycle runs and why each omission is safe. Rejected if any agent the track marks required is missing, or if an optional agent is omitted without a stated reason.",
+      description: "Record which agents this cycle runs and why each omission is safe. Rejected if any agent the track marks required is missing, or if an optional agent is omitted without a stated reason. With closing=true it records the run closing pass instead, drawn from the closing set mjloop_cycle_advance reported on the pass.",
       inputSchema: {
         project_dir: projectDirArg,
-        cycle: number2().int().positive(),
-        selected: array(string2().min(1)).min(1),
+        closing: literal(true).optional().describe(
+          'Declares the run closing pass rather than a working cycle. Set it only after mjloop_cycle_advance returned "pass" and its closing_agents.'
+        ),
+        cycle: number2().int().positive().optional().describe("The working cycle this roster composes. Omitted only for a closing roster"),
+        // `min(1)` lives in `RosterSchema` rather than here because the two
+        // kinds disagree about it: a working cycle must dispatch someone, and a
+        // closing pass that dispatched nobody is the one case worth writing
+        // down — it is the durable record that the run shipped without its
+        // documentation, and why. A wire-level floor would make it unwritable.
+        selected: array(string2().min(1)).describe("Agents dispatched. At least one for a working cycle"),
         skipped: record(string2().min(1), string2().min(1)).default({}).describe("agent -> why omitting it is safe")
       }
     },
-    async ({ project_dir, cycle, selected, skipped }) => guard(async () => ok(await rosterSet(resolveProjectDir(project_dir), { cycle, selected, skipped })))
+    async ({ project_dir, closing, cycle, selected, skipped }) => guard(async () => {
+      const dir = resolveProjectDir(project_dir);
+      if (closing !== true) {
+        if (cycle === void 0) {
+          throw new Error("give a cycle number, or set closing=true to declare the run's closing pass");
+        }
+        return ok(await rosterSet(dir, { cycle, selected, skipped }));
+      }
+      if (cycle !== void 0) {
+        throw new Error("a closing roster belongs to no cycle \u2014 it records the pass that ended the run; drop the cycle argument");
+      }
+      return ok(await rosterSet(dir, { closing: true, selected, skipped }));
+    })
   );
   server.registerTool(
     "mjloop_run_log",
@@ -31143,16 +32858,53 @@ function buildServer() {
         project_dir: projectDirArg,
         agent: AgentNameSchema.describe("Agent name as it appears in the track roster"),
         instance: string2().min(1).optional().describe("Distinguishes parallel runs of the same agent, e.g. one hypothesis-tester per hypothesis"),
+        run_id: string2().min(1).optional().describe(
+          "The run this agent was dispatched under \u2014 the run_id mjloop_cycle_advance returned in its state. Pass it for a closing agent: it is refused if the run has since been replaced, which is the only thing keeping a late result out of the next run findings."
+        ),
         result: AgentResultSchema
       }
     },
-    async ({ project_dir, agent, instance, result }) => guard(
+    async ({ project_dir, agent, instance, run_id, result }) => guard(
       async () => ok(
         await runLog(resolveProjectDir(project_dir), {
           agent,
           ...instance === void 0 ? {} : { instance },
+          ...run_id === void 0 ? {} : { run_id },
           result
         })
+      )
+    )
+  );
+  server.registerTool(
+    "mjloop_verify_run",
+    {
+      title: "Run a verify command",
+      description: "Run one verify slot from the run's pinned verify block, write the whole log under the cycle, and return a bounded digest: exit code, headline, capped failures, and no verdict \u2014 the verifier still decides. phase running means the child outlived wait_ms; phase queued means nothing ran at all because another verify command in this project holds the lock. Call again for either.",
+      inputSchema: {
+        project_dir: projectDirArg,
+        slot: VerifySlotSchema,
+        label: string2().min(1).optional().describe("Distinguishes two runs of one slot in a cycle"),
+        wait_ms: number2().int().positive().optional().describe("How long to wait before returning phase running. Default 45000")
+      }
+    },
+    // The only tool that takes the callback's second argument. `extra.signal`
+    // fires when the client cancels or times out the request, and it is passed
+    // as `waitSignal` — which abandons *this call's wait* and never the child.
+    // A client-side MCP_TIMEOUT that killed the suite would make the next call
+    // re-run a four-minute command from zero, which is the exact outcome
+    // `phase: 'running'` exists to prevent. Only verify.timeout_ms kills.
+    async ({ project_dir, slot, label, wait_ms }, extra) => guard(
+      async () => ok(
+        await verifyRun(
+          resolveProjectDir(project_dir),
+          {
+            slot,
+            ...label === void 0 ? {} : { label },
+            ...wait_ms === void 0 ? {} : { wait_ms }
+          },
+          void 0,
+          extra.signal
+        )
       )
     )
   );
@@ -31160,7 +32912,7 @@ function buildServer() {
     "mjloop_cycle_advance",
     {
       title: "Close the cycle",
-      description: "Record the cycle outcome. pass finishes the run; otherwise the next cycle opens unless the cap is reached. Returns the new state plus carried_findings \u2014 the closed cycle findings, which are the next cycle task list.",
+      description: "Record the cycle outcome. pass finishes the run; otherwise the next cycle opens unless the cap is reached. Returns the new state plus carried_findings \u2014 the closed cycle findings, which are the next cycle task list \u2014 and closing_agents, the agents to dispatch now that the run has passed, empty on any other outcome.",
       inputSchema: {
         project_dir: projectDirArg,
         agents: array(string2().min(1)).min(1),
@@ -31327,14 +33079,14 @@ function buildServer() {
         run: string2().min(1).nullish().describe("The run that produced it, when there is one")
       }
     },
-    async ({ project_dir, kind, title, body, tags, run }) => guard(
+    async ({ project_dir, kind, title, body, tags, run: run2 }) => guard(
       async () => ok(
         await memoryAdd(resolveProjectDir(project_dir), {
           kind,
           title,
           body,
           ...tags === void 0 ? {} : { tags },
-          ...run === void 0 ? {} : { run }
+          ...run2 === void 0 ? {} : { run: run2 }
         })
       )
     )
@@ -31360,6 +33112,28 @@ function buildServer() {
       inputSchema: { project_dir: projectDirArg, id: string2().min(1).describe("Memory id, e.g. M001") }
     },
     async ({ project_dir, id }) => guard(async () => ok(await memoryGet(resolveProjectDir(project_dir), id)))
+  );
+  server.registerTool(
+    "mjloop_report_get",
+    {
+      title: "Read a report over past runs",
+      description: "Two projections of one bounded walk over past runs. telemetry: what every specialist this project drafted actually returned, so a mode or an available list can be pruned on evidence \u2014 a report, never a rule. preflight: the shape of a run on a track before it starts \u2014 roster, dispatches per cycle, ceiling, and what comparable past runs took. Neither is folded into routine output; ask for it.",
+      inputSchema: {
+        project_dir: projectDirArg,
+        report: _enum(["telemetry", "preflight"]),
+        track: IdSchema.optional().describe("preflight only, and required for it. Track name as in .mjloop/config.yaml"),
+        story: IdSchema.nullish().describe("preflight only. Compares story-bound runs against story-bound runs"),
+        limit: number2().int().positive().max(200).optional().describe("telemetry only: past runs to walk. Default 50")
+      }
+    },
+    async ({ project_dir, report, track, story, limit }) => guard(async () => {
+      const dir = resolveProjectDir(project_dir);
+      if (report === "preflight") {
+        if (track === void 0) throw new Error("preflight needs a track \u2014 the estimate is per track, and is asked before a run exists");
+        return ok(await preflightEstimate(dir, { track, story: story ?? null }));
+      }
+      return ok(await readTelemetry(dir, limit === void 0 ? {} : { limit }));
+    })
   );
   return server;
 }

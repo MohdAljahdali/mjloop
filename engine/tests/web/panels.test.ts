@@ -4,6 +4,7 @@ import { installForTest } from '../../src/web/public/lib/i18n.js'
 import { installStorage } from '../../src/web/public/lib/local.js'
 import { draw, installScheduler } from '../../src/web/public/ui/render.js'
 import { drawRail, mountRail } from '../../src/web/public/ui/rail.js'
+import { mountConfig } from '../../src/web/public/panels/config.js'
 import { mountEvidence } from '../../src/web/public/panels/evidence.js'
 import { mountPlans, planStatus, ready, statusIndex, unmet } from '../../src/web/public/panels/plans.js'
 import { mountQueue } from '../../src/web/public/panels/queue.js'
@@ -12,6 +13,7 @@ import { facet } from '../../src/web/public/panels/memory.js'
 import { suggestions } from '../../src/web/public/panels/launcher.js'
 import { mountToasts, toast } from '../../src/web/public/ui/toasts.js'
 import { emptySnapshot, loadPage, readLocale } from './helpers/page.js'
+import { ConfigSchema } from '../../src/schemas/config.js'
 import type { PlanView, StoryView } from '../../src/web/protocol.js'
 
 /**
@@ -61,6 +63,40 @@ function reveal(id: string): HTMLElement {
   node.hidden = false
   return node
 }
+
+/**
+ * A read api that answers the paths a test names and 404s everything else.
+ *
+ * Routed rather than a single body: a panel that fetches two documents and
+ * draws them into one block is exactly where an unrouted stub passes for the
+ * wrong reason — every feed gets the same object and every assertion holds.
+ */
+function serve(routes: Record<string, unknown>): void {
+  vi.stubGlobal('fetch', (url: string) => {
+    const body = routes[url.split('?')[0] ?? '']
+    return Promise.resolve(
+      new Response(JSON.stringify(body ?? { error: { code: 'error.notFound' } }), {
+        status: body === undefined ? 404 : 200,
+      }),
+    )
+  })
+}
+
+/** A parsed config, through the engine's own schema so every default is real. */
+function configView(patch: Record<string, unknown> = {}): unknown {
+  return {
+    raw: 'version: 1\n',
+    parsed: ConfigSchema.parse({
+      version: 1,
+      tracks: { build: { required: ['builder'], max_cycles: 5 }, edit: { required: ['builder'], max_cycles: 2 } },
+      ...patch,
+    }),
+    invalid: false,
+  }
+}
+
+const cells = (selector: string): (string | null)[] =>
+  [...document.querySelectorAll(selector)].map((node) => node.textContent)
 
 describe('plans', () => {
   it('draws the status as a word and names what a story waits on', () => {
@@ -208,6 +244,48 @@ describe('run', () => {
       'verifier',
     ])
   })
+
+  it('estimates the run nobody has started yet, and says when it has no basis', async () => {
+    // The idle branch is the only moment the estimate can still change a
+    // decision, and an idle state names no track — so the page names one, from
+    // the config, and the engine answers for that track.
+    serve({
+      '/api/config': configView(),
+      '/api/preflight/build': {
+        track: 'build',
+        max_cycles: 5,
+        roster: {
+          required: ['builder', 'verifier'],
+          available: ['security'],
+          forced: [],
+          forbidden: [],
+          closing: ['docs'],
+        },
+        dispatches_per_cycle: 3,
+        ceiling: { cycles: 5, dispatches: 16 },
+        comparable: null,
+      },
+    })
+
+    reveal('panel-run')
+    mountRun()
+    draw(emptySnapshot())
+    await vi.waitFor(() => expect((document.getElementById('run-preflight') as HTMLElement).hidden).toBe(false))
+
+    expect((document.getElementById('preflight-track') as HTMLSelectElement).value).toBe('build')
+    expect(cells('#preflight-facts dt')).toEqual([
+      english['preflight.maxCycles'],
+      english['preflight.perCycle'],
+      english['preflight.ceiling'],
+      english['preflight.required'],
+      english['preflight.available'],
+      english['preflight.closing'],
+    ])
+    expect(cells('#preflight-facts dd')).toEqual(['5', '3', '16', 'builder, verifier', 'security', 'docs'])
+    // No comparable run is an answer. An invented range would not be.
+    expect(document.getElementById('preflight-basis')?.textContent).toBe(english['preflight.noBasis'])
+    expect(document.querySelectorAll('#preflight-past .fact')).toHaveLength(0)
+  })
 })
 
 describe('evidence', () => {
@@ -236,6 +314,170 @@ describe('evidence', () => {
     expect(row.textContent).toContain('P001-S01')
     expect(row.textContent).toContain('halted')
     expect((document.getElementById('evidence-empty') as HTMLElement).hidden).toBe(true)
+  })
+
+  it('shows what the engine executed, including a queued command and the drift beside it', async () => {
+    // The ledger is the only record that the suite behind a verdict actually
+    // ran. A queued row means *nothing ran* — another command in this project
+    // held the verify lock — and `live_command` means `config.yaml` moved
+    // under the run, which the run reports and never obeys.
+    const id = '2026-07-28-002--adhoc--build'
+    serve({
+      '/api/runs': [{ id, story: null, track: 'build', cycles: 1, halted: false }],
+      [`/api/runs/${id}`]: { id, halt: null, cycles: [1] },
+      [`/api/runs/${id}/1`]: {
+        cycle: 1,
+        roster: { selected: ['builder'], skipped: [] },
+        findings: [],
+        agents: [],
+        verify: [
+          {
+            slot: 'test',
+            command: 'npm test',
+            source: 'pinned',
+            live_command: 'npm test -- --coverage',
+            log: 'test-01.log',
+            phase: 'complete',
+            exit_code: 1,
+            timed_out: false,
+            fingerprint: null,
+            cached_from_cycle: null,
+            duration_ms: 1800,
+            at: '2026-07-28T12:00:00.000Z',
+          },
+          {
+            slot: 'lint',
+            command: 'npm run lint',
+            source: 'pinned',
+            live_command: null,
+            log: '',
+            phase: 'queued',
+            exit_code: null,
+            timed_out: false,
+            fingerprint: null,
+            cached_from_cycle: null,
+            duration_ms: null,
+            at: '2026-07-28T12:00:01.000Z',
+          },
+        ],
+        verify_total: 9,
+        handoff: '# Cycle 1\n\nbuilder: pass — the parser now reads the header.',
+        handoff_truncated: false,
+      },
+    })
+
+    reveal('panel-evidence')
+    const evidence = mountEvidence()
+    draw(emptySnapshot())
+    await vi.waitFor(() => expect(document.querySelectorAll('#evidence-list .run')).toHaveLength(1))
+
+    evidence.toggle(id)
+    await vi.waitFor(() => expect(document.querySelectorAll('.grid-verify .grid-row')).toHaveLength(2))
+
+    const rows = [...document.querySelectorAll('.grid-verify .grid-row')] as HTMLElement[]
+    expect(rows[0]?.querySelector('[data-slot="command"]')?.textContent).toBe('npm test')
+    expect(rows[0]?.querySelector('[data-slot="phase"]')?.textContent).toBe(english['evidence.verify.complete'])
+    expect(rows[0]?.querySelector('[data-slot="exit"]')?.textContent).toBe('1')
+    expect(rows[0]?.querySelector('[data-slot="duration"]')?.textContent).toBe('1.8s')
+    // The command that is in the file now, beside the one that ran.
+    expect(rows[0]?.querySelector('[data-slot="drift"]')?.textContent).toBe('npm test -- --coverage')
+    expect(rows[1]?.querySelector('[data-slot="phase"]')?.textContent).toBe(english['evidence.verify.queued'])
+    expect(rows[1]?.querySelector('[data-slot="exit"]')?.textContent).toBe('—')
+
+    // Headings inside a cloned block are the row's own job — `translateStatic`
+    // cannot reach into `<template>` content.
+    expect(document.querySelector('.grid-verify [data-slot="vh-slot"]')?.textContent).toBe(
+      english['evidence.verify.slot'],
+    )
+
+    // The reader caps the rows it serves; a cap nobody mentions reads as a
+    // complete record with invocations missing from it.
+    const more = document.querySelector('[data-slot="verifyMore"]') as HTMLElement
+    expect(more.hidden).toBe(false)
+    expect(more.textContent).toContain('9')
+
+    const handoff = document.querySelector('.cycle-block details') as HTMLDetailsElement
+    expect(handoff.hidden).toBe(false)
+    expect(handoff.querySelector('[data-slot="handoff"]')?.textContent).toContain('the parser now reads the header')
+    expect((handoff.querySelector('[data-slot="handoffCut"]') as HTMLElement).hidden).toBe(true)
+
+    // Left as it was found: `opened` is module state, and a run left open here
+    // would have the next test in this file fetching its cycles.
+    evidence.toggle(id)
+  })
+})
+
+describe('config', () => {
+  it('renders one row per verify command, and the rest of the block as policy', async () => {
+    // `verify:` is not a map of commands. It also carries `timeout_ms`,
+    // `lock_timeout_ms` and `failure_patterns`, so a row per
+    // `Object.entries(verify)` told an operator the engine executes a number —
+    // under the heading "Verify commands", which is where they are told what
+    // it does execute.
+    serve({
+      '/api/config': configView({
+        verify: { test: 'npm test', build: 'npm run build', failure_patterns: { test: ['^FAIL'] } },
+      }),
+    })
+
+    reveal('panel-config')
+    mountConfig()
+    draw(emptySnapshot())
+    await vi.waitFor(() => expect(document.querySelectorAll('#config-verify .fact')).toHaveLength(3))
+
+    expect(cells('#config-verify dt')).toEqual(['verify.test', 'verify.lint', 'verify.build'])
+    expect(cells('#config-verify dd')).toEqual(['npm test', english['config.verifyUnset'], 'npm run build'])
+
+    expect(cells('#config-verify-policy dt')).toEqual([
+      'verify.timeout_ms',
+      'verify.lock_timeout_ms',
+      'verify.failure_patterns.test',
+    ])
+    expect(cells('#config-verify-policy dd')).toEqual(['900000', '1800000', '^FAIL'])
+    // What the entries walk actually put on screen for `failure_patterns`.
+    expect(document.getElementById('panel-config')?.textContent).not.toContain('[object Object]')
+  })
+
+  it('reports what each specialist returned, and says so when there is nothing to report', async () => {
+    serve({
+      '/api/config': configView(),
+      '/api/telemetry': {
+        runs: 3,
+        cycles: 7,
+        specialists: [
+          {
+            agent: 'security',
+            mode: 'auto',
+            drafted: 6,
+            skipped: 1,
+            landed: 5,
+            results: { pass: 4, fail: 1, blocked: 0 },
+            findings: { high: 0, medium: 0, low: 2 },
+            runs: 3,
+            last_seen: '2026-07-28-002--adhoc--build',
+          },
+        ],
+        truncated: 2,
+        flagged: ['security'],
+      },
+    })
+
+    reveal('panel-config')
+    mountConfig()
+    draw(emptySnapshot())
+    await vi.waitFor(() => expect(document.querySelectorAll('#telemetry-list .grid-row')).toHaveLength(1))
+
+    const row = document.querySelector('#telemetry-list .grid-row') as HTMLElement
+    expect(row.querySelector('[data-slot="agent"]')?.textContent).toBe('security')
+    expect(row.querySelector('[data-slot="mode"]')?.textContent).toBe('auto')
+    // Counts read against their heading, and never through `Intl`: `4/1/0`
+    // must not arrive as `٤/١/٠` beside a Latin agent name.
+    expect(row.querySelector('[data-slot="results"]')?.textContent).toBe('4/1/0')
+    expect(row.querySelector('[data-slot="findings"]')?.textContent).toBe('0/0/2')
+    expect((document.getElementById('telemetry-empty') as HTMLElement).hidden).toBe(true)
+    expect(document.getElementById('telemetry-more')?.textContent).toContain('2')
+    // Drafted six times with nothing high or medium to show for it.
+    expect(document.getElementById('telemetry-flagged')?.textContent).toContain('security')
   })
 })
 

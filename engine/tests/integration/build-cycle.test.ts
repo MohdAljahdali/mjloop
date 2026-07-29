@@ -7,6 +7,7 @@ import { runLog } from '../../src/ops/log.js'
 import { rosterSet } from '../../src/ops/roster.js'
 import { cycleAdvance, runDirPath, runStart } from '../../src/ops/run.js'
 import { stateSummary } from '../../src/ops/summary.js'
+import { readVerifyLedger, verifyRun } from '../../src/ops/verify.js'
 import { loadConfig, writeConfig } from '../../src/store/config-store.js'
 import { makeTmpProject, type TmpProject } from '../helpers/tmp-project.js'
 
@@ -49,15 +50,18 @@ function verifierFail(claims: string[], excerpt = `${claims.length} failing: ${c
 }
 
 /**
- * The build track offers five conditional specialists, and a roster owes a
- * reason for every available agent it drops. This suite is about the cycle, so
- * it states them once.
+ * A roster owes a reason for every *available* agent it drops. This suite is
+ * about the cycle, so it states them once.
+ *
+ * `docs` is deliberately absent: it closes the build track rather than joining
+ * a cycle, so a working cycle owes nothing for leaving it out — the reason it
+ * owes is written once, into `closing/roster.json`, by the pass at the bottom
+ * of this file.
  */
 const SPECIALISTS_SKIPPED = {
   'ui-designer': 'no user-facing surface',
   'ui-critic': 'no user-facing surface',
   security: 'no untrusted input',
-  docs: 'no public interface changed',
   perf: 'not a hot path',
 }
 
@@ -163,5 +167,172 @@ describe('a multi-cycle build run', () => {
 
     expect(second.state.status).toBe('halted')
     expect(second.state.halt_reason).toBe('cycle cap 2 reached for track build')
+  })
+})
+
+/**
+ * A green suite, instant, phrased the way a project's own would be.
+ *
+ * It is executed twice in one test — once inside the cycle and once by the
+ * closing agent — so it is a `printf` rather than the fixture's `npm test`:
+ * this test is about where the second run's receipt lands, not about node.
+ */
+const VERIFY_TEST = "printf 'tests 1, pass 1, fail 0\\n'"
+
+/**
+ * `runStart` pins the verify block, so the command has to be in `config.yaml`
+ * before the run opens — a run started first would pin `npm test` and then
+ * refuse to obey the edit, which is exactly what the pin is for.
+ */
+async function pinVerify(command: string): Promise<void> {
+  const config = await loadConfig(project.dir)
+  config.verify.test = command
+  await writeConfig(project.dir, config)
+}
+
+/**
+ * What the leader stages when it commits: every path the run's agents reported
+ * in `files_touched`, read back off the results they left behind.
+ *
+ * The engine never commits — `skills/mjloop-leader/SKILL.md` step 8 does, from
+ * the results it is holding — so this walk stands in for it, and it walks
+ * `closing/` alongside the cycles for the same reason step 8 commits *after*
+ * the closing pass. `cyclesOnly` is the stage a leader would have taken before
+ * it, which is the thing this test needs to be able to name.
+ */
+async function stagedFiles(runDir: string, options: { cyclesOnly?: boolean } = {}): Promise<string[]> {
+  const entries = await fs.readdir(runDir, { withFileTypes: true })
+  const staged = new Set<string>()
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue
+    const isCycle = /^cycle-\d+$/.test(entry.name)
+    if (!isCycle && (entry.name !== 'closing' || options.cyclesOnly === true)) continue
+    const dir = path.join(runDir, entry.name)
+    for (const file of await fs.readdir(dir)) {
+      // The two aggregates are not agent results, and `roster` and `findings`
+      // are reserved agent names so nothing else can be writing them.
+      if (!file.endsWith('.json') || file === 'roster.json' || file === 'findings.json') continue
+      const result = JSON.parse(await fs.readFile(path.join(dir, file), 'utf8'))
+      for (const touched of result.files_touched) staged.add(touched)
+    }
+  }
+  return [...staged].sort()
+}
+
+describe('the pass that ends a build run', () => {
+  it('closes with docs, which re-verifies and lands in the commit without moving the verdict', async () => {
+    await pinVerify(VERIFY_TEST)
+    await runStart(project.dir, { track: 'build', goal: 'Add a Send button' }, clock)
+
+    await rosterSet(project.dir, {
+      cycle: 1,
+      selected: ['builder', 'verifier'],
+      skipped: { ...SPECIALISTS_SKIPPED, scout: 'goal names the file', critic: 'single-file change' },
+    })
+    await runLog(
+      project.dir,
+      {
+        agent: 'builder',
+        result: {
+          status: 'pass',
+          summary: 'Added the button and a test for it.',
+          evidence: [{ kind: 'file', ref: 'src/button.js', excerpt: "return 'Send'" }],
+          findings: [],
+          files_touched: ['src/button.js', 'test/button.test.js'],
+          next_hint: null,
+        },
+      },
+      clock,
+    )
+
+    // Run through the engine, so the cycle carries a ledger of its own for the
+    // closing pass to be compared against.
+    const inCycle = await verifyRun(project.dir, { slot: 'test', wait_ms: 4000 }, clock)
+    expect(inCycle.exit_code).toBe(0)
+    await runLog(
+      project.dir,
+      {
+        agent: 'verifier',
+        result: {
+          status: 'pass',
+          summary: 'The suite the engine ran exits 0.',
+          evidence: [{ kind: 'command', ref: inCycle.command, excerpt: 'tests 1, pass 1, fail 0' }],
+          findings: [],
+          files_touched: [],
+          next_hint: null,
+        },
+      },
+      clock,
+    )
+
+    const closed = await cycleAdvance(project.dir, { agents: ['builder', 'verifier'], result: 'pass' }, clock)
+    expect(closed.state.status).toBe('done')
+    // Reported at the one moment the leader can act on it, and from the
+    // track's own data — the engine knows no agent names.
+    expect(closed.closing_agents).toEqual(['docs'])
+
+    const dir = runDirPath(project.dir, closed.state)
+
+    // 1. The closing roster. It is refused until the run has passed, so this
+    //    call is itself the assertion that the run really is closed.
+    await rosterSet(project.dir, { closing: true, selected: ['docs'], skipped: {} })
+
+    // 2. docs writes the documentation and re-runs the suite against the tree
+    //    as it now stands. This is the widened precondition: the run is already
+    //    `done`, and the alternative is a commit resting on a green result
+    //    taken before the documentation landed.
+    await fs.mkdir(path.join(project.dir, 'docs'), { recursive: true })
+    await fs.writeFile(path.join(project.dir, 'docs', 'buttons.md'), '# Buttons\n\nSend submits the form.\n', 'utf8')
+    const reverified = await verifyRun(project.dir, { slot: 'test', wait_ms: 4000 }, clock)
+    expect(reverified.phase).toBe('complete')
+    expect(reverified.exit_code).toBe(0)
+    // Outside every cycle directory. The cycle's own ledger is the record of
+    // what that cycle verified and the closing pass must not append to it — a
+    // reader of `cycle-01` would otherwise see a row for a command run after
+    // the cycle closed.
+    expect(path.dirname(reverified.log)).toBe(path.relative(project.dir, path.join(dir, 'closing', 'verify')))
+    expect(await readVerifyLedger(path.join(dir, 'cycle-01'))).toHaveLength(1)
+    expect(await readVerifyLedger(path.join(dir, 'closing'))).toHaveLength(1)
+
+    // 3. docs logs, carrying the run it was dispatched under. Its finding is
+    //    the interesting part: a closing agent cannot reopen a verdict nobody
+    //    can revisit, so the finding is recorded in its own result file and
+    //    nowhere else.
+    const logged = await runLog(
+      project.dir,
+      {
+        agent: 'docs',
+        run_id: closed.state.run_id,
+        result: {
+          status: 'pass',
+          summary: 'Documented the Send button against the code as it finally stands.',
+          evidence: [{ kind: 'command', ref: reverified.command, excerpt: 'tests 1, pass 1, fail 0' }],
+          findings: [{ severity: 'low', file: 'docs/buttons.md', line: 3, claim: 'the keyboard shortcut is undocumented' }],
+          files_touched: ['docs/buttons.md'],
+          next_hint: null,
+        },
+      },
+      clock,
+    )
+    expect(logged.findingsAdded).toBe(0)
+    expect(logged.gateOpened).toBe(false)
+
+    // The verdict is exactly where the pass left it, findings and all.
+    const summary = await stateSummary(project.dir)
+    expect(summary.status).toBe('done')
+    expect(summary.cycle).toBe(1)
+    expect(summary.findings).toEqual({ high: 0, medium: 0, low: 0 })
+
+    // Both closing artefacts are in `closing/` and neither is in the cycle.
+    expect((await fs.readdir(path.join(dir, 'closing'))).sort()).toEqual(['docs.json', 'roster.json', 'verify'])
+    const roster = JSON.parse(await fs.readFile(path.join(dir, 'closing', 'roster.json'), 'utf8'))
+    expect(roster).toEqual({ closing: true, selected: ['docs'], skipped: {} })
+    expect(await fs.readdir(path.join(dir, 'cycle-01'))).not.toContain('docs.json')
+
+    // 4. And the commit. Staged from `files_touched`, so the documentation
+    //    ships with the code it describes — the defect idea 9 removes is a
+    //    commit taken one step earlier, which is what the second walk is.
+    expect(await stagedFiles(dir)).toEqual(['docs/buttons.md', 'src/button.js', 'test/button.test.js'])
+    expect(await stagedFiles(dir, { cyclesOnly: true })).toEqual(['src/button.js', 'test/button.test.js'])
   })
 })

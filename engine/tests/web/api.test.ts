@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { initLoop } from '../../src/ops/init.js'
 import { gateSet, planCreate, storyAdd } from '../../src/ops/plan.js'
+import { TELEMETRY_MAX_ROWS } from '../../src/ops/telemetry.js'
 import { etag, handleApi } from '../../src/web/api.js'
 import { WEB_CODES } from '../../src/web/codes.js'
 import { makeTmpProject, type TmpProject } from '../helpers/tmp-project.js'
@@ -46,6 +47,35 @@ describe('handleApi', () => {
     expect((await call('/api/stories/P001-S01'))?.status).toBe(200)
     expect((await call('/api/runs'))?.status).toBe(200)
     expect((await call('/api/memory'))?.status).toBe(200)
+    // The Config tab's specialist table and the idle Run tab's estimate. Both
+    // are reads over run directories that already exist; neither can start
+    // anything, which is why the pre-dispatch surface may live in a browser at
+    // all.
+    expect((await call('/api/telemetry'))?.status).toBe(200)
+    expect((await call('/api/preflight/edit'))?.status).toBe(200)
+  })
+
+  it('bounds the reports it serves', async () => {
+    const telemetry = (await call('/api/telemetry'))?.body as { specialists: unknown[]; truncated: number }
+    // A report aggregated across every run in the project is the one payload
+    // here with no natural end. The cap and the count of what it dropped are
+    // both on the wire, so the ceiling is visible rather than silent.
+    expect(telemetry.specialists.length).toBeLessThanOrEqual(TELEMETRY_MAX_ROWS)
+    expect(telemetry.truncated).toBe(0)
+  })
+
+  it('answers for a track this project does not define without describing it', async () => {
+    const result = await call('/api/preflight/nonsense')
+    expect(result?.status).toBe(404)
+    expect(result?.body).toEqual({ error: { code: 'error.notFound' } })
+    // A track name is an id everywhere else in the engine, so a name that is
+    // not one is refused before anything reads a directory.
+    expect((await call('/api/preflight/not a track'))?.status).toBe(400)
+    expect((await call('/api/preflight'))?.status).toBe(404)
+    expect((await call('/api/preflight/edit/extra'))?.status).toBe(404)
+    // The report routes are reads and nothing else.
+    expect((await call('/api/telemetry', 'POST'))?.status).toBe(405)
+    expect((await call('/api/preflight/edit', 'DELETE'))?.status).toBe(405)
   })
 
   it('refuses anything that is not a read', async () => {
@@ -65,6 +95,9 @@ describe('handleApi', () => {
       '/api/runs/../..',
       '/api/memory/../config.yaml',
       '/api/runs/P001/../../..',
+      '/api/preflight/../../etc',
+      '/api/preflight/..%2F..%2Fconfig.yaml',
+      '/api/telemetry/../../etc',
       // An un-normalised path, which a browser would never send but a raw
       // socket can: it is still ours to refuse rather than to resolve.
       '/api/../app.js',
@@ -89,6 +122,8 @@ describe('handleApi', () => {
       await call('/api/plans/P999'),
       await call('/api/state', 'POST'),
       await call('/api/runs/x/0'),
+      await call('/api/preflight/nonsense'),
+      await call('/api/preflight/not a track'),
     ]
     for (const failure of failures) {
       const error = (failure?.body as { error?: Record<string, unknown> }).error ?? {}

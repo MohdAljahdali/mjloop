@@ -58,6 +58,8 @@ const FORBIDDEN: [string, string][] = [
   ['writeConfig', 'serialises the whole document back to YAML, dropping every comment, and takes no lock'],
   ['writeJsonAtomic', 'is the raw state writer, underneath every guard there is'],
   ['readPlan', 'repairs clobbered frontmatter by rewriting the file, and the read side must never write'],
+  ['verifyRun', 'spawns a shell command from the run pin and takes the project verify lock; the read side executes nothing'],
+  ['worktreeDigest', 'shells out to git in the project directory, and the read side never runs a subprocess'],
 ]
 
 describe('the engine surface the browser can reach', () => {

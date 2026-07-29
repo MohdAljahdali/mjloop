@@ -13,6 +13,7 @@
  */
 import { clone, cls, flag, phrase, verbatim } from '../ui/dom.js'
 import { feed } from '../lib/api.js'
+import { pluralKey } from '../lib/i18n.js'
 import { reconcile } from '../ui/list.js'
 import { draw, register } from '../ui/render.js'
 
@@ -20,6 +21,19 @@ import { draw, register } from '../ui/render.js'
  * @typedef {import('../../protocol.js').Snapshot} Snapshot
  * @typedef {import('../../read.js').StateView} StateView
  * @typedef {import('../../read.js').RunDetail} RunDetail
+ * @typedef {import('../../read.js').ConfigView} ConfigView
+ */
+
+/**
+ * What `/api/preflight/<track>` serves, taken from the reader that serves it.
+ *
+ * There is no currency figure on it, and that is the design rather than an
+ * omission: the engine cannot see what an agent runs on — that is frontmatter
+ * under the plugin's `agents/` directory — so a price would be a guess wearing
+ * an estimate's clothes. Cycles, dispatches and minutes are what it can
+ * actually observe, and they are what this block draws.
+ *
+ * @typedef {Awaited<ReturnType<typeof import('../../read.js').readPreflightEstimate>>} Preflight
  */
 
 /**
@@ -71,6 +85,30 @@ export function mountRun() {
   const haltBlock = pick('run-haltreport')
   const haltReport = pick('run-halt-report')
 
+  const preflightBlock = pick('run-preflight')
+  const preflightFacts = pick('preflight-facts')
+  const preflightBasis = pick('preflight-basis')
+  const preflightPast = pick('preflight-past')
+  const trackPicker = /** @type {HTMLSelectElement} */ (document.getElementById('preflight-track'))
+
+  /**
+   * Which track the estimate is for.
+   *
+   * The engine's route takes a track rather than a state, because
+   * `status === 'idle'` is exactly when it is asked and an idle state names no
+   * track at all. So the page has to name one, and a picker is the only honest
+   * way: tracks are configuration, and hard-coding `build` here would be the
+   * first place in the cockpit that knew a track name.
+   */
+  let chosen = ''
+  /** The track list currently in the picker, so it is rebuilt only when it moves. */
+  let offered = ''
+
+  trackPicker.addEventListener('change', () => {
+    chosen = trackPicker.value
+    draw()
+  })
+
   /**
    * The whole state file — findings, history, `cycle_errors`, the reproduction
    * with its excerpt. Followed on `revisions.cycle` as well as `revisions.state`
@@ -94,19 +132,55 @@ export function mountRun() {
     onChange: () => draw(),
   })
 
+  /**
+   * The track names to offer, which only `config.yaml` knows. Fetched solely
+   * while the estimate is on screen — a running project never asks for it.
+   *
+   * @type {import('../lib/api.js').Feed<ConfigView>}
+   */
+  const config = feed({
+    dep: (snapshot) => (waiting(snapshot) ? snapshot.revisions.config : null),
+    path: () => '/api/config',
+    onChange: () => draw(),
+  })
+
+  /**
+   * The estimate follows both revisions it rests on: `revisions.config`
+   * because the track's shape is the whole ceiling, and `revisions.runs`
+   * because the comparable half is a walk over finished runs.
+   *
+   * @type {import('../lib/api.js').Feed<Preflight>}
+   */
+  const preflight = feed({
+    dep: (snapshot) =>
+      !waiting(snapshot) || chosen === '' ? null : `${chosen}:${snapshot.revisions.config}:${snapshot.revisions.runs}`,
+    path: () => `/api/preflight/${encodeURIComponent(chosen)}`,
+    onChange: () => draw(),
+  })
+
   register({
     id: 'run',
     node,
     update(snapshot) {
       state.update(snapshot)
       run.update(snapshot)
+      config.update(snapshot)
 
       const summary = snapshot.state
       const idle = !summary.initialised || summary.status === 'idle'
       phrase(empty, summary.initialised ? 'run.idle' : 'run.uninitialised')
       flag(empty, 'hidden', !idle)
       flag(body, 'hidden', idle)
-      if (idle) return
+      if (idle) {
+        // The picker has to be filled before the feed reads `chosen`, so the
+        // estimate is asked for after it and not beside it.
+        drawPicker(snapshot)
+        preflight.update(snapshot)
+        drawPreflight(preflight.value())
+        return
+      }
+      preflight.update(snapshot)
+      drawPreflight(null)
 
       verbatim(goal, summary.goal ?? '—')
       verbatim(story, summary.story ?? '')
@@ -140,6 +214,91 @@ export function mountRun() {
       drawHalt(run.value())
     },
   })
+
+  /**
+   * The track picker, rebuilt only when the configured tracks change.
+   *
+   * `chosen` opens on the track the state names — a project that has run
+   * before is usually about to run the same track again — and falls back to
+   * the first one the config declares. Nothing here writes to the picker while
+   * a person is using it: the options are replaced only when the list itself
+   * moved, which is the same rule the memory tab's kind filter follows.
+   *
+   * @param {Snapshot} snapshot
+   */
+  function drawPicker(snapshot) {
+    const tracks = Object.keys(config.value()?.parsed?.tracks ?? {})
+    if (tracks.join(',') === offered) return
+    offered = tracks.join(',')
+
+    const preferred = snapshot.state.track
+    chosen = preferred !== null && tracks.includes(preferred) ? preferred : (tracks[0] ?? '')
+    trackPicker.replaceChildren(
+      ...tracks.map((name) => {
+        const option = document.createElement('option')
+        // An option with no `value` attribute submits its own text, and a
+        // track name is an identifier out of the user's own config file — so
+        // the text *is* the value. Written this way deliberately: no renderer
+        // on this page assigns to a `.value`, and the selection is expressed
+        // on the option rather than on the control the user is pointing at.
+        option.textContent = name
+        option.selected = name === chosen
+        return option
+      }),
+    )
+  }
+
+  /**
+   * What the run can cost at most, and what comparable runs actually took.
+   *
+   * @param {Preflight | null} estimate
+   */
+  function drawPreflight(estimate) {
+    flag(preflightBlock, 'hidden', estimate === null)
+    if (estimate === null) return
+
+    /** @type {{ key: string, value: string }[]} */
+    const facts = [
+      { key: 'preflight.maxCycles', value: String(estimate.max_cycles) },
+      { key: 'preflight.perCycle', value: String(estimate.dispatches_per_cycle) },
+      { key: 'preflight.ceiling', value: String(estimate.ceiling.dispatches) },
+      { key: 'preflight.required', value: estimate.roster.required.join(', ') },
+    ]
+    // The four sets that are often empty are shown only when they are not: a
+    // row reading "—" four times over is how a reader learns to skip the
+    // block, and `forbidden` is the one line here that explains an absence.
+    // The keys are written out rather than composed, so `locales.test.ts` can
+    // still tell a dead key in this namespace from a live one.
+    const optional = /** @type {const} */ ([
+      ['preflight.available', estimate.roster.available],
+      ['preflight.forced', estimate.roster.forced],
+      ['preflight.forbidden', estimate.roster.forbidden],
+      ['preflight.closing', estimate.roster.closing],
+    ])
+    for (const [key, agents] of optional) {
+      if (agents.length > 0) facts.push({ key, value: agents.join(', ') })
+    }
+    reconcile(preflightFacts, facts, (fact) => fact.key, labelledRow)
+
+    const comparable = estimate.comparable
+    if (comparable === null) {
+      // *No basis* is an answer. An invented range is not.
+      phrase(preflightBasis, 'preflight.noBasis')
+      reconcile(preflightPast, [], (fact) => fact.key, labelledRow)
+      return
+    }
+
+    phrase(preflightBasis, pluralKey('preflight.basis', comparable.runs), { count: comparable.runs })
+    /** @type {{ key: string, value: string }[]} */
+    const past = [
+      { key: 'preflight.pastCycles', value: spread(comparable.cycles) },
+      { key: 'preflight.pastDispatches', value: spread(comparable.dispatches) },
+    ]
+    // Absent until a run has been timed: nothing archives a finished run's
+    // clock, so only the run `state.json` still describes carries one.
+    if (comparable.minutes !== null) past.push({ key: 'preflight.pastMinutes', value: spread(comparable.minutes) })
+    reconcile(preflightPast, past, (fact) => fact.key, labelledRow)
+  }
 
   /**
    * Which agents this cycle drafted, and which have landed.
@@ -322,6 +481,49 @@ export function mountRun() {
     const report = detail?.halt ?? null
     flag(haltBlock, 'hidden', report === null)
     verbatim(haltReport, report ?? '')
+  }
+}
+
+/**
+ * Whether the estimate is the thing to show: a project that exists, with
+ * nothing running in it. Every one of the preflight feeds is gated on this, so
+ * a live run costs no request for a document about a run that has not started.
+ *
+ * @param {Snapshot} snapshot
+ * @returns {boolean}
+ */
+function waiting(snapshot) {
+  return snapshot.state.initialised && snapshot.state.status === 'idle'
+}
+
+/**
+ * `3 (2–5)`, or the bare number when every comparable run agreed.
+ *
+ * Through `verbatim()` like every other digit in a dense row: a median of 2.5
+ * cycles is a true statement about two runs and rounding it would invent a run
+ * neither of them was, so it is printed as the engine computed it.
+ *
+ * @param {{ median: number, min: number, max: number }} range
+ * @returns {string}
+ */
+function spread(range) {
+  return range.min === range.max ? String(range.median) : `${range.median} (${range.min}–${range.max})`
+}
+
+/** A `<dl class="facts">` row whose label is a translated phrase. */
+function labelledRow() {
+  const { root, slots } = clone('tpl-fact')
+  return {
+    root,
+    /** @param {{ key: string, value: string }} fact */
+    update(fact) {
+      const label = slots['label']
+      if (label !== undefined) phrase(label, fact.key)
+      // Agent names, track names and counts read against a heading: every one
+      // of them an identifier, and none of them prose.
+      const value = slots['value']
+      if (value !== undefined) verbatim(value, fact.value)
+    },
   }
 }
 

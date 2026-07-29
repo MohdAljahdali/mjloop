@@ -25,6 +25,13 @@ Call `mjloop_run_start` with the track and the goal. Restate the goal in one sen
 name the acceptance condition you will judge against. A goal you cannot state as a
 checkable condition is not ready to run.
 
+Then read `gates.preflight` from `.mjloop/config.yaml`. When it is `human`, call
+`mjloop_report_get` with `report: "preflight"` and the track before the first
+`mjloop_roster_set`, show the user what the run is shaped like — the roster, the dispatches
+per cycle, the ceiling, and what comparable past runs took — and wait for their answer.
+Under `auto`, the default, you proceed without asking: an estimate shown before every run
+that then always proceeds is a prompt nobody reads.
+
 ### 2a. Resuming an open run
 
 `/mjloop:resume` — and any run `mjloop_state_get` already reports as `running` — enters here
@@ -87,24 +94,29 @@ by the next render.
 
 ### 3. Compose the roster
 
-Read `.mjloop/config.yaml` for the track's `required` and `available` sets.
+Read `.mjloop/config.yaml` for the track's `required`, `available` and `closing` sets.
 
 - Every `required` agent is in the cycle. There is no argument to be had.
 - Draft from `available` only what this task actually needs.
 - Every agent you leave out needs a stated reason — an omission with no reason is
   rejected.
 - A specialist set to `always` is in the cycle regardless of what you think.
+- A `closing` agent is not yours to draft here. It runs once, after the run passes, and
+  `mjloop_roster_set` rejects a roster that names one. Step 8 is where it is dispatched.
 
 Call `mjloop_roster_set`. **If it rejects your roster, fix the roster.** Do not work around
 it — the rejection is the invariant doing its job.
 
 ### Drafting the specialists
 
-Seven agents are available on the build track and each omission needs a stated reason.
+Six agents are available on the build track and each omission needs a stated reason.
 These are the conditions that call for each:
 
 - **`scout`** — the change spans files or subsystems this cycle has not mapped, and you
-  would otherwise be guessing where the work lands.
+  would otherwise be guessing where the work lands. A passing `scout` becomes the run's
+  map: the engine writes `.mjloop/runs/<run>/map.md` from its result and every later brief
+  points at it, so drafting `scout` again in a later cycle updates the ground rather than
+  rediscovering it.
 - **`critic`** — the change is large enough or risky enough that a second reading before
   verification pays for itself.
 - **`ui-designer` and `ui-critic`** — the story has `ui: true`, or the change alters what
@@ -114,9 +126,14 @@ These are the conditions that call for each:
   nothing to judge until the change exists and passes.
 - **`security`** — the change touches authentication, authorisation, input handling, a
   network boundary, a query, a file path, or a secret.
-- **`docs`** — the change alters something a reader was told: a signature, a flag, a
-  route, an installation step, or a comment's claim.
 - **`perf`** — the change touches a hot path, a loop over data, or a data-access pattern.
+
+`docs` is not on that list, because on the default `build` track it closes the run instead
+of joining a cycle — documentation drafted in cycle 2 describes code cycle 4 replaces.
+Step 8 dispatches it, once, against the code as it finally stands. In an older project
+whose `config.yaml` still lists `docs` under `available`, it is an ordinary specialist and
+the old rule holds: draft it when the change alters something a reader was told — a
+signature, a flag, a route, an installation step, or a comment's claim.
 
 `specialists` in `.mjloop/config.yaml` overrides your judgement in both directions.
 `always` means the agent is in the cycle whatever you think, and `never` means
@@ -224,9 +241,24 @@ parallel up to `limits.max_parallel_agents`; an agent that consumes another's ou
 waits for it. `verifier` runs after every agent that touches code — only `ui-critic`,
 which judges the verified result against the contract, runs after it.
 
+The `Map:` and `Handoff:` lines carry paths, not documents. `mjloop_state_get` returns the
+map path and `mjloop_cycle_advance` returned the handoff path when it closed the last cycle,
+so neither costs you a directory listing. Do not paste either file into a brief: the whole
+saving is that one bounded document sits on disk instead of being copied into every agent's
+context every cycle.
+
 Call `mjloop_run_log` for each result. If it rejects the result, hand the error text back
 to that agent as a **single** corrective retry. On a second failure, treat the cycle as
 failed and move on — one bad agent does not end the run.
+
+One rejection is worth recognising before you spend that retry badly. `mjloop_run_log`
+refuses a `pass` whose evidence names a command the verify ledger it is logged against records as
+failing, killed, still running, or still queued behind the project verify lock — the engine
+keeps the receipt for what it ran, and a pass resting on a red one rests on nothing. The
+message names the command, the log, and the remedy: re-run it through `mjloop_verify_run`
+so the ledger carries a newer entry, then log again. Hand that back verbatim. The agent's
+verdict may well be correct and merely newer than the ledger, and the refusal is the engine
+asking for proof of that rather than an accusation.
 
 ### 5. Judge
 
@@ -256,13 +288,15 @@ work whose UI nobody judged.
 ### 6. Close the cycle
 
 Call `mjloop_cycle_advance` with the agents that ran and the result. It returns the new
-state, and `carried_findings` — the findings this cycle closed with.
+state, `carried_findings` — the findings this cycle closed with — and two more things: the
+path of the `handoff.md` it just generated for the cycle that closed, and `closing_agents`,
+which is empty on anything but a pass.
 
-- `done` — report what changed, cite the evidence, and commit when `gates.commit` is
-  `auto`. If `carried_findings` is not empty, the run passed with those findings still
-  open: name them as known-remaining work and point at the run directory. A cycle can
-  pass with a `medium` or `low` finding outstanding, and there is no next cycle to hand
-  it to.
+- `done` — the run passed. Close it as step 8 describes, and only then report what changed
+  and cite the evidence. If `carried_findings` is not empty, the run passed with those
+  findings still open: name them as known-remaining work and point at the run directory. A
+  cycle can pass with a `medium` or `low` finding outstanding, and there is no next cycle
+  to hand it to.
 - `running` — the next cycle is open. Go to step 7.
 - `halted` — read `HALT.md`, report it plainly, and recommend a next step. Three reasons
   are possible, and they are not the same problem:
@@ -281,28 +315,79 @@ state, and `carried_findings` — the findings this cycle closed with.
 On a multi-cycle track, a cycle after the first is not a fresh attempt at the goal — it
 is work on a known list.
 
-Put `carried_findings` in the next cycle's brief as the task list, highest severity
-first. `builder` works that list; it does not re-derive the goal from scratch.
+The cycle that closed wrote its own record, so hand that forward rather than retyping it.
+Put the handoff path `mjloop_cycle_advance` returned on the next brief's `Handoff:` line,
+and name in prose only the findings you are actually asking this agent to work, highest
+severity first. `builder` works from that; it does not re-derive the goal from scratch.
+
+Do not inline `carried_findings`. The array has no ceiling, and forty open findings become
+a forty-entry line delivered to every agent of the next cycle, and the cycle after that.
+The handoff carries the full list bounded, with a marker naming where the rest is, and the
+agent opens it.
 
 Compose the roster for the new cycle from what the findings actually call for. A cycle
 whose findings are all in one file rarely needs `scout` again — say so in `skipped`
 rather than drafting it out of habit.
 
-### 8. Commit the passing cycle
+### 8. Close the run, then commit it
 
-When `gates.commit` is `auto`, commit after the cycle passes — never before, and never by
-asking an agent to do it.
+When `gates.commit` is `auto`, the run commits once it has passed — never before, and never
+by asking an agent to do it.
 
-The order matters: `verifier` gives the verdict, then the commit happens. Only verified
-work reaches the history, and a failing cycle leaves none behind.
+The order matters: `verifier` gives the verdict, then the closing agents run, then the
+commit happens. Only verified work reaches the history, and a failing cycle leaves none
+behind.
+
+A pass ends the cycles but not the work. `mjloop_cycle_advance` returns `closing_agents` —
+the agents the track runs once, after the verdict, against the code as it finally stands.
+Their sequence relative to the commit is fixed, because both other orderings break
+something: commit first and the shipped commit carries stale documentation while the
+closing edits sit in a tree the run has already declared done; dispatch and commit blind
+and the commit contains edits no verifying agent saw.
+
+1. **Declare the closing roster.** `mjloop_roster_set` with `closing: true` and no cycle
+   number: every closing agent you dispatch in `selected`, and a stated reason in `skipped`
+   for every one you do not. That record is the only durable trace that a run shipped
+   without a step it could have run.
+2. **Dispatch them, and log each with `mjloop_run_log`, passing `run_id`** — the run they
+   were dispatched under. A closing agent works after the run is `done`, outside the lock
+   that protects every other result, and the `run_id` check is the only thing keeping a
+   late `docs` result out of the next run's findings if someone starts one meanwhile.
+3. **Let the closing agent re-verify — it does, and you still do not.** `docs` carries
+   `mjloop_verify_run` in its own tools for exactly this: it writes the documentation, then
+   re-runs the suite through the engine and returns the digest as its evidence. The engine
+   accepts that call against a run that is already `done` and writes the log under
+   `closing/`, which is what keeps *only verified work reaches the history* true — the
+   commit rests on a green digest taken after the documentation landed, not before it.
+   Fetching that digest yourself and handing it over is the same mistake as fetching a
+   verifier's: it is your evidence then, not the agent's.
+4. **Then commit, once** — and only on a green closing pass. Stage the closing agents'
+   `files_touched` alongside the cycles'. A closing agent that returns `fail` with a red
+   digest has found something the cycles' evidence could not: the tree that would ship does
+   not pass. Do not commit over it. Report what the digest said and leave the work where it
+   is, in the tree, for the next run to open against. You are not the only guard on this:
+   `mjloop_run_log` checks a closing `pass` against the closing verify ledger exactly as it
+   checks a cycle agent's against the cycle's, so a closing agent that returns `pass` citing
+   a command the engine recorded as red is refused before its result is written. Hand the
+   refusal back as the single corrective retry, as you would inside a cycle.
+
+A closing agent influences no verdict, and this is structural rather than a courtesy: its
+findings are not recorded, the gate is not probed, and `state.json` is not written. The run
+is over, and a `high` finding filed against a verdict nobody can revisit would have nowhere
+to go. If a closing agent finds something real, it belongs in your report and in the next
+run's goal. Stopping the commit on a red closing digest is not an exception to that: the
+verdict stays exactly as the cycle left it, and what changes is only what you choose to
+make permanent.
 
 A pass ends the run, so a run commits at most once, on its last cycle. A run that halts
 has therefore committed nothing: every cycle it ran is still in the working tree, and
 `HALT.md` is what explains it. Say that plainly when you report a halt — do not describe
-earlier cycles as saved, and do not commit unverified work to make it true.
+earlier cycles as saved, and do not commit unverified work to make it true. A halt has no
+closing pass either: `closing_agents` comes back empty, because a run that did not land its
+work has nothing to document and documenting it would describe code that no longer exists.
 
-Stage only the files the cycle's agents reported in `files_touched`. Write a message that
-says what the cycle achieved, not that a loop ran.
+Stage only the files the agents reported in `files_touched`. Write a message that says what
+the run achieved, not that a loop ran.
 
 ### Memory
 
@@ -346,12 +431,24 @@ If the run halts, say so plainly and stop.
 
 ## What you never do
 
-- Never write `.mjloop/state.json` or a `manifest.json` by hand.
+- Never write `.mjloop/state.json`, a `manifest.json`, or a run's `verify-pinned.json` by
+  hand. The pin is what the engine executes; a run that could rewrite its own is a run that
+  chooses what verifies it.
 - Never skip the track's verifying agent, and never overrule its verdict. On `edit`,
   `build`, and `fix` that is `verifier`; the `plan` track has none, and step 3d says what
   stands in for it there.
 - Never raise a track's `max_cycles` to get past a halt — that is the user's decision.
 - Never invent a verify command. A missing command is a `blocked`, and you ask once.
+- **Never call `mjloop_verify_run` yourself.** The verifying agent obtains its own digest.
+  A digest you fetched is not that agent's evidence, and pasting one into a brief makes you
+  the verifier. The engine cannot see who called it, so this one is yours to keep. It holds
+  after the verdict too: the closing agent re-runs the suite itself, and it holds the tool
+  to do it.
+- Never dispatch a closing agent inside a working cycle, and never treat what one returns
+  as a revision of the verdict. It runs after the pass, on the code as it finally stands.
+- Never commit over a closing agent's red digest. The verdict stands — it was true of the
+  tree the cycles verified — but the tree that would ship is a different one, and a commit
+  is the one thing that makes it permanent.
 - Never implement the change yourself. If no agent fits, say so; that is a missing agent,
   not your job.
 - Never let `builder` commit its own work — the verdict comes first, then the commit.

@@ -9,17 +9,32 @@ server, so no agent can corrupt it by hand.
 
 ## Status
 
-Milestone 7 — all four tracks ship: `plan`, `build`, `fix`, and `edit`, and so do all the
-guards: the cycle cap, the stagnation guard, the repeated-error guard, the reproduction
-gate, and the autonomous `Stop` hook. The five conditional specialists ship with it —
-`ui-designer`, `ui-critic`, `security`, `docs`, and `perf` — along with `/mjloop:design-sync`
-and a `specialists` setting the engine enforces in both directions.
+All four tracks ship: `plan`, `build`, `fix`, and `edit`, and so do all the guards: the
+cycle cap, the stagnation guard, the repeated-error guard, the reproduction gate, and the
+autonomous `Stop` hook. So do the conditional specialists — `ui-designer`, `ui-critic`,
+`security`, `perf`, and `docs` — with `/mjloop:design-sync` and a `specialists` setting the
+engine enforces in both directions; memory, in `.mjloop/memory/`, so a run can record a
+decision and a later run can find it; extension, so `/mjloop:add` scaffolds an agent, a
+skill, or a track; and the cockpit, `/mjloop:web`, which drives and reads a run in a
+browser.
 
-Memory ships too: `.mjloop/memory/` and the three `mjloop_memory_*` tools, so a run can record
-a decision or a lesson and a later run can find it. So does extension — `/mjloop:add`
-scaffolds an agent, a skill, or a track, and the `mjloop-tracks` and `mjloop-extend` skills
-document what a track is and how to add one.
-See `docs/superpowers/specs/2026-07-27-loop-milestone-7-memory-and-extension-design.md`.
+Milestone 8 — **the engine runs your verify commands itself.** It executes the copy of the
+`verify:` block the run pinned when it started, keeps the whole log under the cycle, and
+hands the verifier a bounded digest instead of a transcript. The receipt is what changes:
+a `pass` citing a command the engine recorded as failing, killed, or never started is
+refused rather than believed.
+
+A run also stops regenerating its own narrative. It keeps a `map.md`, rendered from the
+mapping agent's own result, and a `handoff.md` per cycle — what each agent reported, the
+files it touched, the verification table, the open findings — generated from what the
+cycle already produced, with no extra model call. Later cycles are handed paths to both
+rather than a retyped file list and a growing findings array. `docs` now runs once, after
+the run passes, against the code as it finally stands. And two reports are there when you
+ask for them: which specialists are earning their dispatch, and what a run on a track is
+likely to cost, in cycles, dispatches and minutes — no price table, because the engine
+cannot see which model an agent runs on.
+
+See `docs/superpowers/specs/2026-07-28-mjloop-milestone-8-token-economy-design.md`.
 
 ## Install
 
@@ -37,7 +52,7 @@ Then add this repository as a plugin marketplace or local plugin in Claude Code.
 /mjloop:plan <idea>                        idea to approved plan to stories
 /mjloop:build <goal | P001-S02 | --next>   multi-cycle build, optionally against a story
 /mjloop:fix <what is broken>               reproduce first, then fix the root cause
-/mjloop:status                             where the current run stands
+/mjloop:status                             where the run stands, and what is not earning it
 /mjloop:stop [reason]                      halt the run and write a report
 /mjloop:resume                             continue an interrupted run
 /mjloop:design-sync                        extract the design system the UI agents read
@@ -56,6 +71,16 @@ declared without its evidence. The `plan` track has no verifier: there is no sui
 against a document, so its verdict comes from `fit-checker`, the approval gate, and the
 story reviews.
 
+That evidence is the engine's own. The verifier calls `mjloop_verify_run`, the engine runs
+the command the run pinned at its start, writes the whole log under the cycle, and records
+what it executed — so a `pass` citing a command the engine watched exit non-zero is
+refused, and an edit to `verify:` mid-run is reported rather than obeyed.
+
+A track can also declare a `closing` set: agents that run once, after the run has passed,
+and never inside a working cycle — which the engine refuses. On `build` that is `docs`,
+because documentation drafted in cycle 2 describes code cycle 4 replaces. A closing agent's
+result is recorded beside the run and changes no verdict.
+
 Change a track, cap, or forced specialist in `.mjloop/config.yaml`.
 
 ## Extending it
@@ -68,6 +93,7 @@ tracks:
   refactor:
     required:  [builder, verifier]
     available: [scout, critic, perf]
+    closing:   [docs]
     max_cycles: 5
 ```
 
@@ -75,9 +101,9 @@ tracks:
 `.claude/agents/`, which is where Claude Code reads project subagents from — the scaffold
 refuses a name that would shadow one this plugin ships.
 
-The `mjloop-tracks` and `mjloop-extend` skills explain the whole system: what `required` and
-`available` guarantee, the two kinds of gate, the three specialist modes, and what a new
-agent must return.
+The `mjloop-tracks` and `mjloop-extend` skills explain the whole system: what `required`,
+`available` and `closing` guarantee, the two kinds of gate, the three specialist modes, and
+what a new agent must return.
 
 ## Plans and stories
 
@@ -94,9 +120,16 @@ Write stories through the `mjloop_story_*` tools rather than by hand.
 
 ## Specialists
 
-A build cycle can draw on seven optional agents beyond `builder` and `verifier`: `scout`,
-`critic`, `ui-designer`, `ui-critic`, `security`, `docs`, and `perf`. The leader drafts
-what the change calls for and must record a reason for every one it leaves out.
+A build cycle can draw on six optional agents beyond `builder` and `verifier`: `scout`,
+`critic`, `ui-designer`, `ui-critic`, `security`, and `perf`. The leader drafts what the
+change calls for and must record a reason for every one it leaves out. `docs` is the
+seventh and it closes the run instead of joining a cycle.
+
+`/mjloop:status` prints one line about any specialist this project has drafted five or
+more times without a single high or medium finding to show for it. It is a report and
+never a rule: nothing in the engine drafts or skips an agent because of it, and a
+specialist with a zero hit rate may be exactly why the project has no findings of that
+kind.
 
 `specialists` in `.mjloop/config.yaml` overrides that judgement in both directions:
 

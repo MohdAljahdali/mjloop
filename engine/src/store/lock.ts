@@ -14,6 +14,17 @@ export interface LockOptions {
   staleMs?: number
   /** Retry interval. Default 25ms. */
   pollMs?: number
+  /**
+   * Called at most once, the first time the lock is found already held and this
+   * call has to wait for it.
+   *
+   * The distinction it exists for: "not started yet" and "waiting for someone
+   * else" look identical from outside, and a caller that reports the second
+   * when it means the first is asserting a contention that never happened.
+   * Nothing here depends on it, and it is never called for a lock acquired on
+   * the first attempt.
+   */
+  onWait?: () => void
 }
 
 interface LockSnapshot {
@@ -51,9 +62,10 @@ interface LockSnapshot {
  * concurrent waiter to be misled by.
  */
 export async function withLock<T>(lockDir: string, fn: () => Promise<T>, options: LockOptions = {}): Promise<T> {
-  const { timeoutMs = 5000, staleMs = 30_000, pollMs = 25 } = options
+  const { timeoutMs = 5000, staleMs = 30_000, pollMs = 25, onWait } = options
   const deadline = Date.now() + timeoutMs
 
+  let announced = false
   let ownedSnapshot: LockSnapshot | null = null
   while (ownedSnapshot === null) {
     try {
@@ -65,6 +77,10 @@ export async function withLock<T>(lockDir: string, fn: () => Promise<T>, options
       ownedSnapshot = await statSnapshot(lockDir)
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
+      if (!announced) {
+        announced = true
+        onWait?.()
+      }
       // Checked before the stale-reclaim branch as well as the waiting
       // branch: reclaiming can fail to make progress round after round
       // (e.g. the reclaim marker is contended), and a path that never

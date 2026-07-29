@@ -1,0 +1,288 @@
+
+> @mjloop/engine@0.4.1 test
+> vitest run
+
+
+ RUN  v4.1.10 /Volumes/SSD/Projects/loop/engine
+
+mjloop web: write failed: NoActiveRunError: no active run — call mjloop_run_start first
+ ❯ tests/mcp/server.test.ts (17 tests | 1 failed) 354ms
+     × runs init then reports a summary 19ms
+ ❯ tests/web/writes.test.ts (13 tests | 5 failed) 435ms
+     × attributes the decision to the server, never to the browser 36ms
+     × halts the run named on the wire 43ms
+     × refuses a stale plan write and changes nothing 20ms
+     × refuses a stale story write and changes nothing 23ms
+     × refuses a halt aimed at a run that is no longer the one on record 21ms
+ ❯ tests/cli/index.test.ts (32 tests | 2 failed) 130ms
+     × emits nothing when a config that opted in no longer parses 10ms
+     × emits nothing when state.json is corrupt and the value came from the backup 7ms
+ ❯ tests/web/read.test.ts (12 tests | 5 failed) 529ms
+     × writes nothing, including against a clobbered PLAN.md 67ms
+     × reports the review the engine itself never reads 28ms
+     × skips an agent result that no longer parses rather than blanking the cycle 38ms
+     × keeps the raw config, comments and all 11ms
+     × reports a config that does not parse without pretending it is missing 14ms
+ ❯ tests/ops/summary.test.ts (22 tests | 1 failed) 338ms
+     × degrades to an unknown cap when config.yaml is hand-broken 11ms
+ ❯ tests/web/snapshot.test.ts (9 tests | 2 failed) 302ms
+     × never writes to the project it is reading 28ms
+     × lists run directories newest first 10ms
+ ❯ tests/store/atomic.test.ts (9 tests | 1 failed) 48ms
+     × places every artefact under .mjloop 6ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 17 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/cli/index.test.ts > runCli stop-guard > emits nothing when a config that opted in no longer parses
+Error: ENOENT: no such file or directory, open '/var/folders/fp/9bhk_v0j0wj6qxdhz8krhql80000gp/T/loop-test-VpTkoq/.mjloop/config.yaml'
+ ❯ tests/cli/index.test.ts:256:5
+    254|     await writeConfig(project.dir, config)
+    255|     await runStart(project.dir, { track: 'build', goal: 'Add it' }, cl…
+    256|     await fs.writeFile(path.join(project.dir, '.mjloop', 'config.yaml'…
+       |     ^
+    257|
+    258|     const { stdout } = await runCli(['stop-guard'], JSON.stringify({ c…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/17]⎯
+
+ FAIL  tests/cli/index.test.ts > runCli stop-guard > emits nothing when state.json is corrupt and the value came from the backup
+Error: ENOENT: no such file or directory, copyfile '/var/folders/fp/9bhk_v0j0wj6qxdhz8krhql80000gp/T/loop-test-WPYnsj/.mjloop/state.json' -> '/var/folders/fp/9bhk_v0j0wj6qxdhz8krhql80000gp/T/loop-test-WPYnsj/.mjloop/state.json.bak'
+ ❯ tests/cli/index.test.ts:270:5
+    268|
+    269|     const statePath = path.join(project.dir, '.mjloop', 'state.json')
+    270|     await fs.copyFile(statePath, `${statePath}.bak`)
+       |     ^
+    271|     await fs.writeFile(statePath, '<<<<<<< HEAD\nnot json', 'utf8')
+    272|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/17]⎯
+
+ FAIL  tests/mcp/server.test.ts > tool behaviour > runs init then reports a summary
+AssertionError: expected '{\n  "created": [\n    ".mjloop-broke…' to contain '.mjloop/state.json'
+
+- Expected
++ Received
+
+- .mjloop/state.json
++ {
++   "created": [
++     ".mjloop-broken",
++     ".mjloop-broken/plans",
++     ".mjloop-broken/runs",
++     ".mjloop-broken/memory",
++     ".mjloop-broken/state.json",
++     ".mjloop-broken/config.yaml",
++     "CLAUDE.md"
++   ],
++   "verify": {
++     "test": "npm test",
++     "lint": null,
++     "build": null
++   },
++   "alreadyInitialised": false
++ }
+
+ ❯ tests/mcp/server.test.ts:75:26
+     73|   it('runs init then reports a summary', async () => {
+     74|     const init = await client.callTool({ name: 'mjloop_init', argument…
+     75|     expect(textOf(init)).toContain('.mjloop/state.json')
+       |                          ^
+     76|
+     77|     const summary = await client.callTool({ name: 'mjloop_state_get', …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/17]⎯
+
+ FAIL  tests/ops/summary.test.ts > stateSummary > degrades to an unknown cap when config.yaml is hand-broken
+Error: ENOENT: no such file or directory, open '/var/folders/fp/9bhk_v0j0wj6qxdhz8krhql80000gp/T/loop-test-SmDgPM/.mjloop/config.yaml'
+ ❯ tests/ops/summary.test.ts:99:5
+     97|     // HALT.md explicitly directs users to edit config.yaml, so a YAML…
+     98|     // must degrade the summary, not crash the SessionStart hook.
+     99|     await fs.writeFile(path.join(project.dir, '.mjloop', 'config.yaml'…
+       |     ^
+    100|
+    101|     const summary = await stateSummary(project.dir)
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/17]⎯
+
+ FAIL  tests/web/read.test.ts > read > writes nothing, including against a clobbered PLAN.md
+Error: ENOENT: no such file or directory, open '/var/folders/fp/9bhk_v0j0wj6qxdhz8krhql80000gp/T/loop-test-HnmPxH/.mjloop/plans/P001-user-auth/PLAN.md'
+ ❯ tests/web/read.test.ts:73:5
+     71|     // `readPlan` would repair this by rewriting the file. Nothing her…
+     72|     const planFile = path.join(project.dir, '.mjloop', 'plans', 'P001-…
+     73|     await fs.writeFile(planFile, '---\nnot: frontmatter\n---\n\nstill …
+       |     ^
+     74|
+     75|     const before = await hashTree(project.dir)
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/17]⎯
+
+ FAIL  tests/web/read.test.ts > read > reports the review the engine itself never reads
+Error: ENOENT: no such file or directory, open '/var/folders/fp/9bhk_v0j0wj6qxdhz8krhql80000gp/T/loop-test-bINuLq/.mjloop/plans/P001-user-auth/REVIEW.md'
+ ❯ tests/web/read.test.ts:106:5
+    104|     await seed()
+    105|     const file = path.join(project.dir, '.mjloop', 'plans', 'P001-user…
+    106|     await fs.writeFile(file, '# Review\n\nToo big.\n', 'utf8')
+       |     ^
+    107|     expect((await readPlanDetail(project.dir, 'P001')).review).toConta…
+    108|   })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/17]⎯
+
+ FAIL  tests/web/read.test.ts > read > skips an agent result that no longer parses rather than blanking the cycle
+Error: ENOENT: no such file or directory, open '/var/folders/fp/9bhk_v0j0wj6qxdhz8krhql80000gp/T/loop-test-zCWBg9/.mjloop/runs/2026-07-28-001--adhoc--edit/cycle-01/verifier.json'
+ ❯ tests/web/read.test.ts:170:5
+    168|     const runId = (await readRuns(project.dir))[0]?.id ?? ''
+    169|     const dir = path.join(project.dir, '.mjloop', 'runs', runId, 'cycl…
+    170|     await fs.writeFile(path.join(dir, 'verifier.json'), '{"nonsense":t…
+       |     ^
+    171|
+    172|     const cycle = await readCycleDetail(project.dir, runId, 1)
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/17]⎯
+
+ FAIL  tests/web/read.test.ts > read > keeps the raw config, comments and all
+Error: ENOENT: no such file or directory, open '/var/folders/fp/9bhk_v0j0wj6qxdhz8krhql80000gp/T/loop-test-jaXSxK/.mjloop/config.yaml'
+ ❯ tests/web/read.test.ts:182:44
+    180|     // serialises the parsed document and drops every comment, which i…
+    181|     // Config tab is read-only and shows the file as written.
+    182|     await fs.writeFile(file, `# keep me\n${await fs.readFile(file, 'ut…
+       |                                            ^
+    183|
+    184|     const view = await readConfigView(project.dir)
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/17]⎯
+
+ FAIL  tests/web/read.test.ts > read > reports a config that does not parse without pretending it is missing
+Error: ENOENT: no such file or directory, open '/var/folders/fp/9bhk_v0j0wj6qxdhz8krhql80000gp/T/loop-test-udIUeT/.mjloop/config.yaml'
+ ❯ tests/web/read.test.ts:192:5
+    190|   it('reports a config that does not parse without pretending it is mi…
+    191|     await initLoop(project.dir, clock)
+    192|     await fs.writeFile(path.join(project.dir, '.mjloop', 'config.yaml'…
+       |     ^
+    193|     const view = await readConfigView(project.dir)
+    194|     expect(view.invalid).toBe(true)
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/17]⎯
+
+ FAIL  tests/web/snapshot.test.ts > buildSnapshot > never writes to the project it is reading
+Error: ENOENT: no such file or directory, open '/var/folders/fp/9bhk_v0j0wj6qxdhz8krhql80000gp/T/loop-test-kzHuaL/.mjloop/plans/P001-user-auth/PLAN.md'
+ ❯ tests/web/snapshot.test.ts:74:5
+     72|     // the file — which is exactly why the snapshot does not use `read…
+     73|     // poller running eight times a second must not write to a project.
+     74|     await fs.writeFile(planFile, 'no frontmatter here at all\n', 'utf8…
+       |     ^
+     75|     const before = await fs.readFile(planFile, 'utf8')
+     76|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/17]⎯
+
+ FAIL  tests/web/snapshot.test.ts > buildSnapshot > lists run directories newest first
+AssertionError: expected [] to deeply equal [ …(2) ]
+
+- Expected
++ Received
+
+- [
+-   "2026-07-28-002--P001-S01--build",
+-   "2026-07-28-001--adhoc--edit",
+- ]
++ []
+
+ ❯ tests/web/snapshot.test.ts:92:27
+     90|
+     91|     const snapshot = await buildSnapshot(project.dir)
+     92|     expect(snapshot.runs).toEqual(['2026-07-28-002--P001-S01--build', …
+       |                           ^
+     93|   })
+     94| })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/17]⎯
+
+ FAIL  tests/web/writes.test.ts > applyWrite > attributes the decision to the server, never to the browser
+Error: ENOENT: no such file or directory, open '/var/folders/fp/9bhk_v0j0wj6qxdhz8krhql80000gp/T/loop-test-aqMmcm/.mjloop/plans/P002-billing/PLAN.md'
+ ❯ tests/web/writes.test.ts:67:18
+     65|   it('attributes the decision to the server, never to the browser', as…
+     66|     await applyWrite(project.dir, { kind: 'gate', plan: 'P002', from: …
+     67|     const plan = await fs.readFile(path.join(project.dir, '.mjloop', '…
+       |                  ^
+     68|     // A `by` the page could type would be a forgeable audit record, w…
+     69|     // worse than the engine admitting it cannot verify who decided.
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/17]⎯
+
+ FAIL  tests/web/writes.test.ts > applyWrite > halts the run named on the wire
+Error: ENOENT: no such file or directory, scandir '/var/folders/fp/9bhk_v0j0wj6qxdhz8krhql80000gp/T/loop-test-ers1Cn/.mjloop/runs/2026-07-28-001--adhoc--edit'
+ ❯ tests/web/writes.test.ts:102:18
+    100|     expect(after.state.halt_reason).toBe('Wrong story.')
+    101|     // A halt that left no report would be a Stop wearing a different …
+    102|     const runs = await fs.readdir(path.join(project.dir, '.mjloop', 'r…
+       |                  ^
+    103|     expect(runs).toContain('HALT.md')
+    104|   })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/17]⎯
+
+ FAIL  tests/web/writes.test.ts > applyWrite > refuses a stale plan write and changes nothing
+Error: ENOENT: no such file or directory, scandir '/var/folders/fp/9bhk_v0j0wj6qxdhz8krhql80000gp/T/loop-test-HVtrT6/.mjloop'
+ ❯ walk tests/web/writes.test.ts:40:25
+     38|   const out = new Map<string, string>()
+     39|   const walk = async (at: string): Promise<void> => {
+     40|     for (const entry of await fs.readdir(at, { withFileTypes: true }))…
+       |                         ^
+     41|       const full = path.join(at, entry.name)
+     42|       if (entry.isDirectory()) await walk(full)
+ ❯ hashTree tests/web/writes.test.ts:46:3
+ ❯ tests/web/writes.test.ts:110:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/17]⎯
+
+ FAIL  tests/web/writes.test.ts > applyWrite > refuses a stale story write and changes nothing
+Error: ENOENT: no such file or directory, scandir '/var/folders/fp/9bhk_v0j0wj6qxdhz8krhql80000gp/T/loop-test-2v0jfn/.mjloop'
+ ❯ walk tests/web/writes.test.ts:40:25
+     38|   const out = new Map<string, string>()
+     39|   const walk = async (at: string): Promise<void> => {
+     40|     for (const entry of await fs.readdir(at, { withFileTypes: true }))…
+       |                         ^
+     41|       const full = path.join(at, entry.name)
+     42|       if (entry.isDirectory()) await walk(full)
+ ❯ hashTree tests/web/writes.test.ts:46:3
+ ❯ tests/web/writes.test.ts:110:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[15/17]⎯
+
+ FAIL  tests/web/writes.test.ts > applyWrite > refuses a halt aimed at a run that is no longer the one on record
+Error: ENOENT: no such file or directory, scandir '/var/folders/fp/9bhk_v0j0wj6qxdhz8krhql80000gp/T/loop-test-0FAxqE/.mjloop'
+ ❯ walk tests/web/writes.test.ts:40:25
+     38|   const out = new Map<string, string>()
+     39|   const walk = async (at: string): Promise<void> => {
+     40|     for (const entry of await fs.readdir(at, { withFileTypes: true }))…
+       |                         ^
+     41|       const full = path.join(at, entry.name)
+     42|       if (entry.isDirectory()) await walk(full)
+ ❯ hashTree tests/web/writes.test.ts:46:3
+ ❯ tests/web/writes.test.ts:119:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[16/17]⎯
+
+ FAIL  tests/store/atomic.test.ts > resolveLoopPaths > places every artefact under .mjloop
+AssertionError: expected '/tmp/demo/.mjloop-broken' to be '/tmp/demo/.mjloop' // Object.is equality
+
+Expected: "/tmp/demo/.mjloop"
+Received: "/tmp/demo/.mjloop-broken"
+
+ ❯ tests/store/atomic.test.ts:18:24
+     16|   it('places every artefact under .mjloop', () => {
+     17|     const paths = resolveLoopPaths('/tmp/demo')
+     18|     expect(paths.root).toBe('/tmp/demo/.mjloop')
+       |                        ^
+     19|     expect(paths.state).toBe('/tmp/demo/.mjloop/state.json')
+     20|     expect(paths.config).toBe('/tmp/demo/.mjloop/config.yaml')
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[17/17]⎯
+
+
+ Test Files  7 failed | 42 passed (49)
+      Tests  17 failed | 764 passed (781)
+   Start at  21:51:10
+   Duration  1.89s (transform 1.35s, setup 0ms, import 4.02s, tests 10.94s, environment 801ms)
+

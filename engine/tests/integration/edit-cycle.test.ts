@@ -62,18 +62,33 @@ describe('a full edit cycle', () => {
     )
     await runLog(project.dir, { agent: 'verifier', result: PASSING_VERIFIER }, clock)
 
-    const { state } = await cycleAdvance(project.dir, { agents: ['editor', 'verifier'], result: 'pass' }, clock)
+    const { state, handoff, closing_agents } = await cycleAdvance(
+      project.dir,
+      { agents: ['editor', 'verifier'], result: 'pass' },
+      clock,
+    )
     expect(state.status).toBe('done')
+    // `edit` declares no closing agents, so the pass really is the end of the
+    // run: nothing is dispatched after it and the leader commits straight away.
+    expect(closing_agents).toEqual([])
 
     // every artefact of the cycle is on disk and traceable to the run
     const dir = runDirPath(project.dir, state)
     expect(await fs.readdir(dir)).toEqual(expect.arrayContaining(['cycle-01']))
+    // `handoff.md` among them: `cycleAdvance` writes one on every close,
+    // including the pass that ends a one-cycle track, where it is the run's
+    // closing record rather than a brief for a cycle that will never open.
     expect((await fs.readdir(path.join(dir, 'cycle-01'))).sort()).toEqual([
       'editor.json',
       'findings.json',
+      'handoff.md',
       'roster.json',
       'verifier.json',
     ])
+    // The path the leader is handed is the document on disk. A returned path
+    // that resolved to nothing would be worse than the `null` a failed write
+    // reports, because the leader would pass it on to the next reader.
+    expect(handoff).toBe(path.relative(project.dir, path.join(dir, 'cycle-01', 'handoff.md')))
 
     const summary = await stateSummary(project.dir)
     expect(summary.status).toBe('done')

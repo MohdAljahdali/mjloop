@@ -27,6 +27,33 @@ An argument that looks like a plan or story id but does not match exactly — `P
 named after the literal text; the engine does not re-check the shape. For a bare plan id,
 offer `mjloop_story_get` with `next: true` and that `plan`.
 
+## Before the first dispatch
+
+Read `gates.preflight` from `.mjloop/config.yaml`.
+
+- **`auto`** — the default. Start the run. An estimate shown before every run that then
+  always proceeds is a prompt nobody reads.
+- **`human`** — call `mjloop_report_get` with `report: "preflight"`, `track: "build"`, and
+  the story id when the argument named one. Report it in a few lines and wait for the
+  person to answer before the first `mjloop_roster_set`.
+
+Report three things and no more: `dispatches_per_cycle` with the agents that make it up,
+the `ceiling` this track allows, and `comparable` — what past runs of this same kind
+actually took, in cycles, dispatches and minutes. `comparable: null` means the project has
+never run this track this way; say *no basis* rather than inventing one, and note that
+`minutes` stays null until a run has been timed end to end.
+
+The estimate names no price and no model — the engine cannot see which model an agent
+runs on, and a currency figure built on that would be a guess wearing an estimate's
+clothes. The actionable number is `dispatches_per_cycle`: one specialist removed from the
+track's `available` is one dispatch fewer in every cycle of the run.
+
+## What the run does
+
 Unlike `/mjloop:edit`, this track does not stop after one cycle. A failing cycle produces
 findings that become the next cycle's work, up to the track's cap — or until the run
 stops making progress, at which point the engine halts it and writes `HALT.md`.
+
+A cycle that passes ends the run, and `mjloop_cycle_advance` returns `closing_agents` —
+the agents that run once against the code as it finally stands. Dispatch them, then
+commit.

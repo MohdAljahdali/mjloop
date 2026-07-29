@@ -3,7 +3,7 @@ import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { renderSummaryLine, stateSummary } from '../../src/ops/summary.js'
 import { initLoop } from '../../src/ops/init.js'
-import { cycleAdvance, runStart } from '../../src/ops/run.js'
+import { cycleAdvance, runDirPath, runStart } from '../../src/ops/run.js'
 import { runLog } from '../../src/ops/log.js'
 import { resolveLoopPaths } from '../../src/store/paths.js'
 import { makeTmpProject, type TmpProject } from '../helpers/tmp-project.js'
@@ -243,5 +243,28 @@ describe('the design system flag', () => {
     await initLoop(project.dir, clock)
     await fs.mkdir(resolveLoopPaths(project.dir).designSystem)
     expect((await stateSummary(project.dir)).design_system).toBe(false)
+  })
+})
+
+/**
+ * `runLog` writes `map.md` and `stateSummary` reports it; these are the
+ * reader's tests, so they sit with the reader. The file is written by hand
+ * here — what is under test is the field, not the agent that produces it.
+ */
+describe('the run map on the summary', () => {
+  it('reports the map path once it exists and null before', async () => {
+    await initLoop(project.dir, clock)
+    const state = await runStart(project.dir, { track: 'build', goal: 'Add the endpoint' }, clock)
+    expect((await stateSummary(project.dir)).map).toBeNull()
+
+    await fs.writeFile(path.join(runDirPath(project.dir, state), 'map.md'), '# Map\n', 'utf8')
+    expect((await stateSummary(project.dir)).map).toBe(
+      path.join('.mjloop', 'runs', '2026-07-26-001--adhoc--build', 'map.md'),
+    )
+  })
+
+  it('reports null when no run has started', async () => {
+    await initLoop(project.dir, clock)
+    expect((await stateSummary(project.dir)).map).toBeNull()
   })
 })

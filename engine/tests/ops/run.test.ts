@@ -1,12 +1,14 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { NoActiveRunError, UnknownTrackError, cycleAdvance, halt, runDirName, runDirPath, runStart } from '../../src/ops/run.js'
 import { initLoop } from '../../src/ops/init.js'
 import { runLog } from '../../src/ops/log.js'
 import { gateSet, planCreate, storyAdd } from '../../src/ops/plan.js'
+import { rosterSet } from '../../src/ops/roster.js'
 import { InvalidStateError, StateStore } from '../../src/store/state-store.js'
 import { loadConfig, writeConfig } from '../../src/store/config-store.js'
+import { resolveLoopPaths } from '../../src/store/paths.js'
 import { makeTmpProject, type TmpProject } from '../helpers/tmp-project.js'
 
 const NOW = new Date('2026-07-26T10:36:00.000Z')
@@ -230,7 +232,13 @@ describe('cycleAdvance', () => {
     expect(state.current.stage).toBe('done')
     expect(state.cycle).toBe(1)
     expect(state.history).toEqual([
-      { cycle: 1, agents: ['editor', 'verifier'], result: 'pass', ref: '.mjloop/runs/2026-07-26-001--adhoc--edit' },
+      {
+        cycle: 1,
+        agents: ['editor', 'verifier'],
+        result: 'pass',
+        ref: '.mjloop/runs/2026-07-26-001--adhoc--edit',
+        at: NOW.toISOString(),
+      },
     ])
   })
 
@@ -451,8 +459,12 @@ describe('stagnation guard', () => {
     // the same defect, so state carries two copies of one piece of work — the
     // same work as last cycle, and it must count as such.
     await runLog(project.dir, { agent: 'critic', result: sameFailure }, clock)
-    const { strikes } = await failCycle()
+    const { strikes, carried_findings } = await failCycle()
     expect(strikes).toBe(1)
+    // The guard's identity and the task list's are allowed to differ, and here
+    // they must: two agents reported one defect, so the cycle looks unchanged
+    // to the guard and the next cycle is handed one piece of work.
+    expect(carried_findings).toHaveLength(1)
   })
 
   it('does not carry a strike into the next run', async () => {
@@ -751,5 +763,552 @@ describe('halt', () => {
     expect(state.halt_reason).toBe('user requested stop')
     const report = await fs.readFile(path.join(runDirPath(project.dir, state), 'HALT.md'), 'utf8')
     expect(report).toContain('user requested stop')
+  })
+})
+
+describe('the run verify pin', () => {
+  const PIN = 'verify-pinned.json'
+
+  async function readPin(state: Awaited<ReturnType<typeof runStart>>): Promise<Record<string, any>> {
+    return JSON.parse(await fs.readFile(path.join(runDirPath(project.dir, state), PIN), 'utf8'))
+  }
+
+  it('pins the resolved verify block into the run directory at run start', async () => {
+    const state = await runStart(project.dir, { track: 'edit', goal: 'Rename' }, clock)
+
+    const pin = await readPin(state)
+    expect(pin.version).toBe(1)
+    expect(pin.pinned_at).toBe(NOW.toISOString())
+    expect(pin.verify.test).toBe('npm test')
+  })
+
+  it('pins the ceiling and the failure patterns, not only the commands', async () => {
+    // Both are executed policy: a timeout of 1 ms kills every suite the engine
+    // starts, and a failure pattern is a regular expression this engine
+    // compiles and runs. A pin of the three commands alone would leave an
+    // agent holding `Write` two ways to change what verification means.
+    const config = await loadConfig(project.dir)
+    config.verify.timeout_ms = 5_000
+    config.verify.failure_patterns.test = ['^boom']
+    await writeConfig(project.dir, config)
+
+    const pin = await readPin(await runStart(project.dir, { track: 'edit', goal: 'Rename' }, clock))
+    expect(pin.verify.timeout_ms).toBe(5_000)
+    expect(pin.verify.failure_patterns.test).toEqual(['^boom'])
+    // Defaulted rather than configured, and pinned all the same.
+    expect(pin.verify.lock_timeout_ms).toBe(1_800_000)
+  })
+
+  it('leaves an existing pin untouched', async () => {
+    // `nextRunId` hands every start a directory of its own, so a second pin is
+    // unreachable through `runStart` itself. The collision is staged at the one
+    // moment it could happen — the run directory already carrying a pin when
+    // the write lands, which is what a re-pinning resume would look like — and
+    // the `wx` flag is what makes that case something nobody has to reason
+    // about. A resume that re-pinned would execute a `config.yaml` edited since
+    // the run began, which is the whole hole the pin closes.
+    const earlier = `${JSON.stringify(
+      {
+        version: 1,
+        pinned_at: '2026-07-01T00:00:00.000Z',
+        verify: {
+          test: 'npm run the-command-this-run-started-with',
+          lint: null,
+          build: null,
+          timeout_ms: 900_000,
+          lock_timeout_ms: 1_800_000,
+          failure_patterns: { test: [], lint: [], build: [] },
+        },
+      },
+      null,
+      2,
+    )}\n`
+
+    const realMkdir = fs.mkdir.bind(fs)
+    const spy = vi.spyOn(fs, 'mkdir').mockImplementation(async (target: any, options: any) => {
+      const created = await realMkdir(target, options)
+      if (String(target).endsWith('--adhoc--edit')) {
+        await fs.writeFile(path.join(String(target), PIN), earlier, 'utf8')
+      }
+      return created
+    })
+
+    try {
+      const state = await runStart(project.dir, { track: 'edit', goal: 'Rename' }, clock)
+      expect(await fs.readFile(path.join(runDirPath(project.dir, state), PIN), 'utf8')).toBe(earlier)
+    } finally {
+      spy.mockRestore()
+    }
+  })
+})
+
+describe('the run timestamps', () => {
+  it('stamps the run with its start time', async () => {
+    const state = await runStart(project.dir, { track: 'build', goal: 'Add the endpoint' }, clock)
+    expect(state.started_at).toBe(NOW.toISOString())
+  })
+
+  it('stamps each history entry with the time its cycle closed', async () => {
+    const first = new Date('2026-07-26T11:00:00.000Z')
+    const second = new Date('2026-07-26T12:30:00.000Z')
+
+    await runStart(project.dir, { track: 'build', goal: 'Add the endpoint' }, clock)
+    await cycleAdvance(project.dir, { agents: ['builder', 'verifier'], result: 'fail' }, () => first)
+    await cycleAdvance(project.dir, { agents: ['builder', 'verifier'], result: 'fail' }, () => second)
+
+    const state = await new StateStore(project.dir).get()
+    expect(state.history.map((entry) => entry.at)).toEqual([first.toISOString(), second.toISOString()])
+  })
+
+  it('reads a state file written before the timestamps existed', async () => {
+    await runStart(project.dir, { track: 'build', goal: 'Add the endpoint' }, clock)
+    await cycleAdvance(project.dir, { agents: ['builder', 'verifier'], result: 'fail' }, clock)
+
+    // Exactly what a state file written by an earlier milestone looks like:
+    // the fields are absent, not null. Without their defaults the whole
+    // document would fail validation on read rather than gaining them on its
+    // next write, and the run would be unresumable.
+    const file = resolveLoopPaths(project.dir).state
+    const raw = JSON.parse(await fs.readFile(file, 'utf8'))
+    delete raw.started_at
+    for (const entry of raw.history) delete entry.at
+    await fs.writeFile(file, `${JSON.stringify(raw, null, 2)}\n`, 'utf8')
+
+    const legacy = await new StateStore(project.dir).get()
+    expect(legacy.started_at).toBeNull()
+    expect(legacy.history[0]?.at).toBeNull()
+
+    const { state } = await cycleAdvance(project.dir, { agents: ['builder', 'verifier'], result: 'fail' }, clock)
+    // The cycle closed here is stamped; the one that predates the field is
+    // left as it was rather than back-dated to a time nobody observed.
+    expect(state.history.at(-1)?.at).toBe(NOW.toISOString())
+    expect(state.history[0]?.at).toBeNull()
+  })
+})
+
+describe('the closing set', () => {
+  it('returns the closing set once the run passes', async () => {
+    await runStart(project.dir, { track: 'build', goal: 'Add the endpoint' }, clock)
+    const { closing_agents } = await cycleAdvance(
+      project.dir,
+      { agents: ['builder', 'verifier'], result: 'pass' },
+      clock,
+    )
+    expect(closing_agents).toEqual(['docs'])
+  })
+
+  it('returns an empty closing set on a halt', async () => {
+    // A run that did not land its work has nothing to document, and documenting
+    // it would describe a state of the code that no longer exists.
+    const config = await loadConfig(project.dir)
+    config.tracks.build = { required: ['builder', 'verifier'], available: [], closing: ['docs'], max_cycles: 1 }
+    await writeConfig(project.dir, config)
+
+    await runStart(project.dir, { track: 'build', goal: 'Add the endpoint' }, clock)
+    const { state, closing_agents } = await cycleAdvance(
+      project.dir,
+      { agents: ['builder', 'verifier'], result: 'fail' },
+      clock,
+    )
+    expect(state.status).toBe('halted')
+    expect(closing_agents).toEqual([])
+  })
+
+  it('returns an empty closing set on a track that declares none', async () => {
+    await runStart(project.dir, { track: 'edit', goal: 'Rename' }, clock)
+    const { closing_agents } = await cycleAdvance(
+      project.dir,
+      { agents: ['editor', 'verifier'], result: 'pass' },
+      clock,
+    )
+    expect(closing_agents).toEqual([])
+  })
+})
+
+describe('the cycle handoff', () => {
+  /** One optional agent, so a roster's skip reason is one readable line. */
+  async function narrowBuildTrack(maxCycles = 5): Promise<void> {
+    const config = await loadConfig(project.dir)
+    config.tracks.build = {
+      required: ['builder', 'verifier'],
+      available: ['security'],
+      closing: [],
+      max_cycles: maxCycles,
+    }
+    await writeConfig(project.dir, config)
+  }
+
+  function result(over: Record<string, unknown> = {}) {
+    return {
+      status: 'pass' as const,
+      summary: 'Added the route and its test.',
+      evidence: [],
+      findings: [],
+      files_touched: [],
+      next_hint: null,
+      ...over,
+    }
+  }
+
+  /** The ledger `verifyRun` writes. This is its only reader under test. */
+  function ledgerEntry(over: Record<string, unknown> = {}) {
+    return {
+      slot: 'test',
+      command: 'cd engine && npm test',
+      source: 'pinned',
+      live_command: null,
+      log: 'test.log',
+      phase: 'complete',
+      exit_code: 1,
+      timed_out: false,
+      fingerprint: null,
+      cached_from_cycle: null,
+      duration_ms: 1_200,
+      at: NOW.toISOString(),
+      ...over,
+    }
+  }
+
+  async function writeLedger(
+    state: Awaited<ReturnType<typeof runStart>>,
+    cycle: number,
+    entries: unknown[],
+  ): Promise<void> {
+    const dir = path.join(runDirPath(project.dir, state), `cycle-0${cycle}`, 'verify')
+    await fs.mkdir(dir, { recursive: true })
+    await fs.writeFile(path.join(dir, 'index.json'), JSON.stringify(entries, null, 2), 'utf8')
+  }
+
+  async function handoffFor(state: Awaited<ReturnType<typeof runStart>>, cycle = 1): Promise<string> {
+    return fs.readFile(path.join(runDirPath(project.dir, state), `cycle-0${cycle}`, 'handoff.md'), 'utf8')
+  }
+
+  const close = (result: 'pass' | 'fail' | 'blocked' = 'fail', agents = ['builder', 'verifier']) =>
+    cycleAdvance(project.dir, { agents, result }, clock)
+
+  it('writes a handoff for the cycle that closed, not the one that opened', async () => {
+    await narrowBuildTrack()
+    const started = await runStart(project.dir, { track: 'build', goal: 'Add the endpoint' }, clock)
+    const { state } = await close()
+
+    // State has already stepped to cycle 2; the document describes cycle 1.
+    expect(state.cycle).toBe(2)
+    expect(await handoffFor(started)).toContain('# Handoff — cycle 1 of 2026-07-26-001')
+    await expect(fs.access(path.join(runDirPath(project.dir, started), 'cycle-02'))).rejects.toThrow()
+  })
+
+  it('returns the handoff path', async () => {
+    await narrowBuildTrack()
+    const started = await runStart(project.dir, { track: 'build', goal: 'Add the endpoint' }, clock)
+    const { handoff } = await close()
+
+    expect(handoff).toBe(path.join('.mjloop', 'runs', '2026-07-26-001--adhoc--build', 'cycle-01', 'handoff.md'))
+    // Repo-relative, so the leader can hand the string to an agent as it is.
+    expect(await fs.readFile(path.join(project.dir, handoff!), 'utf8')).toContain('# Handoff')
+    expect(handoff).toBe(path.join('.mjloop', 'runs', runDirName(started), 'cycle-01', 'handoff.md'))
+  })
+
+  it('names every agent the roster drafted and every one it skipped', async () => {
+    await narrowBuildTrack()
+    const started = await runStart(project.dir, { track: 'build', goal: 'Add the endpoint' }, clock)
+    await rosterSet(project.dir, {
+      cycle: 1,
+      selected: ['builder', 'verifier'],
+      skipped: { security: 'no auth surface touched' },
+    })
+    await runLog(project.dir, { agent: 'builder', result: result() }, clock)
+    await runLog(
+      project.dir,
+      { agent: 'verifier', result: result({ status: 'fail', summary: 'One assertion still expects the old shape.' }) },
+      clock,
+    )
+    await close()
+
+    const doc = await handoffFor(started)
+    expect(doc).toContain('| builder | pass | Added the route and its test. |')
+    expect(doc).toContain('| verifier | fail | One assertion still expects the old shape. |')
+    // The stated reason is recoverable from nowhere else, and it is the whole
+    // product of the roster's "either drafted or explained" invariant.
+    expect(doc).toContain('Skipped: `security` — no auth surface touched')
+  })
+
+  it('marks a drafted agent that left no result file', async () => {
+    // `runLog` only enters its locked update when a result has findings, a gate
+    // proof or error signatures, so a pass carrying only file evidence can land
+    // in a cycle that has just closed. Without a row the agent would be absent
+    // with nothing saying so.
+    await narrowBuildTrack()
+    const started = await runStart(project.dir, { track: 'build', goal: 'Add the endpoint' }, clock)
+    await rosterSet(project.dir, {
+      cycle: 1,
+      selected: ['builder', 'verifier'],
+      skipped: { security: 'no auth surface touched' },
+    })
+    await runLog(project.dir, { agent: 'builder', result: result() }, clock)
+    await close()
+
+    expect(await handoffFor(started)).toContain('| verifier | — | no result recorded |')
+  })
+
+  it('lists the files each agent touched', async () => {
+    await narrowBuildTrack()
+    const started = await runStart(project.dir, { track: 'build', goal: 'Add the endpoint' }, clock)
+    await runLog(
+      project.dir,
+      { agent: 'builder', result: result({ files_touched: ['src/routes/health.ts', 'test/health.test.ts'] }) },
+      clock,
+    )
+    await close()
+
+    const doc = await handoffFor(started)
+    expect(doc).toContain('- `src/routes/health.ts` — builder')
+    expect(doc).toContain('- `test/health.test.ts` — builder')
+  })
+
+  it('carries the verification table from the cycle ledger', async () => {
+    await narrowBuildTrack()
+    const started = await runStart(project.dir, { track: 'build', goal: 'Add the endpoint' }, clock)
+    await writeLedger(started, 1, [ledgerEntry(), ledgerEntry({ slot: 'lint', command: 'npm run typecheck', log: 'lint.log', exit_code: 0 })])
+    await close()
+
+    const doc = await handoffFor(started)
+    expect(doc).toContain('| `cd engine && npm test` | 1 | `cycle-01/verify/test.log` |')
+    expect(doc).toContain('| `npm run typecheck` | 0 | `cycle-01/verify/lint.log` |')
+  })
+
+  it('notes a reused result and a diverged live command in the verification table', async () => {
+    // Both are read straight off the ledger entry and neither costs a column.
+    // The second is the only place a person who is not watching the cockpit
+    // finds out that a mid-run edit to config.yaml is waiting for the next run.
+    await narrowBuildTrack()
+    const started = await runStart(project.dir, { track: 'build', goal: 'Add the endpoint' }, clock)
+    await close()
+    await writeLedger(started, 2, [
+      ledgerEntry({ slot: 'lint', command: 'npm run typecheck', log: 'lint.log', exit_code: 0, cached_from_cycle: 1 }),
+      ledgerEntry({ slot: 'build', command: 'npm run build', log: 'build.log', exit_code: 0, live_command: 'npm run bundle' }),
+    ])
+    await close()
+
+    const doc = await handoffFor(started, 2)
+    // A reused entry's log belongs to the cycle that produced it.
+    expect(doc).toContain('`cycle-01/verify/lint.log` (cached, cycle 1)')
+    expect(doc).toContain('`cycle-02/verify/build.log` (config.yaml now says `npm run bundle`)')
+  })
+
+  it('writes a handoff on a pass, a fail and a halt', async () => {
+    // On a pass it is the run's closing record; on a halt it sits beside
+    // HALT.md and answers a different question — HALT.md says why the run
+    // stopped, the handoff says what the cycle did.
+    await narrowBuildTrack()
+    const failing = await runStart(project.dir, { track: 'build', goal: 'Add the endpoint' }, clock)
+    await close()
+    expect(await handoffFor(failing)).toContain('next: cycle 2 of 5')
+
+    const passing = await runStart(project.dir, { track: 'build', goal: 'Add the endpoint' }, clock)
+    await close('pass')
+    expect(await handoffFor(passing)).toContain('the run is done')
+
+    const halting = await runStart(project.dir, { track: 'edit', goal: 'Rename' }, clock)
+    await cycleAdvance(project.dir, { agents: ['editor', 'verifier'], result: 'fail' }, clock)
+    const halted = await handoffFor(halting)
+    expect(halted).toContain('halted: cycle cap 1 reached for track edit')
+    await expect(fs.access(path.join(runDirPath(project.dir, halting), 'HALT.md'))).resolves.toBeUndefined()
+  })
+
+  it('writes a short handoff when the cycle directory holds nothing', async () => {
+    // A run must never fail to advance because a derived document could not be
+    // assembled: no roster, no results, no ledger is a short handoff.
+    await narrowBuildTrack()
+    const started = await runStart(project.dir, { track: 'build', goal: 'Add the endpoint' }, clock)
+    await close()
+
+    const doc = await handoffFor(started)
+    expect(doc).toContain('| builder | — | no result recorded |')
+    expect(doc).toContain('_nothing was verified through the engine_')
+    expect(doc).toContain('_none recorded_')
+  })
+
+  it('never exceeds the handoff ceiling', async () => {
+    await narrowBuildTrack()
+    const started = await runStart(project.dir, { track: 'build', goal: 'Add the endpoint' }, clock)
+    await runLog(
+      project.dir,
+      {
+        agent: 'builder',
+        result: result({
+          summary: 'x'.repeat(50_000),
+          // Long paths as well as many of them: `files_touched` has no schema
+          // ceiling, so thirty entries of a deep monorepo path clear 6 KB on
+          // their own and the per-section caps alone would not hold the file.
+          files_touched: Array.from({ length: 200 }, (_, index) => `src/${'deep/'.repeat(40)}file-${index}.ts`),
+        }),
+      },
+      clock,
+    )
+    await runLog(
+      project.dir,
+      {
+        agent: 'verifier',
+        result: result({
+          status: 'fail',
+          findings: Array.from({ length: 200 }, (_, index) => ({
+            severity: 'high' as const,
+            file: 'src/a.ts',
+            line: index + 1,
+            claim: `defect number ${index}`,
+          })),
+        }),
+      },
+      clock,
+    )
+    await close()
+
+    const doc = await handoffFor(started)
+    expect(Buffer.byteLength(doc, 'utf8')).toBeLessThanOrEqual(6_000)
+    expect(doc).toContain('Truncated at 6000 bytes')
+    expect(doc).toContain('cycle-01/')
+  })
+
+  it('names where the elided findings went', async () => {
+    await narrowBuildTrack()
+    const started = await runStart(project.dir, { track: 'build', goal: 'Add the endpoint' }, clock)
+    await runLog(
+      project.dir,
+      {
+        agent: 'verifier',
+        result: result({
+          status: 'fail',
+          findings: Array.from({ length: 25 }, (_, index) => ({
+            severity: 'low' as const,
+            file: 'src/a.ts',
+            line: index + 1,
+            claim: `nit ${index}`,
+          })),
+        }),
+      },
+      clock,
+    )
+    await close()
+
+    // Nothing is discarded — the marker names the file that still holds it.
+    expect(await handoffFor(started)).toContain('*5 more in cycle-01/findings.json*')
+  })
+
+  it('still advances the cycle when the handoff cannot be written', async () => {
+    await narrowBuildTrack()
+    const started = await runStart(project.dir, { track: 'build', goal: 'Add the endpoint' }, clock)
+    // A directory where the document goes: the write fails, and the state
+    // transition it follows has already committed.
+    await fs.mkdir(path.join(runDirPath(project.dir, started), 'cycle-01', 'handoff.md'), { recursive: true })
+
+    const { state, carried_findings } = await close()
+    expect(state.cycle).toBe(2)
+    expect(state.status).toBe('running')
+    expect(carried_findings).toEqual([])
+  })
+
+  it('returns null for the handoff path when the write failed', async () => {
+    // There is no path-shaped value for a document that was not written, and
+    // this result is serialised straight to the leader.
+    await narrowBuildTrack()
+    const started = await runStart(project.dir, { track: 'build', goal: 'Add the endpoint' }, clock)
+    await fs.mkdir(path.join(runDirPath(project.dir, started), 'cycle-01', 'handoff.md'), { recursive: true })
+
+    expect((await close()).handoff).toBeNull()
+  })
+
+  it('skips a result file it cannot parse rather than losing the whole handoff', async () => {
+    await narrowBuildTrack()
+    const started = await runStart(project.dir, { track: 'build', goal: 'Add the endpoint' }, clock)
+    await runLog(project.dir, { agent: 'builder', result: result() }, clock)
+    await fs.writeFile(path.join(runDirPath(project.dir, started), 'cycle-01', 'verifier.json'), '{ not json', 'utf8')
+    await close()
+
+    const doc = await handoffFor(started)
+    expect(doc).toContain('| builder | pass | Added the route and its test. |')
+    expect(doc).toContain('# Handoff — cycle 1')
+  })
+})
+
+describe('deduplicating the carried findings', () => {
+  /** Two genuine defects in one file, and one of them reported twice. */
+  const auth = (line: number) => ({
+    severity: 'high' as const,
+    file: 'src/auth.ts',
+    line,
+    claim: 'missing null check',
+  })
+
+  function reported(findings: ReturnType<typeof auth>[]) {
+    return {
+      status: 'fail' as const,
+      summary: 'the suite is still red',
+      evidence: [],
+      findings,
+      files_touched: [],
+      next_hint: null,
+    }
+  }
+
+  async function twoAgentsOneDefect(track: string): Promise<void> {
+    await runStart(project.dir, { track, goal: 'Fix the null check' }, clock)
+    await runLog(project.dir, { agent: 'verifier', result: reported([auth(12), auth(88)]) }, clock)
+    await runLog(project.dir, { agent: 'critic', result: reported([auth(12)]) }, clock)
+  }
+
+  it('carries one entry per distinct finding', async () => {
+    // Line 12 twice is one piece of work; line 88 is another. Collapsing on the
+    // guard's coarser identity would lose it, and the loop would then halt for
+    // "no progress" over work it was never shown.
+    await twoAgentsOneDefect('build')
+    const { carried_findings } = await cycleAdvance(
+      project.dir,
+      { agents: ['builder', 'verifier', 'critic'], result: 'fail' },
+      clock,
+    )
+
+    expect(carried_findings).toEqual([auth(12), auth(88)])
+  })
+
+  it('archives the deduplicated list', async () => {
+    await twoAgentsOneDefect('build')
+    const started = await new StateStore(project.dir).get()
+    const { carried_findings } = await cycleAdvance(
+      project.dir,
+      { agents: ['builder', 'verifier', 'critic'], result: 'fail' },
+      clock,
+    )
+
+    const file = path.join(runDirPath(project.dir, started), 'cycle-01', 'findings.json')
+    expect(JSON.parse(await fs.readFile(file, 'utf8'))).toEqual(carried_findings)
+  })
+
+  it('prints one line per distinct finding in the halt report', async () => {
+    // The edit track caps at one cycle, so this fail halts the run.
+    await runStart(project.dir, { track: 'edit', goal: 'Fix the null check' }, clock)
+    await runLog(project.dir, { agent: 'verifier', result: reported([auth(12)]) }, clock)
+    await runLog(project.dir, { agent: 'editor', result: reported([auth(12)]) }, clock)
+    const { state } = await cycleAdvance(project.dir, { agents: ['editor', 'verifier'], result: 'fail' }, clock)
+
+    const report = await fs.readFile(path.join(runDirPath(project.dir, state), 'HALT.md'), 'utf8')
+    expect(report.split('src/auth.ts:12')).toHaveLength(2)
+  })
+
+  it('prints the same list whether the halt was a guard or a person', async () => {
+    const openFindings = (report: string) => report.split('## Open findings')[1]?.split('## Next step')[0]
+
+    await runStart(project.dir, { track: 'edit', goal: 'Fix the null check' }, clock)
+    await runLog(project.dir, { agent: 'verifier', result: reported([auth(12), auth(88)]) }, clock)
+    await runLog(project.dir, { agent: 'editor', result: reported([auth(12)]) }, clock)
+    const { state: byGuard } = await cycleAdvance(project.dir, { agents: ['editor', 'verifier'], result: 'fail' }, clock)
+    const guard = await fs.readFile(path.join(runDirPath(project.dir, byGuard), 'HALT.md'), 'utf8')
+
+    await runStart(project.dir, { track: 'edit', goal: 'Fix the null check' }, clock)
+    await runLog(project.dir, { agent: 'verifier', result: reported([auth(12), auth(88)]) }, clock)
+    await runLog(project.dir, { agent: 'editor', result: reported([auth(12)]) }, clock)
+    const byPerson = await halt(project.dir, 'user requested stop', clock)
+    const person = await fs.readFile(path.join(runDirPath(project.dir, byPerson), 'HALT.md'), 'utf8')
+
+    expect(openFindings(person)).toBe(openFindings(guard))
   })
 })

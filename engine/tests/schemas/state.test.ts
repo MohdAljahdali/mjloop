@@ -15,6 +15,7 @@ describe('initialState', () => {
     expect(state.reproduction).toBeNull()
     expect(state.cycle_errors).toEqual([])
     expect(state.last_error_fingerprint).toBeNull()
+    expect(state.started_at).toBeNull()
   })
 })
 
@@ -108,5 +109,49 @@ describe('StateSchema', () => {
 
   it('rejects an empty signature', () => {
     expect(StateSchema.safeParse({ ...initialState(NOW), cycle_errors: [''] }).success).toBe(false)
+  })
+
+  it('defaults started_at to null on a document written before the field existed', () => {
+    const { started_at, ...withoutField } = initialState(NOW)
+    expect(StateSchema.parse(withoutField).started_at).toBeNull()
+  })
+
+  it('accepts a stamped start time', () => {
+    const state = { ...initialState(NOW), started_at: '2026-07-28T10:31:00.000Z' }
+    expect(StateSchema.safeParse(state).success).toBe(true)
+  })
+
+  it('rejects a start time that is not a timestamp', () => {
+    expect(StateSchema.safeParse({ ...initialState(NOW), started_at: 'this morning' }).success).toBe(false)
+  })
+
+  it('tells a run that predates the pin apart from one whose pin was deleted', () => {
+    // The second job started_at does: runStart is its only writer, so
+    // `null` means the run began before the verify pin existed and verifyRun
+    // may fall back to the live config. On any newer run a missing pin is a
+    // deletion, and falling back there would make `rm` the downgrade attack
+    // the pin exists to prevent. The two states have to be distinguishable
+    // from state.json alone, which is what this asserts.
+    const legacy = StateSchema.parse({ ...initialState(NOW), run_id: '2026-07-01-001', track: 'build', status: 'running' })
+    const current = StateSchema.parse({ ...legacy, started_at: '2026-07-28T10:31:00.000Z' })
+    expect(legacy.started_at).toBeNull()
+    expect(current.started_at).not.toBeNull()
+  })
+
+  it('defaults a history entry written before it was timed', () => {
+    const entry = { cycle: 1, agents: ['editor'], result: 'pass' as const, ref: 'runs/r' }
+    const parsed = StateSchema.parse({ ...initialState(NOW), history: [entry] })
+    expect(parsed.history[0]?.at).toBeNull()
+  })
+
+  it('accepts a timed history entry', () => {
+    const entry = { cycle: 1, agents: ['editor'], result: 'pass' as const, ref: 'runs/r', at: '2026-07-28T10:36:00.000Z' }
+    const parsed = StateSchema.parse({ ...initialState(NOW), history: [entry] })
+    expect(parsed.history[0]?.at).toBe('2026-07-28T10:36:00.000Z')
+  })
+
+  it('rejects a history entry whose close time is not a timestamp', () => {
+    const entry = { cycle: 1, agents: ['editor'], result: 'pass' as const, ref: 'runs/r', at: 'later' }
+    expect(StateSchema.safeParse({ ...initialState(NOW), history: [entry] }).success).toBe(false)
   })
 })

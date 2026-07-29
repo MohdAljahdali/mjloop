@@ -1,8 +1,14 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import { HISTORY_DEFAULT_LIMIT } from '../ops/history.js'
+import { preflightEstimate, type Preflight } from '../ops/preflight.js'
+import { UnknownTrackError } from '../ops/run.js'
+import { readTelemetry, type Telemetry } from '../ops/telemetry.js'
+import { readVerifyLedger } from '../ops/verify.js'
 import { AgentResultSchema, RosterSchema } from '../schemas/contract.js'
 import { FindingSchema, type State } from '../schemas/state.js'
 import { ManifestSchema, PlanFrontmatterSchema, StoryFrontmatterSchema } from '../schemas/plan.js'
+import type { LedgerEntry } from '../schemas/verify.js'
 import { loadConfig, ConfigMissingError } from '../store/config-store.js'
 import { parseFrontmatter } from '../store/frontmatter.js'
 import { listMemories, readMemory } from '../store/memory-store.js'
@@ -22,6 +28,13 @@ import type { Config } from '../schemas/config.js'
  * That rules out `readPlan`, which repairs clobbered frontmatter by rewriting
  * the file. Plans are read here from `PLAN.md` directly and their stories from
  * `listStories`, which skips a file it cannot parse rather than mending it.
+ *
+ * It also decides which half of `ops/verify.ts` this file may touch. That module
+ * exports the ledger *reader* beside the executor that spawns a shell command
+ * and takes the project verify lock; only the reader belongs on a wire a browser
+ * can pull. `tests/web/boundary.test.ts` names `verifyRun` and `worktreeDigest`
+ * in its `FORBIDDEN` list with the reason attached, so importing the executor
+ * beside the reader fails a test rather than passing review.
  */
 
 export class NotFoundError extends Error {
@@ -225,6 +238,30 @@ export async function readRunDetail(projectDir: string, runId: string): Promise<
   }
 }
 
+/**
+ * How many ledger rows one cycle may put on the wire.
+ *
+ * `cycle-NN/verify/index.json` gains a row per invocation and a cycle can verify
+ * as many times as its agents ask to, so the array has no ceiling of its own.
+ * This document is what the Evidence tab re-fetches every time `revisions.cycle`
+ * moves — roughly once a second while the run is live — so an unbounded array
+ * here is a payload that grows for the length of the cycle and is re-serialised
+ * at that rate. The newest rows are kept: they are the ones the cycle's verdict
+ * is about to rest on.
+ */
+export const CYCLE_VERIFY_MAX = 50
+
+/**
+ * The ceiling on the handoff body this reader will carry.
+ *
+ * `writeHandoff` truncates at 6 000 bytes, so a handoff the engine wrote is
+ * already bounded and this cap never fires. It exists for the one it did not
+ * write: `handoff.md` is an ordinary file in an ordinary directory that a person
+ * or an agent can replace, and the same once-a-second re-fetch applies to
+ * whatever is found there.
+ */
+export const CYCLE_HANDOFF_MAX = 12_000
+
 export interface CycleDetail {
   cycle: number
   /**
@@ -234,6 +271,27 @@ export interface CycleDetail {
   roster: { selected: string[]; skipped: { agent: string; reason: string }[] } | null
   findings: { severity: string; file: string; line: number; claim: string }[]
   agents: { agent: string; result: unknown }[]
+  /**
+   * What the engine executed for this cycle, from `cycle-NN/verify/index.json`.
+   *
+   * At most `CYCLE_VERIFY_MAX` rows, oldest first. The pin's drift marker
+   * (`source`, `live_command`) and the `queued` phase are fields on the entry
+   * rather than a second channel, which is why an operator who edited
+   * `config.yaml` mid-run can see which command actually ran without this file
+   * gaining a route, a reader, or any knowledge of the pin.
+   */
+  verify: LedgerEntry[]
+  /** Rows on disk, so `CYCLE_VERIFY_MAX` is visible rather than silent. */
+  verify_total: number
+  /**
+   * `cycle-NN/handoff.md`, verbatim. Null when the cycle has none: every cycle
+   * closed before the handoff existed, and any cycle whose handoff write failed
+   * — `cycleAdvance` reports that as `handoff: null` rather than throwing, so
+   * the absence is expected here too.
+   */
+  handoff: string | null
+  /** True when `CYCLE_HANDOFF_MAX` cut the body above. */
+  handoff_truncated: boolean
 }
 
 export async function readCycleDetail(projectDir: string, runId: string, cycle: number): Promise<CycleDetail> {
@@ -243,6 +301,10 @@ export async function readCycleDetail(projectDir: string, runId: string, cycle: 
 
   const roster = await readJson(path.join(dir, 'roster.json'), RosterSchema)
   const findings = await readJson(path.join(dir, 'findings.json'), FindingSchema.array())
+  // Absence is the ordinary case, not an error: every cycle of every run that
+  // predates the ledger has no `verify/` directory at all.
+  const ledger = await readVerifyLedger(dir)
+  const handoff = await fs.readFile(path.join(dir, 'handoff.md'), 'utf8').catch(() => null)
 
   const agents: { agent: string; result: unknown }[] = []
   for (const entry of inside.filter((name) => name.endsWith('.json')).sort()) {
@@ -265,6 +327,10 @@ export async function readCycleDetail(projectDir: string, runId: string, cycle: 
           },
     findings: findings ?? [],
     agents,
+    verify: ledger.slice(-CYCLE_VERIFY_MAX),
+    verify_total: ledger.length,
+    handoff: handoff === null ? null : handoff.slice(0, CYCLE_HANDOFF_MAX),
+    handoff_truncated: handoff !== null && handoff.length > CYCLE_HANDOFF_MAX,
   }
 }
 
@@ -320,6 +386,61 @@ export async function readMemoryEntry(projectDir: string, id: string): Promise<M
     return { ...memory.frontmatter, body: memory.body }
   } catch {
     throw new NotFoundError('memory')
+  }
+}
+
+/* ── the two cross-run reports ────────────────────────────────────────────── */
+
+/**
+ * Both are projections of `readRunHistory`, and both live in `ops/` because the
+ * MCP server serves the same two reports from the same walk. They are re-stated
+ * here rather than routed straight out of `api.ts` for two reasons the route
+ * table should not have to carry: the bound each one puts on the wire, and the
+ * translation of an engine exception into this file's `NotFoundError`.
+ */
+
+/**
+ * The specialist table, bounded twice over.
+ *
+ * `readTelemetry` caps its rows at `TELEMETRY_MAX_ROWS` and reports `truncated`
+ * beside them; the limit passed here is the other ceiling — how many run
+ * directories the walk opens. It is the default made explicit, because the
+ * number that matters is the one this wire is willing to pay for, and inheriting
+ * it would let a later change to the op's default silently change what a browser
+ * poll costs.
+ *
+ * This answer moves with `revisions.runs` and not the cycle tick, which is why a
+ * cross-run walk at ~1.25 Hz is not what the Config tab does: `revisions.runs`
+ * is the run-directory listing plus that directory's mtime, so it does not move
+ * when a `cycle-NN/<agent>.json` lands inside a run that already exists. The
+ * table goes stale during a live run and refreshes when the next run opens —
+ * correct for a report whose subject is the last fifty runs.
+ */
+export async function readTelemetryReport(projectDir: string): Promise<Telemetry> {
+  return await readTelemetry(projectDir, { limit: HISTORY_DEFAULT_LIMIT })
+}
+
+/**
+ * The shape of a run the operator has not started yet.
+ *
+ * A pure read, and the pre-dispatch surface: `runStart` is permanently forbidden
+ * from the browser, so the idle Run tab can show what a run would cost and
+ * nothing here can begin one. No story is passed — the idle tab has none — and
+ * that is not a default standing in for one: it selects ad-hoc runs as the
+ * comparable set, which is what an operator about to type a goal is choosing
+ * between.
+ *
+ * A track the project does not define, and a project with no config at all, are
+ * both 404s rather than 500s: neither is this server failing to read something
+ * it should have been able to read.
+ */
+export async function readPreflightEstimate(projectDir: string, track: string): Promise<Preflight> {
+  try {
+    return await preflightEstimate(projectDir, { track })
+  } catch (error) {
+    if (error instanceof UnknownTrackError) throw new NotFoundError('track')
+    if (error instanceof ConfigMissingError) throw new NotFoundError('config')
+    throw error
   }
 }
 

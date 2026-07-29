@@ -1,0 +1,6 @@
+# These four logs are captured output from real runs of this repository's own
+# `verify.test` and `verify.lint` commands, and the digest and error-signature
+# tests are worthless against synthetic strings. The root .gitignore's `*.log`
+# would keep every one of them out of the repository, so it is negated here
+# rather than being weakened for the whole tree.
+!*.log

@@ -1,0 +1,56 @@
+
+> @mjloop/engine@0.4.1 test
+> vitest run
+
+
+ RUN  v4.1.10 /Volumes/SSD/Projects/loop/engine
+
+mjloop web: write failed: NoActiveRunError: no active run — call mjloop_run_start first
+ ❯ tests/ops/fingerprint.test.ts (25 tests | 1 failed) 12ms
+     × ignores the line a finding sits on 3ms
+ ❯ tests/ops/run.test.ts (48 tests | 1 failed) 1472ms
+     × still strikes when the defect drifts down the file 32ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/ops/fingerprint.test.ts > cycleFingerprint > ignores the line a finding sits on
+AssertionError: expected '8d9c804f0005e38be4417163cf93727a991d9…' to be '1b4f32a5ea0613b742945931095d0db59ff8f…' // Object.is equality
+
+Expected: "1b4f32a5ea0613b742945931095d0db59ff8f5eeea848ebe3e9131e49938054f"
+Received: "8d9c804f0005e38be4417163cf93727a991d917ed7a82f474529e21023d3cc33"
+
+ ❯ tests/ops/fingerprint.test.ts:31:60
+     29|     // drifts down a line or two every cycle. Hashing the line would l…
+     30|     // flailing loop escape every strike.
+     31|     expect(cycleFingerprint([{ ...A, line: 40 }], 'fail')).toBe(cycleF…
+       |                                                            ^
+     32|   })
+     33|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/ops/run.test.ts > stagnation guard > still strikes when the defect drifts down the file
+AssertionError: expected +0 to be 1 // Object.is equality
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ tests/ops/run.test.ts:444:67
+    442|     // not changed and neither should the verdict.
+    443|     await failCycle('asserts the old label', 6)
+    444|     expect((await failCycle('asserts the old label', 7)).strikes).toBe…
+       |                                                                   ^
+    445|     expect((await failCycle('asserts the old label', 8)).state.status)…
+    446|   })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  2 failed | 47 passed (49)
+      Tests  2 failed | 779 passed (781)
+   Start at  21:50:46
+   Duration  1.82s (transform 1.29s, setup 0ms, import 3.98s, tests 10.57s, environment 700ms)
+

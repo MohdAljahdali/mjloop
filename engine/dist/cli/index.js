@@ -114,17 +114,17 @@ var require_visit = __commonJS({
     visit.BREAK = BREAK;
     visit.SKIP = SKIP;
     visit.REMOVE = REMOVE;
-    function visit_(key, node, visitor, path5) {
-      const ctrl = callVisitor(key, node, visitor, path5);
+    function visit_(key, node, visitor, path7) {
+      const ctrl = callVisitor(key, node, visitor, path7);
       if (identity.isNode(ctrl) || identity.isPair(ctrl)) {
-        replaceNode(key, path5, ctrl);
-        return visit_(key, ctrl, visitor, path5);
+        replaceNode(key, path7, ctrl);
+        return visit_(key, ctrl, visitor, path7);
       }
       if (typeof ctrl !== "symbol") {
         if (identity.isCollection(node)) {
-          path5 = Object.freeze(path5.concat(node));
+          path7 = Object.freeze(path7.concat(node));
           for (let i = 0; i < node.items.length; ++i) {
-            const ci = visit_(i, node.items[i], visitor, path5);
+            const ci = visit_(i, node.items[i], visitor, path7);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -135,13 +135,13 @@ var require_visit = __commonJS({
             }
           }
         } else if (identity.isPair(node)) {
-          path5 = Object.freeze(path5.concat(node));
-          const ck = visit_("key", node.key, visitor, path5);
+          path7 = Object.freeze(path7.concat(node));
+          const ck = visit_("key", node.key, visitor, path7);
           if (ck === BREAK)
             return BREAK;
           else if (ck === REMOVE)
             node.key = null;
-          const cv = visit_("value", node.value, visitor, path5);
+          const cv = visit_("value", node.value, visitor, path7);
           if (cv === BREAK)
             return BREAK;
           else if (cv === REMOVE)
@@ -162,17 +162,17 @@ var require_visit = __commonJS({
     visitAsync.BREAK = BREAK;
     visitAsync.SKIP = SKIP;
     visitAsync.REMOVE = REMOVE;
-    async function visitAsync_(key, node, visitor, path5) {
-      const ctrl = await callVisitor(key, node, visitor, path5);
+    async function visitAsync_(key, node, visitor, path7) {
+      const ctrl = await callVisitor(key, node, visitor, path7);
       if (identity.isNode(ctrl) || identity.isPair(ctrl)) {
-        replaceNode(key, path5, ctrl);
-        return visitAsync_(key, ctrl, visitor, path5);
+        replaceNode(key, path7, ctrl);
+        return visitAsync_(key, ctrl, visitor, path7);
       }
       if (typeof ctrl !== "symbol") {
         if (identity.isCollection(node)) {
-          path5 = Object.freeze(path5.concat(node));
+          path7 = Object.freeze(path7.concat(node));
           for (let i = 0; i < node.items.length; ++i) {
-            const ci = await visitAsync_(i, node.items[i], visitor, path5);
+            const ci = await visitAsync_(i, node.items[i], visitor, path7);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -183,13 +183,13 @@ var require_visit = __commonJS({
             }
           }
         } else if (identity.isPair(node)) {
-          path5 = Object.freeze(path5.concat(node));
-          const ck = await visitAsync_("key", node.key, visitor, path5);
+          path7 = Object.freeze(path7.concat(node));
+          const ck = await visitAsync_("key", node.key, visitor, path7);
           if (ck === BREAK)
             return BREAK;
           else if (ck === REMOVE)
             node.key = null;
-          const cv = await visitAsync_("value", node.value, visitor, path5);
+          const cv = await visitAsync_("value", node.value, visitor, path7);
           if (cv === BREAK)
             return BREAK;
           else if (cv === REMOVE)
@@ -216,23 +216,23 @@ var require_visit = __commonJS({
       }
       return visitor;
     }
-    function callVisitor(key, node, visitor, path5) {
+    function callVisitor(key, node, visitor, path7) {
       if (typeof visitor === "function")
-        return visitor(key, node, path5);
+        return visitor(key, node, path7);
       if (identity.isMap(node))
-        return visitor.Map?.(key, node, path5);
+        return visitor.Map?.(key, node, path7);
       if (identity.isSeq(node))
-        return visitor.Seq?.(key, node, path5);
+        return visitor.Seq?.(key, node, path7);
       if (identity.isPair(node))
-        return visitor.Pair?.(key, node, path5);
+        return visitor.Pair?.(key, node, path7);
       if (identity.isScalar(node))
-        return visitor.Scalar?.(key, node, path5);
+        return visitor.Scalar?.(key, node, path7);
       if (identity.isAlias(node))
-        return visitor.Alias?.(key, node, path5);
+        return visitor.Alias?.(key, node, path7);
       return void 0;
     }
-    function replaceNode(key, path5, node) {
-      const parent = path5[path5.length - 1];
+    function replaceNode(key, path7, node) {
+      const parent = path7[path7.length - 1];
       if (identity.isCollection(parent)) {
         parent.items[key] = node;
       } else if (identity.isPair(parent)) {
@@ -842,10 +842,10 @@ var require_Collection = __commonJS({
     var createNode = require_createNode();
     var identity = require_identity();
     var Node = require_Node();
-    function collectionFromPath(schema, path5, value) {
+    function collectionFromPath(schema, path7, value) {
       let v = value;
-      for (let i = path5.length - 1; i >= 0; --i) {
-        const k = path5[i];
+      for (let i = path7.length - 1; i >= 0; --i) {
+        const k = path7[i];
         if (typeof k === "number" && Number.isInteger(k) && k >= 0) {
           const a = [];
           a[k] = v;
@@ -864,7 +864,7 @@ var require_Collection = __commonJS({
         sourceObjects: /* @__PURE__ */ new Map()
       });
     }
-    var isEmptyPath = (path5) => path5 == null || typeof path5 === "object" && !!path5[Symbol.iterator]().next().done;
+    var isEmptyPath = (path7) => path7 == null || typeof path7 === "object" && !!path7[Symbol.iterator]().next().done;
     var Collection = class extends Node.NodeBase {
       constructor(type, schema) {
         super(type);
@@ -894,11 +894,11 @@ var require_Collection = __commonJS({
        * be a Pair instance or a `{ key, value }` object, which may not have a key
        * that already exists in the map.
        */
-      addIn(path5, value) {
-        if (isEmptyPath(path5))
+      addIn(path7, value) {
+        if (isEmptyPath(path7))
           this.add(value);
         else {
-          const [key, ...rest] = path5;
+          const [key, ...rest] = path7;
           const node = this.get(key, true);
           if (identity.isCollection(node))
             node.addIn(rest, value);
@@ -912,8 +912,8 @@ var require_Collection = __commonJS({
        * Removes a value from the collection.
        * @returns `true` if the item was found and removed.
        */
-      deleteIn(path5) {
-        const [key, ...rest] = path5;
+      deleteIn(path7) {
+        const [key, ...rest] = path7;
         if (rest.length === 0)
           return this.delete(key);
         const node = this.get(key, true);
@@ -927,8 +927,8 @@ var require_Collection = __commonJS({
        * scalar values from their surrounding node; to disable set `keepScalar` to
        * `true` (collections are always returned intact).
        */
-      getIn(path5, keepScalar) {
-        const [key, ...rest] = path5;
+      getIn(path7, keepScalar) {
+        const [key, ...rest] = path7;
         const node = this.get(key, true);
         if (rest.length === 0)
           return !keepScalar && identity.isScalar(node) ? node.value : node;
@@ -946,8 +946,8 @@ var require_Collection = __commonJS({
       /**
        * Checks if the collection includes a value with the key `key`.
        */
-      hasIn(path5) {
-        const [key, ...rest] = path5;
+      hasIn(path7) {
+        const [key, ...rest] = path7;
         if (rest.length === 0)
           return this.has(key);
         const node = this.get(key, true);
@@ -957,8 +957,8 @@ var require_Collection = __commonJS({
        * Sets a value in this collection. For `!!set`, `value` needs to be a
        * boolean to add/remove the item from the set.
        */
-      setIn(path5, value) {
-        const [key, ...rest] = path5;
+      setIn(path7, value) {
+        const [key, ...rest] = path7;
         if (rest.length === 0) {
           this.set(key, value);
         } else {
@@ -1505,7 +1505,7 @@ var require_stringify = __commonJS({
         props.push(doc.directives.tagString(tag));
       return props.join(" ");
     }
-    function stringify2(item, ctx, onComment, onChompKeep) {
+    function stringify3(item, ctx, onComment, onChompKeep) {
       if (identity.isPair(item))
         return item.toString(ctx, onComment, onChompKeep);
       if (identity.isAlias(item)) {
@@ -1534,7 +1534,7 @@ var require_stringify = __commonJS({
 ${ctx.indent}${str}`;
     }
     exports.createStringifyContext = createStringifyContext;
-    exports.stringify = stringify2;
+    exports.stringify = stringify3;
   }
 });
 
@@ -1544,7 +1544,7 @@ var require_stringifyPair = __commonJS({
     "use strict";
     var identity = require_identity();
     var Scalar = require_Scalar();
-    var stringify2 = require_stringify();
+    var stringify3 = require_stringify();
     var stringifyComment = require_stringifyComment();
     function stringifyPair({ key, value }, ctx, onComment, onChompKeep) {
       const { allNullValues, doc, indent, indentStep, options: { commentString, indentSeq, simpleKeys } } = ctx;
@@ -1566,7 +1566,7 @@ var require_stringifyPair = __commonJS({
       });
       let keyCommentDone = false;
       let chompKeep = false;
-      let str = stringify2.stringify(key, ctx, () => keyCommentDone = true, () => chompKeep = true);
+      let str = stringify3.stringify(key, ctx, () => keyCommentDone = true, () => chompKeep = true);
       if (!explicitKey && !ctx.inFlow && str.length > 1024) {
         if (simpleKeys)
           throw new Error("With simple keys, single line scalar must not span more than 1024 characters");
@@ -1618,7 +1618,7 @@ ${indent}:`;
         ctx.indent = ctx.indent.substring(2);
       }
       let valueCommentDone = false;
-      const valueStr = stringify2.stringify(value, ctx, () => valueCommentDone = true, () => chompKeep = true);
+      const valueStr = stringify3.stringify(value, ctx, () => valueCommentDone = true, () => chompKeep = true);
       let ws = " ";
       if (keyComment || vsb || vcb) {
         ws = vsb ? "\n" : "";
@@ -1759,7 +1759,7 @@ var require_addPairToJSMap = __commonJS({
     "use strict";
     var log = require_log();
     var merge2 = require_merge();
-    var stringify2 = require_stringify();
+    var stringify3 = require_stringify();
     var identity = require_identity();
     var toJS = require_toJS();
     function addPairToJSMap(ctx, map, { key, value }) {
@@ -1795,7 +1795,7 @@ var require_addPairToJSMap = __commonJS({
       if (typeof jsKey !== "object")
         return String(jsKey);
       if (identity.isNode(key) && ctx?.doc) {
-        const strCtx = stringify2.createStringifyContext(ctx.doc, {});
+        const strCtx = stringify3.createStringifyContext(ctx.doc, {});
         strCtx.anchors = /* @__PURE__ */ new Set();
         for (const node of ctx.anchors.keys())
           strCtx.anchors.add(node.anchor);
@@ -1862,12 +1862,12 @@ var require_stringifyCollection = __commonJS({
   "node_modules/yaml/dist/stringify/stringifyCollection.js"(exports) {
     "use strict";
     var identity = require_identity();
-    var stringify2 = require_stringify();
+    var stringify3 = require_stringify();
     var stringifyComment = require_stringifyComment();
     function stringifyCollection(collection, ctx, options) {
       const flow = ctx.inFlow ?? collection.flow;
-      const stringify3 = flow ? stringifyFlowCollection : stringifyBlockCollection;
-      return stringify3(collection, ctx, options);
+      const stringify4 = flow ? stringifyFlowCollection : stringifyBlockCollection;
+      return stringify4(collection, ctx, options);
     }
     function stringifyBlockCollection({ comment, items }, ctx, { blockItemPrefix, flowChars, itemIndent, onChompKeep, onComment }) {
       const { indent, options: { commentString } } = ctx;
@@ -1892,7 +1892,7 @@ var require_stringifyCollection = __commonJS({
           }
         }
         chompKeep = false;
-        let str2 = stringify2.stringify(item, itemCtx, () => comment2 = null, () => chompKeep = true);
+        let str2 = stringify3.stringify(item, itemCtx, () => comment2 = null, () => chompKeep = true);
         if (comment2)
           str2 += stringifyComment.lineComment(str2, itemIndent, commentString(comment2));
         if (chompKeep && comment2)
@@ -1959,7 +1959,7 @@ ${indent}${line}` : "\n";
         }
         if (comment)
           reqNewline = true;
-        let str = stringify2.stringify(item, itemCtx, () => comment = null);
+        let str = stringify3.stringify(item, itemCtx, () => comment = null);
         reqNewline || (reqNewline = lines.length > linesAtValue || str.includes("\n"));
         if (i < items.length - 1) {
           str += ",";
@@ -3320,7 +3320,7 @@ var require_stringifyDocument = __commonJS({
   "node_modules/yaml/dist/stringify/stringifyDocument.js"(exports) {
     "use strict";
     var identity = require_identity();
-    var stringify2 = require_stringify();
+    var stringify3 = require_stringify();
     var stringifyComment = require_stringifyComment();
     function stringifyDocument(doc, options) {
       const lines = [];
@@ -3335,7 +3335,7 @@ var require_stringifyDocument = __commonJS({
       }
       if (hasDirectives)
         lines.push("---");
-      const ctx = stringify2.createStringifyContext(doc, options);
+      const ctx = stringify3.createStringifyContext(doc, options);
       const { commentString } = ctx.options;
       if (doc.commentBefore) {
         if (lines.length !== 1)
@@ -3357,7 +3357,7 @@ var require_stringifyDocument = __commonJS({
           contentComment = doc.contents.comment;
         }
         const onChompKeep = contentComment ? void 0 : () => chompKeep = true;
-        let body = stringify2.stringify(doc.contents, ctx, () => contentComment = null, onChompKeep);
+        let body = stringify3.stringify(doc.contents, ctx, () => contentComment = null, onChompKeep);
         if (contentComment)
           body += stringifyComment.lineComment(body, "", commentString(contentComment));
         if ((body[0] === "|" || body[0] === ">") && lines[lines.length - 1] === "---") {
@@ -3365,7 +3365,7 @@ var require_stringifyDocument = __commonJS({
         } else
           lines.push(body);
       } else {
-        lines.push(stringify2.stringify(doc.contents, ctx));
+        lines.push(stringify3.stringify(doc.contents, ctx));
       }
       if (doc.directives?.docEnd) {
         if (doc.comment) {
@@ -3473,9 +3473,9 @@ var require_Document = __commonJS({
           this.contents.add(value);
       }
       /** Adds a value to the document. */
-      addIn(path5, value) {
+      addIn(path7, value) {
         if (assertCollection(this.contents))
-          this.contents.addIn(path5, value);
+          this.contents.addIn(path7, value);
       }
       /**
        * Create a new `Alias` node, ensuring that the target `node` has the required anchor.
@@ -3550,14 +3550,14 @@ var require_Document = __commonJS({
        * Removes a value from the document.
        * @returns `true` if the item was found and removed.
        */
-      deleteIn(path5) {
-        if (Collection.isEmptyPath(path5)) {
+      deleteIn(path7) {
+        if (Collection.isEmptyPath(path7)) {
           if (this.contents == null)
             return false;
           this.contents = null;
           return true;
         }
-        return assertCollection(this.contents) ? this.contents.deleteIn(path5) : false;
+        return assertCollection(this.contents) ? this.contents.deleteIn(path7) : false;
       }
       /**
        * Returns item at `key`, or `undefined` if not found. By default unwraps
@@ -3572,10 +3572,10 @@ var require_Document = __commonJS({
        * scalar values from their surrounding node; to disable set `keepScalar` to
        * `true` (collections are always returned intact).
        */
-      getIn(path5, keepScalar) {
-        if (Collection.isEmptyPath(path5))
+      getIn(path7, keepScalar) {
+        if (Collection.isEmptyPath(path7))
           return !keepScalar && identity.isScalar(this.contents) ? this.contents.value : this.contents;
-        return identity.isCollection(this.contents) ? this.contents.getIn(path5, keepScalar) : void 0;
+        return identity.isCollection(this.contents) ? this.contents.getIn(path7, keepScalar) : void 0;
       }
       /**
        * Checks if the document includes a value with the key `key`.
@@ -3586,10 +3586,10 @@ var require_Document = __commonJS({
       /**
        * Checks if the document includes a value at `path`.
        */
-      hasIn(path5) {
-        if (Collection.isEmptyPath(path5))
+      hasIn(path7) {
+        if (Collection.isEmptyPath(path7))
           return this.contents !== void 0;
-        return identity.isCollection(this.contents) ? this.contents.hasIn(path5) : false;
+        return identity.isCollection(this.contents) ? this.contents.hasIn(path7) : false;
       }
       /**
        * Sets a value in this document. For `!!set`, `value` needs to be a
@@ -3606,13 +3606,13 @@ var require_Document = __commonJS({
        * Sets a value in this document. For `!!set`, `value` needs to be a
        * boolean to add/remove the item from the set.
        */
-      setIn(path5, value) {
-        if (Collection.isEmptyPath(path5)) {
+      setIn(path7, value) {
+        if (Collection.isEmptyPath(path7)) {
           this.contents = value;
         } else if (this.contents == null) {
-          this.contents = Collection.collectionFromPath(this.schema, Array.from(path5), value);
+          this.contents = Collection.collectionFromPath(this.schema, Array.from(path7), value);
         } else if (assertCollection(this.contents)) {
-          this.contents.setIn(path5, value);
+          this.contents.setIn(path7, value);
         }
       }
       /**
@@ -5500,7 +5500,7 @@ var require_cst_scalar = __commonJS({
 var require_cst_stringify = __commonJS({
   "node_modules/yaml/dist/parse/cst-stringify.js"(exports) {
     "use strict";
-    var stringify2 = (cst) => "type" in cst ? stringifyToken(cst) : stringifyItem(cst);
+    var stringify3 = (cst) => "type" in cst ? stringifyToken(cst) : stringifyItem(cst);
     function stringifyToken(token) {
       switch (token.type) {
         case "block-scalar": {
@@ -5553,7 +5553,7 @@ var require_cst_stringify = __commonJS({
         res += stringifyToken(value);
       return res;
     }
-    exports.stringify = stringify2;
+    exports.stringify = stringify3;
   }
 });
 
@@ -5572,9 +5572,9 @@ var require_cst_visit = __commonJS({
     visit.BREAK = BREAK;
     visit.SKIP = SKIP;
     visit.REMOVE = REMOVE;
-    visit.itemAtPath = (cst, path5) => {
+    visit.itemAtPath = (cst, path7) => {
       let item = cst;
-      for (const [field, index] of path5) {
+      for (const [field, index] of path7) {
         const tok = item?.[field];
         if (tok && "items" in tok) {
           item = tok.items[index];
@@ -5583,23 +5583,23 @@ var require_cst_visit = __commonJS({
       }
       return item;
     };
-    visit.parentCollection = (cst, path5) => {
-      const parent = visit.itemAtPath(cst, path5.slice(0, -1));
-      const field = path5[path5.length - 1][0];
+    visit.parentCollection = (cst, path7) => {
+      const parent = visit.itemAtPath(cst, path7.slice(0, -1));
+      const field = path7[path7.length - 1][0];
       const coll = parent?.[field];
       if (coll && "items" in coll)
         return coll;
       throw new Error("Parent collection not found");
     };
-    function _visit(path5, item, visitor) {
-      let ctrl = visitor(item, path5);
+    function _visit(path7, item, visitor) {
+      let ctrl = visitor(item, path7);
       if (typeof ctrl === "symbol")
         return ctrl;
       for (const field of ["key", "value"]) {
         const token = item[field];
         if (token && "items" in token) {
           for (let i = 0; i < token.items.length; ++i) {
-            const ci = _visit(Object.freeze(path5.concat([[field, i]])), token.items[i], visitor);
+            const ci = _visit(Object.freeze(path7.concat([[field, i]])), token.items[i], visitor);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -5610,10 +5610,10 @@ var require_cst_visit = __commonJS({
             }
           }
           if (typeof ctrl === "function" && field === "key")
-            ctrl = ctrl(item, path5);
+            ctrl = ctrl(item, path7);
         }
       }
-      return typeof ctrl === "function" ? ctrl(item, path5) : ctrl;
+      return typeof ctrl === "function" ? ctrl(item, path7) : ctrl;
     }
     exports.visit = visit;
   }
@@ -7264,7 +7264,7 @@ var require_public_api = __commonJS({
       }
       return doc;
     }
-    function parse4(src, reviver, options) {
+    function parse5(src, reviver, options) {
       let _reviver = void 0;
       if (typeof reviver === "function") {
         _reviver = reviver;
@@ -7283,7 +7283,7 @@ var require_public_api = __commonJS({
       }
       return doc.toJS(Object.assign({ reviver: _reviver }, options));
     }
-    function stringify2(value, replacer, options) {
+    function stringify3(value, replacer, options) {
       let _replacer = null;
       if (typeof replacer === "function" || Array.isArray(replacer)) {
         _replacer = replacer;
@@ -7305,10 +7305,10 @@ var require_public_api = __commonJS({
         return value.toString(options);
       return new Document.Document(value, _replacer, options).toString(options);
     }
-    exports.parse = parse4;
+    exports.parse = parse5;
     exports.parseAllDocuments = parseAllDocuments;
     exports.parseDocument = parseDocument;
-    exports.stringify = stringify2;
+    exports.stringify = stringify3;
   }
 });
 
@@ -7365,10 +7365,11 @@ var require_dist = __commonJS({
 });
 
 // src/cli/index.ts
-import path4 from "node:path";
+import path6 from "node:path";
 
 // src/ops/summary.ts
 import fs4 from "node:fs/promises";
+import path4 from "node:path";
 
 // node_modules/zod/v4/core/core.js
 var _a;
@@ -7611,10 +7612,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj, path5) {
-  if (!path5)
+function getElementAtPath(obj, path7) {
+  if (!path7)
     return obj;
-  return path5.reduce((acc, key) => acc?.[key], obj);
+  return path7.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -8023,11 +8024,11 @@ function explicitlyAborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path5, issues) {
+function prefixIssues(path7, issues) {
   return issues.map((iss) => {
     var _a3;
     (_a3 = iss).path ?? (_a3.path = []);
-    iss.path.unshift(path5);
+    iss.path.unshift(path7);
     return iss;
   });
 }
@@ -8174,16 +8175,16 @@ function flattenError(error2, mapper = (issue2) => issue2.message) {
 }
 function formatError(error2, mapper = (issue2) => issue2.message) {
   const fieldErrors = { _errors: [] };
-  const processError = (error3, path5 = []) => {
+  const processError = (error3, path7 = []) => {
     for (const issue2 of error3.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path5, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path7, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path5, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path7, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path5, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path7, ...issue2.path]);
       } else {
-        const fullpath = [...path5, ...issue2.path];
+        const fullpath = [...path7, ...issue2.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue2));
         } else {
@@ -8210,8 +8211,8 @@ function formatError(error2, mapper = (issue2) => issue2.message) {
 }
 function toDotPath(_path) {
   const segs = [];
-  const path5 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
-  for (const seg of path5) {
+  const path7 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
+  for (const seg of path7) {
     if (typeof seg === "number")
       segs.push(`[${seg}]`);
     else if (typeof seg === "symbol")
@@ -12466,7 +12467,18 @@ var HistoryEntrySchema = strictObject({
   cycle: number2().int().positive(),
   agents: array(string2().min(1)).min(1),
   result: ResultSchema,
-  ref: string2().min(1)
+  ref: string2().min(1),
+  /**
+   * When the cycle closed, so a run can be measured in minutes rather than
+   * only in cycles.
+   *
+   * Nullable and defaulted for the reason `last_fingerprint` is: `StateSchema`
+   * is strict, so without the default every history entry written before this
+   * field existed would fail validation on read rather than gaining the field
+   * on its next write. Its only writer is `cycleAdvance`, inside the update it
+   * already takes the lock for.
+   */
+  at: iso_exports.datetime().nullable().default(null)
 });
 var ReproductionSchema = strictObject({
   /** The agent whose result opened the gate. */
@@ -12487,6 +12499,20 @@ var StateSchema = strictObject({
   status: StatusSchema,
   cycle: number2().int().nonnegative(),
   goal: string2().min(1).nullable(),
+  /**
+   * When the run opened. Nullable and defaulted: a state file written before
+   * this field existed must gain it on its next write rather than fail to read.
+   *
+   * It carries a second load, and the two readers never write it. Because
+   * `runStart` is its only writer and it landed in the same change as the
+   * verify pin, `started_at === null` identifies a run that predates the pin —
+   * which is the one question `verifyRun` must answer to tell a legacy run
+   * (fall back to the live config, and say so) apart from a run whose pin was
+   * deleted (refuse). Without a marker the two absences are indistinguishable,
+   * and falling back on both would make `rm` the downgrade attack the pin
+   * exists to prevent.
+   */
+  started_at: iso_exports.datetime().nullable().default(null),
   current: strictObject({
     plan: IdSchema.nullable(),
     story: IdSchema.nullable(),
@@ -12522,7 +12548,7 @@ var StateSchema = strictObject({
 });
 
 // src/schemas/contract.ts
-var RESERVED_AGENT_NAMES = ["findings"];
+var RESERVED_AGENT_NAMES = ["findings", "roster", "verify", "evidence", "handoff", "map"];
 var AgentNameSchema = string2().regex(/^[A-Za-z0-9_-]+$/, 'only letters, digits, "-" and "_" are allowed').refine((name) => !name.includes("--"), '"--" is reserved: it separates an agent from its instance in the cycle file name').refine((name) => !RESERVED_AGENT_NAMES.includes(name), `reserved by the cycle directory: ${RESERVED_AGENT_NAMES.join(", ")}`);
 var EvidenceSchema = strictObject({
   kind: _enum(["command", "file", "test"]),
@@ -12552,18 +12578,44 @@ var GateSchema = strictObject({
   /** Agents that may not be logged until it is open. */
   blocks: array(string2().min(1)).min(1)
 });
+var MapSchema = strictObject({
+  /** Whose passing result becomes the run's map. */
+  drafted_by: string2().min(1)
+});
 var TrackSchema = strictObject({
   /** Agents the leader may never drop from a cycle. */
   required: array(string2().min(1)).min(1),
   /** Agents the leader may draft when the task calls for them. */
   available: array(string2().min(1)).default([]),
+  /**
+   * Agents that run once, after the run passes — never inside a working
+   * cycle.
+   *
+   * The default is load-bearing in the same way `available`'s is: `Track` is
+   * the output type, so every literal in `DEFAULT_TRACKS` must spell the key
+   * out, while an existing hand-written `config.yaml` gains `closing: []` on
+   * read and keeps parsing untouched.
+   */
+  closing: array(string2().min(1)).default([]),
   max_cycles: number2().int().positive(),
   /** Optional precondition. A track without one behaves as it always has. */
-  gate: GateSchema.optional()
+  gate: GateSchema.optional(),
+  /** Optional. A track that hands a map forward names who drafts it. */
+  map: MapSchema.optional()
 }).superRefine((track, ctx) => {
+  const known = /* @__PURE__ */ new Set([...track.required, ...track.available, ...track.closing]);
+  const remedy = `add it to required, available or closing first (this track has: ${[...known].join(", ")})`;
+  if (track.map !== void 0) {
+    const draftable = /* @__PURE__ */ new Set([...track.required, ...track.available]);
+    if (!draftable.has(track.map.drafted_by)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["map", "drafted_by"],
+        message: `"${track.map.drafted_by}" is not draftable in a working cycle on this track \u2014 a map drafted by an agent the leader can never draft is a map that is never written, and silently. Check the spelling, or add it to required or available first (this track draws cycles from: ${[...draftable].join(", ")})`
+      });
+    }
+  }
   if (track.gate === void 0) return;
-  const known = /* @__PURE__ */ new Set([...track.required, ...track.available]);
-  const remedy = `add it to required or available first (this track has: ${[...known].join(", ")})`;
   if (!known.has(track.gate.proven_by)) {
     ctx.addIssue({
       code: "custom",
@@ -12591,17 +12643,56 @@ var TrackSchema = strictObject({
 var VerifySchema = strictObject({
   test: string2().min(1).nullable().default(null),
   lint: string2().min(1).nullable().default(null),
-  build: string2().min(1).nullable().default(null)
+  build: string2().min(1).nullable().default(null),
+  /** Hard ceiling per invocation. The child is killed, and the kill is reported. */
+  timeout_ms: number2().int().positive().default(9e5),
+  /**
+   * How long an invocation waits for the project verify lock before returning
+   * a terminal `phase: 'queued'`. Two full ceilings by default, so a waiter
+   * never gives up on a suite that is still legitimately running: one holder
+   * may legitimately hold for `timeout_ms`, and a waiter that abandoned sooner
+   * would report a queue where there was only a slow test suite.
+   */
+  lock_timeout_ms: number2().int().positive().default(18e5),
+  /**
+   * Optional per-slot overrides for the digest's failure patterns. Compiled
+   * with `new RegExp` at use, inside a `try` — a typo in a regex must not stop
+   * a project verifying, so an invalid pattern falls back to the documented
+   * default and is reported in the digest.
+   */
+  failure_patterns: strictObject({
+    test: array(string2().min(1)).default([]),
+    lint: array(string2().min(1)).default([]),
+    build: array(string2().min(1)).default([])
+  }).prefault({})
 });
 var LEGACY_CONFIG_KEYS = ["custom_dirs"];
 var ConfigSchema = strictObject({
   version: literal(1),
   autonomous: boolean2().default(false),
+  /**
+   * Whether an identical verify command may reuse an earlier green result
+   * within the same run.
+   *
+   * Off by default. A suite that is not a pure function of the worktree —
+   * one that touches the network, the clock, a shared database or a port —
+   * has flakes, and re-running is how a loop finds them; a cache hides
+   * exactly that class of failure. A project whose build inputs live outside
+   * git (an ignored `.env`, generated code, `node_modules`) must leave it
+   * off, because the digest the cache keys on cannot see any of them.
+   */
+  verify_cache: boolean2().default(false),
   limits: strictObject({
     max_parallel_agents: number2().int().positive().default(4),
     no_progress_strikes: number2().int().positive().default(2)
   }).default({ max_parallel_agents: 4, no_progress_strikes: 2 }),
-  verify: VerifySchema.default({ test: null, lint: null, build: null }),
+  // `.prefault({})` rather than a literal default object: `.default()` takes
+  // the schema's *output*, in which every `.default()`ed field is required,
+  // so a literal here is a hand-maintained duplicate of the schema's own
+  // defaults that has to be edited twice every time `VerifySchema` gains a
+  // key. `.prefault` re-parses its argument, so each field arrives with its
+  // own default and the duplicate is retired.
+  verify: VerifySchema.prefault({}),
   /** A track name reaches the filesystem — it is the last component of every
    * run directory name — so it is constrained where it is defined, exactly as
    * the story id in the same template is. `config.yaml` is hand-editable and
@@ -12617,8 +12708,14 @@ var ConfigSchema = strictObject({
   specialists: record(AgentNameSchema, SpecialistModeSchema).default({}),
   gates: strictObject({
     plan_approval: _enum(["human", "auto"]).default("human"),
-    commit: _enum(["auto", "human"]).default("auto")
-  }).default({ plan_approval: "human", commit: "auto" })
+    commit: _enum(["auto", "human"]).default("auto"),
+    /**
+     * Does a person see the run's estimate before the first dispatch?
+     * `auto` by default: an estimate shown before every run that then
+     * always proceeds is a prompt nobody reads.
+     */
+    preflight: _enum(["human", "auto"]).default("auto")
+  }).default({ plan_approval: "human", commit: "auto", preflight: "auto" })
 }).superRefine((config2, ctx) => {
   const forbidden = new Set(
     Object.entries(config2.specialists).filter(([, mode]) => mode === "never").map(([name]) => name)
@@ -12632,6 +12729,22 @@ var ConfigSchema = strictObject({
           message: `"${agent}" is required by track "${trackName}" but specialists.${agent} is "never" \u2014 every possible roster for that track would be rejected. Drop one of the two.`
         });
       }
+    }
+    for (const agent of track.closing) {
+      if (forbidden.has(agent)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["tracks", trackName, "closing"],
+          message: `"${agent}" closes track "${trackName}" but specialists.${agent} is "never" \u2014 it could never be dispatched, and a closing agent needs no skip reason, so nothing would record that the run shipped without it. Drop one of the two.`
+        });
+      }
+    }
+    if (track.map !== void 0 && forbidden.has(track.map.drafted_by)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["tracks", trackName, "map", "drafted_by"],
+        message: `"${track.map.drafted_by}" drafts the map on track "${trackName}" but specialists.${track.map.drafted_by} is "never" \u2014 the only result that becomes a map could never be produced, so every cycle would re-derive the ground. Drop one of the two.`
+      });
     }
     if (track.gate !== void 0 && forbidden.has(track.gate.proven_by)) {
       ctx.addIssue({
@@ -12663,10 +12776,27 @@ function resolveLoopPaths(projectDir) {
     plans: path.join(root, "plans"),
     runs: path.join(root, "runs"),
     memory: path.join(root, "memory"),
-    lock: path.join(root, ".lock")
+    lock: path.join(root, ".lock"),
+    /**
+     * Mutual exclusion for verify *execution*, and never the same directory as
+     * `lock`.
+     *
+     * The two answer different questions and must not share a directory. The
+     * state lock is held for a read-modify-write measured in milliseconds; this
+     * one is held for as long as a test suite runs. A subprocess held inside
+     * `.lock` would starve every other tool in the session, since `withLock`'s
+     * default acquire timeout is 5 000 ms.
+     *
+     * Keyed on the project rather than the slot, because the contended resource
+     * is the machine — a port, a fixture database, a build output directory —
+     * and the engine cannot know which two commands share one. Two suites on
+     * one port both go red, and a red digest arms the repeated-error guard, so
+     * a run making progress can halt over a port nobody was fighting for.
+     */
+    verifyLock: path.join(root, ".verify-lock")
   };
 }
-var PROTECTED_BASENAMES = ["state.json", "manifest.json"];
+var PROTECTED_BASENAMES = ["state.json", "manifest.json", "verify-pinned.json"];
 
 // src/store/config-store.ts
 var ConfigMissingError = class extends Error {
@@ -12758,8 +12888,9 @@ var LockTimeoutError = class extends Error {
   }
 };
 async function withLock(lockDir, fn, options = {}) {
-  const { timeoutMs = 5e3, staleMs = 3e4, pollMs = 25 } = options;
+  const { timeoutMs = 5e3, staleMs = 3e4, pollMs = 25, onWait } = options;
   const deadline = Date.now() + timeoutMs;
+  let announced = false;
   let ownedSnapshot = null;
   while (ownedSnapshot === null) {
     try {
@@ -12767,6 +12898,10 @@ async function withLock(lockDir, fn, options = {}) {
       ownedSnapshot = await statSnapshot(lockDir);
     } catch (error2) {
       if (error2.code !== "EEXIST") throw error2;
+      if (!announced) {
+        announced = true;
+        onWait?.();
+      }
       if (Date.now() >= deadline) {
         throw new LockTimeoutError(`could not acquire ${lockDir} within ${timeoutMs}ms`);
       }
@@ -12863,14 +12998,169 @@ var StateStore = class {
   }
 };
 
+// src/ops/run.ts
+import path3 from "node:path";
+
+// src/schemas/verify.ts
+var VerifySlotSchema = _enum(["test", "lint", "build"]);
+var VerifyPhaseSchema = _enum(["queued", "running", "complete"]);
+var LedgerEntrySchema = strictObject({
+  slot: VerifySlotSchema,
+  /** What was executed — the pinned string, byte for byte. */
+  command: string2().min(1),
+  /**
+   * Which copy of the verify block this invocation executed. `'live'` occurs
+   * only for a run started before the pin existed (`state.started_at === null`).
+   */
+  source: _enum(["pinned", "live"]),
+  /**
+   * What `.mjloop/config.yaml` holds for this slot *now*, when it differs from
+   * the command that ran. `null` when they agree, and when there is no pin.
+   *
+   * Drift is recorded and never obeyed, and never refuses anything: a rule that
+   * halted a run on drift would hand any agent holding `Write` a way to stop
+   * the run by editing a file this project deliberately leaves hand-editable.
+   */
+  live_command: string2().min(1).nullable().default(null),
+  /** Log file name within `cycle-NN/verify/`. Empty when nothing was written. */
+  log: string2(),
+  phase: VerifyPhaseSchema,
+  /** `null` while queued or running, and on a timeout or a kill. */
+  exit_code: number2().int().nullable(),
+  timed_out: boolean2().default(false),
+  /**
+   * The cache fingerprint (`verifyFingerprint`). `null` when the cache is off
+   * or the worktree could not be digested. It is **not** the in-flight
+   * de-duplication key — that one is `slot::label::command` and always exists.
+   */
+  fingerprint: string2().min(1).nullable().default(null),
+  /** Set when this entry reused an earlier cycle's green result. */
+  cached_from_cycle: number2().int().positive().nullable().default(null),
+  /** Filled in by the amendment; `null` until the child exits. */
+  duration_ms: number2().int().nonnegative().nullable().default(null),
+  /**
+   * When the entry was first written. The amendment matches on this and the
+   * log name, both of which are known before the file exists — which is what
+   * lets a queued entry be written before there is anything else to say.
+   */
+  at: iso_exports.datetime()
+});
+var LedgerSchema = array(LedgerEntrySchema);
+var PinnedVerifySchema = strictObject({
+  /**
+   * Bumped only if this wrapper's own shape changes. The block inside it needs
+   * no version of its own: it is re-parsed through the live `VerifySchema`, so
+   * a pin written before a key existed gains that key's default on read. That
+   * is the whole reason this wraps `VerifySchema` rather than restating the
+   * three command strings — every future `verify.*` key is pinned
+   * automatically, and every older pin keeps parsing.
+   */
+  version: literal(1),
+  pinned_at: string2().min(1),
+  verify: VerifySchema
+});
+
+// src/schemas/plan.ts
+var StoryStatusSchema = _enum(["todo", "doing", "done", "blocked"]);
+var PlanIdSchema = string2().regex(/^P\d{3}$/, "a plan id looks like P001");
+var StoryIdSchema = string2().regex(/^P\d{3}-S\d{2}$/, "a story id looks like P001-S02");
+var ApprovalDecisionSchema = _enum(["approved", "rejected", "changes_requested"]);
+var ApprovalSchema = strictObject({
+  decision: ApprovalDecisionSchema,
+  /** Who decided. Free text: the engine cannot verify it, and pretending otherwise would be worse. */
+  by: string2().min(1),
+  at: iso_exports.datetime(),
+  /** The approver's own words, kept so the approval is auditable rather than a bare flag. */
+  note: string2().min(1).nullable().default(null)
+});
+var PlanFrontmatterSchema = strictObject({
+  id: PlanIdSchema,
+  /** Also reaches the filesystem: the directory is `<id>-<slug>`. */
+  slug: IdSchema,
+  title: string2().min(1),
+  created_at: iso_exports.datetime(),
+  /**
+   * The default is load-bearing, as it was for `last_fingerprint` and
+   * `reproduction`: the schema is strict, so without it every PLAN.md written
+   * before this field existed would fail validation on read.
+   */
+  approval: ApprovalSchema.nullable().default(null)
+});
+var StoryFrontmatterSchema = strictObject({
+  id: StoryIdSchema,
+  plan: PlanIdSchema,
+  /**
+   * Bounded because it reaches the filesystem: the story file is named
+   * `<id>-<slugified title>.md`. The slug is truncated as well, so this bound
+   * is about the caller getting a validation error naming the field rather
+   * than a title that quietly loses most of itself.
+   */
+  title: string2().min(1).max(200),
+  status: StoryStatusSchema,
+  /** Drives the conditional UI specialists in a later milestone. */
+  ui: boolean2().default(false),
+  depends_on: array(StoryIdSchema).default([]),
+  acceptance: array(string2().min(1)).default([]),
+  /** Run directory holding the proof this story is done. Null until it is. */
+  evidence: string2().min(1).nullable().default(null)
+}).refine((story) => story.id.startsWith(`${story.plan}-`), {
+  error: "a story id must begin with its plan id",
+  path: ["id"]
+});
+var ManifestEntrySchema = strictObject({
+  id: StoryIdSchema,
+  title: string2().min(1),
+  status: StoryStatusSchema,
+  ui: boolean2(),
+  depends_on: array(StoryIdSchema),
+  /** Relative to the plan directory. */
+  file: string2().min(1)
+});
+var ManifestSchema = strictObject({
+  schema: literal(1),
+  plan: PlanIdSchema,
+  slug: IdSchema,
+  title: string2().min(1),
+  generated_at: iso_exports.datetime(),
+  stories: array(ManifestEntrySchema)
+});
+
+// src/store/frontmatter.ts
+var YAML2 = __toESM(require_dist(), 1);
+
+// src/ops/run.ts
+var NoActiveRunError = class extends Error {
+  constructor() {
+    super("no active run \u2014 call mjloop_run_start first");
+    this.name = "NoActiveRunError";
+  }
+};
+function runDirName(state) {
+  if (state.run_id === null || state.track === null) throw new NoActiveRunError();
+  return `${state.run_id}--${state.current.story ?? "adhoc"}--${state.track}`;
+}
+function runDirPath(projectDir, state) {
+  return path3.join(resolveLoopPaths(projectDir).runs, runDirName(state));
+}
+
 // src/ops/summary.ts
 var NO_FINDINGS = { high: 0, medium: 0, low: 0 };
+var MAP_FILE = "map.md";
 async function hasDesignSystem(projectDir) {
   try {
     return (await fs4.stat(resolveLoopPaths(projectDir).designSystem)).isFile();
   } catch {
     return false;
   }
+}
+async function runMap(projectDir, state) {
+  if (state.run_id === null || state.track === null) return null;
+  try {
+    if (!(await fs4.stat(path4.join(runDirPath(projectDir, state), MAP_FILE))).isFile()) return null;
+  } catch {
+    return null;
+  }
+  return path4.join(".mjloop", "runs", runDirName(state), MAP_FILE);
 }
 async function stateSummary(projectDir) {
   let config2 = null;
@@ -12903,6 +13193,7 @@ async function stateSummary(projectDir) {
       halt_reason: null,
       reproduction: null,
       design_system: false,
+      map: null,
       config_error: configError
     };
   }
@@ -12935,6 +13226,7 @@ async function stateSummary(projectDir) {
     halt_reason: state.halt_reason,
     reproduction,
     design_system: await hasDesignSystem(projectDir),
+    map: await runMap(projectDir, state),
     config_error: configError
   };
 }
@@ -12961,12 +13253,12 @@ function renderSummaryLine(summary) {
 
 // src/util/entrypoint.ts
 import fs5 from "node:fs/promises";
-import path3 from "node:path";
+import path5 from "node:path";
 import { pathToFileURL } from "node:url";
 async function isEntrypoint(moduleUrl) {
   const argv1 = process.argv[1];
   if (argv1 === void 0) return false;
-  let resolved = path3.resolve(argv1);
+  let resolved = path5.resolve(argv1);
   try {
     resolved = await fs5.realpath(resolved);
   } catch {
@@ -13041,9 +13333,9 @@ async function stateGuardCommand(stdin) {
 function evaluateStateGuard(input) {
   const filePath = extractFilePath(input);
   if (filePath === null) return { deny: false, reason: "" };
-  const segments = filePath.split(path4.sep);
+  const segments = filePath.split(path6.sep);
   if (!segments.includes(".mjloop")) return { deny: false, reason: "" };
-  const basename = path4.basename(filePath);
+  const basename = path6.basename(filePath);
   if (!PROTECTED_BASENAMES.includes(basename)) {
     return { deny: false, reason: "" };
   }

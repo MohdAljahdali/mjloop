@@ -1,0 +1,14 @@
+
+> @mjloop/engine@0.4.1 test
+> vitest run
+
+
+ RUN  v4.1.10 /Volumes/SSD/Projects/loop/engine
+
+mjloop web: write failed: NoActiveRunError: no active run — call mjloop_run_start first
+
+ Test Files  49 passed (49)
+      Tests  781 passed (781)
+   Start at  21:50:25
+   Duration  1.88s (transform 1.46s, setup 0ms, import 4.19s, tests 10.33s, environment 690ms)
+

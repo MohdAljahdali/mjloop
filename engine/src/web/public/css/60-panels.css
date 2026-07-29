@@ -233,6 +233,17 @@
   grid-template-columns: max-content 1fr 1fr max-content 1fr;
 }
 
+/* Two commands share the flexible width: the one that ran and, when they have
+   drifted apart, the one `config.yaml` holds now. Everything else in the row
+   is a word or a number. */
+.grid-verify {
+  grid-template-columns: max-content 1fr repeat(4, max-content) 1fr max-content;
+}
+
+.grid-telemetry {
+  grid-template-columns: 1fr repeat(8, max-content);
+}
+
 .sev-high {
   color: var(--bad);
 }
@@ -255,6 +266,57 @@
 
 .res-blocked {
   color: var(--warn);
+}
+
+/* A phase is how far an invocation got, and an exit code is a fact about a
+   process. Neither is a verdict — that word belongs to the agent's result
+   above, and the two must not read alike. Hence `--dim` on a completed run
+   rather than the green `.res-pass` wears. */
+.phase-queued {
+  color: var(--warn);
+}
+
+.phase-running {
+  color: var(--accent);
+}
+
+.phase-complete {
+  color: var(--dim);
+}
+
+.exit-zero {
+  color: var(--ok);
+}
+
+.exit-nonzero {
+  color: var(--bad);
+}
+
+.exit-none {
+  color: var(--dim);
+}
+
+.verify {
+  margin-block-start: 12px;
+}
+
+.verify h4 {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--dim);
+  margin: 0 0 6px;
+}
+
+/* The one control on a tab that otherwise only reads: which track the estimate
+   is for. */
+.picker {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-block-end: 12px;
+  font-size: 12px;
+  color: var(--dim);
 }
 
 /* A halt report or a gate excerpt: verbatim output, so it wraps rather than

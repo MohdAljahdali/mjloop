@@ -19,22 +19,71 @@ export const GateSchema = z.strictObject({
   blocks: z.array(z.string().min(1)).min(1),
 })
 
+/**
+ * The agent whose passing result becomes the run's map.
+ *
+ * Track data rather than a rule in the engine, for the reason `GateSchema`
+ * states: the engine does not know agent names. Hard-coding `scout` in `runLog`
+ * would be the first place it learned one, and a project that maps its ground
+ * with a differently named agent could never hand a map forward.
+ */
+export const MapSchema = z.strictObject({
+  /** Whose passing result becomes the run's map. */
+  drafted_by: z.string().min(1),
+})
+
 export const TrackSchema = z
   .strictObject({
     /** Agents the leader may never drop from a cycle. */
     required: z.array(z.string().min(1)).min(1),
     /** Agents the leader may draft when the task calls for them. */
     available: z.array(z.string().min(1)).default([]),
+    /**
+     * Agents that run once, after the run passes — never inside a working
+     * cycle.
+     *
+     * The default is load-bearing in the same way `available`'s is: `Track` is
+     * the output type, so every literal in `DEFAULT_TRACKS` must spell the key
+     * out, while an existing hand-written `config.yaml` gains `closing: []` on
+     * read and keeps parsing untouched.
+     */
+    closing: z.array(z.string().min(1)).default([]),
     max_cycles: z.number().int().positive(),
     /** Optional precondition. A track without one behaves as it always has. */
     gate: GateSchema.optional(),
+    /** Optional. A track that hands a map forward names who drafts it. */
+    map: MapSchema.optional(),
   })
   .superRefine((track, ctx) => {
-    if (track.gate === undefined) return
-    const known = new Set([...track.required, ...track.available])
+    // `closing` counts as known. A gate naming a closing agent is naming an
+    // agent this track genuinely runs, and `permittedAgents` lets it log, so a
+    // check that called it unknown would be wrong about the track rather than
+    // strict about it.
+    const known = new Set([...track.required, ...track.available, ...track.closing])
     // The remedy travels with the message: an error that names only the
-    // consequence leaves a one-character typo invisible.
-    const remedy = `add it to required or available first (this track has: ${[...known].join(', ')})`
+    // consequence leaves a one-character typo invisible. It names all three
+    // sets because `known` is all three — telling a reader to add the agent to
+    // `required` when they meant to close the run with it would send them to
+    // the wrong line.
+    const remedy = `add it to required, available or closing first (this track has: ${[...known].join(', ')})`
+
+    if (track.map !== undefined) {
+      // Deliberately narrower than `known`. A closing agent runs after the run
+      // has passed, and `runLog`'s closing branch returns before the map is
+      // written — so a map drafted by one is a document that could never be
+      // produced. That is the same permanent, silent absence the gate checks
+      // below exist to prevent, arriving through a different field.
+      const draftable = new Set([...track.required, ...track.available])
+      if (!draftable.has(track.map.drafted_by)) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['map', 'drafted_by'],
+          message: `"${track.map.drafted_by}" is not draftable in a working cycle on this track — a map drafted by an agent the leader can never draft is a map that is never written, and silently. Check the spelling, or add it to required or available first (this track draws cycles from: ${[...draftable].join(', ')})`,
+        })
+      }
+    }
+
+    if (track.gate === undefined) return
 
     if (!known.has(track.gate.proven_by)) {
       ctx.addIssue({
@@ -64,10 +113,44 @@ export const TrackSchema = z
     }
   })
 
+/**
+ * What the engine executes to verify a project, and the policy around it.
+ *
+ * The whole block is executed policy, not just the three command strings: a
+ * `timeout_ms` of `1` kills every suite the engine starts, and a failure
+ * pattern is a regular expression this engine compiles and runs. That is why
+ * `runStart` pins the whole object into the run directory rather than the
+ * commands alone, and why `PinnedVerifySchema` wraps this schema instead of
+ * restating it — a pin written before a key existed gains that key's default
+ * when it is re-parsed here.
+ */
 export const VerifySchema = z.strictObject({
   test: z.string().min(1).nullable().default(null),
   lint: z.string().min(1).nullable().default(null),
   build: z.string().min(1).nullable().default(null),
+  /** Hard ceiling per invocation. The child is killed, and the kill is reported. */
+  timeout_ms: z.number().int().positive().default(900_000),
+  /**
+   * How long an invocation waits for the project verify lock before returning
+   * a terminal `phase: 'queued'`. Two full ceilings by default, so a waiter
+   * never gives up on a suite that is still legitimately running: one holder
+   * may legitimately hold for `timeout_ms`, and a waiter that abandoned sooner
+   * would report a queue where there was only a slow test suite.
+   */
+  lock_timeout_ms: z.number().int().positive().default(1_800_000),
+  /**
+   * Optional per-slot overrides for the digest's failure patterns. Compiled
+   * with `new RegExp` at use, inside a `try` — a typo in a regex must not stop
+   * a project verifying, so an invalid pattern falls back to the documented
+   * default and is reported in the digest.
+   */
+  failure_patterns: z
+    .strictObject({
+      test: z.array(z.string().min(1)).default([]),
+      lint: z.array(z.string().min(1)).default([]),
+      build: z.array(z.string().min(1)).default([]),
+    })
+    .prefault({}),
 })
 
 /**
@@ -94,13 +177,31 @@ export const ConfigSchema = z
   .strictObject({
     version: z.literal(1),
     autonomous: z.boolean().default(false),
+    /**
+     * Whether an identical verify command may reuse an earlier green result
+     * within the same run.
+     *
+     * Off by default. A suite that is not a pure function of the worktree —
+     * one that touches the network, the clock, a shared database or a port —
+     * has flakes, and re-running is how a loop finds them; a cache hides
+     * exactly that class of failure. A project whose build inputs live outside
+     * git (an ignored `.env`, generated code, `node_modules`) must leave it
+     * off, because the digest the cache keys on cannot see any of them.
+     */
+    verify_cache: z.boolean().default(false),
     limits: z
       .strictObject({
         max_parallel_agents: z.number().int().positive().default(4),
         no_progress_strikes: z.number().int().positive().default(2),
       })
       .default({ max_parallel_agents: 4, no_progress_strikes: 2 }),
-    verify: VerifySchema.default({ test: null, lint: null, build: null }),
+    // `.prefault({})` rather than a literal default object: `.default()` takes
+    // the schema's *output*, in which every `.default()`ed field is required,
+    // so a literal here is a hand-maintained duplicate of the schema's own
+    // defaults that has to be edited twice every time `VerifySchema` gains a
+    // key. `.prefault` re-parses its argument, so each field arrives with its
+    // own default and the duplicate is retired.
+    verify: VerifySchema.prefault({}),
     /** A track name reaches the filesystem — it is the last component of every
      * run directory name — so it is constrained where it is defined, exactly as
      * the story id in the same template is. `config.yaml` is hand-editable and
@@ -118,8 +219,17 @@ export const ConfigSchema = z
       .strictObject({
         plan_approval: z.enum(['human', 'auto']).default('human'),
         commit: z.enum(['auto', 'human']).default('auto'),
+        /**
+         * Does a person see the run's estimate before the first dispatch?
+         * `auto` by default: an estimate shown before every run that then
+         * always proceeds is a prompt nobody reads.
+         */
+        preflight: z.enum(['human', 'auto']).default('auto'),
       })
-      .default({ plan_approval: 'human', commit: 'auto' }),
+      // Unlike `verify` above, this literal stays: exactly one schema changes
+      // shape at a time, and the duplicate is one the compiler refuses to let
+      // you forget — `npm run typecheck` fails on a missing key here.
+      .default({ plan_approval: 'human', commit: 'auto', preflight: 'auto' }),
   })
   // A track cannot see the `specialists` map, so the contradiction between a
   // track that requires an agent and a config that forbids it can only be
@@ -140,6 +250,28 @@ export const ConfigSchema = z
           })
         }
       }
+      // A closing agent a specialist rule forbids is a step that silently
+      // never happens: `rosterSet` demands no skip reason for a closing agent,
+      // so nothing anywhere would record that the run shipped without it.
+      for (const agent of track.closing) {
+        if (forbidden.has(agent)) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['tracks', trackName, 'closing'],
+            message: `"${agent}" closes track "${trackName}" but specialists.${agent} is "never" — it could never be dispatched, and a closing agent needs no skip reason, so nothing would record that the run shipped without it. Drop one of the two.`,
+          })
+        }
+      }
+      // The same contradiction through the map: a map drafted by an agent the
+      // config forbids is a document no run ever writes, and every later cycle
+      // re-derives the ground it was meant to hand forward.
+      if (track.map !== undefined && forbidden.has(track.map.drafted_by)) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['tracks', trackName, 'map', 'drafted_by'],
+          message: `"${track.map.drafted_by}" drafts the map on track "${trackName}" but specialists.${track.map.drafted_by} is "never" — the only result that becomes a map could never be produced, so every cycle would re-derive the ground. Drop one of the two.`,
+        })
+      }
       // The sibling contradiction, and the same permanent, silent shutdown
       // `TrackSchema`'s own gate checks exist to prevent: a prover in
       // `available` passes those checks, so only the whole document can see
@@ -156,8 +288,21 @@ export const ConfigSchema = z
 
 export type SpecialistMode = z.infer<typeof SpecialistModeSchema>
 export type Gate = z.infer<typeof GateSchema>
+/** Not `Map`: that name is the global the engine uses everywhere else. */
+export type TrackMap = z.infer<typeof MapSchema>
 export type Track = z.infer<typeof TrackSchema>
-export type Verify = z.infer<typeof VerifySchema>
+/**
+ * The verify block as a *caller supplies* it, not as the engine reads it.
+ *
+ * Deliberately the input type. `detectVerifyCommands` builds this from
+ * `package.json` scripts and knows nothing about `timeout_ms`,
+ * `lock_timeout_ms` or `failure_patterns`; typing it as the schema's output
+ * would make every defaulted key required at the one call site whose whole job
+ * is to supply the three it can actually detect. The parsed block — every key
+ * present, and the thing the engine executes and `runStart` pins — is
+ * `Config['verify']`.
+ */
+export type Verify = z.input<typeof VerifySchema>
 export type Config = z.infer<typeof ConfigSchema>
 
 /**
@@ -189,11 +334,35 @@ export function forbiddenSpecialists(config: Config): string[] {
 }
 
 /**
+ * The agents a track pins in place: the names this schema refuses to let
+ * `specialists.<agent>: never` name, and which `TrackSchema` additionally
+ * refuses to let a track drop from its own sets.
+ *
+ * The four categories are exactly the four `ConfigSchema`'s `superRefine`
+ * rejects above — `required`, `closing`, `map.drafted_by`, `gate.proven_by` —
+ * and this is where any reader who needs that set as *data* rather than as
+ * four error messages should take it from. Telemetry is the reader that
+ * matters: a report that advised `never` for a name on this list would be
+ * advising an operator to make their own `config.yaml` stop parsing.
+ */
+export function pinnedAgents(track: Track): string[] {
+  const pinned = [...track.required, ...track.closing]
+  if (track.map !== undefined) pinned.push(track.map.drafted_by)
+  if (track.gate !== undefined) pinned.push(track.gate.proven_by)
+  return pinned
+}
+
+/**
  * Every agent a track may run. One definition for the two places that must
  * agree about it: the roster the leader declares and the results it logs.
+ *
+ * `closing` is in the union because a closing agent is an agent this track
+ * runs — just not inside a cycle. Without it `runLog` throws
+ * `UnknownAgentError` for the very agent `cycleAdvance` told the leader to
+ * dispatch, and the run's documentation step fails at the last step of the run.
  */
 export function permittedAgents(config: Config, track: Track): Set<string> {
-  return new Set([...track.required, ...track.available, ...forcedSpecialists(config)])
+  return new Set([...track.required, ...track.available, ...track.closing, ...forcedSpecialists(config)])
 }
 
 /**
@@ -201,25 +370,37 @@ export function permittedAgents(config: Config, track: Track): Set<string> {
  * milestones; a track is data, so adding one touches no code.
  */
 export const DEFAULT_TRACKS: Record<string, Track> = {
-  edit: { required: ['editor', 'verifier'], available: [], max_cycles: 1 },
+  // Every literal spells `closing` out, including the three that declare none.
+  // `Track` is the output type, in which a `.default()`ed field is required —
+  // the same reason `available: []` has always been written here.
+  edit: { required: ['editor', 'verifier'], available: [], closing: [], max_cycles: 1 },
   // max_cycles is a ceiling, not a target: with the stagnation guard in place
   // a stuck run halts well before reaching it.
   build: {
     required: ['builder', 'verifier'],
     // Ordered from the general to the specific: the leader reads this list
     // when composing, and every omission needs a stated reason.
-    available: ['scout', 'critic', 'ui-designer', 'ui-critic', 'security', 'docs', 'perf'],
+    available: ['scout', 'critic', 'ui-designer', 'ui-critic', 'security', 'perf'],
+    // `docs` closes the run rather than joining a cycle. Documentation drafted
+    // in cycle 2 describes code cycle 4 replaces, and the alternative under the
+    // old rule was four cycles of boilerplate skip reasons.
+    closing: ['docs'],
     max_cycles: 5,
+    // The only track with ground worth handing forward: `edit` is one cycle,
+    // `fix` has a reproduction, and `plan` produces a document.
+    map: { drafted_by: 'scout' },
   },
   fix: {
     required: ['reproducer', 'fixer', 'verifier'],
     available: ['investigator', 'hypothesis-tester', 'critic', 'security'],
+    closing: [],
     max_cycles: 5,
     gate: { proven_by: 'reproducer', blocks: ['fixer'] },
   },
   plan: {
     required: ['planner', 'fit-checker', 'story-writer'],
     available: ['plan-critic', 'story-critic'],
+    closing: [],
     max_cycles: 6,
     // An evidence gate: whether a plan fits the project that exists is a fact,
     // and fit-checker demonstrates it. The approval gate is a different kind

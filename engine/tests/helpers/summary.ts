@@ -19,6 +19,7 @@ export function summary(overrides: Partial<StateSummary> = {}): StateSummary {
     halt_reason: null,
     reproduction: null,
     design_system: false,
+    map: null,
     config_error: null,
     ...overrides,
   }

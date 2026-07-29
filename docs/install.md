@@ -46,6 +46,28 @@ claude plugin install mjloop@mjloop
 The same two steps work inside a session as `/plugin marketplace add <path>` and
 `/plugin install mjloop@mjloop`.
 
+### It has to be the plugin
+
+Installing mjloop as a plugin is not one route among several. Several of its agents name
+the MCP tools they are permitted to call, and a tool is named the way the harness spells
+it — `mcp__plugin_mjloop_mjloop__mjloop_verify_run` — which carries the server id the
+plugin install assigns. `verifier` uses that tool to run your suite through the engine, and
+`docs` uses it again after it has written the documentation, so the commit rests on a green
+result taken after every edit in it.
+
+Attach the same MCP server under any other id — a hand-written `.mcp.json` is the usual
+way this happens — and those names resolve to nothing. **The failure is silent.** A tool an
+agent was not granted is simply absent: nothing errors, nothing warns, and the agent falls
+back to running the command itself with `Bash`. Two things are lost without anyone being
+told. The engine's ledger, which is the receipt for what actually executed and the reason a
+`pass` can be checked at all, stays empty. And the whole output of your suite enters the
+agent's context instead of a bounded digest, which is the saving the engine's verify path
+exists for.
+
+If you must run the server standalone, keep the id: whatever spelling your client produces
+has to match the `mcp__…` names in `agents/verifier.md` and `agents/docs.md`, and if it
+does not, those files are what you edit.
+
 ## Verify
 
 ```bash
@@ -125,6 +147,11 @@ versions, not a defect — `claude mcp list` is the reliable check.
 
 **A hook reports an error.** The hook scripts invoke `engine/dist/cli/index.js` by path.
 If `dist/` is missing or stale, rebuild.
+
+**An agent ran the suite with `Bash` instead of the engine.** Its verify tool was not
+granted, and the usual cause is a server id other than the plugin's — see "It has to be
+the plugin". Check what `claude mcp list` calls the server; the name in the agents is
+`mcp__plugin_mjloop_mjloop__mjloop_verify_run`.
 
 ## Next
 

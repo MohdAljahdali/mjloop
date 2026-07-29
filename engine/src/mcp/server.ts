@@ -6,14 +6,18 @@ import { AgentNameSchema, AgentResultSchema } from '../schemas/contract.js'
 import { MemoryBodySchema, MemoryKindSchema, MemoryTagsSchema, MemoryTitleSchema } from '../schemas/memory.js'
 import { ApprovalDecisionSchema, StoryStatusSchema } from '../schemas/plan.js'
 import { IdSchema, ResultSchema } from '../schemas/state.js'
+import { VerifySlotSchema } from '../schemas/verify.js'
 import { initLoop } from '../ops/init.js'
 import { renderIndex } from '../ops/index-render.js'
 import { runLog } from '../ops/log.js'
 import { memoryAdd, memoryGet, memorySearch } from '../ops/memory.js'
 import { gateSet, planCreate, storyAdd, storyGet, storyNext, storyUpdate } from '../ops/plan.js'
+import { preflightEstimate } from '../ops/preflight.js'
 import { rosterSet } from '../ops/roster.js'
 import { cycleAdvance, halt, runStart } from '../ops/run.js'
 import { stateSummary } from '../ops/summary.js'
+import { readTelemetry } from '../ops/telemetry.js'
+import { verifyRun } from '../ops/verify.js'
 import { isEntrypoint } from '../util/entrypoint.js'
 
 /** MCP servers are launched with the project as cwd; the argument is an escape hatch. */
@@ -100,16 +104,44 @@ export function buildServer(): McpServer {
     {
       title: 'Declare the cycle roster',
       description:
-        'Record which agents this cycle runs and why each omission is safe. Rejected if any agent the track marks required is missing, or if an optional agent is omitted without a stated reason.',
+        'Record which agents this cycle runs and why each omission is safe. Rejected if any agent the track marks required is missing, or if an optional agent is omitted without a stated reason. With closing=true it records the run closing pass instead, drawn from the closing set mjloop_cycle_advance reported on the pass.',
       inputSchema: {
         project_dir: projectDirArg,
-        cycle: z.number().int().positive(),
-        selected: z.array(z.string().min(1)).min(1),
+        closing: z
+          .literal(true)
+          .optional()
+          .describe(
+            'Declares the run closing pass rather than a working cycle. Set it only after mjloop_cycle_advance returned "pass" and its closing_agents.',
+          ),
+        cycle: z.number().int().positive().optional().describe('The working cycle this roster composes. Omitted only for a closing roster'),
+        // `min(1)` lives in `RosterSchema` rather than here because the two
+        // kinds disagree about it: a working cycle must dispatch someone, and a
+        // closing pass that dispatched nobody is the one case worth writing
+        // down — it is the durable record that the run shipped without its
+        // documentation, and why. A wire-level floor would make it unwritable.
+        selected: z.array(z.string().min(1)).describe('Agents dispatched. At least one for a working cycle'),
         skipped: z.record(z.string().min(1), z.string().min(1)).default({}).describe('agent -> why omitting it is safe'),
       },
     },
-    async ({ project_dir, cycle, selected, skipped }) =>
-      guard(async () => ok(await rosterSet(resolveProjectDir(project_dir), { cycle, selected, skipped }))),
+    async ({ project_dir, closing, cycle, selected, skipped }) =>
+      guard(async () => {
+        const dir = resolveProjectDir(project_dir)
+        if (closing !== true) {
+          if (cycle === undefined) {
+            throw new Error("give a cycle number, or set closing=true to declare the run's closing pass")
+          }
+          return ok(await rosterSet(dir, { cycle, selected, skipped }))
+        }
+        // Refused rather than ignored. A closing pass belongs to no cycle, and a
+        // caller that names one is answering a question this call does not ask —
+        // most likely a leader declaring the closing pass with the cycle roster's
+        // arguments, which would record the wrong composition against the wrong
+        // set of agents and read as accepted.
+        if (cycle !== undefined) {
+          throw new Error('a closing roster belongs to no cycle — it records the pass that ended the run; drop the cycle argument')
+        }
+        return ok(await rosterSet(dir, { closing: true, selected, skipped }))
+      }),
   )
 
   server.registerTool(
@@ -125,17 +157,63 @@ export function buildServer(): McpServer {
           .min(1)
           .optional()
           .describe('Distinguishes parallel runs of the same agent, e.g. one hypothesis-tester per hypothesis'),
+        run_id: z
+          .string()
+          .min(1)
+          .optional()
+          .describe(
+            'The run this agent was dispatched under — the run_id mjloop_cycle_advance returned in its state. ' +
+              'Pass it for a closing agent: it is refused if the run has since been replaced, which is the only ' +
+              'thing keeping a late result out of the next run findings.',
+          ),
         result: AgentResultSchema,
       },
     },
-    async ({ project_dir, agent, instance, result }) =>
+    async ({ project_dir, agent, instance, run_id, result }) =>
       guard(async () =>
         ok(
           await runLog(resolveProjectDir(project_dir), {
             agent,
             ...(instance === undefined ? {} : { instance }),
+            ...(run_id === undefined ? {} : { run_id }),
             result,
           }),
+        ),
+      ),
+  )
+
+  server.registerTool(
+    'mjloop_verify_run',
+    {
+      title: 'Run a verify command',
+      description:
+        "Run one verify slot from the run's pinned verify block, write the whole log under the cycle, and return a bounded digest: exit code, headline, capped failures, and no verdict — the verifier still decides. phase running means the child outlived wait_ms; phase queued means nothing ran at all because another verify command in this project holds the lock. Call again for either.",
+      inputSchema: {
+        project_dir: projectDirArg,
+        slot: VerifySlotSchema,
+        label: z.string().min(1).optional().describe('Distinguishes two runs of one slot in a cycle'),
+        wait_ms: z.number().int().positive().optional().describe('How long to wait before returning phase running. Default 45000'),
+      },
+    },
+    // The only tool that takes the callback's second argument. `extra.signal`
+    // fires when the client cancels or times out the request, and it is passed
+    // as `waitSignal` — which abandons *this call's wait* and never the child.
+    // A client-side MCP_TIMEOUT that killed the suite would make the next call
+    // re-run a four-minute command from zero, which is the exact outcome
+    // `phase: 'running'` exists to prevent. Only verify.timeout_ms kills.
+    async ({ project_dir, slot, label, wait_ms }, extra) =>
+      guard(async () =>
+        ok(
+          await verifyRun(
+            resolveProjectDir(project_dir),
+            {
+              slot,
+              ...(label === undefined ? {} : { label }),
+              ...(wait_ms === undefined ? {} : { wait_ms }),
+            },
+            undefined,
+            extra.signal,
+          ),
         ),
       ),
   )
@@ -145,7 +223,7 @@ export function buildServer(): McpServer {
     {
       title: 'Close the cycle',
       description:
-        'Record the cycle outcome. pass finishes the run; otherwise the next cycle opens unless the cap is reached. Returns the new state plus carried_findings — the closed cycle findings, which are the next cycle task list.',
+        'Record the cycle outcome. pass finishes the run; otherwise the next cycle opens unless the cap is reached. Returns the new state plus carried_findings — the closed cycle findings, which are the next cycle task list — and closing_agents, the agents to dispatch now that the run has passed, empty on any other outcome.',
       inputSchema: {
         project_dir: projectDirArg,
         agents: z.array(z.string().min(1)).min(1),
@@ -366,6 +444,41 @@ export function buildServer(): McpServer {
       inputSchema: { project_dir: projectDirArg, id: z.string().min(1).describe('Memory id, e.g. M001') },
     },
     async ({ project_dir, id }) => guard(async () => ok(await memoryGet(resolveProjectDir(project_dir), id))),
+  )
+
+  // One tool, two projections, and the arithmetic is the point: telemetry and
+  // preflight are both pure projections of the one bounded `readRunHistory`
+  // walk, so a second tool would buy a discriminator's worth of clarity and
+  // charge every context this server is attached to for a whole extra
+  // declaration on every turn. Neither can be served by the cockpit alone —
+  // the leader needs the preflight estimate under gates.preflight: human, and
+  // a slash command cannot make an HTTP request to a server that may not be
+  // running. Eighteen tools, not nineteen and not seventeen.
+  server.registerTool(
+    'mjloop_report_get',
+    {
+      title: 'Read a report over past runs',
+      description:
+        'Two projections of one bounded walk over past runs. telemetry: what every specialist this project drafted actually returned, so a mode or an available list can be pruned on evidence — a report, never a rule. preflight: the shape of a run on a track before it starts — roster, dispatches per cycle, ceiling, and what comparable past runs took. Neither is folded into routine output; ask for it.',
+      inputSchema: {
+        project_dir: projectDirArg,
+        report: z.enum(['telemetry', 'preflight']),
+        track: IdSchema.optional().describe('preflight only, and required for it. Track name as in .mjloop/config.yaml'),
+        story: IdSchema.nullish().describe('preflight only. Compares story-bound runs against story-bound runs'),
+        limit: z.number().int().positive().max(200).optional().describe('telemetry only: past runs to walk. Default 50'),
+      },
+    },
+    async ({ project_dir, report, track, story, limit }) =>
+      guard(async () => {
+        const dir = resolveProjectDir(project_dir)
+        if (report === 'preflight') {
+          // The estimate is per track by construction — it takes a track name
+          // rather than a state, because idle is when it is asked.
+          if (track === undefined) throw new Error('preflight needs a track — the estimate is per track, and is asked before a run exists')
+          return ok(await preflightEstimate(dir, { track, story: story ?? null }))
+        }
+        return ok(await readTelemetry(dir, limit === undefined ? {} : { limit }))
+      }),
   )
 
   return server

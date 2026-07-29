@@ -1,13 +1,16 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { findTrack } from '../schemas/config.js'
-import type { Finding, Result, State } from '../schemas/state.js'
+import * as z from 'zod'
+import { findTrack, type Config } from '../schemas/config.js'
+import { AgentResultSchema, RosterSchema, type AgentResult } from '../schemas/contract.js'
+import type { Finding, Result, Severity, State } from '../schemas/state.js'
+import { LedgerSchema, PinnedVerifySchema, type LedgerEntry } from '../schemas/verify.js'
 import { loadConfig } from '../store/config-store.js'
 import { resolveLoopPaths } from '../store/paths.js'
 import { readStory } from '../store/plan-store.js'
 import { expect as expectUnchanged } from '../store/precondition.js'
 import { StateStore, type Clock } from '../store/state-store.js'
-import { cycleFingerprint, errorFingerprint } from './fingerprint.js'
+import { cycleFingerprint, distinctFindings, errorFingerprint } from './fingerprint.js'
 
 export class UnknownTrackError extends Error {
   constructor(track: string, known: string[]) {
@@ -39,7 +42,12 @@ export function runDirPath(projectDir: string, state: State): string {
  * cannot drift apart on the padding.
  */
 export function cycleDirPath(projectDir: string, state: State, cycle: number = state.cycle): string {
-  return path.join(runDirPath(projectDir, state), `cycle-${String(cycle).padStart(2, '0')}`)
+  return path.join(runDirPath(projectDir, state), cycleDirName(cycle))
+}
+
+/** The padding, in one place — `handoff.md` prints this name as well as joining it. */
+function cycleDirName(cycle: number): string {
+  return `cycle-${String(cycle).padStart(2, '0')}`
 }
 
 export interface RunStartInput {
@@ -69,6 +77,11 @@ export async function runStart(projectDir: string, input: RunStartInput, now: Cl
     draft.status = 'running'
     draft.cycle = 1
     draft.goal = input.goal
+    // Set here rather than by a second writer, in the update this function
+    // already takes the lock for. It measures the run, and it is also the
+    // marker that tells a run predating the verify pin (no pin was ever
+    // written) from one whose pin was deleted — see `pinVerifyBlock`.
+    draft.started_at = now().toISOString()
     draft.current = {
       plan: input.plan ?? null,
       story: input.story ?? null,
@@ -98,7 +111,58 @@ export async function runStart(projectDir: string, input: RunStartInput, now: Cl
   })
 
   await fs.mkdir(runDirPath(projectDir, state), { recursive: true })
+  await pinVerifyBlock(projectDir, state, config, now)
   return state
+}
+
+/**
+ * The basename of the run's frozen verify block.
+ *
+ * Spelled out here rather than imported from the module that executes it:
+ * `runStart` is the only writer and `verifyRun` the only reader, and about the
+ * pin the two deliberately share no code but `PinnedVerifySchema` — `verifyRun`
+ * imports `runDirPath` from here, which is where the pin lives, not what it
+ * says. The word itself is
+ * load-bearing elsewhere — it is in `PROTECTED_BASENAMES` (`store/paths.ts`),
+ * which is the entire enforcement of the pin, since the `PreToolUse` guard
+ * matches by basename anywhere under `.mjloop/`.
+ */
+const VERIFY_PIN_FILE = 'verify-pinned.json'
+
+/**
+ * Freeze what this run may execute, once, into its own directory.
+ *
+ * `config.yaml` is hand-editable by deliberate decision, so an agent holding
+ * `Write` can rewrite a verify command — and the engine hands that string to a
+ * shell. Pinning bounds the window to a run boundary, which is where an
+ * operator already expects a configuration change to land. The whole block is
+ * pinned rather than the three commands: `timeout_ms` of `1` kills every suite
+ * the engine starts, and a failure pattern is a regular expression this engine
+ * compiles and runs.
+ *
+ * `wx`, with `EEXIST` treated as success. `/mjloop:resume` continues an
+ * existing run rather than calling `runStart`, so ordinarily nothing attempts a
+ * second pin; the flag is what makes "ordinarily" something nobody has to
+ * reason about. A resume that re-pinned would reopen the hole for anyone
+ * willing to wait for an interruption.
+ *
+ * Nothing here reads the file back. The pin has one writer and one reader, and
+ * a `runStart` that validated its own write would be validating against itself.
+ */
+async function pinVerifyBlock(projectDir: string, state: State, config: Config, now: Clock): Promise<void> {
+  const pin = PinnedVerifySchema.parse({
+    version: 1,
+    pinned_at: now().toISOString(),
+    verify: config.verify,
+  })
+  try {
+    await fs.writeFile(path.join(runDirPath(projectDir, state), VERIFY_PIN_FILE), `${JSON.stringify(pin, null, 2)}\n`, {
+      encoding: 'utf8',
+      flag: 'wx',
+    })
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
+  }
 }
 
 /**
@@ -116,16 +180,35 @@ export interface CycleAdvanceInput {
 export interface CycleAdvanceResult {
   state: State
   /**
-   * The closed cycle's findings. On a fail these are the next cycle's task
-   * list. On a pass they are informational — the leader's pass rule forbids an
-   * open high-severity finding, but a medium or low one may survive a passing
-   * cycle and there is no next cycle to carry it to.
+   * The closed cycle's findings, one entry per distinct piece of remaining
+   * work. On a fail these are the next cycle's task list. On a pass they are
+   * informational — the leader's pass rule forbids an open high-severity
+   * finding, but a medium or low one may survive a passing cycle and there is
+   * no next cycle to carry it to.
+   *
+   * Deduplicated here, once, before anything consumes it: the archive, the halt
+   * report and the handoff all receive this list rather than `state.findings`,
+   * so a defect two agents both reported is one task everywhere it is read.
    */
   carried_findings: Finding[]
   /** `null` on a pass: the run is over, so no fingerprint is recorded. */
   fingerprint: string | null
   /** `state.no_progress_count` after this cycle. */
   strikes: number
+  /**
+   * The repo-relative path of the cycle's handoff, and **`null` when the write
+   * failed**. There is no path-shaped value for a document that was not
+   * written, and this result is serialised straight to the leader, where an
+   * empty string would read as a real path — the same thing `fingerprint`'s
+   * `null` says about a cycle that produced none.
+   */
+  handoff: string | null
+  /**
+   * Agents to dispatch now that the run has passed. Empty on any other
+   * outcome: a run that did not land its work has nothing to document, and
+   * documenting it would describe a state of the code that no longer exists.
+   */
+  closing_agents: string[]
 }
 
 /**
@@ -145,6 +228,16 @@ export async function cycleAdvance(
   let carried: Finding[] = []
   let closedCycle = 0
   let fingerprint: string | null = null
+  // Hoisted for the same reason `cause` is: the handoff written after the lock
+  // reports the failures this cycle closed with, and state has cleared them by
+  // then on every branch that opens another cycle.
+  let errors: string[] = []
+  // Only a pass produces one, and only from the track's own data — the engine
+  // does not know agent names.
+  let closing: string[] = []
+  // The cap for the handoff's "next: cycle N of M" line. Read from the track
+  // inside the lock, where the track is already resolved.
+  let maxCycles = 0
   // Which guard ended the run, carried out of the update as a value rather
   // than re-derived from `halt_reason`: HALT.md recommends a different next
   // step per guard, and parsing the sentence back apart would couple the
@@ -160,21 +253,31 @@ export async function cycleAdvance(
     const track = findTrack(config, draft.track)
     if (track === undefined) throw new UnknownTrackError(draft.track, Object.keys(config.tracks))
 
-    carried = [...draft.findings]
+    carried = distinctFindings(draft.findings)
     // Sorted because `runLog` appends each agent's signatures as that agent
     // finishes, and agents are dispatched concurrently. `errorFingerprint`
     // sorts before hashing, so without this the halt *reason* — which names
     // `errors[0]` — would blame whichever agent happened to land first and
     // differ between two identical runs.
-    const errors = [...draft.cycle_errors].sort()
+    errors = [...draft.cycle_errors].sort()
     closedCycle = draft.cycle
+    maxCycles = track.max_cycles
 
     const ref = path.join('.mjloop', 'runs', runDirName(draft))
-    draft.history.push({ cycle: draft.cycle, agents: input.agents, result: input.result, ref })
+    // `at` is stamped from the injected clock inside this update, so a run can
+    // be measured in minutes without a second writer or a second lock.
+    draft.history.push({
+      cycle: draft.cycle,
+      agents: input.agents,
+      result: input.result,
+      ref,
+      at: now().toISOString(),
+    })
 
     if (input.result === 'pass') {
       draft.status = 'done'
       draft.current.stage = 'done'
+      closing = [...track.closing]
       return
     }
 
@@ -233,11 +336,29 @@ export async function cycleAdvance(
   })
 
   await archiveFindings(projectDir, after, closedCycle, carried)
+  // Never fatal, and never inside the lock. The state transition has already
+  // committed, so a failure here must not roll it back — losing the handoff
+  // costs nothing, because every fact in it is still in the cycle's own files.
+  // The failure is reported as `handoff: null` rather than as a thrown error,
+  // and named on stderr so it is diagnosable rather than merely absent.
+  let handoff: string | null = null
+  try {
+    handoff = await writeHandoff(projectDir, after, closedCycle, input.result, input.agents, carried, errors, maxCycles)
+  } catch (error) {
+    process.stderr.write(`mjloop: cycle ${closedCycle} handoff was not written: ${String(error)}\n`)
+  }
   // The report names the findings the halted cycle closed with — state no
   // longer holds them, so they are passed in explicitly.
   if (after.status === 'halted') await writeHaltReport(projectDir, after, cause, carried)
 
-  return { state: after, carried_findings: carried, fingerprint, strikes: after.no_progress_count }
+  return {
+    state: after,
+    carried_findings: carried,
+    fingerprint,
+    strikes: after.no_progress_count,
+    handoff,
+    closing_agents: closing,
+  }
 }
 
 /** The command from a `<ref> :: <headline>` signature. */
@@ -262,6 +383,301 @@ async function archiveFindings(
   await fs.writeFile(path.join(dir, 'findings.json'), `${JSON.stringify(findings, null, 2)}\n`, 'utf8')
 }
 
+/**
+ * Every section has a ceiling, and every ceiling has a marker naming where the
+ * rest is. Four of the six sections draw on fields with no schema ceiling —
+ * `summary`, `files_touched`, `state.findings` and `cycle_errors` — and the
+ * handoff is read by every agent of the next cycle, so an unbounded one is a
+ * cost multiplied by the roster's width, every cycle, for the length of a run.
+ * Nothing is discarded: each marker names the file that still holds it.
+ */
+const HANDOFF_MAX_BYTES = 6_000
+const HANDOFF_SUMMARY_MAX = 200
+const HANDOFF_FINDINGS_MAX = 20
+const HANDOFF_FILES_MAX = 30
+const HANDOFF_ERRORS_MAX = 10
+
+/** Highest severity first — the opposite of the alphabetical order `distinctFindings` leaves. */
+const SEVERITY_ORDER: Record<Severity, number> = { high: 0, medium: 1, low: 2 }
+
+/** One `cycle-NN/<basename>.json`, with the agent its name resolves to. */
+interface AgentReport {
+  /** The file's basename: `builder`, or `hypothesis-tester--b` for an instance. */
+  basename: string
+  agent: string
+  result: AgentResult
+}
+
+/**
+ * What the closed cycle did, for the cycle that opens next.
+ *
+ * Every line is a projection of data the cycle already produced — no model
+ * call, which is the point: a handoff generated by a model would cost a
+ * dispatch per cycle to summarise summaries, and would be a fourth narrative to
+ * keep honest.
+ *
+ * It carries only what the brief does not: the per-agent status table, the
+ * roster's skip reasons, and the verify ledger. The brief carries a path to it.
+ *
+ * **Every source it reads is optional.** The roster, the agent results and the
+ * verify ledger are each read with tolerance for absence and for a file that
+ * will not parse, because `cycleAdvance` closes the cycle whatever happened in
+ * it: a run must never fail to advance because a derived document could not be
+ * assembled. A cycle where nothing landed gets a short handoff, not a crash.
+ *
+ * `cycle` is the cycle that closed, never `state.cycle` — the state has already
+ * incremented by the time this is called, which is why `cycleDirPath` takes the
+ * cycle explicitly. `maxCycles` comes in for the same reason, from the track
+ * `cycleAdvance` resolved inside its lock: "next: cycle 4 of 5" needs the cap,
+ * and re-reading config here would be a second load of a file the caller is
+ * already holding.
+ *
+ * Written on every close, including a pass and a halt. On a pass it is the
+ * run's closing record; on a halt it sits beside `HALT.md` and answers a
+ * different question — `HALT.md` says why the run stopped and what to do next,
+ * this says what the cycle did. Conflating them would make each worse.
+ */
+async function writeHandoff(
+  projectDir: string,
+  state: State,
+  cycle: number,
+  result: Result,
+  agents: string[],
+  carried: Finding[],
+  errors: string[],
+  maxCycles: number,
+): Promise<string> {
+  const dir = cycleDirPath(projectDir, state, cycle)
+  const cycleRef = cycleDirName(cycle)
+
+  const reports = await readAgentReports(dir)
+  const roster = await readOptionalJson(path.join(dir, 'roster.json'), RosterSchema)
+  const ledger = await readOptionalJson(path.join(dir, 'verify', 'index.json'), LedgerSchema)
+
+  const document = bound(
+    [
+      `# Handoff — cycle ${cycle} of ${state.run_id}`,
+      '',
+      resultLine(state, result, maxCycles),
+      '',
+      '## What each agent reported',
+      '',
+      ...agentTable(roster?.selected ?? agents, reports),
+      ...skippedLines(roster?.skipped ?? {}),
+      '',
+      '## Files touched',
+      '',
+      ...filesSection(reports, cycleRef),
+      '',
+      '## Verification',
+      '',
+      ...verificationSection(ledger, cycle),
+      '',
+      '## Open findings',
+      '',
+      ...findingsSection(carried, cycleRef),
+      '',
+      '## Failures that could recur',
+      '',
+      ...errorsSection(errors),
+      '',
+    ].join('\n'),
+    cycleRef,
+  )
+
+  await fs.mkdir(dir, { recursive: true })
+  await fs.writeFile(path.join(dir, 'handoff.md'), document, 'utf8')
+  return path.join('.mjloop', 'runs', runDirName(state), cycleRef, 'handoff.md')
+}
+
+function resultLine(state: State, result: Result, maxCycles: number): string {
+  if (state.status === 'done') return `**Result:** ${result} — the run is done.`
+  if (state.status === 'halted') return `**Result:** ${result} — halted: ${state.halt_reason ?? 'no reason recorded'}`
+  return `**Result:** ${result} — next: cycle ${state.cycle} of ${maxCycles}`
+}
+
+/**
+ * The rows are the **roster's** drafted list, not the results that landed, and
+ * an agent with no result file is rendered `— no result recorded`.
+ *
+ * `runLog` only enters its locked update — and therefore only raises
+ * `CycleClosedError` — when a result has findings, a gate proof or error
+ * signatures. A `pass` carrying only `file` evidence writes its
+ * `cycle-NN/<agent>.json` against the pre-read state, i.e. into a cycle that
+ * has just closed. An agent landing a moment late would otherwise be absent
+ * from the table with nothing saying so, and the next cycle would carry that
+ * document as the record of what happened.
+ *
+ * A result whose agent the roster does not name is appended rather than
+ * dropped, for the mirror-image reason: the roster is optional and `runLog`
+ * does not check membership against it, so a row missing here is work nobody
+ * can see.
+ */
+function agentTable(drafted: string[], reports: AgentReport[]): string[] {
+  const rows: string[] = ['| Agent | Status | Summary |', '|---|---|---|']
+  const shown = new Set<string>()
+  for (const agent of drafted) {
+    // One row per result file, so N instances of one agent are N rows rather
+    // than one verdict standing in for N.
+    const mine = reports.filter((report) => report.agent === agent)
+    for (const report of mine) shown.add(report.basename)
+    rows.push(...(mine.length === 0 ? [`| ${cell(agent)} | — | no result recorded |`] : mine.map(reportRow)))
+  }
+  rows.push(...reports.filter((report) => !shown.has(report.basename)).map(reportRow))
+  return rows
+}
+
+function reportRow(report: AgentReport): string {
+  const summary = cell(truncate(report.result.summary, HANDOFF_SUMMARY_MAX))
+  return `| ${cell(report.basename)} | ${report.result.status} | ${summary} |`
+}
+
+/** The stated reason for each omission — the whole product of `rosterSet`'s invariant. */
+function skippedLines(skipped: Record<string, string>): string[] {
+  const entries = Object.entries(skipped)
+  if (entries.length === 0) return []
+  return ['', `Skipped: ${entries.map(([agent, reason]) => `\`${agent}\` — ${oneLine(reason)}`).join('; ')}`]
+}
+
+function filesSection(reports: AgentReport[], cycleRef: string): string[] {
+  const lines = reports
+    .flatMap((report) => report.result.files_touched.map((file) => `- \`${oneLine(file)}\` — ${report.basename}`))
+    .filter((line, index, all) => all.indexOf(line) === index)
+    .sort()
+  if (lines.length === 0) return ['_none recorded_']
+  return elide(lines, HANDOFF_FILES_MAX, (rest) => `*${rest} more in ${cycleRef}/<agent>.json*`)
+}
+
+/**
+ * The ledger, as a table, with the two parentheticals it carries for free: a
+ * reused result and its source cycle, and the live `config.yaml` command when
+ * the run's pinned one has diverged from it. The second is the only place a
+ * person who is not watching the cockpit finds out that an edit they made
+ * mid-run is waiting for the next one.
+ */
+function verificationSection(ledger: LedgerEntry[] | null, cycle: number): string[] {
+  if (ledger === null || ledger.length === 0) return ['_nothing was verified through the engine_']
+  return [
+    '| Command | Exit | Log |',
+    '|---|---|---|',
+    ...ledger.map((entry) => `| \`${cell(entry.command)}\` | ${exitCell(entry)} | ${logCell(entry, cycle)} |`),
+  ]
+}
+
+/**
+ * An exit code, or why there is none. A `queued` or `running` entry has not
+ * produced one yet and a killed one never will, and each of the three means
+ * something different to a reader deciding whether this cycle was verified.
+ */
+function exitCell(entry: LedgerEntry): string {
+  if (entry.timed_out) return '— (timed out)'
+  return entry.exit_code === null ? `— (${entry.phase})` : String(entry.exit_code)
+}
+
+function logCell(entry: LedgerEntry, cycle: number): string {
+  const notes: string[] = []
+  if (entry.cached_from_cycle !== null) notes.push(`cached, cycle ${entry.cached_from_cycle}`)
+  if (entry.live_command !== null) notes.push(`config.yaml now says \`${oneLine(entry.live_command)}\``)
+  const tail = notes.length === 0 ? '' : ` (${notes.join('; ')})`
+  if (entry.log === '') return `—${tail}`
+  // A reused entry's log belongs to the cycle that produced it, not to this
+  // one. `log` is a bare file name within `cycle-NN/verify/`; a value that
+  // already carries a separator is a run-relative path and is left alone,
+  // rather than being nested under a second cycle directory that does not
+  // exist.
+  const source = entry.cached_from_cycle ?? cycle
+  const ref = entry.log.includes('/') ? entry.log : `${cycleDirName(source)}/verify/${entry.log}`
+  return `\`${oneLine(ref)}\`${tail}`
+}
+
+function findingsSection(carried: Finding[], cycleRef: string): string[] {
+  if (carried.length === 0) return ['_none recorded_']
+  const lines = [...carried]
+    .sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity])
+    .map((finding) => `- **${finding.severity}** \`${oneLine(finding.file)}:${finding.line}\` — ${oneLine(finding.claim)}`)
+  return elide(lines, HANDOFF_FINDINGS_MAX, (rest) => `*${rest} more in ${cycleRef}/findings.json*`)
+}
+
+function errorsSection(errors: string[]): string[] {
+  if (errors.length === 0) return ['_none recorded_']
+  return elide(
+    errors.map((signature) => `- \`${oneLine(signature)}\``),
+    HANDOFF_ERRORS_MAX,
+    (rest) => `*${rest} more*`,
+  )
+}
+
+/** Keep the first `max`, and say where the rest went. */
+function elide(lines: string[], max: number, marker: (rest: number) => string): string[] {
+  if (lines.length <= max) return lines
+  return [...lines.slice(0, max), '', marker(lines.length - max)]
+}
+
+/**
+ * The whole-document ceiling, counted in bytes and with the marker spent out of
+ * the budget rather than added to it — so the file never exceeds the constant,
+ * exactly as `capEvidence`'s truncation does.
+ */
+function bound(document: string, cycleRef: string): string {
+  if (Buffer.byteLength(document, 'utf8') <= HANDOFF_MAX_BYTES) return document
+  const marker = `\n\n*Truncated at ${HANDOFF_MAX_BYTES} bytes — the whole cycle is in \`${cycleRef}/\`.*\n`
+  const budget = HANDOFF_MAX_BYTES - Buffer.byteLength(marker, 'utf8')
+  // Trimmed a character at a time rather than sliced by byte offset: cutting a
+  // multi-byte character in half would put a replacement character in a
+  // document every agent of the next cycle reads.
+  let kept = document.slice(0, budget)
+  while (Buffer.byteLength(kept, 'utf8') > budget) kept = kept.slice(0, -1)
+  return kept + marker
+}
+
+/**
+ * The cycle's agent results.
+ *
+ * Directory entries are skipped — `verify/` and `evidence/` are written by
+ * other ops and neither is an agent result — as are the two aggregates
+ * `rosterSet` and `archiveFindings` write. A file that will not parse is
+ * skipped rather than fatal, the same rule the cockpit's cycle view applies:
+ * one bad result must not blank the whole handoff.
+ */
+async function readAgentReports(dir: string): Promise<AgentReport[]> {
+  const entries = await fs.readdir(dir, { withFileTypes: true }).catch(() => [])
+  const reports: AgentReport[] = []
+  for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+    if (!entry.isFile() || !entry.name.endsWith('.json')) continue
+    if (entry.name === 'roster.json' || entry.name === 'findings.json') continue
+    const result = await readOptionalJson(path.join(dir, entry.name), AgentResultSchema)
+    if (result === null) continue
+    const basename = entry.name.slice(0, -'.json'.length)
+    // `runLog` writes an instance as `<agent>--<instance>.json`, and an agent
+    // name may not contain `--`, so the first split is the agent.
+    reports.push({ basename, agent: basename.split('--')[0] ?? basename, result })
+  }
+  return reports
+}
+
+/** Absent, unreadable and unparseable are one answer here: this section is short. */
+async function readOptionalJson<T>(file: string, schema: z.ZodType<T>): Promise<T | null> {
+  try {
+    const parsed = schema.safeParse(JSON.parse(await fs.readFile(file, 'utf8')) as unknown)
+    return parsed.success ? parsed.data : null
+  } catch {
+    return null
+  }
+}
+
+/** A table cell holds one line and no bare pipe, or the row stops being a row. */
+function cell(text: string): string {
+  return oneLine(text).replaceAll('|', '\\|')
+}
+
+function oneLine(text: string): string {
+  return text.replace(/\s+/g, ' ').trim()
+}
+
+function truncate(text: string, max: number): string {
+  return text.length <= max ? text : `${text.slice(0, max - 1)}…`
+}
+
 export async function halt(
   projectDir: string,
   reason: string,
@@ -281,7 +697,9 @@ export async function halt(
     draft.current.stage = 'halted'
     draft.halt_reason = reason
   })
-  await writeHaltReport(projectDir, state, 'manual')
+  // Deduplicated here as well as at the cycle close, so a guard halt and a
+  // `/mjloop:stop` print the same list for the same run in the same file.
+  await writeHaltReport(projectDir, state, 'manual', distinctFindings(state.findings))
   return state
 }
 
@@ -329,12 +747,13 @@ run.`,
   manual: `The run was stopped by hand. Start a new one when the work is ready to continue.`,
 }
 
-async function writeHaltReport(
-  projectDir: string,
-  state: State,
-  cause: HaltCause,
-  open: Finding[] = state.findings,
-): Promise<void> {
+/**
+ * `open` has no default any more, and that is deliberate: both callers pass a
+ * deduplicated list, and a default of `state.findings` would let a third one
+ * print the raw one — the same run's open findings, listed twice over in the
+ * same file, depending on which way it halted.
+ */
+async function writeHaltReport(projectDir: string, state: State, cause: HaltCause, open: Finding[]): Promise<void> {
   const dir = runDirPath(projectDir, state)
   await fs.mkdir(dir, { recursive: true })
 

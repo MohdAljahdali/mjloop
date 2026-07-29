@@ -1,0 +1,11 @@
+
+> @mjloop/engine@0.4.1 typecheck
+> tsc -p tsconfig.json --noEmit && tsc -p tsconfig.web.json
+
+src/ops/index-render.ts(59,25): error TS2339: Property 'lock' does not exist on type 'LoopPaths'.
+src/ops/memory.ts(51,25): error TS2339: Property 'lock' does not exist on type 'LoopPaths'.
+src/ops/plan.ts(63,25): error TS2339: Property 'lock' does not exist on type 'LoopPaths'.
+src/ops/plan.ts(122,25): error TS2339: Property 'lock' does not exist on type 'LoopPaths'.
+src/ops/plan.ts(182,25): error TS2339: Property 'lock' does not exist on type 'LoopPaths'.
+src/ops/plan.ts(293,25): error TS2339: Property 'lock' does not exist on type 'LoopPaths'.
+src/store/state-store.ts(43,32): error TS2339: Property 'lock' does not exist on type 'LoopPaths'.

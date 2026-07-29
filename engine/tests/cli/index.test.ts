@@ -67,6 +67,33 @@ describe('evaluateStateGuard', () => {
     expect(verdict.deny).toBe(true)
   })
 
+  it("denies a hand edit to a run directory's verify-pinned.json", () => {
+    // The basename guard is the entire enforcement of the verify pin: what a
+    // run may execute is decided once, at run start, and nothing the run itself
+    // writes can change it. Adding the word to PROTECTED_BASENAMES is the whole
+    // mechanism — evaluateStateGuard matches by basename anywhere under
+    // .mjloop/, so no guard, hook or hooks.json change is needed. Asserted here
+    // because here is where it lives.
+    const verdict = evaluateStateGuard({
+      tool_name: 'Edit',
+      tool_input: { file_path: '/repo/.mjloop/runs/2026-07-28-001--adhoc--build/verify-pinned.json' },
+    })
+    expect(verdict.deny).toBe(true)
+    expect(verdict.reason).toContain('verify-pinned.json')
+  })
+
+  it('allows a verify log, which the engine writes and a reader may open', () => {
+    // Only the pin is protected. The logs and the ledger beside it are the
+    // engine's output, not its instructions.
+    const under = (name: string): boolean =>
+      evaluateStateGuard({
+        tool_name: 'Write',
+        tool_input: { file_path: `/repo/.mjloop/runs/2026-07-28-001--adhoc--build/cycle-01/verify/${name}` },
+      }).deny
+    expect(under('test.log')).toBe(false)
+    expect(under('index.json')).toBe(false)
+  })
+
   it('allows a write to a story file', () => {
     const verdict = evaluateStateGuard({
       tool_name: 'Write',

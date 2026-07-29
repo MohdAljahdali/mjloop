@@ -2,9 +2,14 @@
  * Evidence — the runs on disk, and what each cycle actually did.
  *
  * The list is directory names with outcomes derived from what is inside them.
- * Opening a run fetches its cycles, and each cycle carries the thing that is
- * recoverable from nowhere else: the agents the leader **skipped**, with its
- * stated reason for each.
+ * Opening a run fetches its cycles, and each cycle carries the two things that
+ * are recoverable from nowhere else: the agents the leader **skipped**, with
+ * its stated reason for each, and what the engine itself executed to verify
+ * the project.
+ *
+ * The verify ledger and the handoff ride the cycle document rather than routes
+ * of their own, so both follow the per-cycle revision rule already below: the
+ * open run's last cycle is live and everything before it is inert.
  */
 import { clone, cls, flag, phrase, verbatim } from '../ui/dom.js'
 import { feed } from '../lib/api.js'
@@ -17,6 +22,48 @@ import { draw, register } from '../ui/render.js'
  * @typedef {import('../../read.js').RunDetail} RunDetail
  * @typedef {import('../../read.js').CycleDetail} CycleDetail
  */
+
+/**
+ * One line of `cycle-NN/verify/index.json` — the engine's record of what the
+ * engine itself executed.
+ *
+ * Taken from the reader's own type rather than restated: `public/` is the
+ * browser and imports nothing from `src/`, but `read.ts` is the wire it is
+ * already typed against, so the ledger's shape stays in one place.
+ *
+ * @typedef {CycleDetail['verify'][number]} LedgerEntry
+ */
+
+/**
+ * The verify table's headings, which live inside a cloned block and so are
+ * translated by the row's own `update()` — `translateStatic` cannot reach into
+ * `<template>` content, and phrasing them once at clone time would leave them
+ * in the old language after a locale switch.
+ */
+const VERIFY_HEADERS = /** @type {const} */ ([
+  ['vh-slot', 'evidence.verify.slot'],
+  ['vh-command', 'evidence.verify.command'],
+  ['vh-phase', 'evidence.verify.phase'],
+  ['vh-exit', 'evidence.verify.exit'],
+  ['vh-duration', 'evidence.verify.duration'],
+  ['vh-source', 'evidence.verify.source'],
+  ['vh-drift', 'evidence.verify.drift'],
+  ['vh-cached', 'evidence.verify.cached'],
+])
+
+/**
+ * Written out rather than composed into `` `evidence.verify.${phase}` ``, so
+ * `tests/web/locales.test.ts` can still tell a dead key from a live one: a
+ * template literal marks the whole namespace used and the inverse sweep stops
+ * finding anything.
+ */
+const PHASE_KEY = {
+  queued: 'evidence.verify.queued',
+  running: 'evidence.verify.running',
+  complete: 'evidence.verify.complete',
+}
+
+const SOURCE_KEY = { pinned: 'evidence.verify.pinned', live: 'evidence.verify.live' }
 
 /** The run whose cycles are open, or null. */
 let opened = /** @type {string | null} */ (null)
@@ -190,6 +237,102 @@ export function mountEvidence() {
 
         const agents = slots['agents']
         if (agents !== undefined) reconcile(agents, cycle.agents, (entry) => entry.agent, agentRow)
+
+        // What the *engine* ran, beside what the agents said about it. The two
+        // are different claims and this is the only place they sit together.
+        const ledger = cycle.verify
+        const verifyBlock = slots['verifyBlock']
+        if (verifyBlock !== undefined) flag(verifyBlock, 'hidden', ledger.length === 0)
+        const verifyTitle = slots['verifyTitle']
+        if (verifyTitle !== undefined) phrase(verifyTitle, 'evidence.verify.title')
+        for (const [name, key] of VERIFY_HEADERS) {
+          const head = slots[name]
+          if (head !== undefined) phrase(head, key)
+        }
+        const verifyHost = slots['verify']
+        if (verifyHost !== undefined) {
+          // Keyed on the log name and the start time, both of which are fixed
+          // before the child exits: an entry is written while it is queued or
+          // running and amended in place, so a key built from the exit code
+          // would replace the row rather than update it.
+          reconcile(verifyHost, ledger, (entry) => `${entry.slot}:${entry.log}:${entry.at}`, verifyRow)
+        }
+        // The reader caps the rows it puts on the wire, and a cap nobody
+        // mentions reads as a complete record that is missing invocations.
+        const verifyMore = slots['verifyMore']
+        if (verifyMore !== undefined) {
+          flag(verifyMore, 'hidden', cycle.verify_total <= ledger.length)
+          if (cycle.verify_total > ledger.length) {
+            phrase(verifyMore, 'evidence.verify.more', { shown: ledger.length, total: cycle.verify_total })
+          }
+        }
+
+        // The handoff is the next cycle's brief, written from this one. It is
+        // collapsed because it repeats — deliberately — what the rows above
+        // already say.
+        const handoffDetails = slots['handoffDetails']
+        if (handoffDetails !== undefined) flag(handoffDetails, 'hidden', cycle.handoff === null)
+        const handoffSummary = slots['handoffSummary']
+        if (handoffSummary !== undefined) phrase(handoffSummary, 'evidence.handoff')
+        const handoffBody = slots['handoff']
+        if (handoffBody !== undefined) verbatim(handoffBody, cycle.handoff ?? '')
+        const handoffCut = slots['handoffCut']
+        if (handoffCut !== undefined) {
+          // Only ever a handoff the engine did not write: `writeHandoff`
+          // truncates well under the reader's ceiling.
+          flag(handoffCut, 'hidden', !cycle.handoff_truncated)
+          phrase(handoffCut, 'evidence.handoffCut')
+        }
+      },
+    }
+  }
+
+  function verifyRow() {
+    const { root, slots } = clone('tpl-verify-row')
+    return {
+      root,
+      /** @param {LedgerEntry} entry */
+      update(entry) {
+        const slot = slots['slot']
+        if (slot !== undefined) verbatim(slot, entry.slot)
+        // The string the engine handed to `spawn`, byte for byte.
+        const command = slots['command']
+        if (command !== undefined) verbatim(command, entry.command)
+
+        const phase = slots['phase']
+        if (phase !== undefined) {
+          phrase(phase, PHASE_KEY[entry.phase])
+          cls(phase, 'phase', entry.phase)
+        }
+
+        const exit = slots['exit']
+        if (exit !== undefined) {
+          // A timeout has no exit code and is not a failing one either: the
+          // child was killed at the ceiling, which is a different fact and the
+          // one a person needs to raise `verify.timeout_ms`.
+          if (entry.timed_out) phrase(exit, 'evidence.verify.timedOut')
+          else verbatim(exit, entry.exit_code === null ? '—' : entry.exit_code)
+          // The colour reports the exit code and nothing beyond it. Whether
+          // this cycle passed is an agent's judgement, written in the results
+          // above; an exit code is only ever a fact about a process.
+          cls(exit, 'exit', entry.exit_code === null ? 'none' : entry.exit_code === 0 ? 'zero' : 'nonzero')
+        }
+
+        const duration = slots['duration']
+        if (duration !== undefined) verbatim(duration, seconds(entry.duration_ms))
+
+        const source = slots['source']
+        if (source !== undefined) phrase(source, SOURCE_KEY[entry.source])
+
+        // The drift marker. `config.yaml` is hand-editable and an agent
+        // holding Write can rewrite a verify command mid-run; the run executes
+        // its pinned copy regardless, and this column is where an operator
+        // finds out that the file no longer describes what ran.
+        const drift = slots['drift']
+        if (drift !== undefined) verbatim(drift, entry.live_command ?? '—')
+
+        const cached = slots['cached']
+        if (cached !== undefined) verbatim(cached, entry.cached_from_cycle ?? '—')
       },
     }
   }
@@ -251,6 +394,21 @@ export function mountEvidence() {
       draw()
     },
   }
+}
+
+/**
+ * Milliseconds as `1.8s`, and an em dash while there is nothing to measure.
+ *
+ * Deliberately not localised into words, for `lib/fmt.js:duration`'s reason:
+ * it sits in a dense row beside a command and an exit code, and the unit
+ * letter reads the same at a glance in both directions. One decimal, because
+ * the number the cache argument turns on is under two seconds.
+ *
+ * @param {number | null} ms
+ * @returns {string}
+ */
+function seconds(ms) {
+  return ms === null ? '—' : `${(ms / 1000).toFixed(1)}s`
 }
 
 function chipRow() {

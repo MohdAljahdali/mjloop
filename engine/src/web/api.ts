@@ -2,6 +2,7 @@ import crypto from 'node:crypto'
 import type http from 'node:http'
 import type { WebCode } from './codes.js'
 import { PlanIdSchema, StoryIdSchema } from '../schemas/plan.js'
+import { IdSchema } from '../schemas/state.js'
 import {
   NotFoundError,
   readConfigView,
@@ -9,10 +10,12 @@ import {
   readMemories,
   readMemoryEntry,
   readPlanDetail,
+  readPreflightEstimate,
   readRunDetail,
   readRuns,
   readState,
   readStoryDetail,
+  readTelemetryReport,
 } from './read.js'
 
 /**
@@ -33,6 +36,12 @@ import {
  *    `.mjloop`; reusing them means the wire validation *is* that defence. The
  *    id shape is itself the traversal guard — `.` is outside `[\w-]`, so `..`
  *    cannot match.
+ *  - Every route is a read and none of them can be made into anything else.
+ *    The two reports added for the token-economy milestone are projections over
+ *    run directories that already exist; the preflight estimate in particular
+ *    describes a run *before* it starts and cannot start one, because `runStart`
+ *    is forbidden from this process entirely (`web/writes.ts`, and the
+ *    `FORBIDDEN` list in `tests/web/boundary.test.ts`).
  *  - Errors carry no prose. `{ error: { code } }` with **no `params` at all**,
  *    because a `params` hole is exactly how a sentence gets smuggled past the
  *    no-prose rule. A diagnosis goes to the terminal the server was launched
@@ -106,6 +115,22 @@ async function route(projectDir: string, segments: readonly string[]): Promise<A
         return ok(await readCycleDetail(projectDir, first, cycle))
       }
       break
+
+    case 'telemetry':
+      // No parameter, and deliberately none: the row cap and the walk's bound
+      // are the engine's to state, not a query string's to widen.
+      if (segments.length !== 1) break
+      return ok(await readTelemetryReport(projectDir))
+
+    case 'preflight':
+      if (segments.length !== 2 || first === undefined) break
+      // A track name is an `IdSchema` id everywhere else in the engine —
+      // `config.tracks` is keyed on it — so it is validated with that schema
+      // rather than a regex retyped on the wire, for the same reason plan and
+      // story ids are. The id shape is the traversal guard: `.` is outside
+      // `[A-Za-z0-9_-]`, so `..` cannot match.
+      if (!IdSchema.safeParse(first).success) return fail(400, 'error.badRequest')
+      return ok(await readPreflightEstimate(projectDir, first))
 
     case 'memory':
       if (segments.length === 1) return ok(await readMemories(projectDir))

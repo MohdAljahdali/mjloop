@@ -78,6 +78,24 @@
     <main>
       <section class="panel" id="panel-run" hidden>
         <p class="empty" id="run-empty"></p>
+
+        <!-- The estimate, and the only thing on this page that describes a run
+             nobody has started. It sits in the idle branch beside the empty
+             line because that is the one moment it can still change a
+             decision: the engine takes a track, not a state, for exactly this
+             reason. -->
+        <section class="block" id="run-preflight" hidden>
+          <h2 data-i18n="preflight.title"></h2>
+          <p class="hint" data-i18n="preflight.why"></p>
+          <label class="picker">
+            <span data-i18n="preflight.track"></span>
+            <select id="preflight-track" name="track" data-i18n-label="preflight.track"></select>
+          </label>
+          <dl class="facts" id="preflight-facts"></dl>
+          <p class="hint" id="preflight-basis"></p>
+          <dl class="facts" id="preflight-past"></dl>
+        </section>
+
         <div id="run-body" hidden>
           <dl class="facts">
             <div class="fact"><dt data-i18n="run.goal"></dt><dd id="run-goal"></dd></div>
@@ -268,12 +286,26 @@
           <div class="fact"><dt data-i18n="config.strikes"></dt><dd id="config-strikes"></dd></div>
           <div class="fact"><dt data-i18n="config.planApproval"></dt><dd id="config-plan-gate"></dd></div>
           <div class="fact"><dt data-i18n="config.commitGate"></dt><dd id="config-commit-gate"></dd></div>
+          <div class="fact"><dt data-i18n="config.preflightGate"></dt><dd id="config-preflight-gate"></dd></div>
+          <div class="fact"><dt data-i18n="config.verifyCache"></dt><dd id="config-verify-cache"></dd></div>
         </dl>
 
         <section class="block">
           <h2 data-i18n="config.verify"></h2>
           <p class="hint" data-i18n="config.verifyWhy"></p>
           <dl class="facts" id="config-verify"></dl>
+        </section>
+
+        <!-- Separate from the commands above, and not merely for reading ease:
+             `verify:` also carries a timeout, a lock timeout and per-slot
+             failure patterns, none of which is a command the engine runs. A
+             list built from `Object.entries(verify)` put all three under the
+             heading "Verify commands" — three lines claiming the engine
+             executes a number. -->
+        <section class="block">
+          <h2 data-i18n="config.verifyPolicy"></h2>
+          <p class="hint" data-i18n="config.verifyPolicyWhy"></p>
+          <dl class="facts" id="config-verify-policy"></dl>
         </section>
 
         <section class="block">
@@ -292,9 +324,34 @@
           </div>
         </section>
 
-        <section class="block" id="config-specialists-block" hidden>
-          <h2 data-i18n="config.specialists"></h2>
-          <ul class="chips" id="config-specialists"></ul>
+        <!-- What the specialists this project configures actually returned,
+             which is the only form in which a `specialists:` map is worth
+             reading: the mode is one column of it. A report and never a rule —
+             nothing in the engine drafts or skips an agent because of a number
+             here, and a specialist with no findings may be the reason the
+             project has none. -->
+        <section class="block" id="config-telemetry">
+          <h2 data-i18n="telemetry.title"></h2>
+          <p class="hint" data-i18n="telemetry.why"></p>
+          <p class="empty" id="telemetry-empty" data-i18n="telemetry.empty" hidden></p>
+          <p class="hint" id="telemetry-flagged" hidden></p>
+          <div class="scroller" id="telemetry-table" hidden>
+            <div class="grid grid-telemetry" role="table">
+              <div class="grid-head" role="row">
+                <span role="columnheader" data-i18n="telemetry.agent"></span>
+                <span role="columnheader" data-i18n="telemetry.mode"></span>
+                <span role="columnheader" data-i18n="telemetry.drafted"></span>
+                <span role="columnheader" data-i18n="telemetry.skipped"></span>
+                <span role="columnheader" data-i18n="telemetry.landed"></span>
+                <span role="columnheader" data-i18n="telemetry.results"></span>
+                <span role="columnheader" data-i18n="telemetry.findings"></span>
+                <span role="columnheader" data-i18n="telemetry.runs"></span>
+                <span role="columnheader" data-i18n="telemetry.lastRun"></span>
+              </div>
+              <div id="telemetry-list" role="rowgroup" class="grid-body"></div>
+            </div>
+          </div>
+          <p class="more" id="telemetry-more" hidden></p>
         </section>
 
         <details id="config-raw-details">
@@ -440,13 +497,55 @@
       </div>
     </template>
 
+    <!-- The verify table's own headings carry `data-slot` rather than
+         `data-i18n`: `translateStatic` walks the document and
+         `querySelectorAll` does not descend into `<template>` content, so a
+         heading inside a cloned row can only be translated by the row's own
+         `update()` — which is also what repaints it on a locale switch. -->
     <template id="tpl-run-cycle">
       <section class="cycle-block">
         <h3 data-slot="title"></h3>
         <ul class="chips" data-slot="roster"></ul>
         <ul class="skipped" data-slot="skipped"></ul>
         <ul class="agents" data-slot="agents"></ul>
+        <section class="verify" data-slot="verifyBlock" hidden>
+          <h4 data-slot="verifyTitle"></h4>
+          <div class="scroller">
+            <div class="grid grid-verify" role="table">
+              <div class="grid-head" role="row">
+                <span role="columnheader" data-slot="vh-slot"></span>
+                <span role="columnheader" data-slot="vh-command"></span>
+                <span role="columnheader" data-slot="vh-phase"></span>
+                <span role="columnheader" data-slot="vh-exit"></span>
+                <span role="columnheader" data-slot="vh-duration"></span>
+                <span role="columnheader" data-slot="vh-source"></span>
+                <span role="columnheader" data-slot="vh-drift"></span>
+                <span role="columnheader" data-slot="vh-cached"></span>
+              </div>
+              <div class="grid-body" role="rowgroup" data-slot="verify"></div>
+            </div>
+          </div>
+          <p class="more" data-slot="verifyMore" hidden></p>
+        </section>
+        <details data-slot="handoffDetails" hidden>
+          <summary data-slot="handoffSummary"></summary>
+          <pre class="excerpt" data-slot="handoff"></pre>
+          <p class="more" data-slot="handoffCut" hidden></p>
+        </details>
       </section>
+    </template>
+
+    <template id="tpl-verify-row">
+      <div class="grid-row" role="row">
+        <span role="cell"><code data-slot="slot"></code></span>
+        <span role="cell"><code data-slot="command"></code></span>
+        <span role="cell"><span class="phase" data-slot="phase"></span></span>
+        <span role="cell"><span class="exit" data-slot="exit"></span></span>
+        <span role="cell" data-slot="duration"></span>
+        <span role="cell" data-slot="source"></span>
+        <span role="cell"><code data-slot="drift"></code></span>
+        <span role="cell" data-slot="cached"></span>
+      </div>
     </template>
 
     <template id="tpl-skipped">
@@ -481,8 +580,26 @@
       </li>
     </template>
 
-    <template id="tpl-verify">
-      <div class="fact"><dt data-slot="name"></dt><dd data-slot="command"></dd></div>
+    <!-- One row of a `<dl class="facts">`, wherever the rows are data rather
+         than markup: a verify command, a policy key, one line of the preflight
+         estimate. The label is a config key in some of those and a translated
+         phrase in others, so it is a slot and never static text. -->
+    <template id="tpl-fact">
+      <div class="fact"><dt data-slot="label"></dt><dd data-slot="value"></dd></div>
+    </template>
+
+    <template id="tpl-specialist">
+      <div class="grid-row" role="row">
+        <span role="cell"><code data-slot="agent"></code></span>
+        <span role="cell" data-slot="mode"></span>
+        <span role="cell" data-slot="drafted"></span>
+        <span role="cell" data-slot="skipped"></span>
+        <span role="cell" data-slot="landed"></span>
+        <span role="cell" data-slot="results"></span>
+        <span role="cell" data-slot="findings"></span>
+        <span role="cell" data-slot="runs"></span>
+        <span role="cell"><code data-slot="lastRun"></code></span>
+      </div>
     </template>
 
     <template id="tpl-track">

@@ -1,9 +1,11 @@
 import fs from 'node:fs/promises'
+import path from 'node:path'
 import { findTrack, type Config } from '../schemas/config.js'
 import type { Severity, State } from '../schemas/state.js'
 import { ConfigMissingError, loadConfig } from '../store/config-store.js'
 import { resolveLoopPaths } from '../store/paths.js'
 import { StateStore } from '../store/state-store.js'
+import { runDirName, runDirPath } from './run.js'
 
 export interface StateSummary {
   initialised: boolean
@@ -39,6 +41,17 @@ export interface StateSummary {
   /** Whether `.mjloop/design-system.md` exists. The UI agents need one and will not invent it. */
   design_system: boolean
   /**
+   * The run map's repo-relative path once the run has one, else null.
+   *
+   * One `fs.stat`, exactly as `design_system` is, so the leader learns the path
+   * from the call it already makes rather than listing the run directory at
+   * compose time. `handoff` is deliberately **not** here beside it: the handoff
+   * path is `cycleAdvance`'s return value, which the leader is already holding
+   * when it composes the next brief, and putting a derivable string on every
+   * summary payload buys nothing.
+   */
+  map: string | null
+  /**
    * The reason the config could not be read, or null. Every other field
    * degrades silently when config is unreadable — this is the one that says so,
    * because a user whose config has a typo currently sees nothing at all.
@@ -48,6 +61,13 @@ export interface StateSummary {
 
 const NO_FINDINGS: Record<Severity, number> = { high: 0, medium: 0, low: 0 }
 
+/**
+ * The run map's file name. `runLog` writes it and this reports it; the two
+ * agree on one word, in the same way `runStart` and `verifyRun` agree on the
+ * pin's. `map` is a reserved agent name, so nothing else can produce this file.
+ */
+const MAP_FILE = 'map.md'
+
 /** A regular file, not merely a path that exists — a directory here is not a design system. */
 async function hasDesignSystem(projectDir: string): Promise<boolean> {
   try {
@@ -55,6 +75,22 @@ async function hasDesignSystem(projectDir: string): Promise<boolean> {
   } catch {
     return false
   }
+}
+
+/**
+ * Repo-relative, so the value can be handed to an agent as it stands — the same
+ * form `HistoryEntry.ref` takes. Null before a mapping agent has passed, and
+ * null on a track that declares no mapping agent, which are the same answer to
+ * the only question the leader asks: is there a map to carry forward?
+ */
+async function runMap(projectDir: string, state: State): Promise<string | null> {
+  if (state.run_id === null || state.track === null) return null
+  try {
+    if (!(await fs.stat(path.join(runDirPath(projectDir, state), MAP_FILE))).isFile()) return null
+  } catch {
+    return null
+  }
+  return path.join('.mjloop', 'runs', runDirName(state), MAP_FILE)
 }
 
 /**
@@ -102,6 +138,7 @@ export async function stateSummary(projectDir: string): Promise<StateSummary> {
       halt_reason: null,
       reproduction: null,
       design_system: false,
+      map: null,
       config_error: configError,
     }
   }
@@ -138,6 +175,7 @@ export async function stateSummary(projectDir: string): Promise<StateSummary> {
     halt_reason: state.halt_reason,
     reproduction,
     design_system: await hasDesignSystem(projectDir),
+    map: await runMap(projectDir, state),
     config_error: configError,
   }
 }

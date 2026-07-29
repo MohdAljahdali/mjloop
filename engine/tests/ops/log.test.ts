@@ -1,7 +1,12 @@
+import { execFile } from 'node:child_process'
+import crypto from 'node:crypto'
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import { promisify } from 'node:util'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
+  ClosingAgentError,
+  ContradictedEvidenceError,
   CycleClosedError,
   ForbiddenSpecialistError,
   GateClosedError,
@@ -12,7 +17,8 @@ import {
   runLog,
 } from '../../src/ops/log.js'
 import { initLoop } from '../../src/ops/init.js'
-import { UnknownTrackError, cycleAdvance, runDirPath, runStart } from '../../src/ops/run.js'
+import { NoActiveRunError, UnknownTrackError, cycleAdvance, runDirPath, runStart } from '../../src/ops/run.js'
+import { EVIDENCE_EXCERPT_MAX } from '../../src/schemas/contract.js'
 import { loadConfig, writeConfig } from '../../src/store/config-store.js'
 import { StateStore } from '../../src/store/state-store.js'
 import { makeTmpProject, type TmpProject } from '../helpers/tmp-project.js'
@@ -37,6 +43,48 @@ beforeEach(async () => {
   await runStart(project.dir, { track: 'edit', goal: 'Rename submit label' }, clock)
 })
 afterEach(async () => { await project.cleanup() })
+
+const run = promisify(execFile)
+
+/** The directory of whichever run is open. */
+async function runDir(): Promise<string> {
+  return runDirPath(project.dir, await new StateStore(project.dir).get())
+}
+
+/** A ledger entry shaped as `verifyRun` writes one, with the fields a test varies. */
+function ledgerEntry(over: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    slot: 'test',
+    command: 'npm test',
+    source: 'pinned',
+    live_command: null,
+    log: 'test.log',
+    phase: 'complete',
+    exit_code: 0,
+    timed_out: false,
+    fingerprint: null,
+    cached_from_cycle: null,
+    duration_ms: 1_200,
+    at: NOW.toISOString(),
+    ...over,
+  }
+}
+
+/**
+ * The ledger is written by hand rather than by `verifyRun`: these tests are
+ * about what `runLog` does with a record of what the engine ran, and spawning a
+ * real command to produce one would make them a test of the executor instead.
+ */
+async function writeLedger(cycle: string, entries: Record<string, unknown>[]): Promise<void> {
+  const dir = path.join(await runDir(), cycle, 'verify')
+  await fs.mkdir(dir, { recursive: true })
+  await fs.writeFile(path.join(dir, 'index.json'), `${JSON.stringify(entries, null, 2)}\n`, 'utf8')
+}
+
+async function stateHash(): Promise<string> {
+  const raw = await fs.readFile(path.join(project.dir, '.mjloop', 'state.json'))
+  return crypto.createHash('sha256').update(raw).digest('hex')
+}
 
 describe('runLog', () => {
   it('writes the agent result under the cycle directory', async () => {
@@ -456,5 +504,543 @@ describe('runLog error signatures', () => {
       clock,
     )
     expect((await new StateStore(project.dir).get()).cycle_errors).toEqual([])
+  })
+})
+
+describe('runLog against the engine own verify ledger', () => {
+  const passing = {
+    status: 'pass' as const,
+    summary: 'The suite is green.',
+    evidence: [{ kind: 'command' as const, ref: 'npm test', excerpt: 'tests 40, pass 40, fail 0' }],
+    findings: [],
+    files_touched: [],
+    next_hint: null,
+  }
+
+  beforeEach(async () => {
+    await runStart(project.dir, { track: 'build', goal: 'Add the export button' }, clock)
+  })
+
+  it('refuses a pass whose evidence names a command the engine recorded as failing', async () => {
+    await writeLedger('cycle-01', [ledgerEntry({ exit_code: 1 })])
+
+    await expect(runLog(project.dir, { agent: 'verifier', result: passing }, clock)).rejects.toBeInstanceOf(
+      ContradictedEvidenceError,
+    )
+
+    // The negative space every other refusal in this function keeps: the check
+    // runs before anything is written, so a refused pass leaves no result file,
+    // no finding and no signature behind.
+    const state = await new StateStore(project.dir).get()
+    expect(state.findings).toEqual([])
+    expect(state.cycle_errors).toEqual([])
+    await expect(fs.access(path.join(await runDir(), 'cycle-01', 'verifier.json'))).rejects.toThrow()
+  })
+
+  it('refuses a pass citing a command the engine killed', async () => {
+    await writeLedger('cycle-01', [ledgerEntry({ exit_code: null, timed_out: true })])
+    await expect(runLog(project.dir, { agent: 'verifier', result: passing }, clock)).rejects.toBeInstanceOf(
+      ContradictedEvidenceError,
+    )
+  })
+
+  it('refuses a pass citing a command still running', async () => {
+    await writeLedger('cycle-01', [ledgerEntry({ phase: 'running', exit_code: null, duration_ms: null })])
+    await expect(runLog(project.dir, { agent: 'verifier', result: passing }, clock)).rejects.toBeInstanceOf(
+      ContradictedEvidenceError,
+    )
+  })
+
+  it('refuses a pass citing a command that never started', async () => {
+    // `queued` beside `running`: the command was still waiting for the project
+    // verify lock, so a verdict resting on it rests on nothing at all.
+    await writeLedger('cycle-01', [ledgerEntry({ phase: 'queued', exit_code: null, duration_ms: null })])
+    await expect(runLog(project.dir, { agent: 'verifier', result: passing }, clock)).rejects.toBeInstanceOf(
+      ContradictedEvidenceError,
+    )
+  })
+
+  it('names the log path so the leader can read what actually happened', async () => {
+    await writeLedger('cycle-01', [ledgerEntry({ exit_code: 1 })])
+    await expect(runLog(project.dir, { agent: 'verifier', result: passing }, clock)).rejects.toThrow(
+      new RegExp(`${path.basename(await runDir())}.cycle-01.verify.test\\.log`),
+    )
+  })
+
+  it('tells the agent to re-run through the tool rather than merely refusing', async () => {
+    // A red entry left behind by a builder that then fixed the defect is the
+    // ordinary case, so the refusal has to carry its own remedy — otherwise a
+    // correct verdict is thrown away and the leader's single corrective retry
+    // burns on an engine error the agent did not cause.
+    await writeLedger('cycle-01', [ledgerEntry({ exit_code: 1 })])
+    await expect(runLog(project.dir, { agent: 'verifier', result: passing }, clock)).rejects.toThrow(
+      /mjloop_verify_run/,
+    )
+  })
+
+  it('accepts a pass the engine recorded as green', async () => {
+    await writeLedger('cycle-01', [ledgerEntry({ exit_code: 0 })])
+    await expect(runLog(project.dir, { agent: 'verifier', result: passing }, clock)).resolves.toBeDefined()
+  })
+
+  it('keys on the most recent entry, so a re-run clears the refusal', async () => {
+    await writeLedger('cycle-01', [ledgerEntry({ exit_code: 1 }), ledgerEntry({ exit_code: 0 })])
+    await expect(runLog(project.dir, { agent: 'verifier', result: passing }, clock)).resolves.toBeDefined()
+  })
+
+  it('refuses only a pass, so a failing result citing the same command is recorded', async () => {
+    await writeLedger('cycle-01', [ledgerEntry({ exit_code: 1 })])
+    const { path: file } = await runLog(
+      project.dir,
+      { agent: 'verifier', result: { ...passing, status: 'fail' as const } },
+      clock,
+    )
+    expect(path.basename(file)).toBe('verifier.json')
+  })
+
+  it('matches a ref exactly rather than approximately', async () => {
+    // No fuzzy matching, no substring: an agent that ran its own command under
+    // a different name is in exactly the position it was before this check.
+    await writeLedger('cycle-01', [ledgerEntry({ exit_code: 1 })])
+    const result = { ...passing, evidence: [{ kind: 'command' as const, ref: 'npm test -- cache', excerpt: 'ok' }] }
+    await expect(runLog(project.dir, { agent: 'verifier', result }, clock)).resolves.toBeDefined()
+  })
+
+  it('ignores a ledger the cycle does not have', async () => {
+    // Every cycle of every project that predates the engine running verify
+    // commands itself. The check is inert there rather than newly strict.
+    await expect(runLog(project.dir, { agent: 'verifier', result: passing }, clock)).resolves.toBeDefined()
+  })
+
+  it('lets the gate prover pass on a command that exited non-zero', async () => {
+    // The fix track's whole gate depends on this: `reproducer` returns "pass"
+    // meaning "I demonstrated the defect", and the command it names is expected
+    // to fail. A blanket rule would shut the track permanently.
+    await runStart(project.dir, { track: 'fix', goal: 'Stale cache entry' }, clock)
+    await writeLedger('cycle-01', [ledgerEntry({ exit_code: 1 })])
+
+    const { gateOpened } = await runLog(project.dir, { agent: 'reproducer', result: passing }, clock)
+    expect(gateOpened).toBe(true)
+  })
+})
+
+describe('runLog bounding what an agent sends', () => {
+  const long = `3 failing: cannot resolve module\n${'x'.repeat(5_000)}`
+
+  const failing = {
+    status: 'fail' as const,
+    summary: 'the suite is red',
+    evidence: [{ kind: 'command' as const, ref: 'npm test', excerpt: long }],
+    findings: [],
+    files_touched: [],
+    next_hint: null,
+  }
+
+  beforeEach(async () => {
+    await runStart(project.dir, { track: 'build', goal: 'Add the export button' }, clock)
+  })
+
+  it('writes the spill file before the result that points at it', async () => {
+    const { path: file } = await runLog(project.dir, { agent: 'verifier', result: failing }, clock)
+    const stored = JSON.parse(await fs.readFile(file, 'utf8')) as { evidence: { excerpt: string }[] }
+    const excerpt = stored.evidence[0]?.excerpt ?? ''
+
+    expect(excerpt.length).toBeLessThanOrEqual(EVIDENCE_EXCERPT_MAX)
+    const spill = path.join(await runDir(), 'cycle-01', 'evidence', 'verifier--0.txt')
+    expect(excerpt).toContain(path.relative(project.dir, spill))
+    // Lossless: the marker names a file that exists and holds every character.
+    expect(await fs.readFile(spill, 'utf8')).toBe(long)
+  })
+
+  it('writes no evidence directory when nothing overflows', async () => {
+    await runLog(project.dir, { agent: 'verifier', result: { ...failing, evidence: [] } }, clock)
+    await expect(fs.access(path.join(await runDir(), 'cycle-01', 'evidence'))).rejects.toThrow()
+  })
+
+  it('produces the same error signature before and after truncation', async () => {
+    // The signature is computed from the excerpt **as stored**, so `cycle_errors`
+    // and HALT.md always cite text a forensic reader can find on disk.
+    await runLog(project.dir, { agent: 'verifier', result: failing }, clock)
+    expect((await new StateStore(project.dir).get()).cycle_errors).toEqual([
+      'npm test :: N failing: cannot resolve module',
+    ])
+
+    await runStart(project.dir, { track: 'build', goal: 'Again' }, clock)
+    await runLog(
+      project.dir,
+      { agent: 'verifier', result: { ...failing, evidence: [{ kind: 'command', ref: 'npm test', excerpt: '3 failing: cannot resolve module' }] } },
+      clock,
+    )
+    expect((await new StateStore(project.dir).get()).cycle_errors).toEqual([
+      'npm test :: N failing: cannot resolve module',
+    ])
+  })
+
+  it('bounds the reproduction excerpt that reaches state', async () => {
+    // Fails if the proof is ever derived from the uncapped result again: that
+    // excerpt is copied into `state.json`, where every later `StateStore.update`
+    // re-reads, re-validates and re-writes it for the rest of the run.
+    await runStart(project.dir, { track: 'fix', goal: 'Stale cache entry' }, clock)
+    await runLog(project.dir, { agent: 'reproducer', result: { ...failing, status: 'pass' as const } }, clock)
+
+    const state = await new StateStore(project.dir).get()
+    expect(state.reproduction?.excerpt.length ?? 0).toBeLessThanOrEqual(EVIDENCE_EXCERPT_MAX)
+    expect(state.reproduction?.excerpt).toContain('truncated')
+  })
+
+  it('caps a digest-derived excerpt that exceeds the ceiling and names the verify log', async () => {
+    // A ledger match changes only the destination the marker names — the log
+    // the engine already wrote, rather than a second copy of the same bytes —
+    // never whether the cap applies.
+    await writeLedger('cycle-01', [ledgerEntry({ exit_code: 1 })])
+    const { path: file } = await runLog(project.dir, { agent: 'verifier', result: failing }, clock)
+    const stored = JSON.parse(await fs.readFile(file, 'utf8')) as { evidence: { excerpt: string }[] }
+    const excerpt = stored.evidence[0]?.excerpt ?? ''
+
+    expect(excerpt.length).toBeLessThanOrEqual(EVIDENCE_EXCERPT_MAX)
+    expect(excerpt).toContain(path.join('cycle-01', 'verify', 'test.log'))
+    await expect(fs.access(path.join(await runDir(), 'cycle-01', 'evidence'))).rejects.toThrow()
+  })
+})
+
+describe('the run map', () => {
+  const mapped = (summary: string, files: string[]) => ({
+    status: 'pass' as const,
+    summary,
+    evidence: files.map((file) => ({ kind: 'file' as const, ref: file, excerpt: 'export const x = 1' })),
+    findings: [],
+    files_touched: [],
+    next_hint: null,
+  })
+
+  beforeEach(async () => {
+    await runStart(project.dir, { track: 'build', goal: 'Add a health endpoint' }, clock)
+  })
+
+  async function readMap(): Promise<string> {
+    return fs.readFile(path.join(await runDir(), 'map.md'), 'utf8')
+  }
+
+  it('writes the run map from the drafting agent own result', async () => {
+    await runLog(project.dir, { agent: 'scout', result: mapped('The route table is assembled in one file.', ['src/routes/index.ts']) }, clock)
+
+    const map = await readMap()
+    expect(map).toContain('# Map — ')
+    expect(map).toContain('**Track:** build')
+    expect(map).toContain('**Goal:** Add a health endpoint')
+    expect(map).toContain('the later one wins')
+    // The header and the first section are separated, as every section is.
+    expect(map).toContain('the tree it mapped.\n\n## Cycle 1 — scout (HEAD ')
+    expect(map).toContain('The route table is assembled in one file.')
+    expect(map).toContain('- `src/routes/index.ts`')
+  })
+
+  it('writes nothing for an agent the track does not name', async () => {
+    await runLog(project.dir, { agent: 'builder', result: mapped('I built it.', ['src/a.ts']) }, clock)
+    await expect(readMap()).rejects.toThrow()
+  })
+
+  it('writes nothing on a blocked map', async () => {
+    // A scout that returned `blocked` mapped nothing.
+    await runLog(project.dir, { agent: 'scout', result: { ...mapped('I could not read the tree.', []), status: 'blocked' as const } }, clock)
+    await expect(readMap()).rejects.toThrow()
+  })
+
+  it('writes no map on a track that declares none', async () => {
+    await runStart(project.dir, { track: 'edit', goal: 'Rename' }, clock)
+    await runLog(project.dir, { agent: 'editor', result: mapped('Renamed it.', ['src/a.ts']) }, clock)
+    await expect(readMap()).rejects.toThrow()
+  })
+
+  it('stamps each section with the cycle and the commit it described', async () => {
+    // No repository here, and that is a legitimate answer rather than an error:
+    // the project still gets a map, it simply cannot stamp one.
+    await runLog(project.dir, { agent: 'scout', result: mapped('Ground truth.', ['src/a.ts']) }, clock)
+    expect(await readMap()).toContain('## Cycle 1 — scout (HEAD no git)')
+  })
+
+  it('stamps the section with the commit the tree was actually at', async () => {
+    await run('git', ['init', '-q', '-b', 'main'], { cwd: project.dir })
+    await fs.writeFile(path.join(project.dir, 'a.ts'), 'export const a = 1\n', 'utf8')
+    await run('git', ['add', '-A'], { cwd: project.dir })
+    await run(
+      'git',
+      ['-c', 'user.email=t@example.com', '-c', 'user.name=t', '-c', 'commit.gpgsign=false', 'commit', '-q', '-m', 'first'],
+      { cwd: project.dir },
+    )
+    const { stdout } = await run('git', ['rev-parse', '--short', 'HEAD'], { cwd: project.dir })
+
+    await runLog(project.dir, { agent: 'scout', result: mapped('Ground truth.', ['a.ts']) }, clock)
+    expect(await readMap()).toContain(`## Cycle 1 — scout (HEAD ${stdout.trim()})`)
+  })
+
+  it('appends a later map rather than overwriting the first', async () => {
+    await runLog(project.dir, { agent: 'scout', result: mapped('The original ground.', ['src/a.ts']) }, clock)
+    await cycleAdvance(project.dir, { agents: ['builder', 'verifier'], result: 'fail' }, clock)
+    await runLog(project.dir, { agent: 'scout', result: mapped('The ground as it now stands.', ['src/b.ts']) }, clock)
+
+    const map = await readMap()
+    expect(map).toContain('The original ground.')
+    expect(map).toContain('The ground as it now stands.')
+    expect(map.indexOf('## Cycle 1')).toBeLessThan(map.indexOf('## Cycle 2'))
+  })
+
+  it('marks an earlier map files as superseded when a later one names them', async () => {
+    await runLog(project.dir, { agent: 'scout', result: mapped('First pass.', ['src/a.ts', 'src/b.ts']) }, clock)
+    await cycleAdvance(project.dir, { agents: ['builder', 'verifier'], result: 'fail' }, clock)
+    await runLog(project.dir, { agent: 'scout', result: mapped('Second pass.', ['src/b.ts']) }, clock)
+
+    const map = await readMap()
+    expect(map).toContain('*Superseding cycle 1 for:* `src/b.ts`')
+    expect(map).not.toContain('`src/a.ts`, `src/b.ts`\n\nSecond')
+  })
+
+  it('keeps the first section and the two most recent, eliding the rest', async () => {
+    // Four unbounded sections in a file that sits in front of every agent of
+    // every later cycle is growth multiplied by the roster width.
+    const config = await loadConfig(project.dir)
+    config.limits.no_progress_strikes = 10
+    await writeConfig(project.dir, config)
+
+    for (const cycle of [1, 2, 3, 4]) {
+      await runLog(project.dir, { agent: 'scout', result: mapped(`Pass number ${cycle}.`, [`src/${cycle}.ts`]) }, clock)
+      if (cycle < 4) await cycleAdvance(project.dir, { agents: ['builder', 'verifier'], result: 'fail' }, clock)
+    }
+
+    const map = await readMap()
+    expect(map).toContain('Pass number 1.')
+    expect(map).toContain('*(cycle 2 elided — see cycle-02/scout.json)*')
+    expect(map).not.toContain('Pass number 2.')
+    expect(map).toContain('Pass number 3.')
+    expect(map).toContain('Pass number 4.')
+    // The provenance survives elision: the heading is the cheapest and most
+    // useful part of a section, and the marker says where the prose went.
+    expect(map).toContain('## Cycle 2 — scout (HEAD ')
+  })
+
+  it('never exceeds the map ceiling', async () => {
+    await runLog(project.dir, { agent: 'scout', result: mapped('a'.repeat(20_000), ['src/a.ts']) }, clock)
+    const map = await readMap()
+    expect(Buffer.byteLength(map)).toBeLessThanOrEqual(8_000)
+    expect(map).toContain('map truncated at 8000 bytes — see cycle-01/scout.json')
+  })
+
+  it('bounds one section file list rather than spending the whole ceiling on it', async () => {
+    const many = Array.from({ length: 220 }, (_, index) => `src/modules/module-${index}/index.ts`)
+    await runLog(project.dir, { agent: 'scout', result: mapped('A wide first pass.', many) }, clock)
+
+    const map = await readMap()
+    // Rendered whole, this one section is larger than the ceiling — and a byte
+    // cut applied to the document would then leave nothing for later cycles.
+    expect(Buffer.byteLength(map)).toBeLessThanOrEqual(8_000)
+    expect(map).toContain('- `src/modules/module-0/index.ts`')
+    expect(map).toContain('180 more files elided — see cycle-01/scout.json')
+    expect(map).not.toContain('map truncated at 8000 bytes')
+  })
+
+  it('keeps the newest section when the ceiling binds, not the oldest', async () => {
+    const config = await loadConfig(project.dir)
+    config.limits.no_progress_strikes = 10
+    await writeConfig(project.dir, config)
+
+    // Enough prose in every pass that the cumulative document reaches the
+    // ceiling — the file list is bounded, the summary is not.
+    for (const cycle of [1, 2, 3]) {
+      const summary = `Pass number ${cycle}. ${'detail. '.repeat(400)}`
+      await runLog(project.dir, { agent: 'scout', result: mapped(summary, [`src/${cycle}.ts`]) }, clock)
+      if (cycle < 3) await cycleAdvance(project.dir, { agents: ['builder', 'verifier'], result: 'fail' }, clock)
+    }
+
+    const map = await readMap()
+    expect(Buffer.byteLength(map)).toBeLessThanOrEqual(8_000)
+    // The document the run reads is about the tree as it now stands. A tail cut
+    // discards the newest sections first — the inverse of both the section
+    // policy and the precedence rule the header states — and because the next
+    // pass re-parses what this one wrote, it freezes the map at cycle 1 forever.
+    expect(map).toContain('## Cycle 3 — scout (HEAD ')
+    expect(map).toContain('Pass number 3.')
+    // The pressure comes off the oldest prose instead, and its provenance stays.
+    expect(map).toContain('## Cycle 1 — scout (HEAD ')
+    expect(map).toContain('*(cycle 1 elided — see cycle-01/scout.json)*')
+    expect(map).not.toContain('Pass number 1.')
+  })
+})
+
+describe('a closing agent', () => {
+  const documented = {
+    status: 'pass' as const,
+    summary: 'Documented the export button against the code as it finally stands.',
+    evidence: [{ kind: 'file' as const, ref: 'docs/export.md', excerpt: '## Exporting' }],
+    findings: [{ severity: 'high' as const, file: 'docs/export.md', line: 1, claim: 'the old page is stale' }],
+    files_touched: ['docs/export.md'],
+    next_hint: null,
+  }
+
+  beforeEach(async () => {
+    await runStart(project.dir, { track: 'build', goal: 'Add the export button' }, clock)
+  })
+
+  async function pass(): Promise<void> {
+    await cycleAdvance(project.dir, { agents: ['builder', 'verifier'], result: 'pass' }, clock)
+  }
+
+  it('records a closing agent against a run that is done', async () => {
+    const dir = await runDir()
+    await pass()
+
+    const { path: file, findingsAdded, gateOpened } = await runLog(project.dir, { agent: 'docs', result: documented }, clock)
+    expect(file).toBe(path.join(dir, 'closing', 'docs.json'))
+    expect(findingsAdded).toBe(0)
+    expect(gateOpened).toBe(false)
+    expect(JSON.parse(await fs.readFile(file, 'utf8')).summary).toBe(documented.summary)
+  })
+
+  it('writes no state for a closing agent', async () => {
+    await pass()
+    const before = await stateHash()
+    await runLog(project.dir, { agent: 'docs', result: documented }, clock)
+    expect(await stateHash()).toBe(before)
+  })
+
+  it('files no findings from a closing agent', async () => {
+    // A high finding filed by `docs` against a run already reported as passing
+    // would contradict a verdict nobody can revisit.
+    await pass()
+    await runLog(project.dir, { agent: 'docs', result: documented }, clock)
+    expect((await new StateStore(project.dir).get()).findings).toEqual([])
+  })
+
+  it('is invisible to everything that walks a cycle', async () => {
+    const dir = await runDir()
+    await pass()
+    await runLog(project.dir, { agent: 'docs', result: documented }, clock)
+    await expect(fs.access(path.join(dir, 'cycle-01', 'docs.json'))).rejects.toThrow()
+  })
+
+  it('still refuses an ordinary agent against a run that is done', async () => {
+    await pass()
+    await expect(runLog(project.dir, { agent: 'verifier', result: documented }, clock)).rejects.toBeInstanceOf(
+      NoActiveRunError,
+    )
+  })
+
+  it('refuses a closing agent while the run is still running', async () => {
+    // Logged mid-run it would document code that had not settled, and its
+    // findings would join a working cycle's task list.
+    await expect(runLog(project.dir, { agent: 'docs', result: documented }, clock)).rejects.toBeInstanceOf(
+      ClosingAgentError,
+    )
+    expect((await new StateStore(project.dir).get()).findings).toEqual([])
+  })
+
+  it('refuses a closing agent whose run has been replaced', async () => {
+    await pass()
+    const { run_id: dispatched } = await new StateStore(project.dir).get()
+
+    // A person starts the next run while the closing agent is still working.
+    await runStart(project.dir, { track: 'build', goal: 'A different feature' }, clock)
+
+    await expect(
+      runLog(project.dir, { agent: 'docs', run_id: dispatched, result: documented }, clock),
+    ).rejects.toBeInstanceOf(RunReplacedError)
+    expect((await new StateStore(project.dir).get()).findings).toEqual([])
+  })
+
+  it('records a closing agent on a gated track whose gate blocks it', async () => {
+    // The gate probe must not run on the closing path: a closing agent named in
+    // `gate.blocks` would otherwise be refused before the branch is reached.
+    const config = await loadConfig(project.dir)
+    config.tracks.fix = {
+      required: ['reproducer', 'fixer', 'verifier'],
+      available: ['investigator'],
+      closing: ['docs'],
+      max_cycles: 5,
+      gate: { proven_by: 'reproducer', blocks: ['fixer', 'docs'] },
+    }
+    await writeConfig(project.dir, config)
+    await runStart(project.dir, { track: 'fix', goal: 'Stale cache entry' }, clock)
+    await cycleAdvance(project.dir, { agents: ['reproducer', 'fixer', 'verifier'], result: 'pass' }, clock)
+
+    const { path: file } = await runLog(project.dir, { agent: 'docs', result: documented }, clock)
+    expect(path.basename(file)).toBe('docs.json')
+  })
+
+  // A closing agent carries `mjloop_verify_run` and files its digest as its
+  // evidence, and the leader is told not to fetch that digest itself and to
+  // commit only on a green closing pass. So the closing result is the only
+  // input to the commit decision, and the check that refuses a `pass` resting
+  // on a red ledger has to hold here or it is absent from the one path a
+  // permanent change rests on.
+  const reverified = {
+    status: 'pass' as const,
+    summary: 'Documented the export button, then re-ran the suite.',
+    evidence: [{ kind: 'command' as const, ref: 'npm test', excerpt: '0 failed | 781 passed' }],
+    findings: [],
+    files_touched: ['docs/export.md'],
+    next_hint: null,
+  }
+
+  it('refuses a closing pass citing a command the closing ledger records as failing', async () => {
+    const dir = await runDir()
+    await pass()
+    await writeLedger('closing', [ledgerEntry({ exit_code: 1 })])
+
+    await expect(runLog(project.dir, { agent: 'docs', result: reverified }, clock)).rejects.toBeInstanceOf(
+      ContradictedEvidenceError,
+    )
+
+    // The same negative space the cycle path keeps: the check runs before the
+    // directory is made, so a refused closing pass leaves no result file for a
+    // leader to read as a green closing pass.
+    await expect(fs.access(path.join(dir, 'closing', 'docs.json'))).rejects.toThrow()
+  })
+
+  it('names the closing log in the refusal, not a cycle one', async () => {
+    // The log path is resolved against `closing/`, which is where `verifyRun`
+    // writes for a run that is `done`. Resolved against a cycle it would send
+    // the leader to a file that does not exist.
+    await pass()
+    await writeLedger('closing', [ledgerEntry({ exit_code: 1 })])
+    await expect(runLog(project.dir, { agent: 'docs', result: reverified }, clock)).rejects.toThrow(
+      new RegExp(`${path.basename(await runDir())}.closing.verify.test\\.log`),
+    )
+  })
+
+  it('accepts a closing pass the engine recorded as green', async () => {
+    await pass()
+    await writeLedger('closing', [ledgerEntry({ exit_code: 0 })])
+    const { path: file } = await runLog(project.dir, { agent: 'docs', result: reverified }, clock)
+    expect(JSON.parse(await fs.readFile(file, 'utf8')).status).toBe('pass')
+  })
+
+  it('accepts a closing pass whose evidence the closing ledger never recorded', async () => {
+    // The check only ever refuses. A closing agent that made no edits runs no
+    // suite, and the ledger is absent — which must stay inert rather than
+    // becoming a new demand for a receipt.
+    await pass()
+    const { path: file } = await runLog(project.dir, { agent: 'docs', result: reverified }, clock)
+    expect(JSON.parse(await fs.readFile(file, 'utf8')).status).toBe('pass')
+  })
+
+  it('exempts a closing agent that also proves the track gate', async () => {
+    // `TrackSchema` counts `closing` as known when it validates
+    // `gate.proven_by`, so a project may close a track with the agent that
+    // proves its gate — and that agent's `pass` means "I demonstrated the
+    // defect", over a command expected to exit non-zero.
+    const config = await loadConfig(project.dir)
+    config.tracks.fix = {
+      required: ['reproducer', 'fixer', 'verifier'],
+      available: ['investigator'],
+      closing: ['docs'],
+      max_cycles: 5,
+      gate: { proven_by: 'docs', blocks: ['fixer'] },
+    }
+    await writeConfig(project.dir, config)
+    await runStart(project.dir, { track: 'fix', goal: 'Stale cache entry' }, clock)
+    await cycleAdvance(project.dir, { agents: ['reproducer', 'fixer', 'verifier'], result: 'pass' }, clock)
+    await writeLedger('closing', [ledgerEntry({ exit_code: 1 })])
+
+    const { path: file } = await runLog(project.dir, { agent: 'docs', result: reverified }, clock)
+    expect(path.basename(file)).toBe('docs.json')
   })
 })

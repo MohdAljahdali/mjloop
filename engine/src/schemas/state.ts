@@ -26,6 +26,17 @@ export const HistoryEntrySchema = z.strictObject({
   agents: z.array(z.string().min(1)).min(1),
   result: ResultSchema,
   ref: z.string().min(1),
+  /**
+   * When the cycle closed, so a run can be measured in minutes rather than
+   * only in cycles.
+   *
+   * Nullable and defaulted for the reason `last_fingerprint` is: `StateSchema`
+   * is strict, so without the default every history entry written before this
+   * field existed would fail validation on read rather than gaining the field
+   * on its next write. Its only writer is `cycleAdvance`, inside the update it
+   * already takes the lock for.
+   */
+  at: z.iso.datetime().nullable().default(null),
 })
 
 /**
@@ -54,6 +65,20 @@ export const StateSchema = z.strictObject({
   status: StatusSchema,
   cycle: z.number().int().nonnegative(),
   goal: z.string().min(1).nullable(),
+  /**
+   * When the run opened. Nullable and defaulted: a state file written before
+   * this field existed must gain it on its next write rather than fail to read.
+   *
+   * It carries a second load, and the two readers never write it. Because
+   * `runStart` is its only writer and it landed in the same change as the
+   * verify pin, `started_at === null` identifies a run that predates the pin —
+   * which is the one question `verifyRun` must answer to tell a legacy run
+   * (fall back to the live config, and say so) apart from a run whose pin was
+   * deleted (refuse). Without a marker the two absences are indistinguishable,
+   * and falling back on both would make `rm` the downgrade attack the pin
+   * exists to prevent.
+   */
+  started_at: z.iso.datetime().nullable().default(null),
   current: z.strictObject({
     plan: IdSchema.nullable(),
     story: IdSchema.nullable(),
@@ -106,6 +131,10 @@ export function initialState(now: Date): State {
     status: 'idle',
     cycle: 0,
     goal: null,
+    // Spelled out because `State` is the output type, in which a
+    // `.nullable().default(null)` field is required — the same reason
+    // `last_fingerprint`, `cycle_errors` and `reproduction` are written here.
+    started_at: null,
     current: { plan: null, story: null, stage: 'idle' },
     findings: [],
     no_progress_count: 0,
