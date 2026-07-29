@@ -30,6 +30,92 @@ const clock = (): Date => NOW
 const FIXTURES = fileURLToPath(new URL('../fixtures/verify/', import.meta.url))
 const SOURCE = fileURLToPath(new URL('../../src/ops/verify.ts', import.meta.url))
 
+/* ── this file's timeout budget ───────────────────────────────────────────── */
+
+/**
+ * `ops/verify.ts`'s two wall-clock constants, restated.
+ *
+ * Both are module-private there, so neither can be imported and both of these
+ * are copies. Copies go stale, which is why `the timeout budget` suite below
+ * reads the source and fails the moment either of them stops matching.
+ */
+const KILL_GRACE_MS = 5_000
+const DRAIN_GRACE_MS = 2_000
+
+/**
+ * The longest a **single** `verifyRun` can take to hand back a digest once its
+ * ceiling has fired: SIGTERM, then at most `KILL_GRACE_MS` before the SIGKILL,
+ * then at most `DRAIN_GRACE_MS` for the log pipes to let go of the drain. Seven
+ * seconds — and that is *before* the ceiling itself, before git, and before any
+ * setup the test did to get there.
+ */
+const SETTLE_CEILING_MS = KILL_GRACE_MS + DRAIN_GRACE_MS
+
+/**
+ * The most real invocations any one test here makes: three, in `does not reuse
+ * an entry whose log a later run of the same slot overwrote`.
+ *
+ * *Real* is the load-bearing word, and `poll` below is why it needs saying: a
+ * repeat call for the same `slot::label::command` attaches to the in-flight map
+ * and re-races the completion promise that is already running. It executes
+ * nothing, so a test that calls `verifyRun` forty times polling for `running`
+ * still costs one invocation and does not move this number.
+ */
+const MOST_INVOCATIONS = 3
+
+/**
+ * **Every test in this file gets 21 s. Vitest's default is 5 s.**
+ *
+ * The default is not a bad number — it is the right guard for the rest of this
+ * repository, where the slowest test outside this file and its sibling
+ * `tests/store/git.test.ts` is comfortably under a second. It is the wrong
+ * number *here*, for a reason that is a property of the subject rather than of
+ * the machine it runs on: `ops/verify.ts` owns multi-second constants by
+ * design, so a test that exercises them honestly is a test that takes seconds.
+ * `SETTLE_CEILING_MS` alone is already 40 % over the default.
+ *
+ * Git is the other half. With the cache on, a **miss** costs three whole
+ * `worktreeDigest` calls — the lookup outside the lock, the pre-spawn digest
+ * inside it, the post-exit re-digest — at four `git` processes each: twelve
+ * child processes per invocation, 455 ms measured on an idle machine. The
+ * three-invocation test above therefore forks thirty-six `git` processes and
+ * takes ~2.5 s idle. Twice that load puts it over 5 s, which is exactly how it
+ * was found.
+ *
+ * **What breaks without this.** When the harness timeout fires, vitest reports
+ * `Test timed out in 5000ms` against the `it()` and the test's own assertions
+ * never run — so the failure describes the clock instead of the defect. That is
+ * not hypothetical: a real defect introduced into the cache-lock ordering
+ * surfaced as a harness timeout on `takes no lock for a cache hit`, and only
+ * named itself once the budget was widened. A timeout that fires first collapses
+ * every distinct defect in this file into one uninformative message.
+ *
+ * **Why file-scoped rather than per-test.** Per-test timeouts are the policy
+ * that produced this bug. They have to be applied by whoever notices, and what
+ * gets noticed is whatever happened to flake — twice, here, while the slowest
+ * test in the file was never one of them. (That was `records no cache entry
+ * when the tree moved while the command ran` at 4 s idle when this was written;
+ * it is 1.4 s now that its `sleep 3` is a gate, and the slowest is `escalates to
+ * SIGKILL …` at 3 s — which is the point: the set moves, and a budget that
+ * covers the file does not have to be re-derived when it does.) The set needing
+ * one is not
+ * even stable: `takes no lock for a cache hit` became a git-backed test when
+ * the cache landed, long after it was written, and nothing went back to re-time
+ * it. A budget that covers the file needs no such judgement from anyone.
+ *
+ * **Why not the global `testTimeout` in `vitest.config.ts`.** Of the seventeen
+ * tests in this repository slower than 900 ms, thirteen are in this file and
+ * the other four are `tests/store/git.test.ts` — the same git cost seen from
+ * the other side. Everything else has four times the headroom it needs. A 21 s
+ * global would hand every one of those a 21 s rope for a genuine hang in order
+ * to fix a problem that lives in one file.
+ *
+ * `vi.setConfig` is the file-scoped mechanism: vitest calls `vi.resetConfig()`
+ * after each file in the worker loop, so this cannot leak into a file that
+ * still wants the 5 s guard.
+ */
+vi.setConfig({ testTimeout: MOST_INVOCATIONS * SETTLE_CEILING_MS })
+
 let project: TmpProject
 /**
  * Somewhere for a verify command to write a counter without moving the
@@ -120,6 +206,39 @@ async function countOf(name: string): Promise<number> {
 }
 
 /**
+ * The ceiling used wherever a **grandchild has to exist before it fires**.
+ *
+ * `verify.timeout_ms` is armed by `spawnAndDigest` at the `spawn` call, so any
+ * test that asserts something about a descendant is implicitly requiring that
+ * descendant to be born — and observable — inside the ceiling. The number is
+ * therefore not free choice: it is a margin over process startup, and one
+ * chosen too small makes the test race the operating system.
+ *
+ * **This file's third flake was exactly that race.** `sleeper` used to be a
+ * Node script, and `node` builds a VM before it can run its first statement.
+ * Spawn-to-pid for the exact `/bin/sh -c "…node script… && true"` shape
+ * measured p50 24 ms idle, p50 41 ms / max 54 ms at loadavg 54 with a full
+ * suite alongside, and a tail past 200 ms on a machine under 16 spinners. A
+ * 200 ms ceiling against that is a coin flip, and when it lands wrong the group
+ * SIGTERM arrives before node reaches line one: the pid file is *never*
+ * written, so `pid()` polls its whole deadline and the file fails with `the
+ * grandchild never published its pid` — a message about node's startup, in a
+ * test about SIGKILL escalation, that no larger poll deadline can fix.
+ *
+ * `sleeper` is a shell script now, which takes the VM out of the race: the same
+ * measurement is p50 6 ms idle, p50 17 ms / max 28 ms at loadavg 54, n=60.
+ * **1 000 ms is 35× that worst measured case**, and the margin does not erode
+ * as this project grows: what it has to cover is one `fork`+`exec` of
+ * `/bin/sh` and two builtins, and nothing in that scales with the repository,
+ * the suite, or the size of the tree being verified.
+ *
+ * What it costs: ~800 ms each on the two tests that use it, against a 21 s
+ * budget. What it buys is that the ceiling now bounds *the kill*, which is what
+ * these tests are about, rather than bounding node's startup, which is not.
+ */
+const GRANDCHILD_CEILING_MS = 1_000
+
+/**
  * A grandchild that records its own pid where the test can see it.
  *
  * The engine's child is `/bin/sh`; the thing `timeout_ms` is supposed to bound
@@ -127,6 +246,21 @@ async function countOf(name: string): Promise<number> {
  * tell "the group was killed" from "the shell died and the drain gave up two
  * seconds later" — both produce `timed_out: true` and a released lock — so the
  * descendant is made to say its own pid and the test asks the OS about it.
+ *
+ * **A shell script rather than a Node one, because the ceiling is racing it.**
+ * See `GRANDCHILD_CEILING_MS`: the pid has to be published before the kill the
+ * test is trying to observe, and the cheapest process that can publish one is
+ * the shell the engine is already using. Nothing here needs a VM — the whole
+ * script is three lines of POSIX.
+ *
+ * The trap and the pid are in this order and may not be swapped. `trap '' TERM`
+ * sets a *disposition*, not a handler: from the moment it runs the process
+ * ignores SIGTERM for the rest of its life, and — because SIG_IGN survives both
+ * `fork` and `exec` — so does the `sleep` it goes on to run, whether the shell
+ * execs it in place or waits on it. Publishing the pid after the trap makes a
+ * visible pid a pid that is *already* immune, so `escalates to SIGKILL` can
+ * never be handed a grandchild that plain SIGTERM would have killed. Reversed,
+ * that test would still see `died(pid) === true` and would be asserting nothing.
  *
  * `&& true` after it is deliberate: it is the shell's *last* command that a
  * shell may `exec` in place, and a descendant that is really the child pid
@@ -138,35 +272,103 @@ async function sleeper(options: { ignoresTerm?: boolean; lives?: number } = {}):
   /** The pid the grandchild wrote, once it exists. */
   pid: () => Promise<number>
 }> {
-  const script = path.join(scratch, 'sleeper.cjs')
+  const script = path.join(scratch, 'sleeper.sh')
   const pidFile = path.join(scratch, 'sleeper.pid')
   await fs.writeFile(
     script,
     [
-      "const fs = require('node:fs')",
-      'const [, , file, mode, ms] = process.argv',
-      // Installed before the pid is published, so the pid is never visible to
-      // the test in a state where the handler is not yet in place.
-      "if (mode === 'ignore') process.on('SIGTERM', () => {})",
-      'fs.writeFileSync(file, String(process.pid))',
-      'setTimeout(() => {}, Number(ms))',
+      '# $1 pid file, $2 mode, $3 seconds to live',
+      "[ \"$2\" = ignore ] && trap '' TERM",
+      'echo $$ > "$1"',
+      'sleep "$3"',
       '',
     ].join('\n'),
     'utf8',
   )
   const mode = options.ignoresTerm === true ? 'ignore' : 'exit'
   return {
-    command: `node '${script}' '${pidFile}' ${mode} ${options.lives ?? 20_000}`,
+    command: `/bin/sh '${script}' '${pidFile}' ${mode} ${(options.lives ?? 20_000) / 1_000}`,
     pid: async () => {
+      // An upper bound on *late*, not a fix for *never*. The grandchild writes
+      // its pid within a fork and two builtins of being spawned, so a poll that
+      // runs out is not a slow machine — it is a group that was killed before
+      // `/bin/sh` ran at all, which is the failure `GRANDCHILD_CEILING_MS`
+      // exists to make 35× improbable. Raising this number would only make that
+      // failure slower to report.
       const deadline = Date.now() + 5_000
       while (Date.now() < deadline) {
         const raw = await fs.readFile(pidFile, 'utf8').catch(() => '')
         if (raw !== '') return Number(raw)
         await new Promise((resolve) => setTimeout(resolve, 20))
       }
-      throw new Error('the grandchild never published its pid')
+      throw new Error(
+        'the grandchild never published its pid — the process group was killed before /bin/sh ran, ' +
+          `so ${GRANDCHILD_CEILING_MS}ms is no longer a margin over process startup on this machine`,
+      )
     },
   }
+}
+
+/**
+ * A command that runs until the test lets it finish, rather than for a guessed
+ * number of milliseconds.
+ *
+ * Several tests here need a command that is *still running* while they look at
+ * something — an interim digest, a ledger row, the state lock. Spelling that as
+ * `sleep 0.5` and taking the reading early is two bets in one: that the engine
+ * has spawned by then, and that the command has not finished by then. The
+ * second bet is the one nobody notices losing, because a command that finished
+ * early turns the reading into a `complete` digest and the test fails
+ * describing a phase rather than the behaviour it was written for.
+ *
+ * A gate replaces both bets with a fact. The command cannot end until `open()`
+ * is called, so the test reads whenever it is ready, and the command ends the
+ * moment it is done with it — which is also faster than any `sleep` long enough
+ * to have been safe.
+ */
+function gate(name = 'gate'): { waits: string; open: () => Promise<void> } {
+  const file = path.join(scratch, name)
+  return {
+    waits: `until [ -f '${file}' ]; do sleep 0.02; done`,
+    open: async () => {
+      await fs.writeFile(file, '', 'utf8')
+    },
+  }
+}
+
+/**
+ * The first digest of an invocation taken **after** it stopped being `queued`.
+ *
+ * `phase: 'running'` means one thing — `progress.spawned` — and the window
+ * before the spawn belongs to the engine: the config read, the pin, the queued
+ * ledger row, and with the cache on two `worktreeDigest` calls at four `git`
+ * processes each. A single short `wait_ms` picked to be "obviously" shorter
+ * than the command is therefore also a bet that all of that finishes first, and
+ * on a loaded machine it loses: the digest comes back `queued`, and the test
+ * fails on the engine's own startup instead of on what it was written for.
+ *
+ * Re-calling costs nothing and spawns nothing. A second call for the same
+ * `slot::label::command` finds the entry in the in-flight map and re-races the
+ * *same* completion promise, so this observes the engine's progress without
+ * changing it. Bounded, so a regression that never spawns still fails as an
+ * assertion on `phase` — the informative failure — rather than as a harness
+ * timeout naming the `it()`.
+ */
+async function poll(
+  input: Parameters<typeof verifyRun>[1],
+  ready: (digest: Awaited<ReturnType<typeof verifyRun>>) => boolean,
+  attempts = 40,
+): Promise<Awaited<ReturnType<typeof verifyRun>>> {
+  let digest = await verifyRun(project.dir, input, clock)
+  for (let attempt = 0; !ready(digest) && attempt < attempts; attempt += 1) {
+    digest = await verifyRun(project.dir, input, clock)
+  }
+  return digest
+}
+
+/** Polled until the engine has actually spawned the child. */
+async function running(input: Parameters<typeof verifyRun>[1]): Promise<Awaited<ReturnType<typeof verifyRun>>> {
+  return await poll(input, (digest) => digest.phase !== 'queued')
 }
 
 /**
@@ -197,6 +399,31 @@ async function ledger(cycle = 'cycle-01'): Promise<Awaited<ReturnType<typeof rea
 async function logBody(name = 'test.log', cycle = 'cycle-01'): Promise<string> {
   return await fs.readFile(path.join(await runDir(), cycle, 'verify', name), 'utf8').catch(() => '')
 }
+
+/* ── the budget, kept honest ──────────────────────────────────────────────── */
+
+/** `5_000` — how the engine's source spells a number, not how JS prints one. */
+function asSourceLiteral(value: number): string {
+  return value.toLocaleString('en-US').replaceAll(',', '_')
+}
+
+describe('the timeout budget', () => {
+  it('is still derived from the engine constants it is named after', async () => {
+    // The one thing standing between this file and a silent repeat of the bug
+    // it was written for. `KILL_GRACE_MS` and `DRAIN_GRACE_MS` are
+    // module-private in `ops/verify.ts`, so `testTimeout` is derived from
+    // *copies* — and a copy that drifts re-creates the original fault exactly:
+    // the engine's settle grows, the budget does not, and the file starts
+    // reporting harness timeouts that name the `it()` and explain nothing.
+    // Raise either constant in the engine and this fails by name, pointing at
+    // the number that has to move with it.
+    //
+    // Source-level, in the same spirit as `never inherits stdio` below.
+    const source = await fs.readFile(SOURCE, 'utf8')
+    expect(source).toContain(`const KILL_GRACE_MS = ${asSourceLiteral(KILL_GRACE_MS)}\n`)
+    expect(source).toContain(`const DRAIN_GRACE_MS = ${asSourceLiteral(DRAIN_GRACE_MS)}\n`)
+  })
+})
 
 /* ── execution ────────────────────────────────────────────────────────────── */
 
@@ -294,7 +521,9 @@ describe('verifyRun', () => {
     // port state the lock exists to prevent.
     const grandchild = await sleeper()
     await begin({ test: `cd . && ${grandchild.command} && true` })
-    await writePin({ timeout_ms: 200 })
+    // Not 200ms: the grandchild has to exist before the ceiling fires, and this
+    // number is the margin over its startup. See `GRANDCHILD_CEILING_MS`.
+    await writePin({ timeout_ms: GRANDCHILD_CEILING_MS })
 
     const started = Date.now()
     const pending = verifyRun(project.dir, { slot: 'test', wait_ms: 12_000 }, clock)
@@ -309,8 +538,10 @@ describe('verifyRun', () => {
     // without this line the half of the ceiling that reaches the real command
     // is defended by nothing.
     expect(await died(pid), `pid ${pid} outlived the ceiling`).toBe(true)
-    // The ceiling is 200ms and the SIGKILL grace is 5s: anything near the
-    // command's own 20s is the ceiling bounding nothing.
+    // The ceiling is 1s and the SIGKILL grace is 5s: anything near the
+    // command's own 20s is the ceiling bounding nothing. The bound is loose on
+    // purpose — it is here to catch a ceiling that never fired, not to time the
+    // machine, and a tight one would be the next flake in this file.
     expect(Date.now() - started).toBeLessThan(10_000)
     // Released, rather than held until it goes stale.
     await expect(fs.stat(resolveLoopPaths(project.dir).verifyLock)).rejects.toThrow()
@@ -326,7 +557,9 @@ describe('verifyRun', () => {
     // ceiling three seconds before the kill it scheduled was due.
     const grandchild = await sleeper({ ignoresTerm: true })
     await begin({ test: `cd . && ${grandchild.command} && true` })
-    await writePin({ timeout_ms: 200 })
+    // See `GRANDCHILD_CEILING_MS`. At 200ms this test raced the grandchild's
+    // startup against its own kill and lost three times in ten suite runs.
+    await writePin({ timeout_ms: GRANDCHILD_CEILING_MS })
 
     const pending = verifyRun(project.dir, { slot: 'test', wait_ms: 12_000 }, clock)
     const pid = await grandchild.pid()
@@ -386,27 +619,52 @@ describe('verifyRun', () => {
   })
 
   it('returns phase running rather than blocking past the client timeout', async () => {
-    await begin({ test: 'sleep 0.5' })
+    // Gated rather than timed: `sleep 0.5` made this test bet that the engine
+    // spawns in under 30ms *and* that the command outlives however long the
+    // spawn actually took. See `gate`.
+    const held = gate()
+    await begin({ test: held.waits })
 
-    const interim = await verifyRun(project.dir, { slot: 'test', wait_ms: 30 }, clock)
+    const interim = await running({ slot: 'test', wait_ms: 30 })
     expect(interim.phase).toBe('running')
     expect(interim.exit_code).toBeNull()
 
+    await held.open()
     const settled = await verifyRun(project.dir, { slot: 'test', wait_ms: 4000 }, clock)
     expect(settled.phase).toBe('complete')
   })
 
   it('a second call after the wait learns the exit code', async () => {
-    await begin({ test: 'sleep 0.3; exit 7' })
+    const held = gate()
+    await begin({ test: `${held.waits}; exit 7` })
 
-    expect((await verifyRun(project.dir, { slot: 'test', wait_ms: 30 }, clock)).exit_code).toBeNull()
+    // `running()` rather than one 30ms call: a `queued` digest also reports
+    // `exit_code: null`, so the guessed wait could satisfy this line without
+    // ever having reached the state it is about.
+    expect((await running({ slot: 'test', wait_ms: 30 })).exit_code).toBeNull()
+    await held.open()
     expect((await verifyRun(project.dir, { slot: 'test', wait_ms: 4000 }, clock)).exit_code).toBe(7)
   })
 
   it('a request abort stops the wait and leaves the child running', async () => {
-    await begin({ test: "printf 'a\\n'; sleep 0.4; printf 'b\\n'" })
+    // Both halves of this used to be timers. `sleep 0.4` had to outlast the
+    // abort, and the abort had to land after the spawn — so a slow spawn
+    // returned `queued` instead of `running`, and an abort delayed past the
+    // 400ms mark found `b` already in the log. The gate holds the command open
+    // until this test is finished with it, and the abort is fired off the log
+    // itself, so neither ordering is a guess any more.
+    const held = gate()
+    await begin({ test: `printf 'a\\n'; ${held.waits}; printf 'b\\n'` })
     const aborter = new AbortController()
-    setTimeout(() => aborter.abort(), 120)
+    // Bounded, and it aborts either way: an abort that never fires would leave
+    // the 60s wait to run past this file's whole 21s budget and report a
+    // harness timeout instead of the assertion below.
+    void (async () => {
+      for (let attempt = 0; attempt < 300 && !(await logBody()).includes('a'); attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 10))
+      }
+      aborter.abort()
+    })()
 
     const interim = await verifyRun(project.dir, { slot: 'test', wait_ms: 60_000 }, clock, aborter.signal)
 
@@ -415,6 +673,7 @@ describe('verifyRun', () => {
 
     // The child was never signalled — only `verify.timeout_ms` kills one — so
     // the log keeps growing and the next call learns the exit code.
+    await held.open()
     const settled = await verifyRun(project.dir, { slot: 'test', wait_ms: 4000 }, clock)
     expect(settled.exit_code).toBe(0)
     expect(await logBody()).toBe('a\nb\n')
@@ -493,14 +752,19 @@ describe('verifyRun ledger', () => {
   })
 
   it('amends the ledger entry when the child finally exits', async () => {
-    await begin({ test: 'sleep 0.3; exit 1' })
+    // The row is `queued` until the spawn and `running` after it, so a fixed
+    // 30ms wait was reading a race: on a loaded machine the reading lands
+    // before the spawn and the row below says `queued`.
+    const held = gate()
+    await begin({ test: `${held.waits}; exit 1` })
 
-    await verifyRun(project.dir, { slot: 'test', wait_ms: 30 }, clock)
+    expect((await running({ slot: 'test', wait_ms: 30 })).phase).toBe('running')
     const midway = await ledger()
     expect(midway).toHaveLength(1)
     expect(midway[0]?.phase).toBe('running')
     expect(midway[0]?.exit_code).toBeNull()
 
+    await held.open()
     await verifyRun(project.dir, { slot: 'test', wait_ms: 4000 }, clock)
 
     // Rewritten in place, not appended beside: without the amendment a suite
@@ -640,7 +904,15 @@ describe('verifyRun and the project verify lock', () => {
     const lock = resolveLoopPaths(project.dir).verifyLock
     await fs.mkdir(lock)
 
-    const queued = await verifyRun(project.dir, { slot: 'test', wait_ms: 120 }, clock)
+    // Polled on the sentence, not on a 120ms guess. `progress.contended` is set
+    // by `withLock`'s `onWait`, which is reached only after the config read, the
+    // pin and the queued ledger row — so a wait that expires earlier reports the
+    // *other* `queued` headline ('has not started yet'), which is true but is
+    // not what this test is about. The lock is never released here, so no number
+    // of calls can turn this into `complete`.
+    const queued = await poll({ slot: 'test', wait_ms: 120 }, (digest) =>
+      digest.headline.includes('another verify command is running'),
+    )
 
     // Not `running`: no child of this call exists, and a digest that said
     // otherwise is the one lie this design is built to avoid.
@@ -689,7 +961,11 @@ describe('verifyRun and the project verify lock', () => {
     const lock = resolveLoopPaths(project.dir).verifyLock
     await fs.mkdir(lock)
 
-    await verifyRun(project.dir, { slot: 'test', wait_ms: 120 }, clock)
+    // The row is appended immediately *before* the lock is contested, so
+    // waiting for the contended headline is waiting for the row to exist. A
+    // fixed 120ms wait was instead a bet that the engine got that far, and a
+    // reading taken too early finds no rows at all.
+    await poll({ slot: 'test', wait_ms: 120 }, (digest) => digest.headline.includes('another verify command is running'))
 
     // Without the entry a verifier could log `pass` citing a command that only
     // ever queued, and the contradiction check would have nothing to read.
@@ -735,9 +1011,15 @@ describe('verifyRun and the project verify lock', () => {
   })
 
   it('does not hold the state lock while a command runs', async () => {
-    await begin({ test: 'sleep 0.5' })
+    // The state write has to happen *while a command runs*, so the command is
+    // gated rather than given 500ms to be slower than the engine's startup:
+    // with `sleep 0.5` a machine that spawned late could finish the command
+    // before the write, and the test would prove the state lock is free after a
+    // command rather than during one.
+    const held = gate()
+    await begin({ test: held.waits })
 
-    expect((await verifyRun(project.dir, { slot: 'test', wait_ms: 40 }, clock)).phase).toBe('running')
+    expect((await running({ slot: 'test', wait_ms: 40 })).phase).toBe('running')
 
     // `withLock`'s default acquire timeout is 5 000 ms, so a subprocess held
     // inside `.mjloop/.lock` would make this throw.
@@ -746,6 +1028,7 @@ describe('verifyRun and the project verify lock', () => {
     })
     expect((await state()).goal).toBe('still writable')
 
+    await held.open()
     await verifyRun(project.dir, { slot: 'test', wait_ms: 4000 }, clock)
   })
 })
@@ -885,11 +1168,33 @@ describe('verifyRun cache', () => {
     await nextCycle()
     await fs.mkdir(resolveLoopPaths(project.dir).verifyLock)
 
-    // A hit executes nothing and needs exclusion from nothing.
-    const digest = await verifyRun(project.dir, { slot: 'test', wait_ms: 500 }, clock)
+    // A hit executes nothing and needs exclusion from nothing. The wait is the
+    // same 4000ms every sibling uses because a hit is not instantaneous — it
+    // spawns git to fingerprint the worktree, ~250ms idle and more under a
+    // loaded suite — and a budget that expires mid-fingerprint answers `queued`
+    // from the *wait*, which reads identically to the `queued` of a contended
+    // lock. The wider budget cannot hide a regression: this lock is never
+    // released and `lock_timeout_ms` is 1_800_000ms, so a hit that reached
+    // `withLock` would still be waiting when any budget expired.
+    const digest = await verifyRun(project.dir, { slot: 'test', wait_ms: 4000 }, clock)
 
     expect(digest.phase).toBe('complete')
     expect(digest.cached).toBe(true)
+    // The claim in this test's name, asserted where no clock can reach it: an
+    // invocation writes a `queued` ledger row *before* it contests the lock, so
+    // a cycle whose only row is the reuse row is proof the lock was never asked
+    // for — where `phase: 'complete'` alone only proves the answer arrived in
+    // time.
+    const rows = await ledger('cycle-02')
+    expect(rows.map((row) => row.phase)).toEqual(['complete'])
+    expect(rows[0]?.cached_from_cycle).toBe(1)
+    // This test carried an explicit 20_000ms timeout, for the reason described
+    // at the top of the file: without room to finish, a hit that *did* take the
+    // lock is reported as a harness timeout naming the `it`, and the two
+    // assertions above — the ones that say what actually broke — never run. The
+    // file-scoped budget is 21_000ms and covers it, so the explicit number is
+    // gone rather than left behind as the one timeout in the file that does not
+    // track `KILL_GRACE_MS` and `DRAIN_GRACE_MS`.
   })
 
   it('never reuses a failing result', async () => {
@@ -946,19 +1251,22 @@ describe('verifyRun cache', () => {
 
   it('records no cache entry when the tree moved while the command ran', async () => {
     await makeRepo()
-    await begin({ test: 'sleep 3' }, { cache: true })
+    // Gated rather than `sleep 3`. Polling for `running` (below) is unavoidable
+    // — with the cache on, two `worktreeDigest` calls at four `git` processes
+    // each precede the spawn, so any wait short enough to be an interim can
+    // expire before the child exists — but polling costs time, and against a
+    // fixed 3s command that time came out of the window the write below has to
+    // land in, and out of the 4s the settle then had to fit into alongside a
+    // third `worktreeDigest`. The gate makes both windows unbounded and the
+    // command's own runtime ~0, which is also ~3s faster.
+    const held = gate()
+    await begin({ test: held.waits }, { cache: true })
 
-    // Polled rather than guessed. With the cache on, two `worktreeDigest` calls
-    // — three git invocations each — precede the spawn, so any single wait
-    // small enough to be an interim is also small enough to expire before the
-    // child exists on a loaded machine, and the test then reports `queued`.
-    let interim = await verifyRun(project.dir, { slot: 'test', wait_ms: 400 }, clock)
-    for (let attempt = 0; interim.phase === 'queued' && attempt < 20; attempt += 1) {
-      interim = await verifyRun(project.dir, { slot: 'test', wait_ms: 400 }, clock)
-    }
+    const interim = await running({ slot: 'test', wait_ms: 400 })
     expect(interim.phase).toBe('running')
 
     await fs.writeFile(path.join(project.dir, 'concurrent.ts'), 'export const b = 2\n', 'utf8')
+    await held.open()
     const settled = await verifyRun(project.dir, { slot: 'test', wait_ms: 4000 }, clock)
 
     expect(settled.exit_code).toBe(0)
