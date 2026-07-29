@@ -6,6 +6,7 @@ node_modules/
 # src/ shipped nothing that runs — the MCP server and all three hooks point
 # into dist/. It is bundled (no node_modules needed) by `npm run build`.
 *.tsbuildinfo
+.worktrees/
 
 # Test output
 coverage/
