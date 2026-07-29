@@ -68,15 +68,21 @@
     </header>
 
     <nav class="tabs" data-i18n-label="tabs.label">
-      <a id="tab-run" href="#run" data-i18n="tabs.run"></a>
-      <a id="tab-plans" href="#plans" data-i18n="tabs.plans"></a>
-      <a id="tab-evidence" href="#evidence" data-i18n="tabs.evidence"></a>
-      <a id="tab-memory" href="#memory" data-i18n="tabs.memory"></a>
-      <a id="tab-config" href="#config" data-i18n="tabs.config"></a>
+      <a id="tab-run" href="#run" aria-controls="panel-run" data-i18n="tabs.run"></a>
+      <a id="tab-plans" href="#plans" aria-controls="panel-plans" data-i18n="tabs.plans"></a>
+      <a id="tab-evidence" href="#evidence" aria-controls="panel-evidence" data-i18n="tabs.evidence"></a>
+      <a id="tab-memory" href="#memory" aria-controls="panel-memory" data-i18n="tabs.memory"></a>
+      <a id="tab-config" href="#config" aria-controls="panel-config" data-i18n="tabs.config"></a>
     </nav>
 
     <main>
-      <section class="panel" id="panel-run" hidden>
+      <section class="panel" id="panel-run" aria-labelledby="panel-run-title" hidden>
+        <header class="panel-head">
+          <div>
+            <h1 id="panel-run-title" data-i18n="panel.run.title"></h1>
+            <p class="hint" data-i18n="panel.run.help"></p>
+          </div>
+        </header>
         <p class="empty" id="run-empty"></p>
 
         <!-- The estimate, and the only thing on this page that describes a run
@@ -167,7 +173,13 @@
         </div>
       </section>
 
-      <section class="panel" id="panel-plans" hidden>
+      <section class="panel" id="panel-plans" aria-labelledby="panel-plans-title" hidden>
+        <header class="panel-head">
+          <div>
+            <h1 id="panel-plans-title" data-i18n="panel.plans.title"></h1>
+            <p class="hint" data-i18n="panel.plans.help"></p>
+          </div>
+        </header>
         <p class="empty" id="plans-empty"></p>
 
         <section class="block" id="plans-ready" hidden>
@@ -230,7 +242,13 @@
         </section>
       </section>
 
-      <section class="panel" id="panel-evidence" hidden>
+      <section class="panel" id="panel-evidence" aria-labelledby="panel-evidence-title" hidden>
+        <header class="panel-head">
+          <div>
+            <h1 id="panel-evidence-title" data-i18n="panel.evidence.title"></h1>
+            <p class="hint" data-i18n="panel.evidence.help"></p>
+          </div>
+        </header>
         <p class="empty" id="evidence-empty"></p>
         <div class="scroller">
           <div class="grid grid-runs" role="table">
@@ -257,7 +275,13 @@
         </section>
       </section>
 
-      <section class="panel" id="panel-memory" hidden>
+      <section class="panel" id="panel-memory" aria-labelledby="panel-memory-title" hidden>
+        <header class="panel-head">
+          <div>
+            <h1 id="panel-memory-title" data-i18n="panel.memory.title"></h1>
+            <p class="hint" data-i18n="panel.memory.help"></p>
+          </div>
+        </header>
         <p class="empty" id="memory-empty"></p>
         <div class="facets">
           <!-- Faceting is client-side because it has to be: `memorySearch`
@@ -277,7 +301,13 @@
         <p class="more" id="memory-more" hidden></p>
       </section>
 
-      <section class="panel" id="panel-config" hidden>
+      <section class="panel" id="panel-config" aria-labelledby="panel-config-title" hidden>
+        <header class="panel-head">
+          <div>
+            <h1 id="panel-config-title" data-i18n="panel.config.title"></h1>
+            <p class="hint" data-i18n="panel.config.help"></p>
+          </div>
+        </header>
         <p class="hint" data-i18n="config.readOnly"></p>
         <dl class="facts">
           <div class="fact"><dt data-i18n="config.designSystem"></dt><dd id="config-design"></dd></div>

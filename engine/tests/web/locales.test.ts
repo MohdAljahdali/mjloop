@@ -48,6 +48,7 @@ const NAMESPACES = [
   'job',
   'lang',
   'memory',
+  'panel',
   'pane',
   'plans',
   'preflight',

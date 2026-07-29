@@ -155,6 +155,19 @@ describe('templates and actions', () => {
 })
 
 describe('accessibility', () => {
+  it('gives every top-level view a visible heading and an unmistakable selected route', () => {
+    for (const route of ['run', 'plans', 'evidence', 'memory', 'config']) {
+      expect(html).toMatch(new RegExp(`id="tab-${route}"[^>]+aria-controls="panel-${route}"`))
+      expect(html).toMatch(
+        new RegExp(`id="panel-${route}"[^>]+aria-labelledby="panel-${route}-title"`),
+      )
+      expect(html).toMatch(new RegExp(`id="panel-${route}-title"`))
+    }
+    expect(read('css/30-tabs.css')).toMatch(
+      /\.tabs a\[aria-current="page"\][^{]*\{[^}]*background:/,
+    )
+  })
+
   it('gives every control an accessible name', () => {
     // A placeholder is not a name: it is announced inconsistently and it
     // disappears the moment the user types. Every one of these controls had

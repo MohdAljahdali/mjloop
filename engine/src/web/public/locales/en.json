@@ -23,6 +23,17 @@
   "tabs.memory": "Memory",
   "tabs.config": "Config",
 
+  "panel.run.title": "Current run",
+  "panel.run.help": "Live state, agents, guards, findings, and cycle history for this project.",
+  "panel.plans.title": "Plans and stories",
+  "panel.plans.help": "Review plans, approve decisions, and start stories whose dependencies are ready.",
+  "panel.evidence.title": "Evidence",
+  "panel.evidence.help": "Inspect what each run, cycle, and agent actually recorded.",
+  "panel.memory.title": "Project memory",
+  "panel.memory.help": "Search the decisions and lessons MjLoop retained for later runs.",
+  "panel.config.title": "Project configuration",
+  "panel.config.help": "Inspect the policy, verification commands, tracks, and specialist behavior MjLoop uses.",
+
   "status.idle": "idle",
   "status.running": "running",
   "status.paused": "paused",

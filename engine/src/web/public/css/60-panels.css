@@ -1,5 +1,25 @@
 /* The tab bodies: facts, plans, stories, runs, jobs. */
 
+.panel-head {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-block-end: 18px;
+  padding-block-end: 12px;
+  border-block-end: 1px solid var(--line);
+}
+
+.panel-head h1 {
+  margin: 0;
+  font-size: 18px;
+  letter-spacing: -0.01em;
+}
+
+.panel-head .hint {
+  margin: 3px 0 0;
+}
+
 .facts {
   margin: 0;
   display: grid;

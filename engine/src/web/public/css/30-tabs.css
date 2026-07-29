@@ -25,4 +25,6 @@
 .tabs a[aria-current="page"] {
   color: var(--text);
   border-block-end-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  font-weight: 650;
 }
