@@ -206,6 +206,12 @@ describe('the invariants a stylesheet edit could undo', () => {
     expect(read('app.css')).toMatch(/\[hidden\]\s*\{\s*display:\s*none\s*!important/)
   })
 
+  it('keeps dense chrome inside a narrow viewport', () => {
+    expect(read('app.css')).toMatch(/grid-template-columns:\s*minmax\(0,\s*1fr\)/)
+    expect(read('css/30-tabs.css')).toMatch(/\.tabs\s*\{[^}]*overflow-x:\s*auto/)
+    expect(read('css/20-rail.css')).toMatch(/\.rail\s*\{[^}]*overflow-x:\s*auto/)
+  })
+
   it('never lets a pane mode un-clip the terminal', () => {
     for (const name of styles) {
       expect(read(name), name).not.toMatch(/\.terminal[^{]*\{[^}]*overflow:\s*visible/)

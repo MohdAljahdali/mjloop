@@ -62,6 +62,7 @@
   padding: 4px 16px;
   border-block-start: 1px solid var(--line);
   font-size: 13px;
+  overflow-x: auto;
 }
 
 .rail-detail {
