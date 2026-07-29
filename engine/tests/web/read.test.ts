@@ -26,6 +26,7 @@ import {
   readStoryDetail,
   readTelemetryReport,
 } from '../../src/web/read.js'
+import { configRevision } from '../../src/store/config-mutation.js'
 import { makeTmpProject, type TmpProject } from '../helpers/tmp-project.js'
 
 /**
@@ -330,6 +331,7 @@ describe('read', () => {
     expect(view.invalid).toBe(false)
     expect(view.parsed?.version).toBe(1)
     expect(view.raw).toContain('# keep me')
+    expect(view.revision).toBe(configRevision(view.raw ?? ''))
   })
 
   it('reports a config that does not parse without pretending it is missing', async () => {

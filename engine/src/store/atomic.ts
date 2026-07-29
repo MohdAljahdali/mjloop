@@ -15,6 +15,33 @@ export interface WriteOptions {
   backup?: boolean
 }
 
+/**
+ * Atomically replace a text document while retaining its exact spelling.
+ *
+ * JSON state is rendered by this module, but YAML comments and ordering belong
+ * to the person who wrote them. The config mutator prepares the string and
+ * this function only guarantees backup + indivisible landing.
+ */
+export async function writeTextAtomic(file: string, text: string, options: WriteOptions = {}): Promise<void> {
+  const { backup = true } = options
+  await fs.mkdir(path.dirname(file), { recursive: true })
+  if (backup) {
+    try {
+      await fs.copyFile(file, `${file}.bak`)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+    }
+  }
+  const temp = `${file}.${process.pid}.${randomUUID()}.tmp`
+  try {
+    await fs.writeFile(temp, text, 'utf8')
+    await fs.rename(temp, file)
+  } catch (error) {
+    await fs.rm(temp, { force: true }).catch(() => undefined)
+    throw error
+  }
+}
+
 export async function writeJsonAtomic(file: string, data: unknown, options: WriteOptions = {}): Promise<void> {
   const { backup = true } = options
   await fs.mkdir(path.dirname(file), { recursive: true })

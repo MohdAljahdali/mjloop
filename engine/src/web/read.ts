@@ -9,6 +9,7 @@ import { AgentResultSchema, RosterSchema } from '../schemas/contract.js'
 import { FindingSchema, type State } from '../schemas/state.js'
 import { ManifestSchema, PlanFrontmatterSchema, StoryFrontmatterSchema } from '../schemas/plan.js'
 import type { LedgerEntry } from '../schemas/verify.js'
+import { configRevision } from '../store/config-mutation.js'
 import { loadConfig, ConfigMissingError } from '../store/config-store.js'
 import { parseFrontmatter } from '../store/frontmatter.js'
 import { listMemories, readMemory } from '../store/memory-store.js'
@@ -65,6 +66,8 @@ export async function readState(projectDir: string): Promise<StateView> {
 export interface ConfigView {
   /** The file as written, comments intact. The page shows it and never sets it. */
   raw: string | null
+  /** SHA-256 of `raw`, used as the compare-and-swap token for edits. */
+  revision: string | null
   parsed: Config | null
   /** True when the file exists but does not parse. The text is in `raw`. */
   invalid: boolean
@@ -74,13 +77,18 @@ export async function readConfigView(projectDir: string): Promise<ConfigView> {
   const paths = resolveLoopPaths(projectDir)
   const raw = await fs.readFile(paths.config, 'utf8').catch(() => null)
   try {
-    return { raw, parsed: await loadConfig(projectDir), invalid: false }
+    return {
+      raw,
+      revision: raw === null ? null : configRevision(raw),
+      parsed: await loadConfig(projectDir),
+      invalid: false,
+    }
   } catch (error) {
     // A missing config is not an error — a project may be mid-provisioning.
     // Anything else means the file is there and unusable, which is exactly what
     // the Config tab exists to show.
-    if (error instanceof ConfigMissingError) return { raw, parsed: null, invalid: false }
-    return { raw, parsed: null, invalid: true }
+    if (error instanceof ConfigMissingError) return { raw, revision: null, parsed: null, invalid: false }
+    return { raw, revision: raw === null ? null : configRevision(raw), parsed: null, invalid: true }
   }
 }
 
