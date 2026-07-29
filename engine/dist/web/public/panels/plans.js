@@ -12,7 +12,7 @@
  * — and they have to be: `acceptance` and `evidence` live in story frontmatter
  * and are deliberately absent from `ManifestEntry`.
  */
-import { clone, cls, flag, label, phrase, verbatim } from '../ui/dom.js'
+import { attr, clone, cls, flag, label, phrase, verbatim } from '../ui/dom.js'
 import { feed } from '../lib/api.js'
 import { stamp } from '../lib/fmt.js'
 import { t } from '../lib/i18n.js'
@@ -86,6 +86,8 @@ export function ready(plans) {
 
 /** The plan whose detail is open, or null. */
 let opened = /** @type {string | null} */ (null)
+/** The plan opened by a user action and waiting for its fetched detail. */
+let focusPending = /** @type {string | null} */ (null)
 
 /**
  * @param {string} id
@@ -96,6 +98,7 @@ const pick = (id) => /** @type {HTMLElement} */ (document.getElementById(id))
 export function mountPlans() {
   const node = pick('panel-plans')
   const empty = pick('plans-empty')
+  const workspace = pick('plans-workspace')
   const host = pick('plans-list')
   const more = pick('plans-more')
 
@@ -129,6 +132,7 @@ export function mountPlans() {
       plan.update(state)
 
       const plans = state.plans
+      workspace.dataset['detailOpen'] = opened === null ? 'false' : 'true'
       phrase(empty, 'plans.empty')
       flag(empty, 'hidden', plans.length > 0)
 
@@ -180,6 +184,8 @@ export function mountPlans() {
         const open = slots['open']
         if (open !== undefined) {
           open.dataset['plan'] = view.id
+          attr(open, 'aria-controls', 'plan-detail')
+          attr(open, 'aria-expanded', opened === view.id ? 'true' : 'false')
           phrase(open, opened === view.id ? 'plans.close' : 'plans.open')
         }
 
@@ -301,6 +307,13 @@ export function mountPlans() {
     flag(reviewDetails, 'hidden', view.review === null)
 
     reconcile(detailStories, view.stories, (story) => story.id, storyDetailRow)
+
+    if (focusPending === view.id) {
+      focusPending = null
+      detailTitle.focus({ preventScroll: true })
+      const reduced = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
+      detail.scrollIntoView?.({ block: 'nearest', behavior: reduced ? 'auto' : 'smooth' })
+    }
   }
 
   function storyDetailRow() {
@@ -364,7 +377,14 @@ export function mountPlans() {
   return {
     /** @param {string} id */
     toggle(id) {
-      opened = opened === id ? null : id
+      const closing = opened === id
+      opened = closing ? null : id
+      focusPending = closing ? null : id
+      draw()
+    },
+    close() {
+      opened = null
+      focusPending = null
       draw()
     },
     /** @param {'approved' | 'rejected' | 'changes_requested'} decision */

@@ -10523,14 +10523,14 @@ var require_parser = __commonJS({
             case "scalar":
             case "single-quoted-scalar":
             case "double-quoted-scalar": {
-              const fs17 = this.flowScalar(this.type);
+              const fs18 = this.flowScalar(this.type);
               if (atNextItem || it.value) {
-                map.items.push({ start, key: fs17, sep: [] });
+                map.items.push({ start, key: fs18, sep: [] });
                 this.onKeyLine = true;
               } else if (it.sep) {
-                this.stack.push(fs17);
+                this.stack.push(fs18);
               } else {
-                Object.assign(it, { key: fs17, sep: [] });
+                Object.assign(it, { key: fs18, sep: [] });
                 this.onKeyLine = true;
               }
               return;
@@ -10658,13 +10658,13 @@ var require_parser = __commonJS({
             case "scalar":
             case "single-quoted-scalar":
             case "double-quoted-scalar": {
-              const fs17 = this.flowScalar(this.type);
+              const fs18 = this.flowScalar(this.type);
               if (!it || it.value)
-                fc.items.push({ start: [], key: fs17, sep: [] });
+                fc.items.push({ start: [], key: fs18, sep: [] });
               else if (it.sep)
-                this.stack.push(fs17);
+                this.stack.push(fs18);
               else
-                Object.assign(it, { key: fs17, sep: [] });
+                Object.assign(it, { key: fs18, sep: [] });
               return;
             }
             case "flow-map-end":
@@ -10853,7 +10853,7 @@ var require_public_api = __commonJS({
         return docs;
       return Object.assign([], { empty: true }, composer$1.streamInfo());
     }
-    function parseDocument(source, options = {}) {
+    function parseDocument2(source, options = {}) {
       const { lineCounter: lineCounter2, prettyErrors } = parseOptions(options);
       const parser$1 = new parser.Parser(lineCounter2?.addNewLine);
       const composer$1 = new composer.Composer(options);
@@ -10879,7 +10879,7 @@ var require_public_api = __commonJS({
       } else if (options === void 0 && reviver && typeof reviver === "object") {
         options = reviver;
       }
-      const doc = parseDocument(src, options);
+      const doc = parseDocument2(src, options);
       if (!doc)
         return null;
       doc.warnings.forEach((warning) => log.warn(doc.options.logLevel, warning));
@@ -10915,7 +10915,7 @@ var require_public_api = __commonJS({
     }
     exports.parse = parse5;
     exports.parseAllDocuments = parseAllDocuments;
-    exports.parseDocument = parseDocument;
+    exports.parseDocument = parseDocument2;
     exports.stringify = stringify3;
   }
 });
@@ -10974,7 +10974,7 @@ var require_dist = __commonJS({
 
 // src/web/cli.ts
 import { spawn } from "node:child_process";
-import fs16 from "node:fs/promises";
+import fs17 from "node:fs/promises";
 import path17 from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 
@@ -11028,8 +11028,8 @@ async function isEntrypoint(moduleUrl) {
 }
 
 // src/web/server.ts
-import crypto2 from "node:crypto";
-import fs15 from "node:fs/promises";
+import crypto3 from "node:crypto";
+import fs16 from "node:fs/promises";
 import http from "node:http";
 import path16 from "node:path";
 import { fileURLToPath } from "node:url";
@@ -11042,7 +11042,7 @@ var import_websocket = __toESM(require_websocket(), 1);
 var import_websocket_server = __toESM(require_websocket_server(), 1);
 
 // src/web/api.ts
-import crypto from "node:crypto";
+import crypto2 from "node:crypto";
 
 // node_modules/zod/v4/core/core.js
 var _a;
@@ -16373,7 +16373,7 @@ var ManifestSchema = strictObject({
 });
 
 // src/web/read.ts
-import fs10 from "node:fs/promises";
+import fs11 from "node:fs/promises";
 import path10 from "node:path";
 
 // src/ops/history.ts
@@ -16673,6 +16673,25 @@ var StateCorruptedError = class extends Error {
     this.name = "StateCorruptedError";
   }
 };
+async function writeTextAtomic(file, text, options = {}) {
+  const { backup = true } = options;
+  await fs2.mkdir(path3.dirname(file), { recursive: true });
+  if (backup) {
+    try {
+      await fs2.copyFile(file, `${file}.bak`);
+    } catch (error2) {
+      if (error2.code !== "ENOENT") throw error2;
+    }
+  }
+  const temp = `${file}.${process.pid}.${randomUUID()}.tmp`;
+  try {
+    await fs2.writeFile(temp, text, "utf8");
+    await fs2.rename(temp, file);
+  } catch (error2) {
+    await fs2.rm(temp, { force: true }).catch(() => void 0);
+    throw error2;
+  }
+}
 async function writeJsonAtomic(file, data, options = {}) {
   const { backup = true } = options;
   await fs2.mkdir(path3.dirname(file), { recursive: true });
@@ -17517,8 +17536,140 @@ var CacheEntrySchema = strictObject({
 });
 var CacheSchema = array(CacheEntrySchema);
 
-// src/store/memory-store.ts
+// src/store/config-mutation.ts
+var YAML3 = __toESM(require_dist(), 1);
+import crypto from "node:crypto";
 import fs9 from "node:fs/promises";
+var VerifySlotSchema2 = _enum(["test", "lint", "build"]);
+var ConfigChangeSchema = discriminatedUnion("kind", [
+  strictObject({
+    kind: literal("root"),
+    key: _enum(["autonomous", "verify_cache"]),
+    value: boolean2()
+  }),
+  strictObject({
+    kind: literal("limit"),
+    key: _enum(["max_parallel_agents", "no_progress_strikes"]),
+    value: number2().int().positive()
+  }),
+  strictObject({
+    kind: literal("verify.command"),
+    key: VerifySlotSchema2,
+    value: string2().min(1).nullable()
+  }),
+  strictObject({
+    kind: literal("verify.number"),
+    key: _enum(["timeout_ms", "lock_timeout_ms"]),
+    value: number2().int().positive()
+  }),
+  strictObject({
+    kind: literal("verify.patterns"),
+    key: VerifySlotSchema2,
+    value: array(string2().min(1))
+  }),
+  strictObject({
+    kind: literal("gate"),
+    key: _enum(["plan_approval", "commit", "preflight"]),
+    value: _enum(["human", "auto"])
+  }),
+  strictObject({
+    kind: literal("specialist"),
+    agent: AgentNameSchema,
+    value: SpecialistModeSchema.nullable()
+  }),
+  strictObject({
+    kind: literal("track"),
+    track: IdSchema,
+    value: TrackSchema.nullable()
+  })
+]);
+var ConfigPatchSchema = strictObject({
+  revision: string2().regex(/^[a-f0-9]{64}$/),
+  changes: array(ConfigChangeSchema).min(1).max(100)
+});
+var ConfigMutationError = class extends Error {
+  kind;
+  path;
+  constructor(kind, path18 = []) {
+    super(kind);
+    this.name = "ConfigMutationError";
+    this.kind = kind;
+    this.path = path18;
+  }
+};
+function configRevision(raw) {
+  return crypto.createHash("sha256").update(raw).digest("hex");
+}
+async function mutateConfig(projectDir, patch) {
+  const parsedPatch = ConfigPatchSchema.parse(patch);
+  const paths = resolveLoopPaths(projectDir);
+  return withLock(paths.lock, async () => {
+    let raw;
+    try {
+      raw = await fs9.readFile(paths.config, "utf8");
+    } catch (error2) {
+      if (error2.code === "ENOENT") throw new ConfigMutationError("missing");
+      throw error2;
+    }
+    if (configRevision(raw) !== parsedPatch.revision) throw new ConfigMutationError("stale");
+    const document = YAML3.parseDocument(raw, { keepSourceTokens: true });
+    if (document.errors.length > 0) throw new ConfigMutationError("invalid");
+    for (const change of parsedPatch.changes) applyChange(document, change);
+    let candidate;
+    try {
+      candidate = document.toJS();
+    } catch {
+      throw new ConfigMutationError("invalid");
+    }
+    const parsed = ConfigSchema.safeParse(stripLegacy(candidate));
+    if (!parsed.success) {
+      const issue2 = parsed.error.issues[0];
+      const issuePath = issue2?.path.filter((part) => typeof part === "string" || typeof part === "number") ?? [];
+      throw new ConfigMutationError("invalid", issuePath);
+    }
+    const next = document.toString({ lineWidth: 100 });
+    await writeTextAtomic(paths.config, next);
+    return { revision: configRevision(next) };
+  });
+}
+function stripLegacy(document) {
+  if (typeof document !== "object" || document === null || Array.isArray(document)) return document;
+  return Object.fromEntries(
+    Object.entries(document).filter(
+      ([key]) => !LEGACY_CONFIG_KEYS.includes(key)
+    )
+  );
+}
+function applyChange(document, change) {
+  switch (change.kind) {
+    case "root":
+      document.setIn([change.key], change.value);
+      return;
+    case "limit":
+      document.setIn(["limits", change.key], change.value);
+      return;
+    case "verify.command":
+    case "verify.number":
+      document.setIn(["verify", change.key], change.value);
+      return;
+    case "verify.patterns":
+      document.setIn(["verify", "failure_patterns", change.key], change.value);
+      return;
+    case "gate":
+      document.setIn(["gates", change.key], change.value);
+      return;
+    case "specialist":
+      if (change.value === null) document.deleteIn(["specialists", change.agent]);
+      else document.setIn(["specialists", change.agent], change.value);
+      return;
+    case "track":
+      if (change.value === null) document.deleteIn(["tracks", change.track]);
+      else document.setIn(["tracks", change.track], change.value);
+  }
+}
+
+// src/store/memory-store.ts
+import fs10 from "node:fs/promises";
 import path9 from "node:path";
 
 // src/schemas/memory.ts
@@ -17553,7 +17704,7 @@ var MemoryNotFoundError = class extends Error {
 };
 async function listFiles(dir) {
   try {
-    return await fs9.readdir(dir);
+    return await fs10.readdir(dir);
   } catch (error2) {
     if (error2.code !== "ENOENT") throw error2;
     return [];
@@ -17566,7 +17717,7 @@ async function listMemories(projectDir) {
   for (const name of entries2.filter((entry) => entry.endsWith(".md"))) {
     const file = path9.join(dir, name);
     try {
-      const { data, body } = parseFrontmatter(await fs9.readFile(file, "utf8"));
+      const { data, body } = parseFrontmatter(await fs10.readFile(file, "utf8"));
       const parsed = MemoryFrontmatterSchema.safeParse(data);
       if (!parsed.success) continue;
       memories.push({ frontmatter: parsed.data, body, file });
@@ -17599,12 +17750,17 @@ async function readState(projectDir) {
 }
 async function readConfigView(projectDir) {
   const paths = resolveLoopPaths(projectDir);
-  const raw = await fs10.readFile(paths.config, "utf8").catch(() => null);
+  const raw = await fs11.readFile(paths.config, "utf8").catch(() => null);
   try {
-    return { raw, parsed: await loadConfig(projectDir), invalid: false };
+    return {
+      raw,
+      revision: raw === null ? null : configRevision(raw),
+      parsed: await loadConfig(projectDir),
+      invalid: false
+    };
   } catch (error2) {
-    if (error2 instanceof ConfigMissingError) return { raw, parsed: null, invalid: false };
-    return { raw, parsed: null, invalid: true };
+    if (error2 instanceof ConfigMissingError) return { raw, revision: null, parsed: null, invalid: false };
+    return { raw, revision: raw === null ? null : configRevision(raw), parsed: null, invalid: true };
   }
 }
 async function readPlanDetail(projectDir, planId) {
@@ -17614,11 +17770,11 @@ async function readPlanDetail(projectDir, planId) {
   } catch {
     throw new NotFoundError("plan");
   }
-  const raw = await fs10.readFile(path10.join(dir, "PLAN.md"), "utf8").catch(() => null);
+  const raw = await fs11.readFile(path10.join(dir, "PLAN.md"), "utf8").catch(() => null);
   const parsed = raw === null ? null : PlanFrontmatterSchema.safeParse(parseFrontmatter(raw).data);
   const frontmatter = parsed?.success === true ? parsed.data : null;
   const [review, stories, manifestTitle] = await Promise.all([
-    fs10.readFile(path10.join(dir, "REVIEW.md"), "utf8").catch(() => null),
+    fs11.readFile(path10.join(dir, "REVIEW.md"), "utf8").catch(() => null),
     readStoryDetails(projectDir, planId),
     readManifestTitle(dir)
   ]);
@@ -17655,7 +17811,7 @@ async function readStoryDetail(projectDir, storyId) {
 }
 async function readManifestTitle(dir) {
   try {
-    const parsed = ManifestSchema.safeParse(JSON.parse(await fs10.readFile(path10.join(dir, "manifest.json"), "utf8")));
+    const parsed = ManifestSchema.safeParse(JSON.parse(await fs11.readFile(path10.join(dir, "manifest.json"), "utf8")));
     return parsed.success ? parsed.data.title : null;
   } catch {
     return null;
@@ -17663,10 +17819,10 @@ async function readManifestTitle(dir) {
 }
 async function readRuns(projectDir) {
   const runs = resolveLoopPaths(projectDir).runs;
-  const names = await fs10.readdir(runs, { withFileTypes: true }).then((found) => found.filter((entry) => entry.isDirectory()).map((entry) => entry.name)).catch(() => []);
+  const names = await fs11.readdir(runs, { withFileTypes: true }).then((found) => found.filter((entry) => entry.isDirectory()).map((entry) => entry.name)).catch(() => []);
   const out = [];
   for (const name of names.sort().reverse()) {
-    const inside = await fs10.readdir(path10.join(runs, name)).catch(() => []);
+    const inside = await fs11.readdir(path10.join(runs, name)).catch(() => []);
     const [, story, track] = name.split("--");
     out.push({
       id: name,
@@ -17680,11 +17836,11 @@ async function readRuns(projectDir) {
 }
 async function readRunDetail(projectDir, runId) {
   const dir = path10.join(resolveLoopPaths(projectDir).runs, runId);
-  const inside = await fs10.readdir(dir).catch(() => null);
+  const inside = await fs11.readdir(dir).catch(() => null);
   if (inside === null) throw new NotFoundError("run");
   return {
     id: runId,
-    halt: await fs10.readFile(path10.join(dir, "HALT.md"), "utf8").catch(() => null),
+    halt: await fs11.readFile(path10.join(dir, "HALT.md"), "utf8").catch(() => null),
     cycles: inside.filter((entry) => /^cycle-\d+$/.test(entry)).map((entry) => Number(entry.slice("cycle-".length))).sort((a, b) => a - b)
   };
 }
@@ -17692,12 +17848,12 @@ var CYCLE_VERIFY_MAX = 50;
 var CYCLE_HANDOFF_MAX = 12e3;
 async function readCycleDetail(projectDir, runId, cycle) {
   const dir = path10.join(resolveLoopPaths(projectDir).runs, runId, `cycle-${String(cycle).padStart(2, "0")}`);
-  const inside = await fs10.readdir(dir).catch(() => null);
+  const inside = await fs11.readdir(dir).catch(() => null);
   if (inside === null) throw new NotFoundError("cycle");
   const roster = await readJson2(path10.join(dir, "roster.json"), RosterSchema);
   const findings = await readJson2(path10.join(dir, "findings.json"), FindingSchema.array());
   const ledger = await readVerifyLedger(dir);
-  const handoff = await fs10.readFile(path10.join(dir, "handoff.md"), "utf8").catch(() => null);
+  const handoff = await fs11.readFile(path10.join(dir, "handoff.md"), "utf8").catch(() => null);
   const agents = [];
   for (const entry of inside.filter((name) => name.endsWith(".json")).sort()) {
     if (entry === "roster.json" || entry === "findings.json") continue;
@@ -17722,7 +17878,7 @@ async function readRosterProgress(projectDir, runId, cycle) {
   const dir = path10.join(resolveLoopPaths(projectDir).runs, runId, `cycle-${String(cycle).padStart(2, "0")}`);
   const roster = await readJson2(path10.join(dir, "roster.json"), RosterSchema);
   if (roster === null) return null;
-  const inside = await fs10.readdir(dir).catch(() => []);
+  const inside = await fs11.readdir(dir).catch(() => []);
   const landed = roster.selected.filter((agent) => inside.includes(`${agent}.json`));
   return { cycle, selected: roster.selected, landed };
 }
@@ -17752,7 +17908,7 @@ async function readPreflightEstimate(projectDir, track) {
 }
 async function readJson2(file, schema) {
   try {
-    const parsed = schema.safeParse(JSON.parse(await fs10.readFile(file, "utf8")));
+    const parsed = schema.safeParse(JSON.parse(await fs11.readFile(file, "utf8")));
     return parsed.success ? parsed.data : null;
   } catch {
     return null;
@@ -17820,7 +17976,7 @@ async function route(projectDir, segments) {
   return fail(404, "error.notFound");
 }
 function etag(body) {
-  return `W/"${crypto.createHash("sha1").update(body).digest("base64url")}"`;
+  return `W/"${crypto2.createHash("sha1").update(body).digest("base64url")}"`;
 }
 function sendApi(request, response, result) {
   const body = JSON.stringify(result.body);
@@ -18097,7 +18253,7 @@ var JobQueue = class {
 import os from "node:os";
 
 // src/ops/plan.ts
-import fs11 from "node:fs/promises";
+import fs12 from "node:fs/promises";
 import path12 from "node:path";
 
 // src/ops/manifest.ts
@@ -18201,7 +18357,7 @@ async function storyUpdate(projectDir, storyId, patch, now = () => /* @__PURE__ 
       assertDependenciesResolve(siblings, merged.data);
     }
     const renamed = path12.join(path12.dirname(current.file), storyFileName(merged.data));
-    if (renamed !== current.file) await fs11.rename(current.file, renamed);
+    if (renamed !== current.file) await fs12.rename(current.file, renamed);
     const file = await writeStory(projectDir, { frontmatter: merged.data, body: current.body });
     const manifest = await renderManifest(projectDir, planId, now);
     return { id: storyId, file, manifest };
@@ -18227,6 +18383,11 @@ var WriteSchema = discriminatedUnion("kind", [
     kind: literal("halt"),
     run: string2().min(1).max(200),
     reason: string2().min(1).max(2e3)
+  }),
+  strictObject({
+    kind: literal("config.patch"),
+    revision: string2().regex(/^[a-f0-9]{64}$/),
+    changes: array(ConfigChangeSchema).min(1).max(100)
   })
 ]);
 function decidedBy() {
@@ -18251,6 +18412,9 @@ var HANDLERS = {
   },
   halt: async (projectDir, write) => {
     await halt(projectDir, write.reason, void 0, { expectRun: write.run });
+  },
+  "config.patch": async (projectDir, write) => {
+    await mutateConfig(projectDir, { revision: write.revision, changes: write.changes });
   }
 };
 async function applyWrite(projectDir, write) {
@@ -18258,6 +18422,12 @@ async function applyWrite(projectDir, write) {
     await HANDLERS[write.kind](projectDir, write);
     return { ok: true };
   } catch (error2) {
+    if (error2 instanceof ConfigMutationError) {
+      return {
+        ok: false,
+        code: error2.kind === "stale" ? "write.stale.config" : "write.invalid.config"
+      };
+    }
     if (error2 instanceof StalePreconditionError) {
       return { ok: false, code: STALE[error2.subject] };
     }
@@ -18290,7 +18460,7 @@ var ClientMessageSchema = discriminatedUnion("type", [
   strictObject({ type: literal("attach"), jobId: string2().min(1) }),
   strictObject({ type: literal("nudge") }),
   /**
-   * The one door for the three engine writes the browser can reach.
+   * The one door for the guarded engine writes the browser can reach.
    *
    * `id` is the page's own correlation token, echoed back on the receipt; it is
    * never used to name anything on disk.
@@ -18367,17 +18537,17 @@ var spawnPtySession = ({ cwd, command, cols, rows }) => {
 };
 
 // src/web/snapshot.ts
-import fs14 from "node:fs/promises";
+import fs15 from "node:fs/promises";
 import path15 from "node:path";
 
 // src/ops/summary.ts
-import fs12 from "node:fs/promises";
+import fs13 from "node:fs/promises";
 import path13 from "node:path";
 var NO_FINDINGS = { high: 0, medium: 0, low: 0 };
 var MAP_FILE = "map.md";
 async function hasDesignSystem(projectDir) {
   try {
-    return (await fs12.stat(resolveLoopPaths(projectDir).designSystem)).isFile();
+    return (await fs13.stat(resolveLoopPaths(projectDir).designSystem)).isFile();
   } catch {
     return false;
   }
@@ -18385,7 +18555,7 @@ async function hasDesignSystem(projectDir) {
 async function runMap(projectDir, state) {
   if (state.run_id === null || state.track === null) return null;
   try {
-    if (!(await fs12.stat(path13.join(runDirPath(projectDir, state), MAP_FILE))).isFile()) return null;
+    if (!(await fs13.stat(path13.join(runDirPath(projectDir, state), MAP_FILE))).isFile()) return null;
   } catch {
     return null;
   }
@@ -18461,11 +18631,11 @@ async function stateSummary(projectDir) {
 }
 
 // src/web/revision.ts
-import fs13 from "node:fs/promises";
+import fs14 from "node:fs/promises";
 import path14 from "node:path";
 async function stamp(file) {
   try {
-    const stats = await fs13.stat(file);
+    const stats = await fs14.stat(file);
     return `${Math.trunc(stats.mtimeMs)}.${stats.size}`;
   } catch {
     return "-";
@@ -18478,7 +18648,7 @@ async function stampDir(dir, documents) {
 }
 async function entries(dir) {
   try {
-    return (await fs13.readdir(dir)).sort();
+    return (await fs14.readdir(dir)).sort();
   } catch {
     return [];
   }
@@ -18578,7 +18748,7 @@ async function readPlanView(projectDir, id) {
 }
 async function readPlanFrontmatter(dir) {
   try {
-    const raw = await fs14.readFile(path15.join(dir, "PLAN.md"), "utf8");
+    const raw = await fs15.readFile(path15.join(dir, "PLAN.md"), "utf8");
     const parsed = PlanFrontmatterSchema.safeParse(parseFrontmatter(raw).data);
     if (!parsed.success) return null;
     return { title: parsed.data.title, approval: parsed.data.approval };
@@ -18588,7 +18758,7 @@ async function readPlanFrontmatter(dir) {
 }
 async function readManifest(dir) {
   try {
-    const raw = await fs14.readFile(path15.join(dir, "manifest.json"), "utf8");
+    const raw = await fs15.readFile(path15.join(dir, "manifest.json"), "utf8");
     const parsed = ManifestSchema.safeParse(JSON.parse(raw));
     if (!parsed.success) return null;
     return {
@@ -18607,7 +18777,7 @@ async function readManifest(dir) {
 }
 async function listRuns(projectDir) {
   try {
-    const entries2 = await fs14.readdir(resolveLoopPaths(projectDir).runs, { withFileTypes: true });
+    const entries2 = await fs15.readdir(resolveLoopPaths(projectDir).runs, { withFileTypes: true });
     return entries2.filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort().reverse();
   } catch {
     return [];
@@ -18627,11 +18797,12 @@ var PUBLIC_DIR = fileURLToPath(new URL("./public/", import.meta.url));
 var OK_CODES = {
   gate: "write.ok.gate",
   "story.status": "write.ok.story",
-  halt: "write.ok.halt"
+  halt: "write.ok.halt",
+  "config.patch": "write.ok.config"
 };
 function tokenMatches(expected, given) {
   if (given === null || given.length !== expected.length) return false;
-  return crypto2.timingSafeEqual(Buffer.from(expected), Buffer.from(given));
+  return crypto3.timingSafeEqual(Buffer.from(expected), Buffer.from(given));
 }
 var COOKIE = "mjloop_token";
 function readCookie(header, name) {
@@ -18647,7 +18818,7 @@ function suppliedToken(url, cookieHeader) {
 }
 async function startServer(options) {
   const { projectDir } = options;
-  const token = crypto2.randomBytes(32).toString("hex");
+  const token = crypto3.randomBytes(32).toString("hex");
   const sockets = /* @__PURE__ */ new Set();
   const broadcast = (message) => {
     const payload = JSON.stringify(message);
@@ -18827,7 +18998,7 @@ async function handleRequest(request, response, token, projectDir) {
     return;
   }
   try {
-    const body = await fs15.readFile(file);
+    const body = await fs16.readFile(file);
     response.writeHead(200, {
       "content-type": MIME[path16.extname(file)] ?? "application/octet-stream",
       // The page carries a token in its URL. Keeping it out of caches and
@@ -18924,7 +19095,7 @@ ${USAGE}`);
     return 1;
   }
   try {
-    await fs16.stat(resolveLoopPaths(args.dir).root);
+    await fs17.stat(resolveLoopPaths(args.dir).root);
   } catch {
     process.stderr.write(`no .mjloop/ in ${args.dir} \u2014 run /mjloop:init there first.
 `);

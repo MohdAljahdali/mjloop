@@ -1,11 +1,10 @@
 /**
- * Config — read-only, and it says so.
+ * Config — a typed editor in front of the guarded config mutator.
  *
- * `writeConfig` serialises the whole parsed document back to YAML, dropping
- * every comment and every key the schema stripped, and it takes no lock —
- * unlike every state and plan write. Its only caller is `init`. So this tab
- * reads, names the `config.yaml` key behind each value, and shows the file as
- * written; it does not offer to set anything.
+ * The browser never sends a YAML path or a replacement document. It compares
+ * these controls with the parsed document it received and sends a closed list
+ * of typed changes plus that document's revision. The engine then validates
+ * the whole result while holding the project lock and preserves comments.
  *
  * The three verify commands get a callout when unset: each is injected verbatim
  * into every agent brief, and a missing one is a `blocked` the engine is
@@ -22,6 +21,7 @@ import { feed } from '../lib/api.js'
 import { pluralKey } from '../lib/i18n.js'
 import { reconcile } from '../ui/list.js'
 import { draw, register } from '../ui/render.js'
+import { submit } from '../ui/writes.js'
 
 /**
  * @typedef {import('../../read.js').ConfigView} ConfigView
@@ -61,12 +61,10 @@ export function mountConfig() {
   const node = pick('panel-config')
   const design = pick('config-design')
   const project = pick('config-project')
-  const autonomous = pick('config-autonomous')
-  const strikes = pick('config-strikes')
-  const planGate = pick('config-plan-gate')
-  const commitGate = pick('config-commit-gate')
-  const preflightGate = pick('config-preflight-gate')
-  const verifyCache = pick('config-verify-cache')
+  const editor = /** @type {HTMLFormElement} */ (pick('config-editor'))
+  const editorState = pick('config-editor-state')
+  const saveButton = /** @type {HTMLButtonElement} */ (pick('config-save'))
+  const resetButton = /** @type {HTMLButtonElement} */ (pick('config-reset'))
   const verifyHost = pick('config-verify')
   const policyHost = pick('config-verify-policy')
   const tracksHost = pick('config-tracks')
@@ -77,6 +75,18 @@ export function mountConfig() {
   const telemetryMore = pick('telemetry-more')
   const rawDetails = pick('config-raw-details')
   const raw = pick('config-raw')
+
+  /** @type {Config | null} */
+  let baseline = null
+  /** @type {string | null} */
+  let editorRevision = null
+  let dirty = false
+  let saving = false
+  let conflict = false
+  let enabled = false
+
+  editor.addEventListener('input', markDirty)
+  editor.addEventListener('change', markDirty)
 
   /** @type {import('../lib/api.js').Feed<ConfigView>} */
   const config = feed({
@@ -116,6 +126,7 @@ export function mountConfig() {
 
       const view = config.value()
       const parsed = view?.parsed ?? null
+      updateEditor(view)
 
       verbatim(raw, view?.raw ?? '')
       flag(rawDetails, 'hidden', view?.raw === null || view?.raw === undefined)
@@ -123,25 +134,11 @@ export function mountConfig() {
       drawTelemetry(telemetry.value())
 
       if (parsed === null) {
-        verbatim(autonomous, '—')
-        verbatim(strikes, '—')
-        verbatim(planGate, '—')
-        verbatim(commitGate, '—')
-        verbatim(preflightGate, '—')
-        verbatim(verifyCache, '—')
         reconcile(verifyHost, [], (entry) => entry, () => ({ root: document.createElement('div'), update: () => {} }))
         reconcile(policyHost, [], (entry) => entry, () => ({ root: document.createElement('div'), update: () => {} }))
         reconcile(tracksHost, [], (entry) => entry, () => ({ root: document.createElement('tr'), update: () => {} }))
         return
       }
-
-      // Values the user set, shown as they appear in the file.
-      verbatim(autonomous, String(parsed.autonomous))
-      verbatim(strikes, String(parsed.limits.no_progress_strikes))
-      verbatim(planGate, parsed.gates.plan_approval)
-      verbatim(commitGate, parsed.gates.commit)
-      verbatim(preflightGate, parsed.gates.preflight)
-      verbatim(verifyCache, String(parsed.verify_cache))
 
       reconcile(verifyHost, commandRows(parsed.verify), (entry) => entry.key, factRow)
       reconcile(policyHost, policyRows(parsed.verify), (entry) => entry.key, factRow)
@@ -150,6 +147,94 @@ export function mountConfig() {
       reconcile(tracksHost, tracks, ([name]) => name, trackRow)
     },
   })
+
+  function markDirty() {
+    if (!enabled) return
+    dirty = true
+    if (!conflict) flag(editorState, 'hidden', true)
+    updateEditorActions()
+  }
+
+  /** @param {ConfigView | null} view */
+  function updateEditor(view) {
+    const parsed = view?.parsed ?? null
+    const revision = view?.revision ?? null
+    enabled = parsed !== null && revision !== null
+    setEditorEnabled(editor, enabled)
+
+    if (!enabled) {
+      flag(editorState, 'hidden', false)
+      phrase(editorState, view?.invalid === true ? 'config.editorInvalid' : 'config.editorUnavailable')
+      updateEditorActions()
+      return
+    }
+
+    if (revision !== editorRevision) {
+      if (editorRevision !== null && dirty && !saving) {
+        baseline = parsed
+        editorRevision = revision
+        conflict = true
+        flag(editorState, 'hidden', false)
+        phrase(editorState, 'config.editorChanged')
+        updateEditorActions()
+        return
+      }
+      baseline = parsed
+      editorRevision = revision
+      conflict = false
+      dirty = false
+      seedConfigForm(editor, /** @type {Config} */ (parsed))
+    }
+
+    flag(editorState, 'hidden', !conflict)
+    if (conflict) phrase(editorState, 'config.editorChanged')
+    updateEditorActions()
+  }
+
+  function updateEditorActions() {
+    saveButton.disabled = !enabled || !dirty || saving || conflict
+    resetButton.disabled = !enabled || (!dirty && !conflict) || saving
+  }
+
+  function save() {
+    if (!enabled || baseline === null || editorRevision === null || saving || conflict) return
+    if (!editor.reportValidity()) return
+    let changes
+    try {
+      changes = collectConfigChanges(editor, baseline)
+    } catch {
+      flag(editorState, 'hidden', false)
+      phrase(editorState, 'config.editorStructuredInvalid')
+      return
+    }
+    if (changes.length === 0) {
+      dirty = false
+      updateEditorActions()
+      return
+    }
+
+    saving = true
+    updateEditorActions()
+    submit(
+      { kind: 'config.patch', revision: editorRevision, changes },
+      {
+        settled(receipt) {
+          saving = false
+          if (receipt.ok) dirty = false
+          updateEditorActions()
+        },
+      },
+    )
+  }
+
+  function reset() {
+    if (!enabled || baseline === null) return
+    seedConfigForm(editor, baseline)
+    dirty = false
+    conflict = false
+    updateEditorActions()
+    flag(editorState, 'hidden', true)
+  }
 
   /** @param {Telemetry | null} view */
   function drawTelemetry(view) {
@@ -173,6 +258,147 @@ export function mountConfig() {
         count: flagged.length,
         agents: flagged.join(', '),
       })
+    }
+  }
+
+  return { save, reset }
+}
+
+/**
+ * Turn the editor into the same closed change vocabulary the server accepts.
+ *
+ * @param {HTMLFormElement} form
+ * @param {Config} baseline
+ * @returns {import('../../../store/config-mutation.js').ConfigChange[]}
+ */
+export function collectConfigChanges(form, baseline) {
+  /** @type {import('../../../store/config-mutation.js').ConfigChange[]} */
+  const changes = []
+  /** @param {string} name */
+  const boolean = (name) => /** @type {HTMLInputElement} */ (form.elements.namedItem(name)).checked
+  /** @param {string} name */
+  const number = (name) => Number(/** @type {HTMLInputElement} */ (form.elements.namedItem(name)).value)
+  /** @param {string} name */
+  const value = (name) => /** @type {HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement} */ (
+    form.elements.namedItem(name)
+  ).value
+  /** @param {string} name */
+  const command = (name) => value(name).trim() || null
+  /** @param {string} name */
+  const patterns = (name) => value(name).split('\n').map((entry) => entry.trim()).filter(Boolean)
+
+  push(changes, baseline.autonomous !== boolean('autonomous'), {
+    kind: 'root',
+    key: 'autonomous',
+    value: boolean('autonomous'),
+  })
+  push(changes, baseline.verify_cache !== boolean('verify_cache'), {
+    kind: 'root',
+    key: 'verify_cache',
+    value: boolean('verify_cache'),
+  })
+  push(changes, baseline.limits.max_parallel_agents !== number('max_parallel_agents'), {
+    kind: 'limit',
+    key: 'max_parallel_agents',
+    value: number('max_parallel_agents'),
+  })
+  push(changes, baseline.limits.no_progress_strikes !== number('no_progress_strikes'), {
+    kind: 'limit',
+    key: 'no_progress_strikes',
+    value: number('no_progress_strikes'),
+  })
+
+  for (const key of /** @type {const} */ (['plan_approval', 'commit', 'preflight'])) {
+    const next = /** @type {'human' | 'auto'} */ (value(key))
+    push(changes, baseline.gates[key] !== next, { kind: 'gate', key, value: next })
+  }
+
+  for (const key of VERIFY_COMMANDS) {
+    const next = command(`verify_${key}`)
+    push(changes, baseline.verify[key] !== next, { kind: 'verify.command', key, value: next })
+  }
+  for (const key of /** @type {const} */ (['timeout_ms', 'lock_timeout_ms'])) {
+    const next = number(key)
+    push(changes, baseline.verify[key] !== next, { kind: 'verify.number', key, value: next })
+  }
+  for (const key of VERIFY_COMMANDS) {
+    const next = patterns(`patterns_${key}`)
+    push(changes, JSON.stringify(baseline.verify.failure_patterns[key]) !== JSON.stringify(next), {
+      kind: 'verify.patterns',
+      key,
+      value: next,
+    })
+  }
+
+  const specialists = record(value('specialists_json'))
+  for (const agent of [...new Set([...Object.keys(baseline.specialists), ...Object.keys(specialists)])].sort()) {
+    const next = agent in specialists ? specialists[agent] : null
+    push(changes, baseline.specialists[agent] !== next, {
+      kind: 'specialist',
+      agent,
+      value: /** @type {'auto' | 'always' | 'never' | null} */ (next),
+    })
+  }
+
+  const tracks = record(value('tracks_json'))
+  for (const track of [...new Set([...Object.keys(baseline.tracks), ...Object.keys(tracks)])].sort()) {
+    const next = track in tracks ? tracks[track] : null
+    push(changes, JSON.stringify(baseline.tracks[track] ?? null) !== JSON.stringify(next), {
+      kind: 'track',
+      track,
+      value: /** @type {Config['tracks'][string] | null} */ (next),
+    })
+  }
+  return changes
+}
+
+/** @param {string} source @returns {Record<string, unknown>} */
+function record(source) {
+  const parsed = JSON.parse(source)
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) throw new Error('object')
+  return /** @type {Record<string, unknown>} */ (parsed)
+}
+
+/**
+ * @param {import('../../../store/config-mutation.js').ConfigChange[]} changes
+ * @param {boolean} changed
+ * @param {import('../../../store/config-mutation.js').ConfigChange} change
+ */
+function push(changes, changed, change) {
+  if (changed) changes.push(change)
+}
+
+/** @param {HTMLFormElement} form @param {Config} config */
+function seedConfigForm(form, config) {
+  /** @param {string} name @param {unknown} value */
+  const set = (name, value) => {
+    const control = /** @type {HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement} */ (
+      form.elements.namedItem(name)
+    )
+    control.value = String(value)
+  }
+  const autonomous = /** @type {HTMLInputElement} */ (form.elements.namedItem('autonomous'))
+  const verifyCache = /** @type {HTMLInputElement} */ (form.elements.namedItem('verify_cache'))
+  autonomous.checked = config.autonomous
+  verifyCache.checked = config.verify_cache
+  set('max_parallel_agents', config.limits.max_parallel_agents)
+  set('no_progress_strikes', config.limits.no_progress_strikes)
+  set('plan_approval', config.gates.plan_approval)
+  set('commit', config.gates.commit)
+  set('preflight', config.gates.preflight)
+  for (const key of VERIFY_COMMANDS) set(`verify_${key}`, config.verify[key] ?? '')
+  set('timeout_ms', config.verify.timeout_ms)
+  set('lock_timeout_ms', config.verify.lock_timeout_ms)
+  for (const key of VERIFY_COMMANDS) set(`patterns_${key}`, config.verify.failure_patterns[key].join('\n'))
+  set('specialists_json', JSON.stringify(config.specialists, null, 2))
+  set('tracks_json', JSON.stringify(config.tracks, null, 2))
+}
+
+/** @param {HTMLFormElement} form @param {boolean} enabled */
+function setEditorEnabled(form, enabled) {
+  for (const control of form.querySelectorAll('input, select, textarea')) {
+    if (control instanceof HTMLInputElement || control instanceof HTMLSelectElement || control instanceof HTMLTextAreaElement) {
+      control.disabled = !enabled
     }
   }
 }

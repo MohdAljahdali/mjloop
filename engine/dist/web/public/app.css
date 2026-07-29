@@ -43,6 +43,9 @@ body {
   font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   height: 100vh;
   display: grid;
+  /* A grid item's min-content width must not make the whole app wider than a
+     phone. Dense regions own their horizontal scrolling locally. */
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto auto 1fr auto;
   /* A full-height app layout: `main` scrolls internally, the page never does.
      Without this the terminal overflows the viewport in rtl. */

@@ -92,7 +92,7 @@ mountRun()
 const plans = mountPlans()
 const evidence = mountEvidence()
 mountMemory()
-mountConfig()
+const config = mountConfig()
 mountQueue()
 register({ id: 'rail', node: /** @type {HTMLElement} */ (document.querySelector('.rail')), update: drawRail })
 register({
@@ -119,11 +119,14 @@ bus.on('clear', () => send({ type: 'clear' }))
 bus.on('nudge', () => send({ type: 'nudge' }))
 bus.on('build', (element) => enqueue(`/mjloop:build ${element.dataset['story'] ?? ''}`))
 bus.on('open-plan', (element) => plans.toggle(element.dataset['plan'] ?? ''))
+bus.on('close-plan', () => plans.close())
 bus.on('open-run', (element) => evidence.toggle(element.dataset['run'] ?? ''))
 bus.on('approve', () => plans.decide('approved'))
 bus.on('request-changes', () => plans.decide('changes_requested'))
 bus.on('reject', () => plans.decide('rejected'))
 bus.on('requeue', (element) => plans.requeue(element.dataset['story'] ?? '', element.dataset['from'] ?? 'doing'))
+bus.on('config-save', () => config.save())
+bus.on('config-reset', () => config.reset())
 bus.on('new-plan', (element) => {
   // A form, but the same execution path as everything else: it composes a loop
   // command and enqueues it.
