@@ -315,21 +315,131 @@
             <p class="hint" data-i18n="panel.config.help"></p>
           </div>
         </header>
-        <p class="hint" data-i18n="config.readOnly"></p>
         <dl class="facts">
           <div class="fact"><dt data-i18n="config.designSystem"></dt><dd id="config-design"></dd></div>
           <div class="fact"><dt data-i18n="config.project"></dt><dd id="config-project"></dd></div>
-          <div class="fact"><dt data-i18n="config.autonomous"></dt><dd id="config-autonomous"></dd></div>
-          <div class="fact"><dt data-i18n="config.strikes"></dt><dd id="config-strikes"></dd></div>
-          <div class="fact"><dt data-i18n="config.planApproval"></dt><dd id="config-plan-gate"></dd></div>
-          <div class="fact"><dt data-i18n="config.commitGate"></dt><dd id="config-commit-gate"></dd></div>
-          <div class="fact"><dt data-i18n="config.preflightGate"></dt><dd id="config-preflight-gate"></dd></div>
-          <div class="fact"><dt data-i18n="config.verifyCache"></dt><dd id="config-verify-cache"></dd></div>
         </dl>
 
+        <form class="config-editor" id="config-editor" data-act="config-save">
+          <div class="config-editor-head">
+            <div>
+              <h2 data-i18n="config.editorTitle"></h2>
+              <p class="hint" data-i18n="config.editorHelp"></p>
+            </div>
+            <div class="config-editor-actions">
+              <button type="button" id="config-reset" data-act="config-reset" data-i18n="config.reset" disabled></button>
+              <button type="submit" class="primary" id="config-save" data-i18n="config.save" disabled></button>
+            </div>
+          </div>
+          <p class="banner warn" id="config-editor-state" hidden></p>
+
+          <fieldset id="config-editor-fields">
+            <legend data-i18n="config.behavior"></legend>
+            <div class="config-fields">
+              <label class="check-field">
+                <input id="config-autonomous-input" name="autonomous" type="checkbox" data-i18n-label="config.autonomous" />
+                <span data-i18n="config.autonomous"></span>
+              </label>
+              <label class="check-field">
+                <input id="config-verify-cache-input" name="verify_cache" type="checkbox" data-i18n-label="config.verifyCache" />
+                <span data-i18n="config.verifyCache"></span>
+              </label>
+              <label>
+                <span data-i18n="config.maxParallel"></span>
+                <input id="config-max-parallel-input" name="max_parallel_agents" type="number" min="1" step="1" required data-i18n-label="config.maxParallel" />
+              </label>
+              <label>
+                <span data-i18n="config.strikes"></span>
+                <input id="config-strikes-input" name="no_progress_strikes" type="number" min="1" step="1" required data-i18n-label="config.strikes" />
+              </label>
+              <label>
+                <span data-i18n="config.planApproval"></span>
+                <select id="config-plan-gate-input" name="plan_approval" data-i18n-label="config.planApproval">
+                  <option value="human">human</option>
+                  <option value="auto">auto</option>
+                </select>
+              </label>
+              <label>
+                <span data-i18n="config.commitGate"></span>
+                <select id="config-commit-gate-input" name="commit" data-i18n-label="config.commitGate">
+                  <option value="human">human</option>
+                  <option value="auto">auto</option>
+                </select>
+              </label>
+              <label>
+                <span data-i18n="config.preflightGate"></span>
+                <select id="config-preflight-gate-input" name="preflight" data-i18n-label="config.preflightGate">
+                  <option value="human">human</option>
+                  <option value="auto">auto</option>
+                </select>
+              </label>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend data-i18n="config.verify"></legend>
+            <p class="hint" data-i18n="config.verifyWhy"></p>
+            <div class="config-fields config-fields-wide">
+              <label>
+                <span>verify.test</span>
+                <input id="config-test-input" name="verify_test" dir="ltr" autocomplete="off" data-i18n-label="config.verifyTestLabel" />
+              </label>
+              <label>
+                <span>verify.lint</span>
+                <input id="config-lint-input" name="verify_lint" dir="ltr" autocomplete="off" data-i18n-label="config.verifyLintLabel" />
+              </label>
+              <label>
+                <span>verify.build</span>
+                <input id="config-build-input" name="verify_build" dir="ltr" autocomplete="off" data-i18n-label="config.verifyBuildLabel" />
+              </label>
+              <label>
+                <span>verify.timeout_ms</span>
+                <input id="config-timeout-input" name="timeout_ms" type="number" min="1" step="1" required data-i18n-label="config.timeoutLabel" />
+              </label>
+              <label>
+                <span>verify.lock_timeout_ms</span>
+                <input id="config-lock-timeout-input" name="lock_timeout_ms" type="number" min="1" step="1" required data-i18n-label="config.lockTimeoutLabel" />
+              </label>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend data-i18n="config.failurePatterns"></legend>
+            <p class="hint" data-i18n="config.failurePatternsHelp"></p>
+            <div class="config-fields config-fields-wide">
+              <label>
+                <span>verify.failure_patterns.test</span>
+                <textarea id="config-patterns-test-input" name="patterns_test" rows="3" dir="ltr" data-i18n-label="config.patternsTestLabel"></textarea>
+              </label>
+              <label>
+                <span>verify.failure_patterns.lint</span>
+                <textarea id="config-patterns-lint-input" name="patterns_lint" rows="3" dir="ltr" data-i18n-label="config.patternsLintLabel"></textarea>
+              </label>
+              <label>
+                <span>verify.failure_patterns.build</span>
+                <textarea id="config-patterns-build-input" name="patterns_build" rows="3" dir="ltr" data-i18n-label="config.patternsBuildLabel"></textarea>
+              </label>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend data-i18n="config.advancedTitle"></legend>
+            <p class="hint" data-i18n="config.advancedHelp"></p>
+            <div class="config-fields config-fields-wide">
+              <label>
+                <span>specialists</span>
+                <textarea id="config-specialists-input" name="specialists_json" rows="8" dir="ltr" spellcheck="false" data-i18n-label="config.specialistsLabel"></textarea>
+              </label>
+              <label>
+                <span>tracks</span>
+                <textarea id="config-tracks-input" name="tracks_json" rows="12" dir="ltr" spellcheck="false" data-i18n-label="config.tracksLabel"></textarea>
+              </label>
+            </div>
+          </fieldset>
+        </form>
+
         <section class="block">
-          <h2 data-i18n="config.verify"></h2>
-          <p class="hint" data-i18n="config.verifyWhy"></p>
+          <h2 data-i18n="config.currentVerify"></h2>
           <dl class="facts" id="config-verify"></dl>
         </section>
 

@@ -25,7 +25,9 @@ let counter = 0
 
 /**
  * @param {Write} write
- * @param {{ undo?: Write }} [options] An inverse write to offer in the receipt.
+ * @param {{ undo?: Write, settled?: (receipt: { id: string, ok: boolean, code: string }) => void }} [options]
+ *   An inverse write to offer, and an optional lifecycle callback for controls
+ *   such as the config editor's saving state.
  */
 export function submit(write, options = {}) {
   const id = `w${++counter}`
@@ -39,6 +41,7 @@ export function submit(write, options = {}) {
 export function settle(receipt) {
   const held = pending.get(receipt.id)
   pending.delete(receipt.id)
+  held?.settled?.(receipt)
 
   if (!receipt.ok) {
     // A refusal is worth saying out loud: the user pressed something and it did

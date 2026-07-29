@@ -297,6 +297,80 @@
   grid-template-columns: 1fr repeat(8, max-content);
 }
 
+.config-editor {
+  margin-block: 18px 24px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--panel) 82%, transparent);
+}
+
+.config-editor-head,
+.config-editor-actions {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.config-editor-head h2 {
+  margin: 0;
+}
+
+.config-editor-actions {
+  flex: none;
+}
+
+.config-editor fieldset {
+  margin: 18px 0 0;
+  padding: 14px 0 0;
+  border: 0;
+  border-block-start: 1px solid var(--line);
+}
+
+.config-editor legend {
+  padding-inline-end: 10px;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.config-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 12px 16px;
+  margin-block-start: 10px;
+}
+
+.config-fields-wide {
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+.config-fields label:not(.check-field) {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  color: var(--dim);
+  font-size: 12px;
+}
+
+.config-fields input:not([type="checkbox"]),
+.config-fields select,
+.config-fields textarea {
+  width: 100%;
+}
+
+.config-fields textarea {
+  resize: vertical;
+  font-family: var(--mono);
+}
+
+.check-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+}
+
 @media (max-width: 800px) {
   .plans-workspace {
     display: block;
@@ -313,6 +387,15 @@
 
   .plan-back {
     display: inline-flex;
+  }
+
+  .config-editor-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .config-editor-actions {
+    justify-content: flex-end;
   }
 }
 

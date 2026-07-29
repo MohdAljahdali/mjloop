@@ -244,9 +244,11 @@ describe('the page never assigns to a control', () => {
     // Rule 3: every control the user types into is uncontrolled and written
     // once at mount, so an 800ms tick cannot eat a half-typed note by
     // construction rather than by a focus check somebody forgets.
-    // Five files may, and each for something a *person* did or for a control
+    // Six files may, and each for something a *person* did or for a control
     // written once at mount: `app.js` fills the language picker at boot and
-    // clears the new-plan field on submit, `dialog.js` clears the halt reason
+    // clears the new-plan field on submit, `config.js` seeds its editor only
+    // when the config revision changes (and never while dirty), `dialog.js`
+    // clears the halt reason
     // when the dialog is opened, `launcher.js` clears the command box because
     // Run was pressed, `plans.js` clears the approval note once the decision is
     // recorded, and `memory.js` restores the remembered query at mount. No
@@ -254,6 +256,7 @@ describe('the page never assigns to a control', () => {
     const writers = scripts.filter((name) => /\.value\s*=[^=]/.test(code(name)))
     expect(writers).toEqual([
       'app.js',
+      'panels/config.js',
       'panels/launcher.js',
       'panels/memory.js',
       'panels/plans.js',

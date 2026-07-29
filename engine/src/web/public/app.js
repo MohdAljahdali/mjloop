@@ -92,7 +92,7 @@ mountRun()
 const plans = mountPlans()
 const evidence = mountEvidence()
 mountMemory()
-mountConfig()
+const config = mountConfig()
 mountQueue()
 register({ id: 'rail', node: /** @type {HTMLElement} */ (document.querySelector('.rail')), update: drawRail })
 register({
@@ -125,6 +125,8 @@ bus.on('approve', () => plans.decide('approved'))
 bus.on('request-changes', () => plans.decide('changes_requested'))
 bus.on('reject', () => plans.decide('rejected'))
 bus.on('requeue', (element) => plans.requeue(element.dataset['story'] ?? '', element.dataset['from'] ?? 'doing'))
+bus.on('config-save', () => config.save())
+bus.on('config-reset', () => config.reset())
 bus.on('new-plan', (element) => {
   // A form, but the same execution path as everything else: it composes a loop
   // command and enqueues it.

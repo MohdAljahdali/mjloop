@@ -4,7 +4,7 @@ import { installForTest } from '../../src/web/public/lib/i18n.js'
 import { installStorage } from '../../src/web/public/lib/local.js'
 import { draw, installScheduler } from '../../src/web/public/ui/render.js'
 import { drawRail, mountRail } from '../../src/web/public/ui/rail.js'
-import { mountConfig } from '../../src/web/public/panels/config.js'
+import { collectConfigChanges, mountConfig } from '../../src/web/public/panels/config.js'
 import { mountEvidence } from '../../src/web/public/panels/evidence.js'
 import { mountPlans, planStatus, ready, statusIndex, unmet } from '../../src/web/public/panels/plans.js'
 import { mountQueue } from '../../src/web/public/panels/queue.js'
@@ -86,6 +86,7 @@ function serve(routes: Record<string, unknown>): void {
 function configView(patch: Record<string, unknown> = {}): unknown {
   return {
     raw: 'version: 1\n',
+    revision: 'a'.repeat(64),
     parsed: ConfigSchema.parse({
       version: 1,
       tracks: { build: { required: ['builder'], max_cycles: 5 }, edit: { required: ['builder'], max_cycles: 2 } },
@@ -449,6 +450,58 @@ describe('evidence', () => {
 })
 
 describe('config', () => {
+  it('seeds an editable typed form and emits only changed allowlisted fields', async () => {
+    serve({
+      '/api/config': configView({
+        autonomous: false,
+        limits: { max_parallel_agents: 4, no_progress_strikes: 2 },
+        verify: { test: 'npm test', lint: null, build: 'npm run build' },
+      }),
+    })
+
+    reveal('panel-config')
+    mountConfig()
+    draw(emptySnapshot())
+    await vi.waitFor(() =>
+      expect((document.getElementById('config-max-parallel-input') as HTMLInputElement).value).toBe('4'),
+    )
+
+    const form = document.getElementById('config-editor') as HTMLFormElement
+    const autonomous = document.getElementById('config-autonomous-input') as HTMLInputElement
+    const test = document.getElementById('config-test-input') as HTMLInputElement
+    const specialists = document.getElementById('config-specialists-input') as HTMLTextAreaElement
+    const tracks = document.getElementById('config-tracks-input') as HTMLTextAreaElement
+    autonomous.checked = true
+    test.value = 'npm run test:ci'
+    specialists.value = JSON.stringify({ security: 'always' })
+    const editedTracks = JSON.parse(tracks.value)
+    editedTracks.build.max_cycles = 7
+    tracks.value = JSON.stringify(editedTracks)
+
+    const baseline = ConfigSchema.parse({
+      version: 1,
+      tracks: { build: { required: ['builder'], max_cycles: 5 }, edit: { required: ['builder'], max_cycles: 2 } },
+      autonomous: false,
+      limits: { max_parallel_agents: 4, no_progress_strikes: 2 },
+      verify: { test: 'npm test', lint: null, build: 'npm run build' },
+    })
+    expect(collectConfigChanges(form, baseline)).toEqual([
+      { kind: 'root', key: 'autonomous', value: true },
+      { kind: 'verify.command', key: 'test', value: 'npm run test:ci' },
+      { kind: 'specialist', agent: 'security', value: 'always' },
+      {
+        kind: 'track',
+        track: 'build',
+        value: {
+          required: ['builder'],
+          available: [],
+          closing: [],
+          max_cycles: 7,
+        },
+      },
+    ])
+  })
+
   it('renders one row per verify command, and the rest of the block as policy', async () => {
     // `verify:` is not a map of commands. It also carries `timeout_ms`,
     // `lock_timeout_ms` and `failure_patterns`, so a row per
