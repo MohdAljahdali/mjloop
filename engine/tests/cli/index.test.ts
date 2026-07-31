@@ -1,10 +1,12 @@
 import fs from 'node:fs/promises'
+import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { evaluateStateGuard, evaluateStopGuard, runCli } from '../../src/cli/index.js'
 import { initLoop } from '../../src/ops/init.js'
 import { cycleAdvance, runStart } from '../../src/ops/run.js'
 import type { ProjectComponent, ProposedProfile } from '../../src/schemas/project-profile.js'
+import type { SkillPackage } from '../../src/schemas/skill-library.js'
 import { loadConfig, writeConfig } from '../../src/store/config-store.js'
 import { resolveLoopPaths } from '../../src/store/paths.js'
 import {
@@ -15,6 +17,8 @@ import {
   readProposedProfile,
   writeProposedProfile,
 } from '../../src/store/project-profile-store.js'
+import { listAcceptances, readAcceptance } from '../../src/store/skill-acceptance-store.js'
+import { writePackage } from '../../src/store/skill-library-store.js'
 import { makeTmpProject, type TmpProject } from '../helpers/tmp-project.js'
 
 const NOW = new Date('2026-07-26T10:36:00.000Z')
@@ -1242,6 +1246,391 @@ describe('runCli profile rollback', () => {
   })
 })
 
+const DIGEST_A = 'a'.repeat(64)
+const DIGEST_B = 'b'.repeat(64)
+
+function skillPackage(digest: string, overrides: Partial<SkillPackage> = {}): SkillPackage {
+  return {
+    schema: 1,
+    packageId: 'flutter-widgets',
+    digest,
+    source: { kind: 'github', url: 'https://github.com/example/flutter-widgets', revision: 'a1b2c3d' },
+    license: { spdx: 'MIT', file: 'LICENSE' },
+    skillName: 'Flutter Widgets',
+    description: 'Shared widget kit conventions for the mobile component.',
+    tags: ['flutter'],
+    dependencies: { executables: [], packages: ['flutter'] },
+    audit: { state: 'passed', findings: [], at: '2026-07-30T09:00:00.000Z' },
+    guidance: 'Use the shared widget kit under lib/widgets.',
+    importedAt: '2026-07-30T09:00:00.000Z',
+    ...overrides,
+  }
+}
+
+describe('runCli skills', () => {
+  let dataHome: string
+  let contentDir: string
+
+  beforeEach(async () => {
+    dataHome = await fs.mkdtemp(path.join(os.tmpdir(), 'loop-library-'))
+    process.env.MJLOOP_DATA_HOME = dataHome
+    contentDir = await fs.mkdtemp(path.join(os.tmpdir(), 'loop-content-'))
+    await fs.writeFile(path.join(contentDir, 'SKILL.md'), '# Flutter Widgets\n', 'utf8')
+  })
+
+  afterEach(async () => {
+    delete process.env.MJLOOP_DATA_HOME
+    await fs.rm(dataHome, { recursive: true, force: true })
+    await fs.rm(contentDir, { recursive: true, force: true })
+  })
+
+  describe('list', () => {
+    it('is empty at exit 0 on a machine with no library and a project with no acceptances', async () => {
+      const { stdout, exitCode } = await runCli(['skills', 'list', '--dir', project.dir], '')
+      expect(exitCode).toBe(0)
+      expect(stdout).toContain('(none)')
+    })
+
+    it('prints every package in the library and this project\'s acceptances', async () => {
+      await writePackage(project.dir, skillPackage(DIGEST_A), contentDir)
+      await runCli(['skills', 'accept', DIGEST_A, '--dir', project.dir], '')
+
+      const { stdout, exitCode } = await runCli(['skills', 'list', '--dir', project.dir], '')
+      expect(exitCode).toBe(0)
+      expect(stdout).toContain(DIGEST_A)
+      expect(stdout).toContain('Flutter Widgets')
+      expect(stdout).toContain('github')
+      expect(stdout).toContain('flutter-widgets')
+      expect(stdout).toContain('active')
+    })
+
+    it('prints json when asked', async () => {
+      await writePackage(project.dir, skillPackage(DIGEST_A), contentDir)
+      const { stdout, exitCode } = await runCli(['skills', 'list', '--dir', project.dir, '--json'], '')
+      expect(exitCode).toBe(0)
+      const payload = JSON.parse(stdout)
+      expect(payload.packages).toHaveLength(1)
+      expect(payload.packages[0].digest).toBe(DIGEST_A)
+      expect(payload.acceptances).toEqual([])
+    })
+
+    it('refuses a --dir with nothing after it', async () => {
+      const { stdout, exitCode } = await runCli(['skills', 'list', '--dir'], '')
+      expect(exitCode).toBe(1)
+      expect(stdout).toContain('--dir')
+    })
+
+    it('marks an acceptance whose package this machine does not hold', async () => {
+      // The ordinary state of every teammate on a fresh clone: the acceptance
+      // record travels in the repository and the library package does not.
+      // Unmarked, the row reads `status active` while `resolveSkillManifest`
+      // silently drops it, and the only way to notice would be to compare two
+      // 64-character hex strings by eye.
+      await writePackage(project.dir, skillPackage(DIGEST_A), contentDir)
+      await runCli(['skills', 'accept', DIGEST_A, '--dir', project.dir], '')
+      await fs.rm(path.join(dataHome, 'packages', DIGEST_A), { recursive: true, force: true })
+
+      const { stdout, exitCode } = await runCli(['skills', 'list', '--dir', project.dir], '')
+      expect(exitCode).toBe(0)
+      expect(stdout).toContain('not in this machine\'s library')
+
+      const json = JSON.parse((await runCli(['skills', 'list', '--dir', project.dir, '--json'], '')).stdout)
+      expect(json.acceptances[0].packageHeld).toBe(false)
+    })
+
+    it('does not mark an acceptance whose package is present', async () => {
+      await writePackage(project.dir, skillPackage(DIGEST_A), contentDir)
+      await runCli(['skills', 'accept', DIGEST_A, '--dir', project.dir], '')
+
+      const { stdout } = await runCli(['skills', 'list', '--dir', project.dir], '')
+      expect(stdout).not.toContain('not in this machine\'s library')
+
+      const json = JSON.parse((await runCli(['skills', 'list', '--dir', project.dir, '--json'], '')).stdout)
+      expect(json.acceptances[0].packageHeld).toBe(true)
+    })
+
+    it('refuses an acceptance record that no longer parses, rather than crashing', async () => {
+      // The shape a truncated write or a merge conflict leaves — and acceptance
+      // records travel with the project in a repository, so somebody else's
+      // conflict is reachable here. A refusal is the contract every other
+      // command in this file keeps; an escaping throw is a stack trace and no
+      // parseable output at all.
+      await fs.mkdir(resolveLoopPaths(project.dir).skills, { recursive: true })
+      await fs.writeFile(path.join(resolveLoopPaths(project.dir).skills, 'flutter-widgets.json'), 'not json', 'utf8')
+
+      const { stdout, exitCode } = await runCli(['skills', 'list', '--dir', project.dir], '')
+      expect(exitCode).toBe(1)
+      expect(stdout).toContain('not a valid skill acceptance')
+    })
+
+    it('still lists this project\'s library when another project left an unreadable package in it', async () => {
+      await writePackage(project.dir, skillPackage(DIGEST_A), contentDir)
+      await fs.mkdir(path.join(dataHome, 'packages', DIGEST_B), { recursive: true })
+      await fs.writeFile(path.join(dataHome, 'packages', DIGEST_B, 'package.json'), '{"schema":1}', 'utf8')
+
+      const { stdout, exitCode } = await runCli(['skills', 'list', '--dir', project.dir], '')
+      expect(exitCode).toBe(0)
+      expect(stdout).toContain(DIGEST_A)
+      // Named, not swallowed: nothing else on this machine would ever say so.
+      expect(stdout).toContain(DIGEST_B)
+      expect(stdout).toContain('unreadable')
+    })
+
+    it('refuses a library root that resolves inside the project', async () => {
+      process.env.MJLOOP_DATA_HOME = path.join(project.dir, 'library')
+      const { stdout, exitCode } = await runCli(['skills', 'list', '--dir', project.dir], '')
+      expect(exitCode).toBe(1)
+      expect(stdout).toContain('must never live inside one project')
+    })
+  })
+
+  describe('accept', () => {
+    it('accepts a digest the library holds, naming the components and agents it activated', async () => {
+      await writePackage(project.dir, skillPackage(DIGEST_A), contentDir)
+
+      const { stdout, exitCode } = await runCli(
+        ['skills', 'accept', DIGEST_A, '--dir', project.dir, '--agents', 'builder,critic'],
+        '',
+      )
+      expect(exitCode).toBe(0)
+      expect(stdout).toContain('flutter-widgets')
+      expect(stdout).toContain(DIGEST_A)
+      expect(stdout).toContain('builder, critic')
+
+      const accepted = await readAcceptance(project.dir, 'flutter-widgets')
+      expect(accepted?.digest).toBe(DIGEST_A)
+      expect(accepted?.agents).toEqual(['builder', 'critic'])
+      expect(accepted?.status).toBe('active')
+    })
+
+    it('accepts components against the accepted component map', async () => {
+      await acceptProfile(
+        project.dir,
+        { components: [MOBILE], by: 'cli:ada', generatedAt: '2026-07-31T09:00:00.000Z', expectRevision: null },
+        clock,
+      )
+      await writePackage(project.dir, skillPackage(DIGEST_A), contentDir)
+
+      const { exitCode } = await runCli(
+        ['skills', 'accept', DIGEST_A, '--dir', project.dir, '--components', 'mobile'],
+        '',
+      )
+      expect(exitCode).toBe(0)
+      const accepted = await readAcceptance(project.dir, 'flutter-widgets')
+      expect(accepted?.components).toEqual(['mobile'])
+    })
+
+    it('defaults the update policy to orchestration.skills.update_mode', async () => {
+      await initLoop(project.dir, clock)
+      await writePackage(project.dir, skillPackage(DIGEST_A), contentDir)
+
+      const { exitCode } = await runCli(['skills', 'accept', DIGEST_A, '--dir', project.dir], '')
+      expect(exitCode).toBe(0)
+      const accepted = await readAcceptance(project.dir, 'flutter-widgets')
+      expect(accepted?.updatePolicy).toBe('review')
+    })
+
+    it('takes an explicit --policy over the configured default', async () => {
+      await writePackage(project.dir, skillPackage(DIGEST_A), contentDir)
+      const { exitCode } = await runCli(['skills', 'accept', DIGEST_A, '--dir', project.dir, '--policy', 'pinned'], '')
+      expect(exitCode).toBe(0)
+      const accepted = await readAcceptance(project.dir, 'flutter-widgets')
+      expect(accepted?.updatePolicy).toBe('pinned')
+    })
+
+    it('refuses a --policy that is not auto, review or pinned', async () => {
+      await writePackage(project.dir, skillPackage(DIGEST_A), contentDir)
+      const { stdout, exitCode } = await runCli(
+        ['skills', 'accept', DIGEST_A, '--dir', project.dir, '--policy', 'sometimes'],
+        '',
+      )
+      expect(exitCode).toBe(1)
+      expect(stdout).toContain('--policy')
+      expect(await listAcceptances(project.dir)).toEqual([])
+    })
+
+    it('refuses a digest the library does not hold, and names what to do instead', async () => {
+      const { stdout, exitCode } = await runCli(['skills', 'accept', DIGEST_A, '--dir', project.dir], '')
+      expect(exitCode).toBe(1)
+      expect(stdout).toContain('skills list')
+    })
+
+    it('refuses an unaudited package', async () => {
+      await writePackage(project.dir, skillPackage(DIGEST_A, { audit: { state: 'pending', findings: [], at: null } }), contentDir)
+      const { stdout, exitCode } = await runCli(['skills', 'accept', DIGEST_A, '--dir', project.dir], '')
+      expect(exitCode).toBe(1)
+      expect(stdout).toContain('audit')
+      expect(await listAcceptances(project.dir)).toEqual([])
+    })
+
+    it('refuses an unknown component id', async () => {
+      await acceptProfile(
+        project.dir,
+        { components: [MOBILE], by: 'cli:ada', generatedAt: '2026-07-31T09:00:00.000Z', expectRevision: null },
+        clock,
+      )
+      await writePackage(project.dir, skillPackage(DIGEST_A), contentDir)
+
+      const { stdout, exitCode } = await runCli(
+        ['skills', 'accept', DIGEST_A, '--dir', project.dir, '--components', 'invented'],
+        '',
+      )
+      expect(exitCode).toBe(1)
+      expect(stdout).toContain('invented')
+      expect(await listAcceptances(project.dir)).toEqual([])
+    })
+
+    it('refuses an unknown agent name', async () => {
+      await writePackage(project.dir, skillPackage(DIGEST_A), contentDir)
+      const { stdout, exitCode } = await runCli(
+        ['skills', 'accept', DIGEST_A, '--dir', project.dir, '--agents', 'reviewer'],
+        '',
+      )
+      expect(exitCode).toBe(1)
+      expect(stdout).toContain('reviewer')
+      expect(await listAcceptances(project.dir)).toEqual([])
+    })
+
+    it('refuses a source this project already has a live acceptance for', async () => {
+      await writePackage(project.dir, skillPackage(DIGEST_A), contentDir)
+      await runCli(['skills', 'accept', DIGEST_A, '--dir', project.dir], '')
+
+      const { stdout, exitCode } = await runCli(['skills', 'accept', DIGEST_A, '--dir', project.dir], '')
+      expect(exitCode).toBe(1)
+      expect(stdout).toContain('skills remove')
+    })
+
+    it('needs a package digest', async () => {
+      const { stdout, exitCode } = await runCli(['skills', 'accept', '--dir', project.dir], '')
+      expect(exitCode).toBe(1)
+      expect(stdout).toContain('packageDigest')
+    })
+
+    it('refuses a --components with nothing after it', async () => {
+      const { stdout, exitCode } = await runCli(['skills', 'accept', DIGEST_A, '--dir', project.dir, '--components'], '')
+      expect(exitCode).toBe(1)
+      expect(stdout).toContain('--components')
+    })
+
+    it('refuses an --agents with nothing after it', async () => {
+      const { stdout, exitCode } = await runCli(['skills', 'accept', DIGEST_A, '--dir', project.dir, '--agents'], '')
+      expect(exitCode).toBe(1)
+      expect(stdout).toContain('--agents')
+    })
+
+    it('refuses a --policy with nothing after it', async () => {
+      const { stdout, exitCode } = await runCli(['skills', 'accept', DIGEST_A, '--dir', project.dir, '--policy'], '')
+      expect(exitCode).toBe(1)
+      expect(stdout).toContain('--policy')
+    })
+  })
+
+  describe('disable / enable', () => {
+    it('flips an acceptance off and back on', async () => {
+      await writePackage(project.dir, skillPackage(DIGEST_A), contentDir)
+      await runCli(['skills', 'accept', DIGEST_A, '--dir', project.dir], '')
+
+      const disabled = await runCli(['skills', 'disable', 'flutter-widgets', '--dir', project.dir], '')
+      expect(disabled.exitCode).toBe(0)
+      expect(disabled.stdout).toContain('disabled')
+      expect((await readAcceptance(project.dir, 'flutter-widgets'))?.status).toBe('disabled')
+
+      const enabled = await runCli(['skills', 'enable', 'flutter-widgets', '--dir', project.dir], '')
+      expect(enabled.exitCode).toBe(0)
+      expect(enabled.stdout).toContain('active')
+      expect((await readAcceptance(project.dir, 'flutter-widgets'))?.status).toBe('active')
+    })
+
+    it('refuses an unknown skill id', async () => {
+      const { stdout, exitCode } = await runCli(['skills', 'disable', 'invented', '--dir', project.dir], '')
+      expect(exitCode).toBe(1)
+      expect(stdout).toContain('invented')
+    })
+
+    it('needs a skill id', async () => {
+      const { stdout, exitCode } = await runCli(['skills', 'disable', '--dir', project.dir], '')
+      expect(exitCode).toBe(1)
+      expect(stdout).toContain('skillId')
+    })
+  })
+
+  describe('remove', () => {
+    it('removes this project\'s acceptance only, and says so', async () => {
+      await writePackage(project.dir, skillPackage(DIGEST_A), contentDir)
+      await runCli(['skills', 'accept', DIGEST_A, '--dir', project.dir], '')
+
+      const { stdout, exitCode } = await runCli(['skills', 'remove', 'flutter-widgets', '--dir', project.dir], '')
+      expect(exitCode).toBe(0)
+      expect(stdout).toContain('untouched')
+      expect(await readAcceptance(project.dir, 'flutter-widgets')).toBeNull()
+    })
+
+    it('leaves another project\'s acceptance of the same package byte-identical', async () => {
+      const other = await makeTmpProject()
+      try {
+        await writePackage(project.dir, skillPackage(DIGEST_A), contentDir)
+        await runCli(['skills', 'accept', DIGEST_A, '--dir', project.dir], '')
+        await runCli(['skills', 'accept', DIGEST_A, '--dir', other.dir], '')
+        const otherBefore = await fs.readFile(
+          path.join(resolveLoopPaths(other.dir).skills, 'flutter-widgets.json'),
+          'utf8',
+        )
+
+        await runCli(['skills', 'remove', 'flutter-widgets', '--dir', project.dir], '')
+
+        expect(await readAcceptance(project.dir, 'flutter-widgets')).toBeNull()
+        const otherAfter = await fs.readFile(
+          path.join(resolveLoopPaths(other.dir).skills, 'flutter-widgets.json'),
+          'utf8',
+        )
+        expect(otherAfter).toBe(otherBefore)
+      } finally {
+        await other.cleanup()
+      }
+    })
+
+    it('is idempotent on a skill id that was never accepted', async () => {
+      const { exitCode } = await runCli(['skills', 'remove', 'invented', '--dir', project.dir], '')
+      expect(exitCode).toBe(0)
+    })
+
+    it('needs a skill id', async () => {
+      const { stdout, exitCode } = await runCli(['skills', 'remove', '--dir', project.dir], '')
+      expect(exitCode).toBe(1)
+      expect(stdout).toContain('skillId')
+    })
+  })
+})
+
+describe('runCli skills — the state guard route back in', () => {
+  it('denies a hand edit to a project acceptance, and names the CLI route back in', () => {
+    const verdict = evaluateStateGuard({
+      tool_name: 'Edit',
+      tool_input: { file_path: '/repo/.mjloop/skills/flutter-widgets.json' },
+    })
+    expect(verdict.deny).toBe(true)
+    expect(verdict.reason).toContain('mjloop-cli skills accept')
+    expect(verdict.reason).toContain('mjloop-cli skills remove')
+  })
+
+  it('denies the skills directory through the same path shapes as the other protected directories', () => {
+    const denies = (filePath: string): boolean =>
+      evaluateStateGuard({ tool_name: 'Write', tool_input: { file_path: filePath } }).deny
+    expect(denies('/repo/.mjloop//skills/flutter-widgets.json')).toBe(true)
+    expect(denies('/repo/.mjloop/plans/../skills/flutter-widgets.json')).toBe(true)
+    expect(denies('/repo/.Mjloop/skills/flutter-widgets.json'.toLowerCase())).toBe(true)
+  })
+
+  it('allows a skills directory that is not the loop\'s', () => {
+    expect(
+      evaluateStateGuard({
+        tool_name: 'Write',
+        tool_input: { file_path: '/repo/src/skills/flutter-widgets.json' },
+      }).deny,
+    ).toBe(false)
+  })
+})
+
 describe('runCli unknown command', () => {
   it('exits non-zero with usage', async () => {
     const { stdout, exitCode } = await runCli(['nope'], '')
@@ -1272,5 +1661,20 @@ describe('runCli unknown command', () => {
     expect(stdout).toContain('profile show')
     expect(stdout).toContain('profile accept')
     expect(stdout).toContain('profile reject')
+  })
+
+  it('exits non-zero with usage for skills without a subcommand', async () => {
+    const { stdout, exitCode } = await runCli(['skills'], '')
+    expect(exitCode).toBe(1)
+    expect(stdout).toContain('usage')
+  })
+
+  it('names all five skills subcommands in the usage text', async () => {
+    const { stdout } = await runCli(['nope'], '')
+    expect(stdout).toContain('skills list')
+    expect(stdout).toContain('skills accept')
+    expect(stdout).toContain('skills disable')
+    expect(stdout).toContain('skills enable')
+    expect(stdout).toContain('skills remove')
   })
 })

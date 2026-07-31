@@ -1,13 +1,16 @@
 import fs from 'node:fs/promises'
+import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { buildServer, resolveProjectDir } from '../../src/mcp/server.js'
 import { gateSet } from '../../src/ops/plan.js'
+import type { SkillPackage } from '../../src/schemas/skill-library.js'
 import { loadConfig, writeConfig } from '../../src/store/config-store.js'
 import { readFeatureRevision } from '../../src/store/feature-store.js'
 import { acceptProfile } from '../../src/store/project-profile-store.js'
+import { writePackage } from '../../src/store/skill-library-store.js'
 import { makeTmpProject, type TmpProject } from '../helpers/tmp-project.js'
 
 let project: TmpProject
@@ -782,6 +785,74 @@ describe('tool behaviour', () => {
       arguments: { project_dir: project.dir, report: 'preflight', track: 'invented' },
     })
     expect((result as { isError?: boolean }).isError).toBe(true)
+  })
+
+  describe('skills projection', () => {
+    const DIGEST_A = 'a'.repeat(64)
+
+    function skillPackage(digest: string): SkillPackage {
+      return {
+        schema: 1,
+        packageId: 'flutter-widgets',
+        digest,
+        source: { kind: 'github', url: 'https://github.com/example/flutter-widgets', revision: 'a1b2c3d' },
+        license: { spdx: 'MIT', file: 'LICENSE' },
+        skillName: 'Flutter Widgets',
+        description: 'Shared widget kit conventions for the mobile component.',
+        tags: ['flutter'],
+        dependencies: { executables: [], packages: ['flutter'] },
+        audit: { state: 'passed', findings: [], at: '2026-07-30T09:00:00.000Z' },
+        guidance: 'Use the shared widget kit under lib/widgets.',
+        importedAt: '2026-07-30T09:00:00.000Z',
+      }
+    }
+
+    let dataHome: string
+    let contentDir: string
+
+    beforeEach(async () => {
+      dataHome = await fs.mkdtemp(path.join(os.tmpdir(), 'loop-library-'))
+      process.env.MJLOOP_DATA_HOME = dataHome
+      contentDir = await fs.mkdtemp(path.join(os.tmpdir(), 'loop-content-'))
+      await fs.writeFile(path.join(contentDir, 'SKILL.md'), '# Flutter Widgets\n', 'utf8')
+    })
+
+    afterEach(async () => {
+      delete process.env.MJLOOP_DATA_HOME
+      await fs.rm(dataHome, { recursive: true, force: true })
+      await fs.rm(contentDir, { recursive: true, force: true })
+    })
+
+    it('is empty at no error on a machine with no library and a project with no acceptances', async () => {
+      await client.callTool({ name: 'mjloop_init', arguments: { project_dir: project.dir } })
+      const result = await client.callTool({
+        name: 'mjloop_report_get',
+        arguments: { project_dir: project.dir, report: 'skills' },
+      })
+      expect((result as { isError?: boolean }).isError).not.toBe(true)
+      const skills = JSON.parse(textOf(result))
+      expect(skills.packages).toEqual([])
+      expect(skills.acceptances).toEqual([])
+    })
+
+    it('reports the library and this project\'s acceptances — a read of what mjloop-cli skills decided', async () => {
+      await client.callTool({ name: 'mjloop_init', arguments: { project_dir: project.dir } })
+      await writePackage(project.dir, skillPackage(DIGEST_A), contentDir)
+
+      const result = await client.callTool({
+        name: 'mjloop_report_get',
+        arguments: { project_dir: project.dir, report: 'skills' },
+      })
+      expect((result as { isError?: boolean }).isError).not.toBe(true)
+      const skills = JSON.parse(textOf(result))
+      expect(skills.packages).toHaveLength(1)
+      expect(skills.packages[0].digest).toBe(DIGEST_A)
+      // No acceptance was ever made through mjloop-cli skills accept, so the
+      // library holding a package must not, on its own, make it selectable —
+      // this projection reports the library and the (empty) acceptance list
+      // as two separate facts rather than inferring one from the other.
+      expect(skills.acceptances).toEqual([])
+    })
   })
 })
 

@@ -1,5 +1,6 @@
 import crypto from 'node:crypto'
 import fs from 'node:fs/promises'
+import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { initLoop } from '../../src/ops/init.js'
@@ -10,6 +11,7 @@ import { runLog } from '../../src/ops/log.js'
 import { runDirName, runStart } from '../../src/ops/run.js'
 import { LedgerEntrySchema, type LedgerEntry } from '../../src/schemas/verify.js'
 import type { ProjectComponent } from '../../src/schemas/project-profile.js'
+import type { SkillPackage } from '../../src/schemas/skill-library.js'
 import {
   CYCLE_HANDOFF_MAX,
   CYCLE_VERIFY_MAX,
@@ -27,6 +29,7 @@ import {
   readRunDetail,
   readRuns,
   readSkillManifest,
+  readSkillsView,
   readState,
   readStoryDetail,
   readTelemetryReport,
@@ -39,6 +42,8 @@ import {
   updateFeatureDraft,
 } from '../../src/store/feature-store.js'
 import { acceptProfile, writeProposedProfile } from '../../src/store/project-profile-store.js'
+import { acceptSkill } from '../../src/store/skill-acceptance-store.js'
+import { writePackage } from '../../src/store/skill-library-store.js'
 import { makeTmpProject, type TmpProject } from '../helpers/tmp-project.js'
 
 /**
@@ -214,6 +219,10 @@ describe('read', () => {
       // this call rewriting the immutable record it was asked to describe.
       readFeatures(project.dir),
       readFeatureDetail(project.dir, 'F001'),
+      // The library and this project's acceptances of it: a read, and one
+      // that must never activate a skill on the strength of a poller having
+      // looked at the library.
+      readSkillsView(project.dir),
     ])
     expect(await hashTree(project.dir)).toEqual(before)
   })
@@ -610,6 +619,58 @@ describe('read', () => {
     // whose revision is sitting right there would route every later run as
     // though it had never been mapped — silently.
     await expect(readProfileView(project.dir)).rejects.not.toBeInstanceOf(NotFoundError)
+  })
+
+  describe('readSkillsView', () => {
+    const DIGEST_A = 'a'.repeat(64)
+    let dataHome: string
+    let contentDir: string
+
+    function skillPackage(digest: string): SkillPackage {
+      return {
+        schema: 1,
+        packageId: 'flutter-widgets',
+        digest,
+        source: { kind: 'github', url: 'https://github.com/example/flutter-widgets', revision: 'a1b2c3d' },
+        license: { spdx: 'MIT', file: 'LICENSE' },
+        skillName: 'Flutter Widgets',
+        description: 'Shared widget kit conventions for the mobile component.',
+        tags: ['flutter'],
+        dependencies: { executables: [], packages: ['flutter'] },
+        audit: { state: 'passed', findings: [], at: '2026-07-30T09:00:00.000Z' },
+        guidance: 'Use the shared widget kit under lib/widgets.',
+        importedAt: '2026-07-30T09:00:00.000Z',
+      }
+    }
+
+    beforeEach(async () => {
+      dataHome = await fs.mkdtemp(path.join(os.tmpdir(), 'loop-library-'))
+      process.env.MJLOOP_DATA_HOME = dataHome
+      contentDir = await fs.mkdtemp(path.join(os.tmpdir(), 'loop-content-'))
+      await fs.writeFile(path.join(contentDir, 'SKILL.md'), '# Flutter Widgets\n', 'utf8')
+    })
+
+    afterEach(async () => {
+      delete process.env.MJLOOP_DATA_HOME
+      await fs.rm(dataHome, { recursive: true, force: true })
+      await fs.rm(contentDir, { recursive: true, force: true })
+    })
+
+    it('answers with empty arrays for a machine with no library and a project with no acceptances', async () => {
+      expect(await readSkillsView(project.dir)).toEqual({ packages: [], acceptances: [] })
+    })
+
+    it('reports every library package and this project\'s own acceptances', async () => {
+      await writePackage(project.dir, skillPackage(DIGEST_A), contentDir)
+      await acceptSkill(project.dir, { packageDigest: DIGEST_A, updatePolicy: 'review', acceptedBy: 'Mohd' }, clock)
+
+      const view = await readSkillsView(project.dir)
+      expect(view.packages).toHaveLength(1)
+      expect(view.packages[0]?.digest).toBe(DIGEST_A)
+      expect(view.acceptances).toHaveLength(1)
+      expect(view.acceptances[0]?.skillId).toBe('flutter-widgets')
+      expect(view.acceptances[0]?.status).toBe('active')
+    })
   })
 
   it('reports a brief\'s latest revision and every revision behind it', async () => {

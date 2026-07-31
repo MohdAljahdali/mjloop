@@ -590,6 +590,84 @@ nothing, so every selection this manifest can produce is empty. Say so plainly r
 describe a feature nobody can use yet: today a run pins a manifest with a concurrency
 verdict and no skills in it, because there are none on this project to select from.
 
+## Skill library
+
+The skill library is what skill selection above draws from, once a project has accepted
+something into it. It lives **per machine, not per project** — a directory outside any
+checkout, shared by every project on that machine — because the whole point of importing a
+package once is that every later project which accepts it reuses the same download rather
+than fetching its own copy.
+
+**Where it lives.** By default, `~/.local/share/mjloop`. Set `MJLOOP_DATA_HOME` to an
+absolute path to point it elsewhere — the override every test in this story uses, and the
+escape hatch on a host where the default is not writable. `XDG_DATA_HOME/mjloop` is honoured
+too, when set and absolute, before the default applies. One layout on every platform, on
+purpose: a real per-OS resolver would be branches this project's own contributors could
+never all test, so it stays one path everywhere. The resolved root is refused outright if it
+would land inside the project directory or inside any `.mjloop/` directory — a library
+nested in a checkout is exactly the cross-project interference this store exists to
+prevent, so the collision is a thrown error, never a silent correction.
+
+**Content-addressed, so a revision can never overwrite another.** A package is stored under
+`<library root>/packages/<digest>/`, where `<digest>` is the sha-256 hash of the package's
+content — a `package.json` record beside a `content/` directory holding the files as
+fetched. One source imported at two revisions is two different digests, hence two
+directories that cannot collide; writing a digest that already exists is refused rather than
+silently accepted, because identical content is identical bytes and a second write of the
+same digest is either a no-op or a corruption worth noticing.
+
+**A project accepts a digest, never a path.** The acceptance record lives at
+`.mjloop/skills/<skillId>.json` and is engine-owned the same way `.mjloop/profile/` is:
+`Write` and `Edit` are denied inside it, and `mjloop-cli skills …` is the only way in. The
+record names the digest it pinned, the components and agents it applies to, its own update
+policy, and its status — never a filesystem path into the library, because the library
+moves from machine to machine while the acceptance record is committed and travels in the
+repository. `orchestration.skills.update_mode` (above) is only ever a *default offered* at
+the moment of acceptance; nothing in this project consults it afterward, and there is no
+global fallback that could reach into an already-accepted record and change what source or
+policy it pinned.
+
+**Acceptance is per project, and isolated.** Two projects on the same machine, sharing the
+same library, can each accept a different digest of the same source, and neither project's
+record moves when the other writes. Removing a project's acceptance — `skills remove`
+— deletes that project's record and nothing else: not the package, not any other project's
+acceptance of it. The engine can only see the current project's acceptances, so a package
+removal (not exposed by this story) additionally refuses while *this* project's records
+still reference it — a guard against the common case, not a proof that no other project
+depends on it too.
+
+**`mjloop-cli skills`** is the one user-reachable route into all of this:
+
+```
+skills list [--dir <path>] [--json]
+skills accept <packageDigest> [--dir <path>] [--components a,b] [--agents builder,critic] [--policy auto|review|pinned]
+skills disable <skillId> [--dir <path>]
+skills enable <skillId> [--dir <path>]
+skills remove <skillId> [--dir <path>]
+```
+
+`list` prints every package this machine's library holds — source, revision, license, audit
+state — beside every acceptance this project has made — digest, components, agents, policy,
+status; it exits 0 on an empty library, which is the state every machine starts in. `accept`
+refuses a digest the library does not hold, an unknown component or agent name, and —
+today, always — a package whose audit has not passed. `disable`/`enable` flip an
+acceptance's status without touching its record otherwise. `remove` deletes only this
+project's acceptance and says so in its own output.
+
+**The cockpit reports the library; it never activates from it.** `GET /api/skills` is a
+read-only projection of the same data `skills list` prints — packages and this project's
+acceptances — with no new write kind and no new locale string, because accepting a package
+is a decision that changes what every later run is told, which is exactly the class of
+write the browser is permanently denied everywhere else in this system too.
+
+**Two seams still open, honestly.** Nothing imports a package yet — discovery from
+`github`/`registry`/`web`, the static inspection, and the sandboxed execution are the next
+story — so the library is empty on every machine today, and `skills accept` has nothing
+real to accept. And `acceptSkill` refuses any package whose audit state is not `passed`;
+nothing shipped in this release can produce that state, so today no package can be accepted
+through the ordinary path at all. Both are correct for where this story stops, not bugs to
+route around.
+
 ## Plans and stories
 
 A plan lives in `.mjloop/plans/P001-<slug>/`:

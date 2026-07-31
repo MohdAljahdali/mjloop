@@ -1,12 +1,18 @@
+import fs from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { initLoop } from '../../src/ops/init.js'
 import { gateSet, planCreate, storyAdd } from '../../src/ops/plan.js'
 import { runDirName, runStart } from '../../src/ops/run.js'
 import { TELEMETRY_MAX_ROWS } from '../../src/ops/telemetry.js'
+import type { SkillPackage } from '../../src/schemas/skill-library.js'
 import { etag, handleApi } from '../../src/web/api.js'
 import { WEB_CODES } from '../../src/web/codes.js'
 import { approveFeatureBrief, createFeatureBrief, updateFeatureDraft } from '../../src/store/feature-store.js'
 import { acceptProfile } from '../../src/store/project-profile-store.js'
+import { acceptSkill } from '../../src/store/skill-acceptance-store.js'
+import { writePackage } from '../../src/store/skill-library-store.js'
 import { makeTmpProject, type TmpProject } from '../helpers/tmp-project.js'
 
 /**
@@ -199,6 +205,71 @@ describe('handleApi', () => {
     const result = await call('/api/runs/nope/skills')
     expect(result?.status).toBe(404)
     expect(result?.body).toEqual({ error: { code: 'error.notFound' } })
+  })
+
+  describe('/api/skills', () => {
+    const DIGEST_A = 'a'.repeat(64)
+    let dataHome: string
+    let contentDir: string
+
+    function skillPackage(digest: string): SkillPackage {
+      return {
+        schema: 1,
+        packageId: 'flutter-widgets',
+        digest,
+        source: { kind: 'github', url: 'https://github.com/example/flutter-widgets', revision: 'a1b2c3d' },
+        license: { spdx: 'MIT', file: 'LICENSE' },
+        skillName: 'Flutter Widgets',
+        description: 'Shared widget kit conventions for the mobile component.',
+        tags: ['flutter'],
+        dependencies: { executables: [], packages: ['flutter'] },
+        audit: { state: 'passed', findings: [], at: '2026-07-30T09:00:00.000Z' },
+        guidance: 'Use the shared widget kit under lib/widgets.',
+        importedAt: '2026-07-30T09:00:00.000Z',
+      }
+    }
+
+    beforeEach(async () => {
+      dataHome = await fs.mkdtemp(path.join(os.tmpdir(), 'loop-library-'))
+      process.env.MJLOOP_DATA_HOME = dataHome
+      contentDir = await fs.mkdtemp(path.join(os.tmpdir(), 'loop-content-'))
+      await fs.writeFile(path.join(contentDir, 'SKILL.md'), '# Flutter Widgets\n', 'utf8')
+    })
+
+    afterEach(async () => {
+      delete process.env.MJLOOP_DATA_HOME
+      await fs.rm(dataHome, { recursive: true, force: true })
+      await fs.rm(contentDir, { recursive: true, force: true })
+    })
+
+    it('is empty at 200 on a machine with no library and a project with no acceptances', async () => {
+      const result = await call('/api/skills')
+      expect(result?.status).toBe(200)
+      expect(result?.body).toEqual({ packages: [], acceptances: [] })
+    })
+
+    it('reports the library and this project\'s acceptances, and offers no way to change either', async () => {
+      await writePackage(project.dir, skillPackage(DIGEST_A), contentDir)
+      await acceptSkill(project.dir, { packageDigest: DIGEST_A, updatePolicy: 'review', acceptedBy: 'Mohd' }, clock)
+
+      const result = await call('/api/skills')
+      expect(result?.status).toBe(200)
+      expect(result?.body).toMatchObject({
+        packages: [{ digest: DIGEST_A, skillName: 'Flutter Widgets' }],
+        acceptances: [{ skillId: 'flutter-widgets', status: 'active' }],
+      })
+
+      // Activation is the class of write `web/writes.ts` permanently denies
+      // the browser — `mjloop-cli skills accept` is where that decision is
+      // made, and this route only ever reports it.
+      for (const method of ['POST', 'PUT', 'DELETE', 'PATCH']) {
+        expect((await call('/api/skills', method))?.status).toBe(405)
+      }
+    })
+
+    it('answers 404 for a nested path, since there is nothing here to select', async () => {
+      expect((await call('/api/skills/flutter-widgets'))?.status).toBe(404)
+    })
   })
 
   it('answers for a project that has raised no feature without describing it', async () => {

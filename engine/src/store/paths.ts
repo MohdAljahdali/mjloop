@@ -11,6 +11,7 @@ export interface LoopPaths {
   memory: string
   profile: string
   features: string
+  skills: string
   lock: string
   verifyLock: string
 }
@@ -48,6 +49,21 @@ export function resolveLoopPaths(projectDir: string): LoopPaths {
      * a mutable pointer claims, belong to the store.
      */
     features: path.join(root, 'features'),
+    /**
+     * This project's acceptances of packages from the shared, user-local
+     * skill library: one `<skillId>.json` per accepted skill, holding which
+     * digest this project pinned and never a path into the library itself —
+     * see `schemas/skill-acceptance.ts`. The library the digest resolves
+     * against lives under `resolveLibraryRoot` (`library-paths.ts`), which is
+     * deliberately *not* under `.mjloop/`: it is shared by every project on
+     * this machine, where this directory is this one project's own decision.
+     *
+     * Added to `PROTECTED_DIRECTORIES` below now that `mjloop-cli skills
+     * accept|disable|enable|remove` exists: that is the route back in the
+     * denial below names, and the reason the `satisfies` check on
+     * `PROTECTED_DIRECTORY_REASONS` in `cli/index.ts` was written to demand.
+     */
+    skills: path.join(root, 'skills'),
     lock: path.join(root, '.lock'),
     /**
      * Mutual exclusion for verify *execution*, and never the same directory as
@@ -105,5 +121,11 @@ export const PROTECTED_BASENAMES = ['state.json', 'manifest.json', 'verify-pinne
  * approval is a decision a person made about a *particular* set of words. A
  * model that could edit a revision could approve work nobody agreed to, without
  * anything on disk showing that the words moved after the decision.
+ *
+ * `skills` is here for the same shape of reason again: an acceptance names the
+ * exact digest, components and agents a project pinned, and it is a decision
+ * a person made through `mjloop-cli skills accept` — a model that could edit
+ * the record by hand could change what a run treats as accepted without that
+ * decision ever having been made.
  */
-export const PROTECTED_DIRECTORIES = ['profile', 'features'] as const
+export const PROTECTED_DIRECTORIES = ['profile', 'features', 'skills'] as const

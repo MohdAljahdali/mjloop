@@ -19,6 +19,7 @@ import { expect as expectUnchanged } from '../store/precondition.js'
 import { readAcceptedProfile } from '../store/project-profile-store.js'
 import { StateStore, type Clock } from '../store/state-store.js'
 import { cycleFingerprint, distinctFindings, errorFingerprint } from './fingerprint.js'
+import { readAcceptedProjectSkills } from './skill-library.js'
 import { analyseConcurrency, selectSkills } from './skill-selection.js'
 
 export class UnknownTrackError extends Error {
@@ -262,13 +263,18 @@ export const SKILL_MANIFEST_FILE = 'skill-selection.json'
  * or a project that has not yet accepted a component map, would make dynamic
  * skill selection a stronger requirement than this story ever asks it to be.
  *
- * `acceptedSkills` is `[]` on every call this makes. S06 owns the user-local
- * skill library and the per-project acceptance records this list is meant to
- * hold, and until that store exists there is nothing on disk to read — `[]`
- * is not a stand-in for a behaviour not yet wired up, it is today's accurate
- * fact about what this project has accepted, and `selectSkills` already reads
- * an empty list as "nothing an agent may use" rather than as a case needing
- * special handling.
+ * `acceptedSkills` comes from `readAcceptedProjectSkills` (`skill-library.js`),
+ * S06's seam onto its own library and this project's acceptance records. A
+ * project that has accepted nothing still gets `[]` back — no acceptance
+ * store has ever been written, `listAcceptances` reads that as the ordinary
+ * empty case rather than an error — and `selectSkills` already reads an empty
+ * list as "nothing an agent may use" rather than as a case needing special
+ * handling, which is exactly what keeps every run before this change, and
+ * every run since that still accepts nothing, pinning the identical manifest
+ * it always did. An acceptance whose package this machine's library does not
+ * hold is skipped by that seam rather than failing this call; the skipped ids
+ * are not threaded any further than this function today; a caller that needs
+ * them reads `readAcceptedProjectSkills` directly.
  *
  * `UnresolvedComponentError` is deliberately left to propagate rather than
  * being folded into "pin nothing": it means the accepted profile has moved
@@ -291,7 +297,7 @@ async function resolveSkillManifest(
   const profile = await readAcceptedProfile(projectDir)
   if (profile === null) return null
 
-  const acceptedSkills: AcceptedProjectSkill[] = []
+  const { skills: acceptedSkills } = await readAcceptedProjectSkills(projectDir)
   const selections: SkillSelection[] = SKILL_SELECTION_AGENTS.flatMap((agent) =>
     selectSkills({ brief: record.brief, profile, acceptedSkills, agent }),
   ).sort(compareSelections)

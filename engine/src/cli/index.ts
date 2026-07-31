@@ -4,10 +4,13 @@ import os from 'node:os'
 import path from 'node:path'
 import * as z from 'zod'
 import { renderSummaryLine, stateSummary, type StateSummary } from '../ops/summary.js'
-import type { Orchestration } from '../schemas/config.js'
+import type { Orchestration, SkillUpdateMode } from '../schemas/config.js'
+import { SkillUpdateModeSchema } from '../schemas/config.js'
 import type { ProjectComponent, ProjectProfile, ProposedProfile } from '../schemas/project-profile.js'
+import type { ProjectSkillAcceptance } from '../schemas/skill-acceptance.js'
+import type { SkillPackage } from '../schemas/skill-library.js'
 import { ConfigChangeSchema, ConfigMutationError, configRevision, mutateConfig } from '../store/config-mutation.js'
-import { loadConfig } from '../store/config-store.js'
+import { ConfigMissingError, loadConfig } from '../store/config-store.js'
 import { PROTECTED_BASENAMES, PROTECTED_DIRECTORIES, resolveLoopPaths } from '../store/paths.js'
 import { StalePreconditionError } from '../store/precondition.js'
 import {
@@ -18,6 +21,13 @@ import {
   readAcceptedRevision,
   readProposedProfile,
 } from '../store/project-profile-store.js'
+import {
+  acceptSkill,
+  listAcceptances,
+  removeAcceptance,
+  setAcceptanceStatus,
+} from '../store/skill-acceptance-store.js'
+import { listPackages, type SkillLibraryListing } from '../store/skill-library-store.js'
 import { isEntrypoint } from '../util/entrypoint.js'
 
 const USAGE = `usage: mjloop-cli <command>
@@ -31,6 +41,16 @@ const USAGE = `usage: mjloop-cli <command>
                                        accept the current proposal as the next immutable revision;
                                        --from reselects an earlier accepted revision's map instead
   profile reject [--dir <path>]        discard the current proposal, leaving the accepted map active
+  skills list [--dir <path>] [--json]  print this machine's skill library and this project's acceptances
+  skills accept <packageDigest> [--dir <path>] [--components a,b] [--agents builder,critic] [--policy auto|review|pinned]
+                                       accept one digest of a library package into this project
+  skills disable <skillId> [--dir <path>]
+                                       turn off an accepted skill without removing its acceptance
+  skills enable <skillId> [--dir <path>]
+                                       turn a disabled acceptance back on
+  skills remove <skillId> [--dir <path>]
+                                       remove this project's acceptance only — the package and every
+                                       other project's acceptance are untouched
   session-start                        SessionStart hook (reads hook JSON on stdin)
   state-guard                          PreToolUse hook (reads hook JSON on stdin)
   stop-guard                           Stop hook (reads hook JSON on stdin)
@@ -50,6 +70,8 @@ export async function runCli(argv: string[], stdin: string): Promise<CliResult> 
       return configCommand(rest)
     case 'profile':
       return profileCommand(rest)
+    case 'skills':
+      return skillsCommand(rest)
     case 'session-start':
       return sessionStartCommand(stdin)
     case 'state-guard':
@@ -363,6 +385,12 @@ interface CliArgs {
    * reachable on a project whose last scan was discarded, or never ran.
    */
   from: string | undefined
+  /** `--components <a,b>` for `skills accept`, exactly as typed — split into ids by the caller. */
+  components: string | undefined
+  /** `--agents <a,b>` for `skills accept`, exactly as typed — split into names by the caller. */
+  agents: string | undefined
+  /** `--policy <word>` for `skills accept`, exactly as typed — validated against `SkillUpdateModeSchema` by the caller. */
+  policy: string | undefined
   positional: string[]
   /**
    * Flags typed with no word after them, in the order they appeared.
@@ -387,6 +415,9 @@ const FLAG_VALUES: Record<string, string> = {
   '--dir': 'the path of the project to act on',
   '--expect': 'a revision number or the word none',
   '--from': 'the number of the accepted revision whose component map to reselect',
+  '--components': 'a comma-separated list of component ids from the accepted map',
+  '--agents': 'a comma-separated list of agent roles (planner, builder, critic, verifier)',
+  '--policy': 'auto, review or pinned',
 }
 
 /**
@@ -426,37 +457,32 @@ function parseArgs(args: string[]): CliArgs {
   let json = false
   let expected: string | undefined
   let from: string | undefined
+  let components: string | undefined
+  let agents: string | undefined
+  let policy: string | undefined
   const positional: string[] = []
   const empty: string[] = []
+  // One flag name to the local it fills — every entry here takes a value and
+  // is refused rather than defaulted when that value is missing, for the
+  // reason `refuseEmptyFlag` gives: a shell variable that expanded to nothing
+  // must not silently read as "the flag was never given".
+  const valueFlags: Record<string, (value: string) => void> = {
+    '--dir': (value) => { dir = value },
+    '--expect': (value) => { expected = value },
+    '--from': (value) => { from = value },
+    '--components': (value) => { components = value },
+    '--agents': (value) => { agents = value },
+    '--policy': (value) => { policy = value },
+  }
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index]
-    if (arg === '--dir') {
+    if (arg !== undefined && Object.hasOwn(valueFlags, arg)) {
       const value = args[index + 1]
       if (value === undefined) {
         empty.push(arg)
         continue
       }
-      dir = value
-      index += 1
-      continue
-    }
-    if (arg === '--expect') {
-      const value = args[index + 1]
-      if (value === undefined) {
-        empty.push(arg)
-        continue
-      }
-      expected = value
-      index += 1
-      continue
-    }
-    if (arg === '--from') {
-      const value = args[index + 1]
-      if (value === undefined) {
-        empty.push(arg)
-        continue
-      }
-      from = value
+      valueFlags[arg]?.(value)
       index += 1
       continue
     }
@@ -466,7 +492,7 @@ function parseArgs(args: string[]): CliArgs {
     }
     if (arg !== undefined) positional.push(arg)
   }
-  return { dir, json, expect: expected, from, positional, empty }
+  return { dir, json, expect: expected, from, components, agents, policy, positional, empty }
 }
 
 /* ----------------------------------------------------------------- profile */
@@ -844,6 +870,224 @@ function renderSlot(command: string | null): string {
   return command ?? '(none)'
 }
 
+/* ------------------------------------------------------------------ skills */
+
+/**
+ * `skills list` / `skills accept` / `skills disable` / `skills enable` /
+ * `skills remove`: the only user-reachable route into the shared, user-local
+ * skill library and this project's acceptances of it.
+ *
+ * Without a command here, the library and the acceptance store built by S06
+ * are both fully-formed capabilities with no way for a person to ever call
+ * them — the exact lesson this plan has already paid for three times.
+ *
+ * **These are deliberately not offered to the browser.** Accepting a skill
+ * activates it for every later dispatch, which is the class of write
+ * `web/writes.ts` permanently denies; the cockpit's `/api/skills` reports the
+ * library and this project's acceptances and stops there. The decision lives
+ * here, where a person types it.
+ */
+
+async function skillsCommand(args: string[]): Promise<CliResult> {
+  const [subcommand, ...rest] = args
+  if (subcommand === 'list') return skillsListCommand(rest)
+  if (subcommand === 'accept') return skillsAcceptCommand(rest)
+  if (subcommand === 'disable') return skillsSetStatusCommand(rest, 'disabled')
+  if (subcommand === 'enable') return skillsSetStatusCommand(rest, 'active')
+  if (subcommand === 'remove') return skillsRemoveCommand(rest)
+  return { stdout: USAGE, exitCode: 1 }
+}
+
+async function skillsListCommand(args: string[]): Promise<CliResult> {
+  const { dir, json, empty } = parseArgs(args)
+  const refusal = refuseEmptyFlag(empty)
+  if (refusal !== null) return refusal
+
+  // Exit 0 on an empty library and on a project with no acceptances: both are
+  // the state every machine and every project start in, not a failure.
+  let library: SkillLibraryListing
+  let acceptances: ProjectSkillAcceptance[]
+  try {
+    ;[library, acceptances] = await Promise.all([listPackages(dir), listAcceptances(dir)])
+  } catch (error) {
+    // An acceptance record that exists and no longer parses, or a
+    // `MJLOOP_DATA_HOME` that resolves somewhere the library may not live.
+    // `profileShowCommand` relays exactly this class of throw and says why:
+    // the store must not soften it, and this command must not let it escape
+    // `runCli` either — an unhandled rejection is a stack trace on stderr and
+    // nothing on stdout, so `--json` would produce no parseable output at all.
+    return fail(describe(error))
+  }
+
+  if (json) {
+    // `packageHeld` is computed rather than left to the reader for the reason
+    // the rendered view marks it: a script joining two 64-character hex strings
+    // to discover that an acceptance resolves to nothing is a join every
+    // consumer would have to get right separately.
+    const held = new Set(library.packages.map((pkg) => pkg.digest))
+    const annotated = acceptances.map((acceptance) => ({ ...acceptance, packageHeld: held.has(acceptance.digest) }))
+    return { stdout: `${JSON.stringify({ ...library, acceptances: annotated }, null, 2)}\n`, exitCode: 0 }
+  }
+  return { stdout: renderSkills(library, acceptances), exitCode: 0 }
+}
+
+function renderSkills(library: SkillLibraryListing, acceptances: ProjectSkillAcceptance[]): string {
+  const { packages, unreadable } = library
+  const lines: string[] = ['this machine\'s skill library:']
+  if (packages.length === 0) {
+    lines.push('  (none) — nothing has been imported into this machine\'s skill library yet')
+  } else {
+    for (const pkg of packages) {
+      lines.push(`  ${pkg.digest}  ${pkg.skillName}  package ${pkg.packageId}`)
+      lines.push(`    source ${pkg.source.kind}  ${pkg.source.url}  revision ${pkg.source.revision}`)
+      lines.push(`    license ${pkg.license.spdx ?? '(none)'}  audit ${pkg.audit.state}`)
+    }
+  }
+
+  // Said rather than skipped silently. `listPackages` walks a machine-wide
+  // directory, so an entry it could not read may well belong to another
+  // project — but this is the only place on the machine that would ever
+  // mention it, and a person here is the only one who can clear it.
+  for (const entry of unreadable) {
+    lines.push(`  ${entry.digest}  (unreadable) ${entry.reason.split('\n')[0] ?? ''}`)
+  }
+
+  lines.push('')
+  lines.push('this project\'s acceptances:')
+  if (acceptances.length === 0) {
+    lines.push('  (none)')
+  } else {
+    // Which digests this machine can actually resolve. An acceptance record
+    // travels in the repository and a library package does not, so a teammate
+    // on a fresh clone has every acceptance and no packages — the ordinary
+    // case, not an exotic one. Left unmarked, such a row reads `status active`
+    // while `resolveSkillManifest` silently drops it, and the only way to
+    // notice would be to compare two 64-character hex strings by eye.
+    const held = new Set(packages.map((pkg) => pkg.digest))
+    for (const acceptance of acceptances) {
+      const absent = held.has(acceptance.digest) ? '' : '  (package not in this machine\'s library)'
+      lines.push(
+        `  ${acceptance.skillId}  digest ${acceptance.digest}  status ${acceptance.status}  policy ${acceptance.updatePolicy}${absent}`,
+      )
+      lines.push(`    components ${renderValue(acceptance.components)}  agents ${renderValue(acceptance.agents)}`)
+    }
+  }
+
+  return `${lines.join('\n')}\n`
+}
+
+async function skillsAcceptCommand(args: string[]): Promise<CliResult> {
+  const { dir, positional, components, agents, policy, empty } = parseArgs(args)
+  const refusal = refuseEmptyFlag(empty)
+  if (refusal !== null) return refusal
+
+  const [digest] = positional
+  if (digest === undefined) {
+    return fail('skills accept needs a package digest: mjloop-cli skills accept <packageDigest> [--dir <path>]')
+  }
+
+  let updatePolicy: SkillUpdateMode
+  if (policy === undefined) {
+    // Offered as a default from this project's own configured update_mode,
+    // and never consulted again after this acceptance is written —
+    // `ProjectSkillAcceptanceSchema.updatePolicy`'s comment says why: a
+    // global policy that could keep changing an already-accepted skill's
+    // behaviour is exactly the stop condition this field exists to forbid.
+    //
+    // A project with no config yet gets `ConfigSchema`'s own default
+    // (`'review'`) rather than a refusal to run `mjloop init` first: nothing
+    // about accepting a skill requires a provisioned `.mjloop/`, and a
+    // config that fails to *parse* is the only config problem worth
+    // refusing over here.
+    updatePolicy = 'review'
+    try {
+      updatePolicy = (await loadConfig(dir)).orchestration.skills.update_mode
+    } catch (error) {
+      if (!(error instanceof ConfigMissingError)) return fail(describe(error))
+    }
+  } else {
+    const parsedPolicy = SkillUpdateModeSchema.safeParse(policy)
+    if (!parsedPolicy.success) return fail(`--policy takes auto, review or pinned — got "${policy}"`)
+    updatePolicy = parsedPolicy.data
+  }
+
+  try {
+    const accepted = await acceptSkill(dir, {
+      packageDigest: digest,
+      components: components === undefined ? [] : splitList(components),
+      agents: agents === undefined ? [] : splitList(agents),
+      updatePolicy,
+      acceptedBy: acceptedBy(),
+    })
+    return {
+      stdout:
+        `accepted "${accepted.skillId}" at digest ${accepted.digest}\n` +
+        `components ${renderValue(accepted.components)}\n` +
+        `agents ${renderValue(accepted.agents)}\n` +
+        `policy ${accepted.updatePolicy}\n`,
+      exitCode: 0,
+    }
+  } catch (error) {
+    // Every refusal `acceptSkill` can throw already names what to do instead
+    // — an unknown digest, an unaudited package, an unknown component, an
+    // unknown agent, or a source already accepted — so this command adds
+    // nothing to the message and simply relays it.
+    return fail(describe(error))
+  }
+}
+
+async function skillsSetStatusCommand(args: string[], status: ProjectSkillAcceptance['status']): Promise<CliResult> {
+  const { dir, positional, empty } = parseArgs(args)
+  const refusal = refuseEmptyFlag(empty)
+  if (refusal !== null) return refusal
+
+  const [skillId] = positional
+  if (skillId === undefined) {
+    const verb = status === 'disabled' ? 'disable' : 'enable'
+    return fail(`skills ${verb} needs a skill id: mjloop-cli skills ${verb} <skillId> [--dir <path>]`)
+  }
+
+  try {
+    const updated = await setAcceptanceStatus(dir, skillId, status)
+    return { stdout: `"${updated.skillId}" is now ${updated.status}\n`, exitCode: 0 }
+  } catch (error) {
+    return fail(describe(error))
+  }
+}
+
+async function skillsRemoveCommand(args: string[]): Promise<CliResult> {
+  const { dir, positional, empty } = parseArgs(args)
+  const refusal = refuseEmptyFlag(empty)
+  if (refusal !== null) return refusal
+
+  const [skillId] = positional
+  if (skillId === undefined) {
+    return fail('skills remove needs a skill id: mjloop-cli skills remove <skillId> [--dir <path>]')
+  }
+
+  try {
+    await removeAcceptance(dir, skillId)
+  } catch (error) {
+    return fail(describe(error))
+  }
+
+  // Named explicitly, because it is the story's central isolation claim:
+  // this command touches exactly one file under this project's own
+  // .mjloop/skills/, and nothing else.
+  return {
+    stdout: `removed this project's acceptance of "${skillId}" — the package itself and every other project's acceptance are untouched\n`,
+    exitCode: 0,
+  }
+}
+
+/** A comma-separated list, where the empty string is the empty list — mirrors `asList` above. */
+function splitList(raw: string): string[] {
+  return raw
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0)
+}
+
 async function sessionStartCommand(stdin: string): Promise<CliResult> {
   const cwd = readCwd(stdin)
   const summary = await stateSummary(cwd)
@@ -949,6 +1193,8 @@ const PROTECTED_DIRECTORY_REASONS = {
     '.mjloop/profile/ is owned by the mjloop engine: an accepted revision is immutable, and the proposal is what an acceptance reads. Use mjloop-cli profile accept and mjloop-cli profile reject (mjloop-cli profile show first) instead of editing these files directly.',
   features:
     '.mjloop/features/ is owned by the mjloop engine: an approved feature brief is what a later plan is built on, and a revision is never rewritten once it is approved. Use the mjloop_feature_* tools (mjloop_feature_create, mjloop_feature_update, mjloop_feature_approve) instead of editing these files directly.',
+  skills:
+    '.mjloop/skills/ is owned by the mjloop engine: an acceptance names the exact digest, components and agents this project pinned, and a hand edit could silently change what a run treats as accepted without anybody having decided so. Use mjloop-cli skills accept, mjloop-cli skills disable, mjloop-cli skills enable and mjloop-cli skills remove (mjloop-cli skills list first) instead of editing these files directly.',
 } as const satisfies Record<(typeof PROTECTED_DIRECTORIES)[number], string>
 
 /**

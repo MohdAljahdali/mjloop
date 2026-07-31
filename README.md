@@ -108,6 +108,23 @@ that falls to `orchestration.execution.uncertain_concurrency`, sequential by def
 library exists yet, so every selection this manifest can produce today is empty; that is the
 next story.
 
+Latest — **the skill library now exists, per machine, shared by every project on it.** It
+lives outside any checkout — `~/.local/share/mjloop` by default, `MJLOOP_DATA_HOME` to point
+it elsewhere — because a library nested in a project would eventually get committed, and a
+package two projects share would then live inside one of them. A package is stored
+content-addressed by the sha-256 digest of its content, so importing one source at two
+revisions is two packages, never one overwriting the other. A project accepts a **digest**,
+never a path: the acceptance record in `.mjloop/skills/<skillId>.json` travels in the repo,
+the package itself stays on the machine that fetched it, and a teammate whose library lacks
+it is skipped by name rather than failing the run. Acceptance is per project, and removing
+one project's acceptance touches nothing else — not the package, not another project's
+record. `mjloop-cli skills list|accept|disable|enable|remove` is the one route in; the
+cockpit's `/api/skills` only ever reports the library and this project's acceptances and
+never activates one. Nothing imports a package yet — discovery, static audit, and the
+sandbox are the next story — so the library starts empty on every machine, and `skills
+accept` refuses any package whose audit has not passed, which today is every package there
+is; that is by design, not a bug to route around.
+
 ## Install
 
 ```bash

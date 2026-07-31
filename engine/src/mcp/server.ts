@@ -20,6 +20,8 @@ import { cycleAdvance, halt, runStart } from '../ops/run.js'
 import { stateSummary } from '../ops/summary.js'
 import { readTelemetry } from '../ops/telemetry.js'
 import { verifyRun } from '../ops/verify.js'
+import { listAcceptances } from '../store/skill-acceptance-store.js'
+import { listPackages } from '../store/skill-library-store.js'
 // The only store this file reaches for directly, and deliberately so: the
 // feature-brief store already *is* the operation. It takes the write lock,
 // writes atomically, compares and swaps on the expected revision, and validates
@@ -285,9 +287,10 @@ export function buildServer(): McpServer {
   //   approved revision it replaces. Splitting them buys a discriminator and
   //   charges a whole declaration for it.
   // get ← read one revision + read the latest + list features. Three
-  //   projections of one walk over one directory, exactly as telemetry and
-  //   preflight are two projections of one walk over run history. The arguments
-  //   discriminate on their own: no feature means list, no revision means latest.
+  //   projections of one walk over one directory, exactly as telemetry,
+  //   preflight and skills are three projections of one bounded read apiece.
+  //   The arguments discriminate on their own: no feature means list, no
+  //   revision means latest.
   // update ← set fields + append a decision. One act, not two: the interview
   //   learns something and writes down both what it asked and what that settled.
   // approve stands alone, and that is the point of it. It is the only
@@ -789,10 +792,10 @@ export function buildServer(): McpServer {
     {
       title: 'Read a report over past runs',
       description:
-        'Two projections of one bounded walk over past runs. telemetry: what every specialist this project drafted actually returned, so a mode or an available list can be pruned on evidence — a report, never a rule. preflight: the shape of a run on a track before it starts — roster, dispatches per cycle, ceiling, and what comparable past runs took. Neither is folded into routine output; ask for it.',
+        'Three projections of one bounded read, each cheaper folded into this tool than declared beside it — see this file\'s header for what a fourth declaration costs on every turn. telemetry: what every specialist this project drafted actually returned, so a mode or an available list can be pruned on evidence — a report, never a rule. preflight: the shape of a run on a track before it starts — roster, dispatches per cycle, ceiling, and what comparable past runs took. skills: this machine\'s skill library (source, revision, license, audit) beside this project\'s acceptances of it (digest, components, agents, policy, status) — a read of what mjloop-cli skills already decided, never a way to decide it. None is folded into routine output; ask for it.',
       inputSchema: {
         project_dir: projectDirArg,
-        report: z.enum(['telemetry', 'preflight']),
+        report: z.enum(['telemetry', 'preflight', 'skills']),
         track: IdSchema.optional().describe('preflight only, and required for it. Track name as in .mjloop/config.yaml'),
         story: IdSchema.nullish().describe('preflight only. Compares story-bound runs against story-bound runs'),
         limit: z.number().int().positive().max(200).optional().describe('telemetry only: past runs to walk. Default 50'),
@@ -806,6 +809,14 @@ export function buildServer(): McpServer {
           // rather than a state, because idle is when it is asked.
           if (track === undefined) throw new Error('preflight needs a track — the estimate is per track, and is asked before a run exists')
           return ok(await preflightEstimate(dir, { track, story: story ?? null }))
+        }
+        if (report === 'skills') {
+          // A read, and only a read: `listPackages`/`listAcceptances` never
+          // execute anything under a package's `content/`, and this branch
+          // adds no write of its own — activating a skill stays
+          // `mjloop-cli skills accept`'s decision, made by a person.
+          const [library, acceptances] = await Promise.all([listPackages(dir), listAcceptances(dir)])
+          return ok({ packages: library.packages, acceptances })
         }
         return ok(await readTelemetry(dir, limit === undefined ? {} : { limit }))
       }),

@@ -18,6 +18,7 @@ import {
   readRunDetail,
   readRuns,
   readSkillManifest,
+  readSkillsView,
   readState,
   readStoryDetail,
   readTelemetryReport,
@@ -172,6 +173,17 @@ async function route(projectDir: string, segments: readonly string[]): Promise<A
       if (segments.length !== 2 || first === undefined) break
       if (!MEMORY_ID.test(first)) return fail(400, 'error.badRequest')
       return ok(await readMemoryEntry(projectDir, first))
+
+    case 'skills':
+      // No parameter, and none a later story should add: activation is a
+      // decision that changes what every later run is told, and this route
+      // exists precisely so the cockpit can report the library and this
+      // project's acceptances without offering a way to set either — the
+      // class of write `web/writes.ts`'s header permanently denies the
+      // browser. `mjloop-cli skills accept|disable|enable|remove` is where
+      // that decision is made.
+      if (segments.length !== 1) break
+      return ok(await readSkillsView(projectDir))
   }
 
   return fail(404, 'error.notFound')

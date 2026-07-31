@@ -24,6 +24,10 @@ import { listMemories, readMemory } from '../store/memory-store.js'
 import { resolveLoopPaths } from '../store/paths.js'
 import { findPlanDir, listStories } from '../store/plan-store.js'
 import { readAcceptedProfile, readProposedProfile } from '../store/project-profile-store.js'
+import { listAcceptances } from '../store/skill-acceptance-store.js'
+import { listPackages } from '../store/skill-library-store.js'
+import type { ProjectSkillAcceptance } from '../schemas/skill-acceptance.js'
+import type { SkillPackage } from '../schemas/skill-library.js'
 import { StateStore } from '../store/state-store.js'
 import type { Config } from '../schemas/config.js'
 import type { ProjectComponent } from '../schemas/project-profile.js'
@@ -188,6 +192,42 @@ function componentFingerprint(components: readonly ProjectComponent[]): string {
       ].join(' '),
     )
     .join('\n')
+}
+
+/* ── the shared skill library and this project's acceptances ─────────────── */
+
+export interface SkillsView {
+  /** Every package this machine's library holds — source, revision, license, audit. */
+  packages: SkillPackage[]
+  /** This project's own acceptances — digest, components, agents, policy, status. */
+  acceptances: ProjectSkillAcceptance[]
+}
+
+/**
+ * The library and this project's acceptances of it, read-only.
+ *
+ * `mjloop-cli skills accept|disable|enable|remove` is where the decision is
+ * made; this route reports it and nothing more — `web/writes.ts`'s header
+ * permanently denies the browser any write of this class, because accepting
+ * a skill changes what every later dispatch is told to use. `listPackages`
+ * and `listAcceptances` are themselves pure reads that execute nothing under
+ * a package's `content/`, so this function performs no work beyond the two
+ * walks it names.
+ *
+ * An empty library and a project with no acceptances both answer with empty
+ * arrays rather than a 404 — that is the state every machine and every
+ * project start in, the same position `readFeatures` takes on a project that
+ * has raised no feature yet.
+ */
+export async function readSkillsView(projectDir: string): Promise<SkillsView> {
+  // `listPackages` reports the entries it could not read rather than throwing
+  // on them, which is what keeps one damaged import — possibly another
+  // project's, since the library is machine-wide — from turning this whole
+  // read into a 500. The cockpit shows the library it can read; naming an
+  // unreadable entry is `mjloop-cli skills list`'s job, where a person can act
+  // on it.
+  const [library, acceptances] = await Promise.all([listPackages(projectDir), listAcceptances(projectDir)])
+  return { packages: library.packages, acceptances }
 }
 
 /* ── feature briefs ───────────────────────────────────────────────────────── */

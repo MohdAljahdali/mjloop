@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises'
+import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { NoActiveRunError, UnknownTrackError, cycleAdvance, halt, runDirName, runDirPath, runStart } from '../../src/ops/run.js'
@@ -8,6 +9,9 @@ import { gateSet, planCreate, storyAdd } from '../../src/ops/plan.js'
 import { rosterSet } from '../../src/ops/roster.js'
 import { UnresolvedComponentError } from '../../src/ops/skill-selection.js'
 import type { ProjectComponent } from '../../src/schemas/project-profile.js'
+import type { SkillPackage } from '../../src/schemas/skill-library.js'
+import { acceptSkill } from '../../src/store/skill-acceptance-store.js'
+import { writePackage } from '../../src/store/skill-library-store.js'
 import { SkillManifestSchema } from '../../src/schemas/skill-selection.js'
 import { InvalidStateError, StateStore } from '../../src/store/state-store.js'
 import { loadConfig, writeConfig } from '../../src/store/config-store.js'
@@ -849,6 +853,43 @@ describe('the run verify pin', () => {
 
 describe('the run skill manifest', () => {
   const MANIFEST = 'skill-selection.json'
+  const DIGEST = 'a'.repeat(64)
+
+  // The shared library this project's acceptances join against. Pointed at a
+  // throwaway directory so nothing here can reach the machine's real one.
+  let dataHome: string
+  let contentDir: string
+
+  beforeEach(async () => {
+    dataHome = await fs.mkdtemp(path.join(os.tmpdir(), 'loop-library-'))
+    process.env.MJLOOP_DATA_HOME = dataHome
+    contentDir = await fs.mkdtemp(path.join(os.tmpdir(), 'loop-content-'))
+    await fs.writeFile(path.join(contentDir, 'SKILL.md'), '# Flutter Widgets\n', 'utf8')
+  })
+
+  afterEach(async () => {
+    delete process.env.MJLOOP_DATA_HOME
+    await fs.rm(dataHome, { recursive: true, force: true })
+    await fs.rm(contentDir, { recursive: true, force: true })
+  })
+
+  /** A library package this project can accept — audited, since acceptance refuses anything else. */
+  function auditedPackage(): SkillPackage {
+    return {
+      schema: 1,
+      packageId: 'flutter-widgets',
+      digest: DIGEST,
+      source: { kind: 'github', url: 'https://github.com/example/flutter-widgets', revision: 'a1b2c3d' },
+      license: { spdx: 'MIT', file: 'LICENSE' },
+      skillName: 'Flutter Widgets',
+      description: 'Shared widget kit conventions for the mobile component.',
+      tags: ['flutter'],
+      dependencies: { executables: [], packages: [] },
+      audit: { state: 'passed', findings: [], at: NOW.toISOString() },
+      guidance: 'Use the shared widget kit under lib/widgets.',
+      importedAt: NOW.toISOString(),
+    }
+  }
 
   async function readManifest(state: Awaited<ReturnType<typeof runStart>>): Promise<Record<string, any>> {
     return JSON.parse(await fs.readFile(path.join(runDirPath(project.dir, state), MANIFEST), 'utf8'))
@@ -951,9 +992,10 @@ describe('the run skill manifest', () => {
     expect(manifest.sourceBrief).toEqual({ id: feature.id, revision: feature.revision })
     expect(manifest.profileRevision).toBe(1)
 
-    // No skill has ever been accepted by this project — S06, which owns the
-    // library, does not exist yet — so every fixed role still gets a
-    // selection recorded, each naming no skill at all.
+    // No skill has ever been accepted by this project, so every fixed role
+    // still gets a selection recorded, each naming no skill at all — the
+    // additive guarantee: a project that accepts nothing pins exactly what it
+    // pinned before a library existed.
     expect(manifest.selections).toHaveLength(4)
     expect(manifest.selections.map((s: any) => s.agent)).toEqual(['builder', 'critic', 'planner', 'verifier'])
     for (const selection of manifest.selections) {
@@ -966,6 +1008,53 @@ describe('the run skill manifest', () => {
       mode: 'sequential',
       reason: expect.stringMatching(/fewer than two/),
     })
+  })
+
+  it('pins the skills this project actually accepted, with their guidance', async () => {
+    // The one seam this whole capability rests on: `resolveSkillManifest` must
+    // read *this project's* acceptances rather than an empty list. Every other
+    // test in this block asserts the empty case, which stays green whether the
+    // seam is wired or not — this is the one that dies if it is reverted.
+    await acceptComponents([component('mobile', { technology: 'flutter', skillTags: ['flutter'] })])
+    await writePackage(project.dir, auditedPackage(), contentDir)
+    await acceptSkill(
+      project.dir,
+      { packageDigest: DIGEST, components: ['mobile'], agents: ['builder'], updatePolicy: 'pinned', acceptedBy: 'test' },
+      clock,
+    )
+    const feature = await approvedFeature({ affectedComponents: ['mobile'] })
+
+    const state = await runStart(project.dir, { track: 'edit', goal: 'Add link login', feature: feature.id }, clock)
+    const manifest = await readManifest(state)
+
+    const builder = manifest.selections.find((s: any) => s.agent === 'builder')
+    expect(builder.skillIds).toEqual(['flutter-widgets'])
+    // The guidance travels with the pin: an id alone tells a dispatched agent
+    // nothing it can follow.
+    expect(manifest.guidance['flutter-widgets']).toContain('shared widget kit')
+    // And only the agent the acceptance named — accepting a skill for the
+    // builder must not quietly route it to every role.
+    const critic = manifest.selections.find((s: any) => s.agent === 'critic')
+    expect(critic.skillIds).toEqual([])
+  })
+
+  it('pins nothing for an acceptance whose package this machine does not hold', async () => {
+    // A teammate's acceptance record travels in the repository; the library
+    // does not. The run must still start.
+    await acceptComponents([component('mobile', { technology: 'flutter', skillTags: ['flutter'] })])
+    await writePackage(project.dir, auditedPackage(), contentDir)
+    await acceptSkill(
+      project.dir,
+      { packageDigest: DIGEST, components: ['mobile'], agents: ['builder'], updatePolicy: 'pinned', acceptedBy: 'test' },
+      clock,
+    )
+    await fs.rm(path.join(dataHome, 'packages', DIGEST), { recursive: true, force: true })
+    const feature = await approvedFeature({ affectedComponents: ['mobile'] })
+
+    const state = await runStart(project.dir, { track: 'edit', goal: 'Add link login', feature: feature.id }, clock)
+    const manifest = await readManifest(state)
+    expect(manifest.selections.every((s: any) => s.skillIds.length === 0)).toBe(true)
+    expect(manifest.guidance).toEqual({})
   })
 
   it('sorts selections by component id and then by agent across independent components', async () => {
