@@ -1,16 +1,22 @@
 #!/usr/bin/env node
+import { spawn as nodeSpawn } from 'node:child_process'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import * as z from 'zod'
 import { renderSummaryLine, stateSummary, type StateSummary } from '../ops/summary.js'
-import type { Orchestration, SkillUpdateMode } from '../schemas/config.js'
-import { SkillUpdateModeSchema } from '../schemas/config.js'
+import { discoverCandidates, SkillSourceDisabledError } from '../ops/skill-discovery.js'
+import { computePackageDigest, inspectCandidate } from '../ops/skill-import.js'
+import { detectSandboxBackend, runSkillSandbox, type DetectedSandbox, type SkillSandboxDeps } from '../ops/skill-sandbox.js'
+import type { Orchestration, SkillSource, SkillUpdateMode } from '../schemas/config.js'
+import { SkillSourceSchema, SkillUpdateModeSchema } from '../schemas/config.js'
 import type { ProjectComponent, ProjectProfile, ProposedProfile } from '../schemas/project-profile.js'
 import type { ProjectSkillAcceptance } from '../schemas/skill-acceptance.js'
-import type { SkillPackage } from '../schemas/skill-library.js'
+import { ImportReportSchema, SkillCandidateSchema, type ImportReport, type SandboxResult, type SkillCandidate } from '../schemas/skill-import.js'
+import { SkillPackageSchema, type SkillPackage } from '../schemas/skill-library.js'
 import { ConfigChangeSchema, ConfigMutationError, configRevision, mutateConfig } from '../store/config-mutation.js'
 import { ConfigMissingError, loadConfig } from '../store/config-store.js'
+import { parseFrontmatter } from '../store/frontmatter.js'
 import { PROTECTED_BASENAMES, PROTECTED_DIRECTORIES, resolveLoopPaths } from '../store/paths.js'
 import { StalePreconditionError } from '../store/precondition.js'
 import {
@@ -27,8 +33,29 @@ import {
   removeAcceptance,
   setAcceptanceStatus,
 } from '../store/skill-acceptance-store.js'
-import { listPackages, type SkillLibraryListing } from '../store/skill-library-store.js'
+import { listPackages, readPackage, writePackage, type SkillLibraryListing } from '../store/skill-library-store.js'
+import { readBoundedText } from '../util/bounded-body.js'
 import { isEntrypoint } from '../util/entrypoint.js'
+
+/**
+ * Everything the `skills search|inspect|import|check-updates` pipeline needs
+ * that could otherwise reach the network or spawn a process — the same
+ * injection seam `deps.fetch` is throughout `ops/skill-*.ts`, threaded down
+ * to this CLI so `tests/cli/index.test.ts` can inject a fake `fetch` and a
+ * fake sandbox backend/spawn and never touch the network or a real process
+ * to exercise these commands. Every real caller gets `defaultCliDeps`.
+ */
+export interface CliDeps {
+  fetch: typeof globalThis.fetch
+  detectSandboxBackend: () => DetectedSandbox | null
+  spawn: typeof nodeSpawn
+}
+
+const defaultCliDeps: CliDeps = {
+  fetch: globalThis.fetch,
+  detectSandboxBackend,
+  spawn: nodeSpawn,
+}
 
 const USAGE = `usage: mjloop-cli <command>
 
@@ -51,6 +78,18 @@ const USAGE = `usage: mjloop-cli <command>
   skills remove <skillId> [--dir <path>]
                                        remove this project's acceptance only — the package and every
                                        other project's acceptance are untouched
+  skills search <query> [--source github|registry|web] [--dir <path>] [--json]
+                                       metadata-only candidates from an allowed source — nothing is
+                                       written, and no candidate becomes active on its own
+  skills inspect <url> [--ref <ref>] [--dir <path>] [--json]
+                                       pin, fetch, and sandbox one candidate; print its report; write nothing
+  skills import <url> [--ref <ref>] [--dir <path>]
+                                       inspect, sandbox, and on a passed audit write the package into
+                                       this machine's library — this does not accept it into the project;
+                                       accept the printed digest separately with skills accept
+  skills check-updates [--dir <path>] [--json]
+                                       report a new upstream revision as a candidate for each acceptance
+                                       whose policy is not pinned — never imports, never moves a digest
   session-start                        SessionStart hook (reads hook JSON on stdin)
   state-guard                          PreToolUse hook (reads hook JSON on stdin)
   stop-guard                           Stop hook (reads hook JSON on stdin)
@@ -61,7 +100,7 @@ export interface CliResult {
   exitCode: number
 }
 
-export async function runCli(argv: string[], stdin: string): Promise<CliResult> {
+export async function runCli(argv: string[], stdin: string, deps: CliDeps = defaultCliDeps): Promise<CliResult> {
   const [command, ...rest] = argv
   switch (command) {
     case 'summary':
@@ -71,7 +110,7 @@ export async function runCli(argv: string[], stdin: string): Promise<CliResult> 
     case 'profile':
       return profileCommand(rest)
     case 'skills':
-      return skillsCommand(rest)
+      return skillsCommand(rest, deps)
     case 'session-start':
       return sessionStartCommand(stdin)
     case 'state-guard':
@@ -391,6 +430,10 @@ interface CliArgs {
   agents: string | undefined
   /** `--policy <word>` for `skills accept`, exactly as typed — validated against `SkillUpdateModeSchema` by the caller. */
   policy: string | undefined
+  /** `--source <word>` for `skills search`, exactly as typed — validated against `SkillSourceSchema` by the caller. */
+  source: string | undefined
+  /** `--ref <ref>` for `skills inspect`/`skills import`, exactly as typed — a branch, tag, or sha to pin. */
+  ref: string | undefined
   positional: string[]
   /**
    * Flags typed with no word after them, in the order they appeared.
@@ -418,6 +461,8 @@ const FLAG_VALUES: Record<string, string> = {
   '--components': 'a comma-separated list of component ids from the accepted map',
   '--agents': 'a comma-separated list of agent roles (planner, builder, critic, verifier)',
   '--policy': 'auto, review or pinned',
+  '--source': 'github, registry or web',
+  '--ref': 'a branch, tag, or commit sha to pin',
 }
 
 /**
@@ -460,6 +505,8 @@ function parseArgs(args: string[]): CliArgs {
   let components: string | undefined
   let agents: string | undefined
   let policy: string | undefined
+  let source: string | undefined
+  let ref: string | undefined
   const positional: string[] = []
   const empty: string[] = []
   // One flag name to the local it fills — every entry here takes a value and
@@ -473,6 +520,8 @@ function parseArgs(args: string[]): CliArgs {
     '--components': (value) => { components = value },
     '--agents': (value) => { agents = value },
     '--policy': (value) => { policy = value },
+    '--source': (value) => { source = value },
+    '--ref': (value) => { ref = value },
   }
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index]
@@ -492,7 +541,7 @@ function parseArgs(args: string[]): CliArgs {
     }
     if (arg !== undefined) positional.push(arg)
   }
-  return { dir, json, expect: expected, from, components, agents, policy, positional, empty }
+  return { dir, json, expect: expected, from, components, agents, policy, source, ref, positional, empty }
 }
 
 /* ----------------------------------------------------------------- profile */
@@ -888,13 +937,17 @@ function renderSlot(command: string | null): string {
  * here, where a person types it.
  */
 
-async function skillsCommand(args: string[]): Promise<CliResult> {
+async function skillsCommand(args: string[], deps: CliDeps): Promise<CliResult> {
   const [subcommand, ...rest] = args
   if (subcommand === 'list') return skillsListCommand(rest)
   if (subcommand === 'accept') return skillsAcceptCommand(rest)
   if (subcommand === 'disable') return skillsSetStatusCommand(rest, 'disabled')
   if (subcommand === 'enable') return skillsSetStatusCommand(rest, 'active')
   if (subcommand === 'remove') return skillsRemoveCommand(rest)
+  if (subcommand === 'search') return skillsSearchCommand(rest, deps)
+  if (subcommand === 'inspect') return skillsInspectCommand(rest, deps)
+  if (subcommand === 'import') return skillsImportCommand(rest, deps)
+  if (subcommand === 'check-updates') return skillsCheckUpdatesCommand(rest, deps)
   return { stdout: USAGE, exitCode: 1 }
 }
 
@@ -1078,6 +1131,518 @@ async function skillsRemoveCommand(args: string[]): Promise<CliResult> {
     stdout: `removed this project's acceptance of "${skillId}" — the package itself and every other project's acceptance are untouched\n`,
     exitCode: 0,
   }
+}
+
+/* --------------------------------------------------- external discovery/import */
+
+/**
+ * `skills search` / `skills inspect` / `skills import` / `skills check-updates`:
+ * the CLI pipeline over S07's discovery/inspection/sandbox ops.
+ *
+ * Three things are load-bearing here, mirroring the ops modules underneath:
+ *
+ *  - `search` returns metadata-only candidates and writes nothing. A
+ *    candidate is a search result, never a package, and never reaches skill
+ *    selection — see `SkillCandidateSchema`'s own comment.
+ *  - `import` writes a package into this machine's shared library on a
+ *    passed audit. It does **not** accept it into this project — that stays
+ *    the separate, explicit `skills accept <digest>` decision, and every
+ *    success message says so.
+ *  - A failed inspection or import prints its reason and the one thing a
+ *    person may do next — search a different candidate — and never searches
+ *    again on its own; the story's stop condition forbids exactly that.
+ */
+
+const GITHUB_URL = /^https:\/\/github\.com\/([^/]+)\/([^/]+?)(?:\.git)?\/?$/
+
+/** Build a metadata-only candidate from a bare GitHub repository url, for `inspect`/`import`. */
+function candidateFromUrl(url: string, ref: string): SkillCandidate | null {
+  const match = GITHUB_URL.exec(url)
+  if (match === null) return null
+  const [, owner, name] = match
+  const repository = `${owner}/${name}`
+  const parsed = SkillCandidateSchema.safeParse({
+    source: 'github',
+    url,
+    repository,
+    ref,
+    skillName: name,
+    description: `candidate discovered at ${repository}`,
+  })
+  return parsed.success ? parsed.data : null
+}
+
+function isRecordCli(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+/** The same two rules every fetch in this pipeline shares: never follow a cross-host redirect, never accept an unbounded body. */
+async function fetchJsonBounded(url: string, deps: CliDeps): Promise<unknown> {
+  const requestedHost = new URL(url).host
+  // `redirect: 'manual'`, so a redirect is refused rather than performed and
+  // then regretted; and the body is read under the cap rather than buffered
+  // whole and measured afterwards.
+  const response = await deps.fetch(url, {
+    headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'mjloop-skill-import' },
+    redirect: 'manual',
+    signal: AbortSignal.timeout(STAGING_REQUEST_TIMEOUT_MS),
+  })
+  const actualHost = new URL(response.url || url).host
+  if (actualHost !== requestedHost) {
+    throw new Error(`refused a redirect from "${requestedHost}" to "${actualHost}" while staging package content`)
+  }
+  if (response.status >= 300 && response.status < 400) {
+    throw new Error(`refused a redirect from "${requestedHost}" while staging package content — a redirect is never followed here`)
+  }
+  if (!response.ok) throw new Error(`request to "${url}" failed: ${response.status} ${response.statusText}`)
+  const text = await readBoundedText(
+    response,
+    STAGING_RESPONSE_CAP,
+    () => new Error(`response from "${url}" exceeded the ${STAGING_RESPONSE_CAP}-byte staging response cap — refused, not truncated`),
+  )
+  try {
+    return JSON.parse(text) as unknown
+  } catch {
+    throw new Error(`response from "${url}" is not valid JSON`)
+  }
+}
+
+/** No staging request may hang forever, for the same reason none may be unbounded in size. */
+const STAGING_REQUEST_TIMEOUT_MS = 30_000
+const STAGING_RESPONSE_CAP = 2_000_000
+const STAGING_TREE_ENTRY_CAP = 500
+const STAGING_FILE_BYTES_CAP = 200_000
+const STAGING_TOTAL_BYTES_CAP = 5_000_000
+
+interface StagedFile {
+  path: string
+  buffer: Buffer
+}
+
+/**
+ * Refetch a pinned revision's file content for staging, given the sha
+ * `inspectCandidate` already resolved and validated.
+ *
+ * Duplicated from `ops/skill-import.ts`'s own tree/blob fetch rather than
+ * imported: that module returns only an `ImportReport` (metadata), never the
+ * raw bytes it inspected, because inspection and staging are different
+ * concerns — one produces evidence, the other produces a directory
+ * `writePackage` can copy.
+ *
+ * A second fetch is *not* self-evidently the same content as the first. A git
+ * blob is addressed by the hash of its own content, but nothing here verifies
+ * the endpoint's answer against that hash, and the tree listing that decides
+ * which files exist at all is not content-addressed in any sense. So the
+ * caller re-hashes what comes back and refuses unless it equals the digest
+ * inspection computed — see `runInspectionPipeline`.
+ */
+async function fetchGithubPackageFiles(repository: string, sha: string, deps: CliDeps): Promise<StagedFile[]> {
+  const treeUrl = `https://api.github.com/repos/${repository}/git/trees/${sha}?recursive=1`
+  const treeBody = await fetchJsonBounded(treeUrl, deps)
+  if (!isRecordCli(treeBody) || !Array.isArray(treeBody.tree)) {
+    throw new Error(`tree response for "${repository}"@"${sha}" is malformed: expected a "tree" array`)
+  }
+  if (treeBody.truncated === true) throw new Error(`the package tree exceeded the ${STAGING_TREE_ENTRY_CAP}-entry staging cap`)
+
+  const files: StagedFile[] = []
+  let total = 0
+  for (const raw of treeBody.tree) {
+    if (!isRecordCli(raw)) continue
+    const entryPath = typeof raw.path === 'string' ? raw.path : null
+    const type = typeof raw.type === 'string' ? raw.type : null
+    const entrySha = typeof raw.sha === 'string' ? raw.sha : null
+    if (entryPath === null || type === null || entrySha === null || type !== 'blob') continue
+
+    // A hostile path was already refused during inspection; refused again
+    // here rather than trusted, because this is the function that is about
+    // to join the name into a real filesystem path under a temp directory.
+    if (path.isAbsolute(entryPath) || entryPath.split('/').includes('..')) {
+      throw new Error(`refused entry "${entryPath}" while staging package content: an absolute or traversing path is never legitimate`)
+    }
+    if (files.length >= STAGING_TREE_ENTRY_CAP) throw new Error(`the package tree exceeded the ${STAGING_TREE_ENTRY_CAP}-entry staging cap`)
+
+    const blobUrl = `https://api.github.com/repos/${repository}/git/blobs/${entrySha}`
+    const blobBody = await fetchJsonBounded(blobUrl, deps)
+    if (!isRecordCli(blobBody) || typeof blobBody.content !== 'string') {
+      throw new Error(`blob response for "${entryPath}" is malformed: expected a "content" string`)
+    }
+    const encoding = typeof blobBody.encoding === 'string' ? blobBody.encoding : 'base64'
+    const buffer = encoding === 'base64' ? Buffer.from(blobBody.content, 'base64') : Buffer.from(blobBody.content, 'utf8')
+
+    if (buffer.byteLength > STAGING_FILE_BYTES_CAP) throw new Error(`file "${entryPath}" exceeded the ${STAGING_FILE_BYTES_CAP}-byte staging cap`)
+    total += buffer.byteLength
+    if (total > STAGING_TOTAL_BYTES_CAP) throw new Error(`the package's total staged content exceeded the ${STAGING_TOTAL_BYTES_CAP}-byte cap`)
+
+    files.push({ path: entryPath, buffer })
+  }
+  return files
+}
+
+/** The raw `mjloop.smoke` frontmatter value from a fetched `SKILL.md`, unvalidated until `runSkillSandbox` parses it. */
+function extractSmokeChecks(files: StagedFile[]): unknown {
+  const skillMd = files.find((file) => file.path === 'SKILL.md')
+  if (skillMd === undefined) return undefined
+  try {
+    const { data } = parseFrontmatter(skillMd.buffer.toString('utf8'))
+    if (!isRecordCli(data)) return undefined
+    if ('mjloop.smoke' in data) return data['mjloop.smoke']
+    return isRecordCli(data.mjloop) ? data.mjloop.smoke : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/** `auditState` becomes `'passed'` only when inspection found nothing blocking AND the sandbox is `'passed'` or `'skipped'` — never on `'unavailable'`. */
+function finalizeReport(report: ImportReport, sandbox: SandboxResult): ImportReport {
+  const passed = !report.blocking && (sandbox.state === 'passed' || sandbox.state === 'skipped')
+  return ImportReportSchema.parse({
+    ...report,
+    sandbox,
+    auditState: passed ? 'passed' : 'failed',
+    nextAction: passed ? null : { action: 'search-alternative' as const, query: report.candidate.skillName },
+  })
+}
+
+/** One sentence recording what the sandbox phase found, folded into the persisted package's audit findings. */
+function sandboxFinding(sandbox: SandboxResult): string {
+  switch (sandbox.state) {
+    case 'skipped':
+      return `sandbox skipped: ${sandbox.reason}`
+    case 'unavailable':
+      return `sandbox unavailable: ${sandbox.reason}`
+    case 'passed':
+      return `sandbox passed: ${sandbox.checks.length} declared check(s) ran clean`
+    case 'failed':
+      return `sandbox failed: ${sandbox.checks.length} declared check(s) attempted`
+  }
+}
+
+interface InspectionOutcome {
+  report: ImportReport
+  files: StagedFile[]
+}
+
+/**
+ * `orchestration.skills.sources` gates the whole pipeline, not just `search`.
+ *
+ * Enforcing it only in `discoverCandidates` left the allowlist controlling the
+ * one command that writes nothing while `inspect`, `import` and
+ * `check-updates` — the commands that actually fetch package content and put
+ * it in this machine's shared library — ignored it entirely. `config set
+ * orchestration.skills.sources ''` is documented as "no external skill
+ * discovery at all", and this is what makes that true. Refused before the
+ * first request, exactly as discovery refuses.
+ */
+async function refuseDisabledSource(dir: string, source: SkillSource): Promise<void> {
+  const config = await loadConfig(dir)
+  if (!config.orchestration.skills.sources.includes(source)) throw new SkillSourceDisabledError(source)
+}
+
+/**
+ * Pin, fetch, and — unless inspection already refused the candidate — stage
+ * its content and run the sandbox phase. Shared by `inspect` (which discards
+ * `files`) and `import` (which stages them into the library on a passed
+ * audit).
+ *
+ * A blocking inspection (missing `SKILL.md`, missing license, ...) skips
+ * staging and the sandbox entirely: `inspectCandidate` already returned a
+ * failed audit and a next action, and there is nothing a sandbox run could
+ * add to "this is not a skill" or "this has no license".
+ */
+async function runInspectionPipeline(dir: string, candidate: SkillCandidate, deps: CliDeps): Promise<InspectionOutcome> {
+  await refuseDisabledSource(dir, candidate.source)
+  const report = await inspectCandidate(dir, candidate, { fetch: deps.fetch })
+  if (report.blocking) return { report, files: [] }
+
+  // A non-blocking report always carries the pinned revision `inspectCandidate`
+  // resolved before it fetched anything else — `null` there only ever
+  // accompanies a blocking report, which returned above.
+  if (report.revision === null) throw new Error('inspection produced no blocking finding but also no pinned revision — refusing to stage unpinned content')
+  const files = await fetchGithubPackageFiles(candidate.repository, report.revision, deps)
+
+  // The staged bytes must be *the* bytes that were inspected, and the only way
+  // to know that is to hash them with the same function `inspectCandidate`
+  // used. The refetch below is a second answer from the same endpoint; nothing
+  // about a sha the endpoint itself chose proves the second answer matches the
+  // first. Without this check a source can serve a benign tree to inspection
+  // and a hostile one to staging, and the library ends up holding content the
+  // audit never saw, under a digest that does not describe it — and since the
+  // digest covers every path and every byte, verifying it is also what
+  // guarantees `report.executableFiles` still describes what is on disk.
+  const stagedDigest = computePackageDigest(files)
+  if (stagedDigest !== report.digest) {
+    throw new Error(
+      `the content fetched for staging does not match the content that was inspected: audited digest ${report.digest}, ` +
+        `staged digest ${stagedDigest} — refused, and nothing was written; the source answered two different things for ` +
+        `one pinned revision, so nothing it says about this package can be trusted`,
+    )
+  }
+
+  const sandboxDeps: SkillSandboxDeps = { detectBackend: deps.detectSandboxBackend, spawn: deps.spawn }
+  const sandbox: SandboxResult =
+    report.executableFiles.length === 0
+      ? { state: 'skipped', reason: 'no executable content' }
+      : await runSkillSandbox(
+          { files: files.map((file) => ({ path: file.path, content: file.buffer })), executableFiles: report.executableFiles, smokeChecks: extractSmokeChecks(files) },
+          sandboxDeps,
+        )
+
+  return { report: finalizeReport(report, sandbox), files }
+}
+
+function renderReport(report: ImportReport): string {
+  const lines = [
+    `candidate  ${report.candidate.source} ${report.candidate.repository} (ref ${report.candidate.ref})`,
+    `revision   ${report.revision ?? '(unpinned)'}`,
+    `digest     ${report.digest ?? '(none)'}`,
+    `license    ${report.license?.spdx ?? report.license?.file ?? '(none)'}`,
+    `audit      ${report.auditState}`,
+  ]
+  if (report.findings.length > 0) {
+    lines.push('findings:')
+    for (const finding of report.findings) lines.push(`  - ${finding}`)
+  }
+  // The sandbox's own sentence, not just its state: "unavailable" on its own
+  // tells a reader neither why this machine could not verify the package nor
+  // which backend would let it.
+  if (report.sandbox !== null) lines.push(`sandbox    ${sandboxFinding(report.sandbox)}`)
+  if (report.nextAction !== null) {
+    lines.push(`this candidate did not pass — search alternative is a user-initiated action for "${report.nextAction.query}"; nothing searches again on its own`)
+  }
+  return `${lines.join('\n')}\n`
+}
+
+async function skillsSearchCommand(args: string[], deps: CliDeps): Promise<CliResult> {
+  const { dir, json, positional, source, empty } = parseArgs(args)
+  const refusal = refuseEmptyFlag(empty)
+  if (refusal !== null) return refusal
+
+  const [query] = positional
+  if (query === undefined) {
+    return fail('skills search needs a query: mjloop-cli skills search <query> [--source github|registry|web] [--dir <path>]')
+  }
+
+  let parsedSource: SkillSource = 'github'
+  if (source !== undefined) {
+    const result = SkillSourceSchema.safeParse(source)
+    if (!result.success) return fail(`--source takes github, registry or web — got "${source}"`)
+    parsedSource = result.data
+  }
+
+  try {
+    const candidates = await discoverCandidates(dir, { query, source: parsedSource }, { fetch: deps.fetch })
+    if (json) return { stdout: `${JSON.stringify(candidates, null, 2)}\n`, exitCode: 0 }
+    if (candidates.length === 0) return { stdout: `no candidates found for "${query}" on source "${parsedSource}"\n`, exitCode: 0 }
+    const lines = candidates.map(
+      (candidate) =>
+        `  ${candidate.repository}  ref ${candidate.ref}  ${candidate.url}${candidate.stars !== undefined ? `  stars ${candidate.stars}` : ''}\n    ${candidate.description}`,
+    )
+    return {
+      stdout:
+        `candidates for "${query}" (${parsedSource}) — metadata only; nothing is written and none of these is active:\n` +
+        `${lines.join('\n')}\n` +
+        'inspect one before importing: mjloop-cli skills inspect <url>\n',
+      exitCode: 0,
+    }
+  } catch (error) {
+    // `SkillSourceDisabledError` already names the setting and the command
+    // that changes it; every other refusal here is relayed the same way
+    // every other `skills` subcommand relays a store error.
+    return fail(describe(error))
+  }
+}
+
+async function skillsInspectCommand(args: string[], deps: CliDeps): Promise<CliResult> {
+  const { dir, json, positional, ref, empty } = parseArgs(args)
+  const refusal = refuseEmptyFlag(empty)
+  if (refusal !== null) return refusal
+
+  const [url] = positional
+  if (url === undefined) {
+    return fail('skills inspect needs a candidate url: mjloop-cli skills inspect <url> [--ref <ref>] [--dir <path>]')
+  }
+  const candidate = candidateFromUrl(url, ref ?? 'HEAD')
+  if (candidate === null) {
+    return fail(`"${url}" is not a github.com repository url this command can parse — expected https://github.com/<owner>/<repo>`)
+  }
+
+  try {
+    const { report } = await runInspectionPipeline(dir, candidate, deps)
+    if (json) return { stdout: `${JSON.stringify(report, null, 2)}\n`, exitCode: 0 }
+    return { stdout: renderReport(report), exitCode: report.auditState === 'passed' ? 0 : 1 }
+  } catch (error) {
+    return fail(describe(error))
+  }
+}
+
+async function skillsImportCommand(args: string[], deps: CliDeps): Promise<CliResult> {
+  const { dir, positional, ref, empty } = parseArgs(args)
+  const refusal = refuseEmptyFlag(empty)
+  if (refusal !== null) return refusal
+
+  const [url] = positional
+  if (url === undefined) {
+    return fail('skills import needs a candidate url: mjloop-cli skills import <url> [--ref <ref>] [--dir <path>]')
+  }
+  const candidate = candidateFromUrl(url, ref ?? 'HEAD')
+  if (candidate === null) {
+    return fail(`"${url}" is not a github.com repository url this command can parse — expected https://github.com/<owner>/<repo>`)
+  }
+
+  try {
+    const { report, files } = await runInspectionPipeline(dir, candidate, deps)
+    if (report.auditState !== 'passed') {
+      return { stdout: renderReport(report), exitCode: 1 }
+    }
+
+    const pkg = buildSkillPackage(report)
+    const stageDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mjloop-skill-import-'))
+    try {
+      for (const file of files) {
+        const dest = path.join(stageDir, file.path)
+        await fs.mkdir(path.dirname(dest), { recursive: true })
+        await fs.writeFile(dest, file.buffer)
+      }
+      await writePackage(dir, pkg, stageDir)
+    } finally {
+      await fs.rm(stageDir, { recursive: true, force: true })
+    }
+
+    return {
+      stdout:
+        `imported "${pkg.skillName}" at digest ${pkg.digest}\n` +
+        `source ${pkg.source.kind} ${pkg.source.url} revision ${pkg.source.revision}\n` +
+        'this writes the package into this machine\'s library only — it is not yet accepted into this project.\n' +
+        `accept it with: mjloop-cli skills accept ${pkg.digest}\n`,
+      exitCode: 0,
+    }
+  } catch (error) {
+    return fail(describe(error))
+  }
+}
+
+/** Stable across revisions of one source — see `SkillPackageSchema.packageId`'s own comment. */
+function derivePackageId(candidate: SkillCandidate): string {
+  const sanitized = candidate.repository.replace(/[^A-Za-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '')
+  return `${candidate.source}-${sanitized}`
+}
+
+/** Assemble the `SkillPackage` a passed `ImportReport` earns — S06's own shape, filled in from S07's evidence. */
+function buildSkillPackage(report: ImportReport, now: () => Date = () => new Date()): SkillPackage {
+  const skillName = report.skillName ?? report.candidate.skillName
+  const description = report.description ?? report.candidate.description
+  return SkillPackageSchema.parse({
+    schema: 1,
+    packageId: derivePackageId(report.candidate),
+    digest: report.digest,
+    source: { kind: report.candidate.source, url: report.candidate.url, revision: report.revision },
+    license: report.license ?? { spdx: null, file: null },
+    skillName,
+    description,
+    tags: [],
+    dependencies: report.dependencies ?? { executables: [], packages: [] },
+    audit: {
+      state: report.auditState,
+      findings: report.sandbox === null ? report.findings : [...report.findings, sandboxFinding(report.sandbox)],
+      at: now().toISOString(),
+    },
+    guidance: description,
+    importedAt: now().toISOString(),
+  })
+}
+
+/** `<owner>/<name>` out of a `https://github.com/<owner>/<name>` url, or `null` for anything else. */
+function repositoryFromGithubUrl(url: string): string | null {
+  const match = GITHUB_URL.exec(url)
+  if (match === null) return null
+  const [, owner, name] = match
+  return `${owner}/${name}`
+}
+
+async function skillsCheckUpdatesCommand(args: string[], deps: CliDeps): Promise<CliResult> {
+  const { dir, json, empty } = parseArgs(args)
+  const refusal = refuseEmptyFlag(empty)
+  if (refusal !== null) return refusal
+
+  const acceptances = await listAcceptances(dir)
+  const reports: Array<{
+    skillId: string
+    digest: string
+    status: 'pinned' | 'up-to-date' | 'new-candidate' | 'package-missing' | 'unsupported-source' | 'check-failed'
+    currentRevision: string | null
+    candidateRevision: string | null
+    detail: string | null
+  }> = []
+
+  for (const acceptance of acceptances) {
+    // `pinned` is not even checked — the story is explicit that this policy
+    // never moves, so there is nothing here worth spending a network call on.
+    if (acceptance.updatePolicy === 'pinned') {
+      reports.push({ skillId: acceptance.skillId, digest: acceptance.digest, status: 'pinned', currentRevision: null, candidateRevision: null, detail: null })
+      continue
+    }
+
+    const pkg = await readPackage(dir, acceptance.digest)
+    if (pkg === null) {
+      reports.push({ skillId: acceptance.skillId, digest: acceptance.digest, status: 'package-missing', currentRevision: null, candidateRevision: null, detail: null })
+      continue
+    }
+    if (pkg.source.kind !== 'github') {
+      reports.push({ skillId: acceptance.skillId, digest: acceptance.digest, status: 'unsupported-source', currentRevision: pkg.source.revision, candidateRevision: null, detail: null })
+      continue
+    }
+    const repository = repositoryFromGithubUrl(pkg.source.url)
+    if (repository === null) {
+      reports.push({ skillId: acceptance.skillId, digest: acceptance.digest, status: 'check-failed', currentRevision: pkg.source.revision, candidateRevision: null, detail: 'could not parse a repository out of the recorded source url' })
+      continue
+    }
+
+    try {
+      // The same allowlist that gates `search`, `inspect` and `import`: a
+      // project that has turned github off is not quietly polled for it either.
+      await refuseDisabledSource(dir, 'github')
+      const candidateRevision = await resolveGithubHeadSha(repository, deps)
+      const changed = candidateRevision !== pkg.source.revision
+      reports.push({
+        skillId: acceptance.skillId,
+        digest: acceptance.digest,
+        status: changed ? 'new-candidate' : 'up-to-date',
+        currentRevision: pkg.source.revision,
+        candidateRevision,
+        detail: null,
+      })
+    } catch (error) {
+      reports.push({ skillId: acceptance.skillId, digest: acceptance.digest, status: 'check-failed', currentRevision: pkg.source.revision, candidateRevision: null, detail: describe(error) })
+    }
+  }
+
+  if (json) return { stdout: `${JSON.stringify(reports, null, 2)}\n`, exitCode: 0 }
+
+  if (reports.length === 0) return { stdout: '(no acceptances to check)\n', exitCode: 0 }
+  const lines = reports.map((entry) => {
+    if (entry.status === 'pinned') return `  ${entry.skillId}  pinned — not checked`
+    if (entry.status === 'up-to-date') return `  ${entry.skillId}  up to date at ${entry.currentRevision}`
+    if (entry.status === 'new-candidate') {
+      return (
+        `  ${entry.skillId}  new revision available: ${entry.candidateRevision} (currently accepted at ${entry.currentRevision})\n` +
+        `    this is a new candidate, not applied — import it explicitly, then accept the new digest separately`
+      )
+    }
+    if (entry.status === 'package-missing') return `  ${entry.skillId}  package not held in this machine's library — cannot check`
+    if (entry.status === 'unsupported-source') return `  ${entry.skillId}  source has no update check defined yet`
+    return `  ${entry.skillId}  could not check: ${entry.detail}`
+  })
+  return { stdout: `${lines.join('\n')}\n`, exitCode: 0 }
+}
+
+/** The candidate's current upstream revision, resolved the same way `inspectCandidate` pins one — never applied, only reported. */
+async function resolveGithubHeadSha(repository: string, deps: CliDeps): Promise<string> {
+  const repoBody = await fetchJsonBounded(`https://api.github.com/repos/${repository}`, deps)
+  const defaultBranch = isRecordCli(repoBody) && typeof repoBody.default_branch === 'string' ? repoBody.default_branch : 'HEAD'
+  const commitBody = await fetchJsonBounded(`https://api.github.com/repos/${repository}/commits/${encodeURIComponent(defaultBranch)}`, deps)
+  const sha = isRecordCli(commitBody) && typeof commitBody.sha === 'string' ? commitBody.sha : null
+  if (sha === null) throw new Error(`could not resolve the current revision for "${repository}"`)
+  return sha
 }
 
 /** A comma-separated list, where the empty string is the empty list — mirrors `asList` above. */

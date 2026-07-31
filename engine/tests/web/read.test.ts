@@ -657,7 +657,7 @@ describe('read', () => {
     })
 
     it('answers with empty arrays for a machine with no library and a project with no acceptances', async () => {
-      expect(await readSkillsView(project.dir)).toEqual({ packages: [], acceptances: [] })
+      expect(await readSkillsView(project.dir)).toEqual({ packages: [], unreadable: [], acceptances: [] })
     })
 
     it('reports every library package and this project\'s own acceptances', async () => {
@@ -670,6 +670,21 @@ describe('read', () => {
       expect(view.acceptances).toHaveLength(1)
       expect(view.acceptances[0]?.skillId).toBe('flutter-widgets')
       expect(view.acceptances[0]?.status).toBe('active')
+      expect(view.unreadable).toEqual([])
+    })
+
+    it('reports an unreadable digest directory rather than dropping it — evidence an import can now leave behind', async () => {
+      const dataHome = process.env.MJLOOP_DATA_HOME
+      if (dataHome === undefined) throw new Error('expected MJLOOP_DATA_HOME to be set by beforeEach')
+      const corruptDigest = 'b'.repeat(64)
+      const corruptDir = path.join(dataHome, 'packages', corruptDigest)
+      await fs.mkdir(corruptDir, { recursive: true })
+      await fs.writeFile(path.join(corruptDir, 'package.json'), '{"schema":1}', 'utf8')
+
+      const view = await readSkillsView(project.dir)
+      expect(view.packages).toEqual([])
+      expect(view.unreadable).toHaveLength(1)
+      expect(view.unreadable[0]?.digest).toBe(corruptDigest)
     })
   })
 

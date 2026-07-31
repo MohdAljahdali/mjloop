@@ -660,13 +660,178 @@ acceptances — with no new write kind and no new locale string, because accepti
 is a decision that changes what every later run is told, which is exactly the class of
 write the browser is permanently denied everywhere else in this system too.
 
-**Two seams still open, honestly.** Nothing imports a package yet — discovery from
-`github`/`registry`/`web`, the static inspection, and the sandboxed execution are the next
-story — so the library is empty on every machine today, and `skills accept` has nothing
-real to accept. And `acceptSkill` refuses any package whose audit state is not `passed`;
-nothing shipped in this release can produce that state, so today no package can be accepted
-through the ordinary path at all. Both are correct for where this story stops, not bugs to
-route around.
+**`acceptSkill` refuses any package whose audit state is not `passed`.** Discovery, static
+inspection, and the sandbox — the next section — are what finally let a package earn that
+state; before they existed, the library was empty on every machine and `skills accept` had
+nothing real to accept. That is no longer true, and the next section is why.
+
+## External discovery, inspection, and the sandbox
+
+This is how a package gets from "somewhere out there" to `audit.state: 'passed'` — or, far
+more often, to a plainly stated reason it did not. The whole pipeline is a sequence of
+refusals: each phase either produces evidence or refuses outright and says exactly why.
+Nothing here retries silently, fills a gap with a guess, or claims a boundary it does not
+have.
+
+### Which sources are allowed, and how to change it
+
+`orchestration.skills.sources` (above) is the allowlist: any subset of `github`, `registry`,
+`web`, defaulting to `[github]`. Every command that reaches outside this project —
+`skills search`, `skills inspect`, `skills import` and `skills check-updates` — refuses a
+source this project has not enabled, before a single request goes out, naming the setting and
+the command that changes it:
+
+```bash
+mjloop-cli config set orchestration.skills.sources 'github,registry'
+```
+
+General web search is opt-in and off by default. It is not enough to ask `skills search
+--source web`; the project's own config has to have added `web` to `sources` first — and
+today, even once it has, no web search provider is wired up in this build, so the search is
+refused with that reason stated plainly rather than a result faked to look real. `registry`
+draws on `orchestration.skills.trusted_registries` (`https://` only; the schema already
+refuses `registry` with an empty list, see above).
+
+### A candidate is a search result, and nothing more
+
+```
+skills search <query> [--source github|registry|web] [--dir <path>] [--json]
+```
+
+returns metadata only — `{ source, url, repository, ref, skillName, description, stars? }` —
+where a package claims to live, not its content. Nothing here is written to the library, and
+no candidate can ever reach skill selection: the only path from a search result to something a
+project can use runs through `skills inspect` and then a passed sandbox. A connector never
+follows a redirect to a different host than the one it requested — the candidate's own
+`url`/`repository`/`ref` are what this pipeline trusts, never wherever a response claims to
+have been redirected to.
+
+### Pin first, then fetch
+
+```
+skills inspect <url> [--ref <ref>] [--dir <path>] [--json]
+```
+
+is where a candidate becomes evidence. In order:
+
+1. **The ref is pinned to an immutable commit sha through the API before a single byte of
+   content is fetched.** A moving ref — commonly a branch — fetched twice is two different
+   packages wearing one name; pinning first means the sha in the report is the sha every
+   later byte actually came from.
+2. **The tree is fetched under hard caps**, each an outright refusal naming the cap, never a
+   silent truncation: 500 entries, 200,000 bytes per file — checked against the *decoded*
+   bytes, never a declared size field, because a zip-bomb-shaped blob understates exactly that
+   field — 5,000,000 bytes total, and a path nested no deeper than 12 segments. GitHub's own
+   `truncated: true` on an over-large tree is treated as exceeding the cap too, never accepted
+   as a partial list.
+3. **A hostile path is refused the moment its name first appears** — absolute, containing
+   `..`, or starting with a separator — before anything is written anywhere. A symlink entry
+   is fetched here as inert text, the same as any other blob; `writePackage`'s existing
+   symlink refusal is what stops one from ever becoming a real file, and this phase does not
+   duplicate that rule.
+4. **`SKILL.md` is parsed for a `name` and `description`.** A package with no `SKILL.md`, or
+   whose frontmatter is missing either field, is not a skill and is refused.
+5. **A missing license blocks acceptance.** An SPDX id in frontmatter or a recognised
+   `LICENSE` file satisfies it; neither present is a finding that blocks, exactly like a
+   missing `SKILL.md`.
+6. Executable content is classified — a shebang, an executable extension (`.sh .bash .zsh .py
+   .js .mjs .cjs .ts .rb .pl .ps1`), or a `package.json` declaring `scripts` — and dependencies
+   are inventoried from whatever manifests are present. Both are read, never run: classifying
+   a file by its shebang line is reading a byte, not executing it.
+7. A sha256 digest is computed over the canonical sorted content — the same digest the
+   library addresses a package by.
+
+A report that hit a blocking finding says so, carries every finding it could still determine
+alongside the reason, and offers exactly one thing to do next: a **user-initiated** `search
+alternative` action. Nothing here searches again on its own.
+
+### The sandbox — and what it is not
+
+**A bare child process with a scrubbed environment is not a sandbox.** It can still read the
+filesystem, open sockets, and write anywhere the user can — calling that isolation would be
+exactly the false claim this pipeline exists to refuse. The sandbox only counts when it is a
+real isolation mechanism this machine can detect: `sandbox-exec` on darwin, `bwrap`
+(bubblewrap) on linux. Nothing else counts.
+
+- **No executable content** (the common case — most skills are markdown): the sandbox is
+  skipped outright, recorded as `{ state: 'skipped', reason: 'no executable content' }`, and
+  the package is acceptable with no backend at all.
+- **Executable content, a backend detected**: only the checks the package itself declares —
+  `mjloop.smoke` in `SKILL.md` frontmatter, each a bare argv array, never a shell string — run
+  inside that backend, in a disposable temp directory holding only the package's own content;
+  an environment scrubbed to exactly `PATH`, `HOME` (repointed at the temp directory), and
+  `LANG`, with nothing else inherited from the parent process; no network (the backend's own
+  isolation denies it outright, not merely by omission); a hard 30-second timeout that kills
+  the check rather than waiting on it; and output capped and labelled, never the raw stream.
+  Passing every declared check earns `{ state: 'passed' }`; any non-zero exit or timeout earns
+  `{ state: 'failed' }`.
+- **Executable content, no backend detected**: `{ state: 'unavailable', reason }`, naming the
+  backend (`sandbox-exec` or `bwrap`) that would let this machine verify it — and **the package
+  cannot be accepted here**. This is the honest outcome on a machine with neither tool; running
+  the package unsandboxed to find out anyway is never an acceptable substitute, and this
+  pipeline does not do it.
+
+What "isolation" covers, precisely, because a boundary you cannot describe is one you cannot
+rely on: the check may **write** only inside its own disposable directory, may not reach the
+network at all, and may **read** only that directory plus the fixed system paths an executable
+needs to launch (`/usr`, `/bin`, `/sbin`, `/opt`, `/System`, `/dev`). Your project checkout,
+your home directory, and your credential files are not readable from inside a check on either
+backend — which matters, because whatever a check prints is captured into the report that
+`skills inspect --json` shows you. The backend binary itself is invoked by the absolute path
+detection verified, never by a bare name `PATH` could resolve to something else.
+
+The 30-second per-check timeout kills the check's whole process group, so nothing a check
+starts in the background outlives it, and the sandbox phase as a whole is bounded too — a
+package cannot multiply the runtime it was granted by declaring more checks.
+
+Be plain about what this means for you: a report saying `sandbox: passed` verified only what
+its declared checks exercised, run once, on this machine, inside this backend's isolation. It
+is not a general guarantee the package is safe to run outside a smoke check, and it says
+nothing about a package this machine could not sandbox at all — that one is refused, not
+vouched for.
+
+`audit.state` becomes `'passed'` only when inspection found nothing blocking **and** the
+sandbox state is `'passed'` or `'skipped'`. Every other combination — including
+`'unavailable'` — is `'failed'`.
+
+### Import fills the library; acceptance is still your decision
+
+```
+skills import <url> [--ref <ref>] [--dir <path>]
+```
+
+runs the same pipeline and, only on a passed audit, writes the package into this machine's
+shared library through `writePackage` — the same content-addressed store the skill library
+section above describes. **It does not accept the package into this project.** That stays the
+separate, explicit `skills accept <digest>` decision, and the command's own output says so and
+prints the digest to accept:
+
+```
+imported "<name>" at digest <digest>
+this writes the package into this machine's library only — it is not yet accepted into this project.
+accept it with: mjloop-cli skills accept <digest>
+```
+
+A failed audit writes nothing, exits non-zero, and prints the same report `skills inspect`
+would have.
+
+Import also re-hashes the bytes it is about to store and refuses unless they are exactly the
+bytes the audit was computed from. Staging fetches the pinned revision a second time, and a
+second answer from a source is not self-evidently the first answer repeated — so a source that
+served one tree to inspection and another to staging is refused by name, and nothing is
+written. The digest a package is stored under always describes the content stored under it.
+
+### An upstream change is a candidate, never a replacement
+
+```
+skills check-updates [--dir <path>] [--json]
+```
+
+resolves each acceptance's source to its current revision — except one whose `updatePolicy` is
+`pinned`, which is not even checked, by design; the story is explicit that this policy never
+moves. A different sha is reported as `new-candidate`, never imported and never accepted
+automatically: the accepted digest stays exactly what it was, and picking up the change means
+importing and accepting it yourself, the same as any other candidate.
 
 ## Plans and stories
 

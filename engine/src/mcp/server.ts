@@ -815,8 +815,20 @@ export function buildServer(): McpServer {
           // execute anything under a package's `content/`, and this branch
           // adds no write of its own — activating a skill stays
           // `mjloop-cli skills accept`'s decision, made by a person.
+          //
+          // `packages` is where S07's import reports actually land: `mjloop-cli
+          // skills import` only ever writes a package once its audit has
+          // passed, so `audit.state`, `audit.findings` (inspection's findings
+          // plus one line recording the sandbox outcome — see
+          // `cli/index.ts#sandboxFinding`), `license`, and `source.revision`
+          // here already are the import report, not a separate projection of
+          // it. `unreadable` names a digest directory this walk could not turn
+          // into a record — surfaced rather than dropped, the same reason
+          // `mjloop-cli skills list` shows it, and newly meaningful now that
+          // `skills import` can actually write real content into this
+          // machine-wide directory.
           const [library, acceptances] = await Promise.all([listPackages(dir), listAcceptances(dir)])
-          return ok({ packages: library.packages, acceptances })
+          return ok({ packages: library.packages, unreadable: library.unreadable, acceptances })
         }
         return ok(await readTelemetry(dir, limit === undefined ? {} : { limit }))
       }),

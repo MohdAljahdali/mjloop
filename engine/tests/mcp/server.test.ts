@@ -832,6 +832,7 @@ describe('tool behaviour', () => {
       expect((result as { isError?: boolean }).isError).not.toBe(true)
       const skills = JSON.parse(textOf(result))
       expect(skills.packages).toEqual([])
+      expect(skills.unreadable).toEqual([])
       expect(skills.acceptances).toEqual([])
     })
 
@@ -852,6 +853,23 @@ describe('tool behaviour', () => {
       // this projection reports the library and the (empty) acceptance list
       // as two separate facts rather than inferring one from the other.
       expect(skills.acceptances).toEqual([])
+    })
+
+    it('reports an unreadable digest directory beside the packages it could read — evidence an import left behind', async () => {
+      await client.callTool({ name: 'mjloop_init', arguments: { project_dir: project.dir } })
+      const corruptDigest = 'b'.repeat(64)
+      const corruptDir = path.join(dataHome, 'packages', corruptDigest)
+      await fs.mkdir(corruptDir, { recursive: true })
+      await fs.writeFile(path.join(corruptDir, 'package.json'), '{"schema":1}', 'utf8')
+
+      const result = await client.callTool({
+        name: 'mjloop_report_get',
+        arguments: { project_dir: project.dir, report: 'skills' },
+      })
+      expect((result as { isError?: boolean }).isError).not.toBe(true)
+      const skills = JSON.parse(textOf(result))
+      expect(skills.unreadable).toHaveLength(1)
+      expect(skills.unreadable[0].digest).toBe(corruptDigest)
     })
   })
 })

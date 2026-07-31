@@ -120,10 +120,32 @@ it is skipped by name rather than failing the run. Acceptance is per project, an
 one project's acceptance touches nothing else — not the package, not another project's
 record. `mjloop-cli skills list|accept|disable|enable|remove` is the one route in; the
 cockpit's `/api/skills` only ever reports the library and this project's acceptances and
-never activates one. Nothing imports a package yet — discovery, static audit, and the
-sandbox are the next story — so the library starts empty on every machine, and `skills
-accept` refuses any package whose audit has not passed, which today is every package there
-is; that is by design, not a bug to route around.
+never activates one. `skills accept` refuses any package whose audit has not passed —
+discovery, static audit, and the sandbox below are what finally lets one earn that state.
+
+Latest — **a discovered package can now earn a passed audit, or be told exactly why not.**
+The whole pipeline is a sequence of refusals. `mjloop-cli skills search <query> [--source
+github|registry|web]` returns metadata-only candidates — where a package claims to live, not
+its content — from `orchestration.skills.sources` (`[github]` by default); a source the
+project has not enabled is refused before a single request goes out, naming the setting and
+`mjloop-cli config set orchestration.skills.sources ...` as the fix. General web search stays
+off until a project opts in itself. `mjloop-cli skills inspect <url>` pins the candidate's ref
+to an immutable commit sha through the API before fetching a single byte, then fetches its
+tree under hard caps — entry count, per-file and total bytes, path depth — each an outright
+refusal naming the cap, never a silent truncation; refuses a traversing or absolute path the
+moment its name first appears; requires `SKILL.md` to parse into a name and description; and
+blocks on a missing license exactly as it blocks on a missing `SKILL.md`. Executable content —
+a shebang, an executable extension, a `package.json` with `scripts` — is classified by reading
+it, never by running it, and can only earn `'passed'` by running its own declared
+`mjloop.smoke` checks inside a real isolation backend this machine can detect, `sandbox-exec`
+on darwin or `bwrap` on linux; **a bare scrubbed child process is not that backend**, and with
+neither tool present the package is `'unavailable'` and refused outright, never run
+unsandboxed to find out. `mjloop-cli skills import <url>` writes a passed package into the
+library — it still does not accept it into the project, which stays `skills accept
+<digest>`'s job — and `mjloop-cli skills check-updates` reports an upstream change as a new
+candidate, never moving an already-accepted digest and never importing or accepting it on its
+own. A failed candidate offers exactly one thing to do next: a user-initiated search for a
+different one.
 
 ## Install
 

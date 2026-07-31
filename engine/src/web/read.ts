@@ -25,7 +25,7 @@ import { resolveLoopPaths } from '../store/paths.js'
 import { findPlanDir, listStories } from '../store/plan-store.js'
 import { readAcceptedProfile, readProposedProfile } from '../store/project-profile-store.js'
 import { listAcceptances } from '../store/skill-acceptance-store.js'
-import { listPackages } from '../store/skill-library-store.js'
+import { listPackages, type UnreadablePackage } from '../store/skill-library-store.js'
 import type { ProjectSkillAcceptance } from '../schemas/skill-acceptance.js'
 import type { SkillPackage } from '../schemas/skill-library.js'
 import { StateStore } from '../store/state-store.js'
@@ -197,8 +197,26 @@ function componentFingerprint(components: readonly ProjectComponent[]): string {
 /* ── the shared skill library and this project's acceptances ─────────────── */
 
 export interface SkillsView {
-  /** Every package this machine's library holds — source, revision, license, audit. */
+  /**
+   * Every package this machine's library holds — source, revision, license,
+   * audit. Once S07's `mjloop-cli skills import` has run, this *is* the
+   * import report: `audit.state`/`audit.findings` carry inspection's
+   * findings plus one line recording the sandbox outcome (see
+   * `cli/index.ts#sandboxFinding`), because `writePackage` is only ever
+   * reached from a passed audit — there is no separate "import report" object
+   * to project alongside the package it produced.
+   */
   packages: SkillPackage[]
+  /**
+   * A digest directory this walk could not turn into a record, and why.
+   *
+   * Surfaced rather than dropped, the same reason `mjloop-cli skills list`
+   * shows it — and newly meaningful now that `skills import` can actually
+   * write real content into this machine-wide directory, so an entry here can
+   * be evidence of an interrupted or corrupted import rather than only ever
+   * being another project's problem.
+   */
+  unreadable: UnreadablePackage[]
   /** This project's own acceptances — digest, components, agents, policy, status. */
   acceptances: ProjectSkillAcceptance[]
 }
@@ -223,11 +241,10 @@ export async function readSkillsView(projectDir: string): Promise<SkillsView> {
   // `listPackages` reports the entries it could not read rather than throwing
   // on them, which is what keeps one damaged import — possibly another
   // project's, since the library is machine-wide — from turning this whole
-  // read into a 500. The cockpit shows the library it can read; naming an
-  // unreadable entry is `mjloop-cli skills list`'s job, where a person can act
-  // on it.
+  // read into a 500. `unreadable` carries exactly those entries through to the
+  // wire rather than silently dropping them.
   const [library, acceptances] = await Promise.all([listPackages(projectDir), listAcceptances(projectDir)])
-  return { packages: library.packages, acceptances }
+  return { packages: library.packages, unreadable: library.unreadable, acceptances }
 }
 
 /* ── feature briefs ───────────────────────────────────────────────────────── */
