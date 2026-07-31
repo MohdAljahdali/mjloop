@@ -56,6 +56,19 @@ Every key is defaulted and `discovery.mode` defaults to `off`, so an already-pro
 project's plan flow is unchanged by any of it. The cockpit's Config tab edits the block and
 shows the accepted component map read-only.
 
+Newer still — **a feature request can be interviewed before it is planned.** With
+`orchestration.discovery.mode` set to `always` — or to `ask`, which puts the choice to the
+user once and honours a no — `/mjloop:plan` runs the `mjloop-feature-discovery` skill first:
+it reads the accepted component map, the config, and the project's own documentation for
+itself rather than asking, then puts one decision at a time to the user — each with a
+recommended answer — up to `discovery.question_budget` questions, marking whatever the budget
+left unresolved as unresolved instead of guessing it. It stops at a draft brief for a person
+to approve, and plans against the brief they approved. It plans nothing, routes nothing, and
+starts nothing itself: the fit-check and the human approval gate still stand behind it,
+against the plan. The draft lives in the conversation for now — the records that persist a
+brief are not built yet — and the mode defaults to `off`, so `/mjloop:plan` in an existing
+project is unchanged.
+
 ## Install
 
 ```bash

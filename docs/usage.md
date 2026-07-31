@@ -81,6 +81,90 @@ as its work.
 Finally `story-writer` breaks the plan into stories with checkable acceptance criteria,
 and `story-critic` reviews each one.
 
+The track can be preceded by an interview. Under `orchestration.discovery.mode` this command
+first asks whether the request is understood well enough to plan at all — see **Feature
+discovery** below. The setting defaults to `off`, so a project that has not changed it gets
+exactly the command described here.
+
+## Feature discovery
+
+`/mjloop:plan` can interview you before it plans, with the **mjloop-feature-discovery**
+skill. The interview has one output: a draft brief you approve or send back.
+
+It asks about decisions and nothing else. Anything the project can already answer — the
+accepted component map, `.mjloop/config.yaml`, the project's own documentation, the code the
+request lands in — it reads for itself rather than asking you. A question whose answer is
+already in the repository spends your attention on something the interview could have looked
+up, and it spends it from a budget that is not refilled.
+
+It asks **one question per turn** and waits for your answer before choosing the next, and
+every question carries its recommended answer and a sentence of why. Both halves are
+deliberate: a batch of six questions gets a paragraph that answers two and leaves the rest
+unclear, and a question with no recommendation hands the analysis back to the person the
+interview exists to serve. The recommendation is also what makes disagreement cheap — "no,
+the other one, because —" is a faster and more precise answer than an open question ever
+gets.
+
+Then it stops. Discovery does not plan, does not choose which agents or skills the work
+needs, writes no story, edits no code, and starts no run. It presents a draft — a title, the
+problem in your own terms, each decision with the answer you gave, acceptance criteria, and
+the affected component ids taken from the accepted map rather than invented — and waits.
+Approval is your word, and the plan track then opens against the brief you approved rather
+than against a restatement of your original sentence.
+
+### The three modes
+
+`orchestration.discovery.mode` decides whether any of that happens, and the choice belongs to
+the project rather than to a judgement made per invocation:
+
+| Mode | What `/mjloop:plan` does |
+|---|---|
+| `always` | interviews first, every time, and plans against the approved brief |
+| `ask` | puts the choice to you once, with a recommendation, and honours your answer |
+| `off` | goes straight to the plan track — **the default** |
+
+`off` is the default because it is the only value that leaves an existing project alone: a
+project that gains this block gets exactly the `/mjloop:plan` it had before. Change it when
+the project decides to, in writing:
+
+```
+/mjloop:config set orchestration.discovery.mode ask
+```
+
+or the same write from a shell:
+
+```bash
+mjloop-cli config set orchestration.discovery.mode ask
+```
+
+A per-feature choice you state plainly — *skip the questions*, *interview me on this one
+first* — overrides the project default in either direction, for that one request. It is
+recorded where it happened, so that nobody later mistakes a one-off for the project's policy.
+
+### The question budget
+
+`orchestration.discovery.question_budget` bounds the interview: a whole number, 1–20,
+defaulting to 8. It is a ceiling and not a target, and an interview that reaches a shared
+understanding in three questions is finished at three.
+
+When the budget is spent the interview stops asking and presents what it has, marking every
+decision that stayed unresolved as unresolved, with the options it would have put to you. It
+does not spend a last question guessing the rest. An unresolved decision is a real output: it
+tells the plan track exactly where it must not assume, and it tells you what a second,
+shorter interview would be about. A guess recorded as an answer is indistinguishable from a
+decision you made, and is found much later by whoever built on it.
+
+### The draft is not stored yet
+
+The brief lives in the conversation, and so does your approval of it. There is no
+feature-brief record on disk, no directory under `.mjloop/` that holds one, and no engine
+operation that creates or approves one — those arrive with the feature-brief records, which
+this version does not have yet, and until then a brief does not outlive the session that
+produced it.
+
+That is written down rather than left to be found out, because the alternative is worse than
+the gap itself: documentation describing a file nobody writes sends you looking for it.
+
 ## While a run is going
 
 ```
@@ -112,7 +196,6 @@ run reaches `done` or `halted`, the server closes that session and starts the ne
 a fresh one — a clean context per story, which is what makes long queues behave.
 
 Two things worth knowing:
-
 - **The url contains an access token.** Anyone who has it can run commands in your
   project. Do not paste it anywhere. Each server start issues a new one, and the server
   listens on `127.0.0.1` only.
@@ -182,14 +265,6 @@ approving its own plan under `human` is not.
 carries itself to completion without you pressing enter. It extends nothing: the same
 guards end the run in the same place.
 
-## Plans and stories
-
-A plan lives in `.mjloop/plans/P001-<slug>/`:
-
-```
-PLAN.md          the plan, authored — its frontmatter carries the approval
-REVIEW.md        plan-critic's output
-manifest.json    generated from the story files — never hand-edited
 ### `orchestration` — what the loop settles on its own
 
 `/mjloop:init` writes this block too, and every key in it is defaulted. A `config.yaml`
@@ -236,6 +311,10 @@ orchestration:
 behaving exactly as it did before this block existed. Any other default would change what
 the command does in every already-provisioned project the moment the engine is upgraded —
 and that is a decision a project makes for itself, once, in writing.
+
+`always` and `ask` are the two values that turn the interview on, and **Feature discovery**
+above is what they turn on — including what it refuses to do, which a table of accepted
+values cannot say.
 
 Two combinations are refused when the document is parsed, each because it is a setting
 that could never take effect and would fail silently:
@@ -380,6 +459,14 @@ there. Accepting a map activates routing for every later run, which is exactly t
 of write the browser is permanently denied — so it reports the difference and never
 resolves it.
 
+## Plans and stories
+
+A plan lives in `.mjloop/plans/P001-<slug>/`:
+
+```
+PLAN.md          the plan, authored — its frontmatter carries the approval
+REVIEW.md        plan-critic's output
+manifest.json    generated from the story files — never hand-edited
 stories/         one markdown file per story
 ```
 

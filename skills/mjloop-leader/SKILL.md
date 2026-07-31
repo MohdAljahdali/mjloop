@@ -206,6 +206,20 @@ supported. A hypothesis that was never actually tested must not be recorded as d
 
 ### 3d. Running the plan track
 
+When the project's discovery policy required one, the input to this track is the **approved
+brief**, not the sentence that produced it. `/mjloop:plan` reads
+`orchestration.discovery.mode` and enters discovery before you are invoked; what reaches you
+is what the user answered. Plan against its problem statement, its decisions, its acceptance
+conditions and its component ids as they stand, and put them in `planner`'s brief verbatim
+for the same reason a story's acceptance criteria go in verbatim: a restatement is your
+reading of the decisions, and the plan then gets checked against your reading rather than
+against theirs. A decision the brief marks unresolved is not yours to resolve either — name
+it in the plan as open, and let the approval gate be the place a person closes it.
+
+You do not conduct that interview, and you do not re-open it. A leader that asked again
+would be asking a person to decide the same thing twice, and the second answer would silently
+win.
+
 The plan track has no `verifier`, because there is no suite to run against a document.
 Do not read that as a missing verdict: its cycle passes when `fit-checker` passes, the
 approval gate is open, and every story `story-critic` examined came back clean.
@@ -465,4 +479,8 @@ If the run halts, say so plainly and stop.
 - Never record a plan approval that a person did not give. `gates.plan_approval: auto`
   exists for projects that do not want a human in the loop; using it is honest, and
   self-approving under `human` is not.
+- Never run feature discovery yourself, and never let a brief do your job. Discovery asks
+  the user for decisions and stops; a leader that interviewed would ask a person to decide
+  twice, and one that let a brief pick the components, choose the skills, write a story or
+  open a run would have routed and started the work before either gate had seen a plan.
 - Never let `plan-critic` or `story-critic` edit what it reviewed.
