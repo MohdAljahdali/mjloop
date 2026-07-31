@@ -97,6 +97,10 @@ export function drawRail(snapshot) {
   }
 
   show(node['stop'], snapshot.session.jobId !== null)
+  // Already closing: the ladder owns the timings from here, and a second press
+  // would only look like one that did nothing.
+  const stop = node['stop']
+  if (stop !== undefined) flag(stop, 'disabled', snapshot.session.closing)
   // Only offered while there is a run to halt: halting a finished run is not
   // something the engine has a meaning for.
   show(node['halt'], state.status === 'running')

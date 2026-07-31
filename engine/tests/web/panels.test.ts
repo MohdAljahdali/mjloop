@@ -14,7 +14,10 @@ import { suggestions } from '../../src/web/public/panels/launcher.js'
 import { mountToasts, toast } from '../../src/web/public/ui/toasts.js'
 import { emptySnapshot, loadPage, readLocale } from './helpers/page.js'
 import { ConfigSchema } from '../../src/schemas/config.js'
-import type { PlanView, StoryView } from '../../src/web/protocol.js'
+import { ConfigChangeSchema } from '../../src/store/config-mutation.js'
+import type { ProfileView } from '../../src/web/read.js'
+import type { Job, PlanView, StoryView } from '../../src/web/protocol.js'
+import type { StoryDetail } from '../../src/web/read.js'
 
 /**
  * The milestone's own claim, asserted: everything the server already sends
@@ -31,6 +34,17 @@ const story = (patch: Partial<StoryView> & { id: string }): StoryView => ({
   status: 'todo',
   ui: false,
   depends_on: [],
+  ...patch,
+})
+
+/** A story as the read api serves it: frontmatter the manifest does not carry. */
+const detailStory = (patch: Partial<StoryDetail> & { id: string }): StoryDetail => ({
+  title: 'A story',
+  status: 'todo',
+  ui: false,
+  depends_on: [],
+  acceptance: [],
+  evidence: null,
   ...patch,
 })
 
@@ -96,6 +110,38 @@ function configView(patch: Record<string, unknown> = {}): unknown {
   }
 }
 
+/**
+ * What `/api/profile` serves, typed against the reader that serves it. A field
+ * renamed on the engine side is a compile error here rather than a slot that
+ * quietly goes blank on the Config tab.
+ */
+function profileView(patch: Partial<ProfileView> = {}): ProfileView {
+  return {
+    revision: 2,
+    acceptedAt: '2026-07-28T09:00:00.000Z',
+    acceptedBy: 'dashboard:mohd',
+    components: [
+      {
+        id: 'apps-mobile',
+        root: 'apps/mobile',
+        technology: 'flutter',
+        verification: { test: 'cd apps/mobile && flutter test', lint: null, build: null },
+        skillTags: ['flutter'],
+      },
+      {
+        id: 'web',
+        root: 'web',
+        technology: 'nextjs',
+        verification: { test: 'cd web && npm test', lint: 'cd web && npm run lint', build: null },
+        skillTags: ['nextjs'],
+      },
+    ],
+    proposedAt: null,
+    proposalDiffers: false,
+    ...patch,
+  }
+}
+
 const cells = (selector: string): (string | null)[] =>
   [...document.querySelectorAll(selector)].map((node) => node.textContent)
 
@@ -141,32 +187,64 @@ describe('plans', () => {
     mounted.toggle('P001')
   })
 
-  it('draws the status as a word and names what a story waits on', () => {
-    reveal('panel-plans')
-    mountPlans()
-    draw(
-      emptySnapshot({
-        plans: [
-          plan({
-            id: 'P001',
-            stories: [story({ id: 'P001-S01', status: 'done' }), story({ id: 'P001-S02', depends_on: ['P001-S01'] })],
-          }),
+  it('draws each story once, in the open plan, with its status as a word', async () => {
+    // Once, and only in the detail. They used to be drawn inline under every
+    // plan row as well, which is what made a plan of twenty-two unreadable.
+    serve({
+      '/api/plans/P001': {
+        id: 'P001',
+        title: 'A plan',
+        approval: null,
+        body: '',
+        review: null,
+        stories: [
+          detailStory({ id: 'P001-S01', status: 'done', evidence: '2026-07-28-001' }),
+          detailStory({ id: 'P001-S02', depends_on: ['P001-S01'] }),
         ],
-      }),
-    )
+      },
+    })
+    reveal('panel-plans')
+    const mounted = mountPlans()
+    const snapshot = emptySnapshot({
+      plans: [
+        plan({
+          id: 'P001',
+          stories: [story({ id: 'P001-S01', status: 'done' }), story({ id: 'P001-S02', depends_on: ['P001-S01'] })],
+        }),
+      ],
+    })
+    draw(snapshot)
 
-    const rows = document.querySelectorAll('#plans-list .story')
-    expect(rows).toHaveLength(2)
+    expect(document.querySelectorAll('#plans-list .story')).toHaveLength(0)
+
+    mounted.toggle('P001')
+    await vi.waitFor(() => expect(document.querySelectorAll('#plan-detail-stories .story')).toHaveLength(2))
+
+    const rows = document.querySelectorAll('#plan-detail-stories .story')
     expect(rows[0]?.querySelector('.story-status')?.textContent).toBe('done')
     expect(rows[1]?.querySelector('.story-status')?.textContent).toBe('todo')
     // Its one dependency is satisfied, so it is buildable and says nothing.
     expect((rows[1]?.querySelector('.waits') as HTMLElement).hidden).toBe(true)
-    expect((rows[1]?.querySelector('button') as HTMLButtonElement).disabled).toBe(false)
+    expect((rows[1]?.querySelector('[data-act="build"]') as HTMLButtonElement).disabled).toBe(false)
+    // The action is a word, not a `+`.
+    expect(rows[1]?.querySelector('[data-act="build"]')?.textContent).toBe(english['plans.buildAction'])
+
+    mounted.toggle('P001')
   })
 
-  it('disables the build button and says why when a dependency is unmet', () => {
+  it('disables the build button and says why when a dependency is unmet', async () => {
+    serve({
+      '/api/plans/P001': {
+        id: 'P001',
+        title: 'A plan',
+        approval: null,
+        body: '',
+        review: null,
+        stories: [detailStory({ id: 'P001-S01' }), detailStory({ id: 'P001-S02', depends_on: ['P001-S01'] })],
+      },
+    })
     reveal('panel-plans')
-    mountPlans()
+    const mounted = mountPlans()
     draw(
       emptySnapshot({
         plans: [
@@ -177,12 +255,100 @@ describe('plans', () => {
         ],
       }),
     )
+    mounted.toggle('P001')
+    await vi.waitFor(() => expect(document.querySelectorAll('#plan-detail-stories .story')).toHaveLength(2))
 
-    const second = document.querySelectorAll('#plans-list .story')[1] as HTMLElement
+    const second = document.querySelectorAll('#plan-detail-stories .story')[1] as HTMLElement
     const waits = second.querySelector('.waits') as HTMLElement
     expect(waits.hidden).toBe(false)
     expect(waits.textContent).toContain('P001-S01')
-    expect((second.querySelector('button') as HTMLButtonElement).disabled).toBe(true)
+    expect((second.querySelector('[data-act="build"]') as HTMLButtonElement).disabled).toBe(true)
+
+    mounted.toggle('P001')
+  })
+
+  it('filters the open plan down to what the reader asked for', async () => {
+    serve({
+      '/api/plans/P001': {
+        id: 'P001',
+        title: 'A plan',
+        approval: null,
+        body: '',
+        review: null,
+        stories: [
+          detailStory({ id: 'P001-S01', status: 'done', title: 'Rebaseline PROGRESS.md', evidence: 'r1' }),
+          detailStory({ id: 'P001-S02', title: 'Amend DECISIONS.md' }),
+        ],
+      },
+    })
+    reveal('panel-plans')
+    const mounted = mountPlans()
+    draw(
+      emptySnapshot({
+        plans: [
+          plan({
+            id: 'P001',
+            stories: [story({ id: 'P001-S01', status: 'done' }), story({ id: 'P001-S02' })],
+          }),
+        ],
+      }),
+    )
+    mounted.toggle('P001')
+    await vi.waitFor(() => expect(document.querySelectorAll('#plan-detail-stories .story')).toHaveLength(2))
+
+    const picker = document.getElementById('story-filter') as HTMLSelectElement
+    picker.value = 'ready'
+    picker.dispatchEvent(new Event('change'))
+    // `ready` is a status *and* a dependency check, which is the filter people
+    // actually want and the one no status column could offer.
+    expect(cells('#plan-detail-stories .story .story-id')).toEqual(['P001-S02'])
+
+    const query = document.getElementById('story-query') as HTMLInputElement
+    picker.value = ''
+    picker.dispatchEvent(new Event('change'))
+    query.value = 'progress'
+    query.dispatchEvent(new Event('input'))
+    expect(cells('#plan-detail-stories .story .story-id')).toEqual(['P001-S01'])
+
+    query.value = 'nothing matches this'
+    query.dispatchEvent(new Event('input'))
+    expect(document.querySelectorAll('#plan-detail-stories .story')).toHaveLength(0)
+    expect((document.getElementById('plan-stories-empty') as HTMLElement).hidden).toBe(false)
+    expect(document.getElementById('plan-stories-empty')?.textContent).toBe(english['plans.noMatch'])
+
+    mounted.toggle('P001')
+  })
+
+  it('names the buildable stories and marks the one that is next', () => {
+    reveal('panel-plans')
+    mountPlans()
+    draw(
+      emptySnapshot({
+        plans: [
+          plan({
+            id: 'P001',
+            stories: [
+              story({ id: 'P001-S01', title: 'First up' }),
+              story({ id: 'P001-S02', title: 'Also ready' }),
+              story({ id: 'P001-S03', depends_on: ['P001-S01'] }),
+            ],
+          }),
+        ],
+      }),
+    )
+
+    const rows = document.querySelectorAll('#plans-ready-list .ready-row')
+    expect(rows).toHaveLength(2)
+    // The title travels with the id. A `P001-S02` chip asked the reader to hold
+    // an id in their head and go and look it up.
+    expect(rows[0]?.querySelector('.story-title')?.textContent).toBe('First up')
+    expect(rows[0]?.querySelector('[data-slot="plan"]')?.textContent).toBe('P001')
+    expect((rows[0]?.querySelector('.tag.next') as HTMLElement).hidden).toBe(false)
+    expect((rows[1]?.querySelector('.tag.next') as HTMLElement).hidden).toBe(true)
+
+    // And the tally above it counts the same thing without being read row by row.
+    expect(document.getElementById('tally-ready')?.textContent).toBe('2')
+    expect(document.getElementById('tally-done')?.textContent).toBe('0')
   })
 
   it('counts an unknown dependency as unmet', () => {
@@ -573,31 +739,374 @@ describe('config', () => {
     // Drafted six times with nothing high or medium to show for it.
     expect(document.getElementById('telemetry-flagged')?.textContent).toContain('security')
   })
+
+  it('turns every orchestration control into the change vocabulary the server accepts', async () => {
+    serve({ '/api/config': configView() })
+
+    reveal('panel-config')
+    mountConfig()
+    draw(emptySnapshot())
+    // Waited on a *seeded* value rather than on the select, whose first option
+    // is already `off` before anything has been fetched at all.
+    await vi.waitFor(() =>
+      expect((document.getElementById('config-question-budget-input') as HTMLInputElement).value).toBe('8'),
+    )
+
+    const form = document.getElementById('config-editor') as HTMLFormElement
+    /** @see index.html — one control per orchestration leaf. */
+    const control = (id: string): HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement =>
+      document.getElementById(id) as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
+
+    // Seeded from the parsed document, which is what makes an untouched control
+    // emit nothing: this is the state the schema's defaults put on screen.
+    expect((control('config-question-budget-input') as HTMLInputElement).value).toBe('8')
+    expect((control('config-repair-attempts-input') as HTMLInputElement).value).toBe('1')
+    expect((control('config-source-github-input') as HTMLInputElement).checked).toBe(true)
+    expect((control('config-source-web-input') as HTMLInputElement).checked).toBe(false)
+    expect(collectConfigChanges(form, baselineConfig())).toEqual([])
+
+    ;(control('config-auto-accept-input') as HTMLInputElement).checked = true
+    // `always` before `auto-plan`: the two are one document-level rule —
+    // completion `auto-plan` under discovery `off` names a start nothing ever
+    // produces, and `ConfigSchema.superRefine` refuses the pair.
+    control('config-discovery-mode-input').value = 'always'
+    control('config-question-budget-input').value = '12'
+    control('config-discovery-completion-input').value = 'auto-plan'
+    control('config-after-approval-input').value = 'auto'
+    control('config-concurrency-input').value = 'parallel'
+    control('config-repair-attempts-input').value = '3'
+    ;(control('config-plan-review-input') as HTMLInputElement).checked = true
+    ;(control('config-independent-verify-input') as HTMLInputElement).checked = true
+    // The other whole-document rule: a `registry` source with nothing trusted
+    // admits no skill at all, so the panel can express the pair or neither.
+    ;(control('config-source-registry-input') as HTMLInputElement).checked = true
+    control('config-registries-input').value = 'https://skills.example.com\n\n'
+    control('config-update-mode-input').value = 'pinned'
+
+    const changes = collectConfigChanges(form, baselineConfig())
+    expect(changes).toEqual([
+      { kind: 'orchestration.profile.auto_accept', value: true },
+      { kind: 'orchestration.discovery.mode', value: 'always' },
+      { kind: 'orchestration.discovery.question_budget', value: 12 },
+      { kind: 'orchestration.discovery.completion', value: 'auto-plan' },
+      { kind: 'orchestration.execution.after_plan_approval', value: 'auto' },
+      { kind: 'orchestration.execution.uncertain_concurrency', value: 'parallel' },
+      { kind: 'orchestration.execution.repair_attempts', value: 3 },
+      { kind: 'orchestration.quality', key: 'independent_plan_review', value: true },
+      { kind: 'orchestration.quality', key: 'independent_verification', value: true },
+      { kind: 'orchestration.skills.sources', value: ['github', 'registry'] },
+      { kind: 'orchestration.skills.trusted_registries', value: ['https://skills.example.com'] },
+      { kind: 'orchestration.skills.update_mode', value: 'pinned' },
+    ])
+    // And every one of them is a change the wire actually admits. The panel
+    // shares no code with the server's schema, so this is the only place the
+    // two vocabularies are checked against each other.
+    for (const change of changes) {
+      expect(ConfigChangeSchema.safeParse(change).success, JSON.stringify(change)).toBe(true)
+    }
+  })
+
+  it('refuses a pair of orchestration settings the whole document would reject', async () => {
+    serve({ '/api/config': configView() })
+
+    reveal('panel-config')
+    mountConfig()
+    draw(emptySnapshot())
+    await vi.waitFor(() =>
+      expect((document.getElementById('config-question-budget-input') as HTMLInputElement).value).toBe('8'),
+    )
+
+    const save = document.getElementById('config-save') as HTMLButtonElement
+    const state = document.getElementById('config-editor-state') as HTMLElement
+    const move = (id: string, edit: (control: HTMLInputElement & HTMLSelectElement) => void): void => {
+      const control = document.getElementById(id) as HTMLInputElement & HTMLSelectElement
+      edit(control)
+      control.dispatchEvent(new Event('change', { bubbles: true }))
+    }
+
+    // `auto-plan` under a discovery mode of `off` names a start nothing ever
+    // produces. The server refuses the patch under the project lock and is
+    // right to — but it refuses it whole, so a person who moved eight settings
+    // would be told only that one of them was wrong.
+    move('config-discovery-completion-input', (control) => (control.value = 'auto-plan'))
+    expect(save.disabled).toBe(true)
+    expect(state.hidden).toBe(false)
+    expect(state.textContent).toBe(english['config.problem.autoPlanOff'])
+
+    // Switching discovery on is what makes the completion mean something, and
+    // the refusal has to lift the moment it does.
+    move('config-discovery-mode-input', (control) => (control.value = 'always'))
+    expect(save.disabled).toBe(false)
+    expect(state.hidden).toBe(true)
+
+    // The other pair, the same way round.
+    move('config-source-registry-input', (control) => (control.checked = true))
+    expect(save.disabled).toBe(true)
+    expect(state.textContent).toBe(english['config.problem.registryUntrusted'])
+
+    move('config-registries-input', (control) => (control.value = 'https://skills.example.com'))
+    expect(save.disabled).toBe(false)
+    expect(state.hidden).toBe(true)
+  })
+
+  it('refuses a trusted registry the wire schema would drop the whole frame over', async () => {
+    serve({ '/api/config': configView() })
+
+    reveal('panel-config')
+    mountConfig()
+    draw(emptySnapshot())
+    await vi.waitFor(() =>
+      expect((document.getElementById('config-question-budget-input') as HTMLInputElement).value).toBe('8'),
+    )
+
+    const save = document.getElementById('config-save') as HTMLButtonElement
+    const state = document.getElementById('config-editor-state') as HTMLElement
+    const registries = document.getElementById('config-registries-input') as HTMLTextAreaElement
+    const type = (value: string): void => {
+      registries.value = value
+      registries.dispatchEvent(new Event('change', { bubbles: true }))
+    }
+
+    // Every other orchestration control is a select, a checkbox or a number
+    // input the browser itself constrains, so this textarea is the only one that
+    // can express a value `ConfigChangeSchema` refuses. A refused *change* is
+    // not a refused save: the server drops an unparseable frame without
+    // answering it, and this panel clears `saving` only from a receipt — so the
+    // save that carried it never settles and the editor is wedged until the tab
+    // is reloaded, taking every other setting edited in the same press with it.
+    type('http://registry.internal')
+    expect(save.disabled).toBe(true)
+    expect(state.hidden).toBe(false)
+    expect(state.textContent).toBe(english['config.problem.registryNotHttps'])
+
+    // One bad line among good ones is still the whole frame.
+    type('https://skills.example.com\nftp://mirror.internal\n')
+    expect(save.disabled).toBe(true)
+    expect(state.textContent).toBe(english['config.problem.registryNotHttps'])
+
+    type('https://skills.example.com\n\nhttps://mirror.internal\n')
+    expect(save.disabled).toBe(false)
+    expect(state.hidden).toBe(true)
+  })
+
+  it('will not save an orchestration edit onto a config that moved underneath it', async () => {
+    let served: unknown = configView()
+    vi.stubGlobal('fetch', (url: string) => {
+      const config = url.startsWith('/api/config')
+      return Promise.resolve(
+        new Response(JSON.stringify(config ? served : { error: { code: 'error.notFound' } }), {
+          status: config ? 200 : 404,
+        }),
+      )
+    })
+
+    reveal('panel-config')
+    mountConfig()
+    draw(emptySnapshot())
+    // Waited on a *seeded* value rather than on the select, whose first option
+    // is already `off` before anything has been fetched at all.
+    await vi.waitFor(() =>
+      expect((document.getElementById('config-question-budget-input') as HTMLInputElement).value).toBe('8'),
+    )
+
+    const mode = document.getElementById('config-discovery-mode-input') as HTMLSelectElement
+    mode.value = 'always'
+    mode.dispatchEvent(new Event('change', { bubbles: true }))
+    expect((document.getElementById('config-save') as HTMLButtonElement).disabled).toBe(false)
+
+    // Somebody else wrote `config.yaml` — a `mjloop-cli config set`, or another
+    // tab. The revision this editor holds is no longer the file's, so the save
+    // that would overwrite their choice is refused here rather than sent and
+    // refused by the mutator's compare-and-swap.
+    served = { ...(configView({ orchestration: { discovery: { mode: 'ask' } } }) as object), revision: 'b'.repeat(64) }
+    draw(emptySnapshot({ revisions: { ...emptySnapshot().revisions, config: 'moved' } }))
+    await vi.waitFor(() =>
+      expect((document.getElementById('config-editor-state') as HTMLElement).hidden).toBe(false),
+    )
+
+    expect(document.getElementById('config-editor-state')?.textContent).toBe(english['config.editorChanged'])
+    expect((document.getElementById('config-save') as HTMLButtonElement).disabled).toBe(true)
+    // The choice the other writer made is what the page now holds, not the one
+    // this editor was mid-way through.
+    expect((document.getElementById('config-reset') as HTMLButtonElement).disabled).toBe(false)
+  })
+
+  it('shows the accepted component map and offers no way to accept one', async () => {
+    serve({ '/api/config': configView(), '/api/profile': profileView() })
+
+    reveal('panel-config')
+    mountConfig()
+    draw(emptySnapshot())
+    await vi.waitFor(() => expect(document.querySelectorAll('#config-profile-list .component')).toHaveLength(2))
+
+    const record = document.getElementById('config-profile-record') as HTMLElement
+    expect(record.textContent).toContain('2')
+    expect(record.textContent).toContain('dashboard:mohd')
+
+    const first = document.querySelector('#config-profile-list .component') as HTMLElement
+    expect(first.querySelector('[data-slot="id"]')?.textContent).toBe('apps-mobile')
+    expect(first.querySelector('[data-slot="root"]')?.textContent).toBe('apps/mobile')
+    expect(first.querySelector('[data-slot="technology"]')?.textContent).toBe('flutter')
+    expect(first.querySelector('[data-slot="test"]')?.textContent).toBe('cd apps/mobile && flutter test')
+    // A component with no build command says so, for the same reason an unset
+    // `verify.build` does: it is the slot that will not run.
+    expect(first.querySelector('[data-slot="build"]')?.textContent).toBe(english['config.verifyUnset'])
+    expect(first.querySelector('[data-slot="tags"]')?.textContent).toBe('flutter')
+
+    expect((document.getElementById('config-profile-drift') as HTMLElement).hidden).toBe(true)
+    expect((document.getElementById('config-profile-empty') as HTMLElement).hidden).toBe(true)
+
+    // The whole point of the block. Accepting a component map activates routing
+    // for every later run, which `web/writes.ts` denies the browser outright —
+    // so there is nothing here to press.
+    expect(document.querySelectorAll('#config-profile-block button')).toHaveLength(0)
+    expect(document.querySelectorAll('#config-profile-block [data-act]')).toHaveLength(0)
+    expect(document.querySelectorAll('#config-profile-block input, #config-profile-block select')).toHaveLength(0)
+  })
+
+  it('says a newer scan disagrees, and never resolves the disagreement', async () => {
+    serve({
+      '/api/config': configView(),
+      '/api/profile': profileView({ proposedAt: '2026-07-30T09:00:00.000Z', proposalDiffers: true }),
+    })
+
+    reveal('panel-config')
+    mountConfig()
+    draw(emptySnapshot())
+    await vi.waitFor(() => expect((document.getElementById('config-profile-drift') as HTMLElement).hidden).toBe(false))
+
+    expect(document.getElementById('config-profile-drift')?.textContent).toContain('2026-07-30T09:00:00.000Z')
+    // Still the accepted map on screen: the proposal is what a rescan found,
+    // and nothing routes off it until somebody accepts it with a command.
+    expect(document.querySelectorAll('#config-profile-list .component')).toHaveLength(2)
+    expect(document.querySelectorAll('#config-profile-block button')).toHaveLength(0)
+  })
+
+  it('says a project has no accepted map rather than drawing an empty table', async () => {
+    // `/api/profile` 404s for a project nothing has ever mapped, and a 404 is
+    // an answer here — not a fetch this panel should keep waiting on.
+    serve({ '/api/config': configView() })
+
+    reveal('panel-config')
+    mountConfig()
+    draw(emptySnapshot())
+    await vi.waitFor(() => expect((document.getElementById('config-profile-empty') as HTMLElement).hidden).toBe(false))
+
+    expect(document.getElementById('config-profile-empty')?.textContent).toBe(english['config.profileNone'])
+    expect(document.querySelectorAll('#config-profile-list .component')).toHaveLength(0)
+    expect((document.getElementById('config-profile-record') as HTMLElement).hidden).toBe(true)
+  })
 })
 
+/** The document `configView()` serves, as `collectConfigChanges` compares against. */
+function baselineConfig(): ReturnType<typeof ConfigSchema.parse> {
+  return ConfigSchema.parse({
+    version: 1,
+    tracks: { build: { required: ['builder'], max_cycles: 5 }, edit: { required: ['builder'], max_cycles: 2 } },
+  })
+}
+
 describe('queue', () => {
+  const job = (patch: Partial<Job> & { id: string }): Job => ({
+    command: '/mjloop:build P001-S02',
+    status: 'queued',
+    reason: null,
+    startedAt: null,
+    endedAt: null,
+    ...patch,
+  })
+
   it('draws a job duration and its reason', () => {
     reveal('panel-queue')
     mountQueue()
     draw(
       emptySnapshot({
         queue: [
-          {
+          job({
             id: 'j1',
-            command: '/mjloop:build P001-S02',
             status: 'failed',
             reason: { code: 'job.failed.exit', params: { code: 1 } },
             startedAt: '2026-07-28T12:00:00.000Z',
             endedAt: '2026-07-28T12:03:12.000Z',
-          },
+          }),
         ],
       }),
     )
 
-    const row = document.querySelector('#queue-list .job') as HTMLElement
+    const row = document.querySelector('#queue-history .job') as HTMLElement
     expect(row.querySelector('.dur')?.textContent).toBe('3m 12s')
     expect(row.querySelector('.reason')?.textContent).toContain('code 1')
     expect(row.querySelector('.st')?.classList.contains('job-failed')).toBe(true)
+  })
+
+  it('separates what is running from what is waiting from what is over', () => {
+    reveal('panel-queue')
+    mountQueue()
+    draw(
+      emptySnapshot({
+        queue: [
+          job({ id: 'j1', status: 'done', startedAt: '2026-07-28T12:00:00.000Z', endedAt: '2026-07-28T12:01:00.000Z' }),
+          job({ id: 'j2', status: 'running', startedAt: '2026-07-28T12:01:00.000Z' }),
+          job({ id: 'j3', command: '/mjloop:fix a' }),
+          job({ id: 'j4', command: '/mjloop:fix b' }),
+        ],
+        session: { jobId: 'j2', blocked: false, pausedBy: null, closing: false, stalledSince: null },
+      }),
+    )
+
+    expect(document.querySelectorAll('#queue-now .job')).toHaveLength(1)
+    expect(document.querySelectorAll('#queue-waiting .job')).toHaveLength(2)
+    expect(document.querySelectorAll('#queue-history .job')).toHaveLength(1)
+
+    // Its place in the run order, so "mine is second" needs no counting.
+    expect(cells('#queue-waiting .job .pos')).toEqual(['1', '2'])
+
+    // One control per row, and the two that are not the same act do not look
+    // alike: the running row stops a session, a waiting row drops a command.
+    const running = document.querySelector('#queue-now .job') as HTMLElement
+    expect((running.querySelector('[data-slot="stop"]') as HTMLElement).hidden).toBe(false)
+    expect((running.querySelector('[data-slot="cancel"]') as HTMLElement).hidden).toBe(true)
+    const waiting = document.querySelector('#queue-waiting .job') as HTMLElement
+    expect((waiting.querySelector('[data-slot="stop"]') as HTMLElement).hidden).toBe(true)
+    expect((waiting.querySelector('[data-slot="cancel"]') as HTMLElement).hidden).toBe(false)
+    expect((waiting.querySelector('[data-slot="attach"]') as HTMLElement).hidden).toBe(true)
+  })
+
+  it('shows the pause, why it is there, and the way out of it', () => {
+    reveal('panel-queue')
+    mountQueue()
+    const stopped = emptySnapshot({
+      queue: [job({ id: 'j1', command: '/mjloop:fix a' })],
+      session: { jobId: null, blocked: true, pausedBy: 'stopped', closing: false, stalledSince: null },
+    })
+    draw(stopped)
+
+    expect((document.getElementById('queue-blocked') as HTMLElement).hidden).toBe(false)
+    // Resume is never hidden while the queue is holding. It used to be, whenever
+    // the pause happened to arrive before the next job did.
+    expect((document.getElementById('queue-resume') as HTMLElement).hidden).toBe(false)
+    expect(document.getElementById('queue-pause-text')?.textContent).toBe(english['queue.pausedStopped'])
+
+    draw({ ...stopped, session: { ...stopped.session, pausedBy: 'failure' } })
+    // A failure asks you to read a transcript; a stop asks nothing. Different
+    // causes, different sentences.
+    expect(document.getElementById('queue-pause-text')?.textContent).toBe(english['queue.blockedBanner'])
+  })
+
+  it('says a job is closing rather than leaving it as running under a dead button', () => {
+    reveal('panel-queue')
+    mountQueue()
+    draw(
+      emptySnapshot({
+        queue: [job({ id: 'j1', status: 'running', startedAt: '2026-07-28T12:00:00.000Z' })],
+        session: { jobId: 'j1', blocked: true, pausedBy: 'stopped', closing: true, stalledSince: null },
+      }),
+    )
+
+    const row = document.querySelector('#queue-now .job') as HTMLElement
+    expect(row.querySelector('.st')?.textContent).toBe(english['queue.closing'])
+    expect(row.querySelector('.st')?.classList.contains('job-closing')).toBe(true)
+    expect((row.querySelector('[data-slot="stop"]') as HTMLButtonElement).disabled).toBe(true)
   })
 })
 

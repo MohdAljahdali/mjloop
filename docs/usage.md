@@ -263,7 +263,16 @@ you approve a tool permission or answer a question without stopping the queue. W
 run reaches `done` or `halted`, the server closes that session and starts the next job in
 a fresh one — a clean context per story, which is what makes long queues behave.
 
-Two things worth knowing:
+The terminal pane starts collapsed and opens itself when a job starts — the command
+box stays on screen either way, and the ▼ button parks it wherever you want it.
+
+Four things worth knowing:
+
+- **Stop closes the running job; it does not wedge the queue.** Stopping asks the session
+  to exit and the page says `closing the session` until it does. If jobs were waiting
+  behind it the queue pauses, says why, and offers Resume; if nothing was waiting there is
+  nothing to hold, so the next command you type starts straight away. The same is true of
+  a failure: the rest of the queue holds, and a failure with nothing behind it does not.
 - **The url contains an access token.** Anyone who has it can run commands in your
   project. Do not paste it anywhere. Each server start issues a new one, and the server
   listens on `127.0.0.1` only.

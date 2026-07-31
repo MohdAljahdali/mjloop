@@ -54,8 +54,24 @@ export interface SessionView {
    * The queue is holding after a failure or a stop and will not start the next
    * job until asked. Reported rather than inferred: "nothing running but jobs
    * queued" is also what a job looks like in the moment between two sessions.
+   *
+   * True whenever the queue is actually holding — never filtered by whether
+   * there is anything queued behind it. A pause the page cannot see is how a
+   * `Run` press turns into a job that sits there forever.
    */
   blocked: boolean
+  /**
+   * Why it is holding. The two causes need different words and different
+   * advice: a failure asks you to read a transcript, a stop asks nothing.
+   */
+  pausedBy: 'failure' | 'stopped' | null
+  /**
+   * The live session is being closed — `/exit` sent, and the shutdown ladder
+   * running. Between that and the pty going away is up to sixteen seconds in
+   * which the page used to show a job still `running` and a Stop button that
+   * did nothing.
+   */
+  closing: boolean
   /**
    * When the run is `running` but the session has produced no output for the
    * idle threshold. The page turns this into a banner and a nudge button —
@@ -156,6 +172,13 @@ export const ClientMessageSchema = z.discriminatedUnion('type', [
    *
    * `id` is the page's own correlation token, echoed back on the receipt; it is
    * never used to name anything on disk.
+   *
+   * The kinds it carries are `WriteSchema`'s and it widens only when that union
+   * does, which is why `feature.approve` arrived without a line changing here.
+   * That is also why no `FeatureView` joins `Snapshot` above: a brief is *read*
+   * over `/api/features`, never pushed, so the only thing a browser can do to
+   * one is this frame. A record that arrives by one route and leaves by another
+   * has two surfaces to audit, and this one has one.
    */
   z.strictObject({ type: z.literal('write'), id: z.string().min(1).max(64), write: WriteSchema }),
 ])

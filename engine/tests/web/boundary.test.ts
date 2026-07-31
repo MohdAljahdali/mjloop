@@ -58,6 +58,10 @@ const FORBIDDEN: [string, string][] = [
   ['writeConfig', 'serialises the whole document back to YAML, dropping every comment, and takes no lock'],
   ['writeJsonAtomic', 'is the raw state writer, underneath every guard there is'],
   ['readPlan', 'repairs clobbered frontmatter by rewriting the file, and the read side must never write'],
+  ['createFeatureBrief', 'raises a feature, and the discovery interview is what raises one — a page that could author a brief would be a second, weaker discovery flow beside the skill that exists to run one'],
+  ['updateFeatureDraft', 'edits a brief, which is the interview writing down its own working notes'],
+  ['appendFeatureDecision', 'records a question and the answer to it, and the browser asked nobody'],
+  ['supersedeFeatureBrief', 'mints a successor draft carrying an approved brief forward, which is authoring under another name'],
   ['verifyRun', 'spawns a shell command from the run pin and takes the project verify lock; the read side executes nothing'],
   ['worktreeDigest', 'shells out to git in the project directory, and the read side never runs a subprocess'],
 ]
@@ -77,8 +81,13 @@ describe('the engine surface the browser can reach', () => {
     }
   })
 
-  it('reaches the three operational writes from exactly one file', () => {
-    for (const op of ['gateSet', 'storyUpdate', 'halt']) {
+  it('reaches the four operational writes from exactly one file', () => {
+    // `approveFeatureBrief` is the fourth, and it is the only one of the feature
+    // store's mutators that appears anywhere under `src/web/` at all — the other
+    // four are in `FORBIDDEN` above. That pairing is the whole boundary for a
+    // feature brief: the browser may say a person approved what the interview
+    // wrote, and may not write a word of it.
+    for (const op of ['gateSet', 'storyUpdate', 'halt', 'approveFeatureBrief']) {
       const importers = files.filter((file) => imported(read(file)).has(op))
       expect(importers, op).toEqual(['writes.ts'])
     }

@@ -1,5 +1,6 @@
 import os from 'node:os'
 import * as z from 'zod'
+import { FeatureIdSchema } from '../schemas/feature.js'
 import { ApprovalDecisionSchema, PlanIdSchema, StoryIdSchema, StoryStatusSchema } from '../schemas/plan.js'
 import { gateSet } from '../ops/plan.js'
 import { storyUpdate } from '../ops/plan.js'
@@ -9,6 +10,12 @@ import {
   ConfigMutationError,
   mutateConfig,
 } from '../store/config-mutation.js'
+import {
+  ApprovedRevisionImmutableError,
+  StaleFeatureContentError,
+  StaleFeatureRevisionError,
+  approveFeatureBrief,
+} from '../store/feature-store.js'
 import { StalePreconditionError } from '../store/precondition.js'
 import type { WebCode } from './codes.js'
 
@@ -18,7 +25,7 @@ import type { WebCode } from './codes.js'
  *
  * Everything else on the page either reads, or composes a loop command and
  * enqueues it — there is one execution model and not a second, weaker one
- * beside it. These three cannot be expressed as a command, and each is
+ * beside it. These four cannot be expressed as a command, and each is
  * something a person is stuck on today:
  *
  *  - **Plan approval.** `gates.plan_approval` defaults to `human` and the build
@@ -29,6 +36,11 @@ import type { WebCode } from './codes.js'
  *    editor.
  *  - **Halt a run.** Stop kills the pty and leaves `state.json` saying
  *    `running` with no `HALT.md`. That is not a halt.
+ *  - **Feature-brief approval.** The same shape of problem as plan approval, one
+ *    step earlier: the discovery interview finishes and the brief waits for a
+ *    person, and `orchestration.discovery.completion: review` means it waits
+ *    indefinitely. `.mjloop/features/` is a protected directory, so there is no
+ *    text-editor repair here at all.
  *
  * `runStart`, `rosterSet`, `runLog` and `cycleAdvance` are forbidden from the
  * browser **permanently**. `runLog` opens a gated track's gate from the
@@ -37,6 +49,30 @@ import type { WebCode } from './codes.js'
  * guard counters and the reproduction. `cycleAdvance` is the only writer of
  * terminal status. Those four are how the loop *reports what it did*; a browser
  * that can write them can claim work nobody performed.
+ *
+ * A feature brief is denied everything except that one approval, for the same
+ * family of reasons stated against the record it is:
+ *
+ *  - **Creating and editing one** is the discovery interview writing down what
+ *    it asked and what came back. A page that could author a brief would be a
+ *    second, weaker discovery flow beside the skill that exists to run one, and
+ *    the brief it produced would carry decisions nobody was ever asked about.
+ *  - **Superseding one** mints a successor draft carrying an approved brief's
+ *    content forward, which is authoring under another name.
+ *  - **Routing or executing one** — turning a brief into a plan or a run — is
+ *    `/mjloop:plan` and `/mjloop:build`, which the page composes as commands
+ *    like every other loop command. `runStart` being forbidden above is what
+ *    makes that structural rather than a convention.
+ *
+ * Approval is the exception because it is the one of those a *person* performs
+ * rather than the loop: the words being approved were written by the interview,
+ * and all the button adds is that somebody read them and said yes. That is also
+ * exactly why it is compare-and-swap on the revision *and on what that revision
+ * said* — see `gateSet`'s rule about never recording an approval nobody gave,
+ * which applies here with more force, because a plan is written *from* an
+ * approved brief. "Somebody read them" is only true of the words the page was
+ * actually showing, and a draft's revision number does not move when those
+ * words do.
  *
  * This path bypasses the `PreToolUse` state guard entirely — it is the server
  * process, not a `claude` tool call — so the boundary is structural rather than
@@ -93,6 +129,33 @@ export const WriteSchema = z.discriminatedUnion('kind', [
     revision: z.string().regex(/^[a-f0-9]{64}$/),
     changes: z.array(ConfigChangeSchema).min(1).max(100),
   }),
+  z.strictObject({
+    kind: z.literal('feature.approve'),
+    feature: FeatureIdSchema,
+    /**
+     * The revision the operator was looking at when they decided.
+     *
+     * Bounded exactly as the store bounds a revision — a positive integer — and
+     * no more narrowly, because a ceiling this side invented would lock the
+     * browser out of a revision the store can legitimately reach. It never
+     * becomes a path: `approveFeatureBrief` finds the latest revision from the
+     * directory itself and compares this against it, so this is a token to be
+     * matched, not a file to be opened.
+     */
+    revision: z.number().int().positive(),
+    /**
+     * What the brief said on the screen the decision was made from.
+     *
+     * The revision above cannot answer that on its own: a draft holds one
+     * revision number for the whole of its editable life, so a page open while
+     * the interview appends one last decision would still be pointing at
+     * "revision 1" and would approve words nobody read. Same shape and same
+     * job as `config.patch`'s `revision` — a sha256 the server produced,
+     * handed straight back — and it is checked inside the store's lock.
+     */
+    digest: z.string().regex(/^[a-f0-9]{64}$/),
+    note: z.string().max(2000).nullable().default(null),
+  }),
 ])
 
 export type Write = z.infer<typeof WriteSchema>
@@ -144,6 +207,21 @@ const HANDLERS: Handlers = {
   'config.patch': async (projectDir, write) => {
     await mutateConfig(projectDir, { revision: write.revision, changes: write.changes })
   },
+  'feature.approve': async (projectDir, write) => {
+    // `by` is `decidedBy()` here for the same reason the gate's is, and it
+    // matters more: a plan is built from an approved brief, so an approver the
+    // page could type would be a forgeable authorisation for work nobody
+    // agreed to. Approval is also the *only* thing this reaches — the store
+    // refuses to touch an approved revision ever again, so there is no edit
+    // hiding behind this call.
+    await approveFeatureBrief(projectDir, {
+      id: write.feature,
+      expectRevision: write.revision,
+      expectDigest: write.digest,
+      by: decidedBy(),
+      note: write.note,
+    })
+  },
 }
 
 export async function applyWrite(projectDir: string, write: Write): Promise<WriteResult> {
@@ -157,6 +235,34 @@ export async function applyWrite(projectDir: string, write: Write): Promise<Writ
         code: error.kind === 'stale' ? 'write.stale.config' : 'write.invalid.config',
       }
     }
+    // Caught by name and *ahead* of the generic branch below, the way
+    // `ConfigMutationError` is. `StaleFeatureRevisionError` subclasses
+    // `StalePreconditionError` without widening `PreconditionSubject` — that
+    // type is the key of the `STALE` map, so widening it would oblige this map
+    // to grow in the same change — and its inherited `subject` is a placeholder
+    // that is never read.
+    //
+    // `StaleFeatureContentError` and `ApprovedRevisionImmutableError` join it,
+    // and the three are not the same refusal to the store: the revision moved,
+    // the words of this revision moved, or this exact draft was approved by
+    // somebody else first. The store separates them because it has to name the
+    // way forward. To a browser they are one fact — the screen the decision was
+    // made from is out of date, and nothing was changed — and inventing three
+    // codes would put the store's reasoning on a wire that carries no prose.
+    if (
+      error instanceof StaleFeatureRevisionError ||
+      error instanceof StaleFeatureContentError ||
+      error instanceof ApprovedRevisionImmutableError
+    ) {
+      return { ok: false, code: 'write.stale.feature' }
+    }
+    // Deliberately *not* given a code of their own: an approval refused because
+    // the brief has no acceptance criteria, or because a component it names has
+    // since left the accepted map, falls to `write.failed` with the diagnosis on
+    // the server's terminal. Neither is something the page can fix — one is the
+    // interview's work and the other is `mjloop-cli profile accept` — and a code
+    // exists to tell the operator which button to press again, not to narrate a
+    // refusal that has nothing to do with the button.
     if (error instanceof StalePreconditionError) {
       return { ok: false, code: STALE[error.subject] }
     }

@@ -6,6 +6,20 @@
  * of typed changes plus that document's revision. The engine then validates
  * the whole result while holding the project lock and preserves comments.
  *
+ * `specialists:` and `tracks:` were two JSON textareas until this rewrite,
+ * which meant editing a roster by hand-writing JSON that had to satisfy four
+ * cross-field rules nothing reported until after a round trip. They are
+ * structured controls now, over a **draft** the page holds in memory:
+ *
+ *   draft ──(every mutation)──> hidden `*_json` fields ──> collectConfigChanges
+ *
+ * The hidden fields are the seam. `collectConfigChanges` still reads the same
+ * two form values and still emits the same closed change vocabulary, so the
+ * surface changed and the wire did not. Keeping the draft out of the visible
+ * controls is also what keeps rule 3 in `ui/dom.js` intact: the only control a
+ * person types into that the renderer ever writes to is `max_cycles`, and it is
+ * written on a reseed epoch rather than on a poll.
+ *
  * The three verify commands get a callout when unset: each is injected verbatim
  * into every agent brief, and a missing one is a `blocked` the engine is
  * forbidden to invent around.
@@ -16,7 +30,7 @@
  * returned. It is a report and never a rule — nothing in the engine drafts or
  * skips an agent because of a number in it.
  */
-import { clone, flag, phrase, verbatim } from '../ui/dom.js'
+import { attr, clone, flag, phrase, text, translateStatic, verbatim } from '../ui/dom.js'
 import { feed } from '../lib/api.js'
 import { pluralKey } from '../lib/i18n.js'
 import { reconcile } from '../ui/list.js'
@@ -26,6 +40,7 @@ import { submit } from '../ui/writes.js'
 /**
  * @typedef {import('../../read.js').ConfigView} ConfigView
  * @typedef {NonNullable<ConfigView['parsed']>} Config
+ * @typedef {import('../../read.js').ProfileView} ProfileView
  */
 
 /**
@@ -52,6 +67,40 @@ import { submit } from '../ui/writes.js'
 const VERIFY_COMMANDS = /** @type {const} */ (['test', 'lint', 'build'])
 
 /**
+ * The `orchestration.skills.sources` members, in the order the checkboxes are
+ * read back. `SkillSourceSchema`'s own order, so the array this page sends is
+ * the one a person reading `config.yaml` afterwards would have written.
+ */
+const SKILL_SOURCES = /** @type {const} */ (['github', 'registry', 'web'])
+
+/**
+ * The two `orchestration.quality` leaves. They share a type, which is why the
+ * server gives them one change kind with a `key` — the same shape `gate` and
+ * `limit` already use — and why they are a loop here rather than two blocks.
+ */
+const QUALITY_KEYS = /** @type {const} */ (['independent_plan_review', 'independent_verification'])
+
+/**
+ * The label above each of a track's four agent lists.
+ *
+ * `blocks` is one of them: it lives under `gate` rather than at the track's
+ * root, but it is a set of this track's agent names like the other three, so it
+ * gets the same chips, the same combobox and the same pair of actions.
+ */
+const LIST_LABEL = {
+  required: 'config.required',
+  available: 'config.available',
+  closing: 'config.closing',
+  blocks: 'config.gateBlocks',
+}
+
+/** Names the cycle directory keeps for itself — `contract.ts:23`. */
+const RESERVED_AGENTS = ['findings', 'roster', 'verify', 'evidence', 'handoff', 'map']
+
+/** `IdSchema` and `AgentNameSchema` share this pattern; both reject the rest. */
+const NAME = /^[A-Za-z0-9_-]+$/
+
+/**
  * @param {string} id
  * @returns {HTMLElement}
  */
@@ -67,7 +116,18 @@ export function mountConfig() {
   const resetButton = /** @type {HTMLButtonElement} */ (pick('config-reset'))
   const verifyHost = pick('config-verify')
   const policyHost = pick('config-verify-policy')
-  const tracksHost = pick('config-tracks')
+  const specialistHost = pick('config-specialist-rules')
+  const specialistEmpty = pick('config-specialists-empty')
+  const specialistNew = /** @type {HTMLInputElement} */ (pick('config-specialist-new'))
+  const trackHost = pick('config-track-editors')
+  const trackNew = /** @type {HTMLInputElement} */ (pick('config-track-new'))
+  const agentNames = /** @type {HTMLDataListElement} */ (
+    /** @type {unknown} */ (document.getElementById('config-agent-names'))
+  )
+  const profileRecord = pick('config-profile-record')
+  const profileDrift = pick('config-profile-drift')
+  const profileEmpty = pick('config-profile-empty')
+  const profileHost = pick('config-profile-list')
   const telemetryEmpty = pick('telemetry-empty')
   const telemetryFlagged = pick('telemetry-flagged')
   const telemetryTable = pick('telemetry-table')
@@ -85,8 +145,32 @@ export function mountConfig() {
   let conflict = false
   let enabled = false
 
+  /**
+   * The two structured maps, as the user is editing them.
+   *
+   * Deep-copied out of the baseline on every reseed and never shared with it:
+   * `collectConfigChanges` compares the two, so an alias would make every diff
+   * empty and every save a no-op.
+   *
+   * @type {{ specialists: Record<string, string>, tracks: Record<string, any> } | null}
+   */
+  let draft = null
+
+  /**
+   * Bumped on every reseed, and the only thing that lets a row write into the
+   * `max_cycles` box a person may be typing in. A row records the epoch it last
+   * seeded at; the 800ms poll does not change it, so the poll cannot reach the
+   * caret.
+   */
+  let seedEpoch = 0
+
   editor.addEventListener('input', markDirty)
   editor.addEventListener('change', markDirty)
+  // Controls the structured editors own. Separate from `data-act`, which is the
+  // delegated *click* bus: a `<select>` and a checkbox act on `change`, and a
+  // number box on `input`, neither of which that bus carries.
+  editor.addEventListener('input', onField)
+  editor.addEventListener('change', onField)
 
   /** @type {import('../lib/api.js').Feed<ConfigView>} */
   const config = feed({
@@ -113,12 +197,37 @@ export function mountConfig() {
     onChange: () => draw(),
   })
 
+  /**
+   * The accepted component map, and whether a rescan disagrees with it.
+   *
+   * `Revisions` carries no fingerprint of `.mjloop/profile/`, and this panel
+   * does not get to add one: that type is the poller's contract in
+   * `protocol.ts`, and widening it is a change to what every tab subscribes to.
+   * So this rides the two revisions that already move whenever the profile
+   * could have: `config` because `orchestration.profile.auto_accept` is the
+   * setting that decides whether a scan may accept one at all, and `state`
+   * because the only things that write this directory — `mjloop init` and the
+   * commands this very page enqueues — write `state.json` on the way past.
+   *
+   * The staleness that leaves is a read of a record this page is permanently
+   * forbidden from changing, so nobody is looking at a control whose effect has
+   * moved. Reopening the tab refetches.
+   *
+   * @type {import('../lib/api.js').Feed<ProfileView>}
+   */
+  const profile = feed({
+    dep: (state) => `${state.revisions.config}|${state.revisions.state}`,
+    path: () => '/api/profile',
+    onChange: () => draw(),
+  })
+
   register({
     id: 'config',
     node,
     update(state) {
       config.update(state)
       telemetry.update(state)
+      profile.update(state)
 
       phrase(design, state.state.design_system ? 'config.design.present' : 'config.design.missing')
       // An absolute path: an identifier, and one that must not be mirrored.
@@ -132,21 +241,243 @@ export function mountConfig() {
       flag(rawDetails, 'hidden', view?.raw === null || view?.raw === undefined)
 
       drawTelemetry(telemetry.value())
+      drawProfile(profile.value(), profile.value() !== null || profile.error() !== null)
 
       if (parsed === null) {
         reconcile(verifyHost, [], (entry) => entry, () => ({ root: document.createElement('div'), update: () => {} }))
         reconcile(policyHost, [], (entry) => entry, () => ({ root: document.createElement('div'), update: () => {} }))
-        reconcile(tracksHost, [], (entry) => entry, () => ({ root: document.createElement('tr'), update: () => {} }))
+        drawStructured()
         return
       }
 
       reconcile(verifyHost, commandRows(parsed.verify), (entry) => entry.key, factRow)
       reconcile(policyHost, policyRows(parsed.verify), (entry) => entry.key, factRow)
-
-      const tracks = /** @type {[string, any][]} */ (Object.entries(parsed.tracks))
-      reconcile(tracksHost, tracks, ([name]) => name, trackRow)
+      drawStructured()
     },
   })
+
+  /* ── the structured editors ──────────────────────────────────────────── */
+
+  /**
+   * Render the draft: the specialist rules, the track cards, and the agent-name
+   * suggestions both of them offer.
+   */
+  function drawStructured() {
+    const model = draft
+    if (model === null) {
+      reconcile(specialistHost, [], (entry) => entry, () => ({ root: document.createElement('div'), update: () => {} }))
+      reconcile(trackHost, [], (entry) => entry, () => ({ root: document.createElement('div'), update: () => {} }))
+      flag(specialistEmpty, 'hidden', true)
+      return
+    }
+
+    const names = knownAgents(model)
+    // A plain `<option>` list: no caret, no selection, nothing a person is in
+    // the middle of. Rebuilt only when the set actually moved.
+    const offered = names.join(',')
+    if (agentNames.dataset['offered'] !== offered) {
+      agentNames.dataset['offered'] = offered
+      agentNames.replaceChildren(
+        ...names.map((name) => {
+          const option = document.createElement('option')
+          option.value = name
+          return option
+        }),
+      )
+    }
+
+    // `?? 'auto'` for the type checker rather than for the data: the keys come
+    // from this very object, so the lookup cannot miss — but an index signature
+    // says `string | undefined` and the row below needs a mode.
+    const rules = Object.keys(model.specialists)
+      .sort()
+      .map((agent) => ({ agent, mode: model.specialists[agent] ?? 'auto' }))
+    flag(specialistEmpty, 'hidden', rules.length > 0)
+    reconcile(specialistHost, rules, (rule) => rule.agent, specialistRule)
+
+    const tracks = Object.keys(model.tracks).sort().map((name) => ({ name, model }))
+    reconcile(trackHost, tracks, (entry) => entry.name, trackEditor)
+
+    // Rows created a moment ago were not in the form when `updateEditor` ran.
+    setEditorEnabled(editor, enabled)
+  }
+
+  /**
+   * A draft mutation: apply it, mirror it into the hidden fields the diff
+   * reads, and repaint. Every editor action goes through here, so there is one
+   * place where "the draft moved" and "the form is dirty" cannot disagree.
+   *
+   * @param {(model: NonNullable<typeof draft>) => boolean | void} change
+   */
+  function mutate(change) {
+    if (!enabled || draft === null) return
+    if (change(draft) === false) return
+    syncStructured()
+    markDirty()
+    draw()
+  }
+
+  /** Write the draft into the two hidden fields `collectConfigChanges` reads. */
+  function syncStructured() {
+    if (draft === null) return
+    const specialists = /** @type {HTMLInputElement} */ (editor.elements.namedItem('specialists_json'))
+    const tracks = /** @type {HTMLInputElement} */ (editor.elements.namedItem('tracks_json'))
+    specialists.value = JSON.stringify(draft.specialists)
+    tracks.value = JSON.stringify(draft.tracks)
+  }
+
+  /**
+   * The `change`/`input` half of the editor's event handling.
+   *
+   * @param {Event} event
+   */
+  function onField(event) {
+    const target = event.target
+    if (!(target instanceof HTMLElement)) return
+    const field = target.dataset['field']
+    if (field === undefined) return
+    const track = target.dataset['track'] ?? ''
+    const agent = target.dataset['agent'] ?? ''
+
+    switch (field) {
+      case 'specialist-mode':
+        mutate((model) => {
+          if (!(agent in model.specialists)) return false
+          model.specialists[agent] = /** @type {HTMLSelectElement} */ (target).value
+        })
+        return
+      case 'max-cycles': {
+        const next = Number(/** @type {HTMLInputElement} */ (target).value)
+        mutate((model) => {
+          const entry = model.tracks[track]
+          // An empty or half-typed box is not a number yet. Leaving the draft
+          // alone keeps the last good value rather than writing `NaN` into the
+          // patch the moment the field is cleared to retype it.
+          if (entry === undefined || !Number.isInteger(next) || next < 1) return false
+          entry.max_cycles = next
+        })
+        return
+      }
+      case 'gate-enabled':
+        mutate((model) => {
+          const entry = model.tracks[track]
+          if (entry === undefined) return false
+          if (/** @type {HTMLInputElement} */ (target).checked) {
+            const first = entry.required[0] ?? entry.available[0] ?? entry.closing[0] ?? ''
+            entry.gate = { proven_by: first, blocks: [] }
+          } else delete entry.gate
+        })
+        return
+      case 'gate-proven':
+        mutate((model) => {
+          const entry = model.tracks[track]
+          if (entry?.gate === undefined) return false
+          entry.gate.proven_by = /** @type {HTMLSelectElement} */ (target).value
+        })
+        return
+      case 'map-enabled':
+        mutate((model) => {
+          const entry = model.tracks[track]
+          if (entry === undefined) return false
+          if (/** @type {HTMLInputElement} */ (target).checked) {
+            entry.map = { drafted_by: entry.required[0] ?? entry.available[0] ?? '' }
+          } else delete entry.map
+        })
+        return
+      case 'map-drafted':
+        mutate((model) => {
+          const entry = model.tracks[track]
+          if (entry?.map === undefined) return false
+          entry.map.drafted_by = /** @type {HTMLSelectElement} */ (target).value
+        })
+    }
+  }
+
+  /* ── the actions the click bus dispatches ─────────────────────────────── */
+
+  const api = {
+    /** A new `specialists:` rule, from the box beside the list. */
+    specialistAdd() {
+      const agent = specialistNew.value.trim()
+      if (!validAgent(agent)) return
+      mutate((model) => {
+        if (agent in model.specialists) return false
+        model.specialists[agent] = 'auto'
+      })
+      // Cleared because a person pressed Add — the one reason this page ever
+      // writes to a control.
+      specialistNew.value = ''
+    },
+    /** @param {HTMLElement} element */
+    specialistRemove(element) {
+      const agent = element.dataset['agent'] ?? ''
+      mutate((model) => {
+        if (!(agent in model.specialists)) return false
+        delete model.specialists[agent]
+      })
+    },
+    trackAdd() {
+      const name = trackNew.value.trim()
+      if (!NAME.test(name)) return
+      mutate((model) => {
+        if (name in model.tracks) return false
+        model.tracks[name] = { required: [], available: [], closing: [], max_cycles: 5 }
+      })
+      trackNew.value = ''
+    },
+    /** @param {HTMLElement} element */
+    trackRemove(element) {
+      const name = element.dataset['track'] ?? ''
+      mutate((model) => {
+        if (!(name in model.tracks)) return false
+        delete model.tracks[name]
+      })
+    },
+    /** @param {HTMLElement} element */
+    trackDuplicate(element) {
+      const name = element.dataset['track'] ?? ''
+      mutate((model) => {
+        const source = model.tracks[name]
+        if (source === undefined) return false
+        let copy = `${name}-copy`
+        let n = 2
+        while (copy in model.tracks) copy = `${name}-copy-${n++}`
+        model.tracks[copy] = JSON.parse(JSON.stringify(source))
+      })
+    },
+    /** @param {HTMLElement} element */
+    agentAdd(element) {
+      const track = element.dataset['track'] ?? ''
+      const list = element.dataset['list'] ?? ''
+      const box = element.parentElement?.querySelector('input')
+      if (!(box instanceof HTMLInputElement)) return
+      const agent = box.value.trim()
+      if (!validAgent(agent)) return
+      mutate((model) => {
+        const entry = model.tracks[track]
+        if (entry === undefined) return false
+        const bucket = list === 'blocks' ? entry.gate?.blocks : entry[list]
+        if (!Array.isArray(bucket) || bucket.includes(agent)) return false
+        bucket.push(agent)
+      })
+      box.value = ''
+    },
+    /** @param {HTMLElement} element */
+    agentRemove(element) {
+      const track = element.dataset['track'] ?? ''
+      const list = element.dataset['list'] ?? ''
+      const agent = element.dataset['agent'] ?? ''
+      mutate((model) => {
+        const entry = model.tracks[track]
+        if (entry === undefined) return false
+        const bucket = list === 'blocks' ? entry.gate?.blocks : entry[list]
+        if (!Array.isArray(bucket)) return false
+        const at = bucket.indexOf(agent)
+        if (at < 0) return false
+        bucket.splice(at, 1)
+      })
+    },
+  }
 
   function markDirty() {
     if (!enabled) return
@@ -183,6 +514,7 @@ export function mountConfig() {
       editorRevision = revision
       conflict = false
       dirty = false
+      seedDraft(/** @type {Config} */ (parsed))
       seedConfigForm(editor, /** @type {Config} */ (parsed))
     }
 
@@ -192,8 +524,74 @@ export function mountConfig() {
   }
 
   function updateEditorActions() {
-    saveButton.disabled = !enabled || !dirty || saving || conflict
+    // A draft the schema would reject cannot be saved. The server would refuse
+    // it anyway; refusing here costs no round trip and the reason is already on
+    // the card that caused it.
+    const problem = enabled ? orchestrationProblem() : null
+    // The orchestration rules have no card of their own to carry their reason,
+    // so they borrow the editor's banner. `markDirty` hides it immediately
+    // before calling this, which is what makes the message disappear the moment
+    // the pair is completed rather than needing a second place to clear it.
+    if (problem !== null && !conflict) {
+      flag(editorState, 'hidden', false)
+      phrase(editorState, problem)
+    }
+    saveButton.disabled = !enabled || !dirty || saving || conflict || broken() || problem !== null
     resetButton.disabled = !enabled || (!dirty && !conflict) || saving
+  }
+
+  /**
+   * Why `ConfigSchema` would refuse this form as a whole document, or null.
+   *
+   * The first two rules are about a setting that could never take effect, which
+   * is exactly what makes them worth catching here: the server refuses the
+   * *patch* and is right to, but a person who moved eight settings would be told
+   * only that one of them was wrong. Mirrored, never replacing — the engine
+   * re-validates the whole document under the project lock and stays the
+   * authority, the same arrangement `trackProblems` is in.
+   *
+   * The third is mirrored for a harder reason. Every other orchestration control
+   * is a select, a checkbox or a `min`/`max` number input, so the browser itself
+   * keeps them inside the schema; the trusted-registry textarea is the one
+   * control that can express a value `ConfigChangeSchema` refuses. A refused
+   * change is not a refused save: the server drops a frame it cannot parse
+   * without answering it, and this panel clears `saving` only from a receipt, so
+   * the save never settles and the editor stays disabled until the tab is
+   * reloaded — taking every other setting edited in the same press with it.
+   *
+   * @returns {string | null}
+   */
+  function orchestrationProblem() {
+    /** @param {string} name */
+    const field = (name) => /** @type {HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement} */ (
+      editor.elements.namedItem(name)
+    )
+    // `auto-plan` names a start driven by an approved feature brief, and a
+    // project with discovery off never produces one.
+    if (field('orch_discovery_completion').value === 'auto-plan' && field('orch_discovery_mode').value === 'off') {
+      return 'config.problem.autoPlanOff'
+    }
+    // Read the same way `collectConfigChanges` reads it, blank lines and all, so
+    // what is judged here is exactly what would go on the wire.
+    const registries = field('orch_skills_trusted_registries')
+      .value.split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0)
+    // A source that names no registry admits nothing, and the project believes
+    // it enabled one.
+    if (/** @type {HTMLInputElement} */ (field('orch_skills_sources_registry')).checked && registries.length === 0) {
+      return 'config.problem.registryUntrusted'
+    }
+    if (registries.some((registry) => !registry.startsWith('https://'))) {
+      return 'config.problem.registryNotHttps'
+    }
+    return null
+  }
+
+  /** Whether any track in the draft would fail `ConfigSchema`. */
+  function broken() {
+    if (draft === null) return false
+    return Object.keys(draft.tracks).some((name) => trackProblems(draft, name).length > 0)
   }
 
   function save() {
@@ -229,11 +627,57 @@ export function mountConfig() {
 
   function reset() {
     if (!enabled || baseline === null) return
+    seedDraft(baseline)
     seedConfigForm(editor, baseline)
     dirty = false
     conflict = false
     updateEditorActions()
     flag(editorState, 'hidden', true)
+    // The structured editors are rendered from the draft, and a draft that
+    // moved without a repaint is a page showing rules the user just discarded.
+    // Nothing else schedules one here: an idle project produces no state churn,
+    // so there is no poll to ride in on.
+    draw()
+  }
+
+  /**
+   * The component map, read-only and permanently so.
+   *
+   * There is no control here and there deliberately never will be: accepting a
+   * map activates routing for every later run, which is the class of write
+   * `web/writes.ts` denies the browser — the same list `runStart` and
+   * `cycleAdvance` are on. A proposal that disagrees is *said*, and resolving it
+   * is a command like every other thing this page cannot do itself.
+   *
+   * @param {ProfileView | null} view
+   * @param {boolean} answered Whether the fetch has settled, one way or another.
+   */
+  function drawProfile(view, answered) {
+    const revision = view === null ? null : view.revision
+    flag(profileRecord, 'hidden', revision === null)
+    if (view !== null && revision !== null) {
+      phrase(profileRecord, 'config.profileRecord', {
+        revision,
+        by: view.acceptedBy ?? '',
+        at: view.acceptedAt ?? '',
+      })
+    }
+
+    // Only once an accepted map is on screen for it to disagree with. Before
+    // that the empty line already says nothing is accepted, and two sentences
+    // about one absence is one too many.
+    const drift = view !== null && revision !== null && view.proposalDiffers
+    flag(profileDrift, 'hidden', !drift)
+    if (view !== null && drift) phrase(profileDrift, 'config.profileDrift', { at: view.proposedAt ?? '' })
+
+    // "Nothing is accepted" is claimed only once the answer is in, the same
+    // rule the telemetry table follows. A 404 *is* an answer here — it is what
+    // a project nothing has ever mapped returns — and it arrives as a failure
+    // rather than as a body, so the settled check has to consider both.
+    flag(profileEmpty, 'hidden', revision !== null || !answered)
+    if (revision === null) phrase(profileEmpty, 'config.profileNone')
+
+    reconcile(profileHost, view?.components ?? [], (component) => component.id, componentCard)
   }
 
   /** @param {Telemetry | null} view */
@@ -261,7 +705,250 @@ export function mountConfig() {
     }
   }
 
-  return { save, reset }
+  /* ── row factories ───────────────────────────────────────────────────── */
+
+  /**
+   * One accepted component.
+   *
+   * Every value on it is an identifier — a directory, a technology the manifest
+   * declared, a command the engine would spawn — so all of them go through
+   * `verbatim()`, which is also what keeps a Latin path from dragging the
+   * punctuation around it to the wrong end of an Arabic row.
+   */
+  function componentCard() {
+    const { root, slots } = clone('tpl-component')
+    return {
+      root,
+      /** @param {ProfileView['components'][number]} component */
+      update(component) {
+        const id = slots['id']
+        if (id !== undefined) verbatim(id, component.id)
+        const componentRoot = slots['root']
+        if (componentRoot !== undefined) verbatim(componentRoot, component.root)
+        const technology = slots['technology']
+        if (technology !== undefined) verbatim(technology, component.technology)
+
+        for (const slot of VERIFY_COMMANDS) {
+          const cell = slots[slot]
+          if (cell === undefined) continue
+          // Unset is the case worth saying out loud rather than a blank cell,
+          // for the same reason an unset `verify.build` is: it names the check
+          // that will not run for this component.
+          const command = component.verification[slot]
+          if (command === null) phrase(cell, 'config.verifyUnset')
+          else verbatim(cell, command)
+        }
+
+        const tags = slots['tags']
+        // The join later stories select skills on. One cell, because the tags
+        // are read as a set and a chip list would imply each one is actionable.
+        if (tags !== undefined) verbatim(tags, component.skillTags.join(' '))
+
+        // `translateStatic` does not descend into `<template>` content, so this
+        // card's own labels are still keys until it translates itself. Every
+        // update, because the memo is per node and carries the locale epoch.
+        translateStatic(root)
+      },
+    }
+  }
+
+  /** One `specialists:` rule. */
+  function specialistRule() {
+    const { root, slots } = clone('tpl-specialist-rule')
+    return {
+      root,
+      /** @param {{ agent: string, mode: string }} rule */
+      update({ agent, mode }) {
+        const name = slots['agent']
+        if (name !== undefined) verbatim(name, agent)
+
+        const select = /** @type {HTMLSelectElement | undefined} */ (slots['mode'])
+        if (select !== undefined) {
+          attr(select, 'data-agent', agent)
+          if (select.value !== mode) select.value = mode
+        }
+        const why = slots['why']
+        if (why !== undefined) phrase(why, `config.mode.${mode}Why`)
+        const remove = slots['remove']
+        if (remove !== undefined) attr(remove, 'data-agent', agent)
+
+        // `translateStatic` does not descend into `<template>` content, so a
+        // cloned row's own labels are still keys until it translates itself.
+        // Every update, because the memo is per node and carries the locale
+        // epoch: a language switch repaints, an 800ms tick does not.
+        translateStatic(root)
+      },
+    }
+  }
+
+  /**
+   * One of a track's agent lists, mounted into a placeholder and kept.
+   *
+   * @param {HTMLElement | undefined} host
+   * @param {'required' | 'available' | 'closing' | 'blocks'} list
+   */
+  function agentList(host, list) {
+    if (host === undefined) return { update() {} }
+    const { root, slots } = clone('tpl-track-list')
+    host.replaceChildren(root)
+    const label = slots['label']
+    const chips = slots['chips']
+    const add = slots['add']
+
+    return {
+      /** @param {string} track @param {string[]} agents */
+      update(track, agents) {
+        // Phrased on every update rather than once at mount: `phrase` memoises
+        // per node *including the locale epoch*, so this costs nothing until
+        // the language changes — and a label written once at mount is a label
+        // that stays English in an Arabic page.
+        if (label !== undefined) phrase(label, LIST_LABEL[list])
+        if (add !== undefined) {
+          attr(add, 'data-track', track)
+          attr(add, 'data-list', list)
+        }
+        const empty = slots['empty']
+        if (empty !== undefined) flag(empty, 'hidden', agents.length > 0)
+        if (chips === undefined) return
+        reconcile(
+          chips,
+          agents.map((agent) => ({ track, list, agent })),
+          (chip) => chip.agent,
+          agentChip,
+        )
+      },
+    }
+  }
+
+  /** One agent inside one list. */
+  function agentChip() {
+    const { root, slots } = clone('tpl-agent-chip')
+    return {
+      root,
+      /** @param {{ track: string, list: string, agent: string }} chip */
+      update({ track, list, agent }) {
+        const name = slots['name']
+        if (name !== undefined) text(name, agent)
+        const remove = slots['remove']
+        if (remove !== undefined) {
+          attr(remove, 'data-track', track)
+          attr(remove, 'data-list', list)
+          attr(remove, 'data-agent', agent)
+        }
+      },
+    }
+  }
+
+  /** One reason this track would be rejected. */
+  function problemRow() {
+    const { root, slots } = clone('tpl-track-problem')
+    return {
+      root,
+      /** @param {{ id: string, key: string, params: Record<string, string> }} problem */
+      update({ key, params }) {
+        const cell = slots['text'] ?? root
+        phrase(cell, key, params)
+      },
+    }
+  }
+
+  /** One track, as a card. */
+  function trackEditor() {
+    const { root, slots } = clone('tpl-track-editor')
+    const lists = {
+      required: agentList(slots['requiredList'], 'required'),
+      available: agentList(slots['availableList'], 'available'),
+      closing: agentList(slots['closingList'], 'closing'),
+      blocks: agentList(slots['blocksList'], 'blocks'),
+    }
+    // The epoch this row last wrote into its own number box. Never the poll's.
+    let seeded = -1
+
+    return {
+      root,
+      /** @param {{ name: string, model: NonNullable<typeof draft> }} entry */
+      update({ name, model }) {
+        const track = model.tracks[name]
+        if (track === undefined) return
+        root.dataset['track'] = name
+
+        const label = slots['name']
+        if (label !== undefined) verbatim(label, name)
+
+        const cycles = /** @type {HTMLInputElement | undefined} */ (slots['cycles'])
+        if (cycles !== undefined) {
+          attr(cycles, 'data-track', name)
+          if (seeded !== seedEpoch) {
+            seeded = seedEpoch
+            cycles.value = String(track.max_cycles)
+          }
+        }
+        for (const key of /** @type {const} */ (['duplicate', 'remove'])) {
+          const button = slots[key]
+          if (button !== undefined) attr(button, 'data-track', name)
+        }
+
+        lists.required.update(name, track.required)
+        lists.available.update(name, track.available ?? [])
+        lists.closing.update(name, track.closing ?? [])
+        lists.blocks.update(name, track.gate?.blocks ?? [])
+
+        const known = [...track.required, ...(track.available ?? []), ...(track.closing ?? [])]
+        const draftable = [...track.required, ...(track.available ?? [])]
+
+        const gateOn = track.gate !== undefined
+        const gateEnabled = /** @type {HTMLInputElement | undefined} */ (slots['gateEnabled'])
+        if (gateEnabled !== undefined) {
+          attr(gateEnabled, 'data-track', name)
+          if (gateEnabled.checked !== gateOn) gateEnabled.checked = gateOn
+        }
+        const gateBody = slots['gateBody']
+        if (gateBody !== undefined) flag(gateBody, 'hidden', !gateOn)
+        const gateProven = /** @type {HTMLSelectElement | undefined} */ (slots['gateProven'])
+        if (gateProven !== undefined) {
+          attr(gateProven, 'data-track', name)
+          fillSelect(gateProven, known, track.gate?.proven_by ?? '')
+        }
+
+        const mapOn = track.map !== undefined
+        const mapEnabled = /** @type {HTMLInputElement | undefined} */ (slots['mapEnabled'])
+        if (mapEnabled !== undefined) {
+          attr(mapEnabled, 'data-track', name)
+          if (mapEnabled.checked !== mapOn) mapEnabled.checked = mapOn
+        }
+        const mapBody = slots['mapBody']
+        if (mapBody !== undefined) flag(mapBody, 'hidden', !mapOn)
+        const mapDrafted = /** @type {HTMLSelectElement | undefined} */ (slots['mapDrafted'])
+        if (mapDrafted !== undefined) {
+          attr(mapDrafted, 'data-track', name)
+          // Deliberately narrower than the gate's list: a map drafted by a
+          // closing agent is a document no run ever writes — `config.ts` rejects
+          // it, so the control must not offer it.
+          fillSelect(mapDrafted, draftable, track.map?.drafted_by ?? '')
+        }
+
+        const problems = slots['problems']
+        if (problems !== undefined) {
+          reconcile(problems, trackProblems(model, name), (problem) => problem.id, problemRow)
+        }
+
+        // Last, so the lists and chips this update just created are translated
+        // in the same pass rather than one frame later.
+        translateStatic(root)
+      },
+    }
+  }
+
+  /** @param {Config} config */
+  function seedDraft(config) {
+    draft = /** @type {NonNullable<typeof draft>} */ (
+      JSON.parse(JSON.stringify({ specialists: config.specialists, tracks: config.tracks }))
+    )
+    seedEpoch += 1
+    syncStructured()
+  }
+
+  return { save, reset, ...api }
 }
 
 /**
@@ -349,6 +1036,70 @@ export function collectConfigChanges(form, baseline) {
       value: /** @type {Config['tracks'][string] | null} */ (next),
     })
   }
+
+  // One change per orchestration leaf, matching the server's discriminants
+  // exactly: the wire has a kind per setting rather than a section plus a key,
+  // which is what lets each `value` schema be as narrow as `ConfigSchema`'s.
+  const orchestration = baseline.orchestration
+  push(changes, orchestration.profile.auto_accept !== boolean('orch_profile_auto_accept'), {
+    kind: 'orchestration.profile.auto_accept',
+    value: boolean('orch_profile_auto_accept'),
+  })
+  push(changes, orchestration.discovery.mode !== value('orch_discovery_mode'), {
+    kind: 'orchestration.discovery.mode',
+    value: /** @type {Config['orchestration']['discovery']['mode']} */ (value('orch_discovery_mode')),
+  })
+  push(changes, orchestration.discovery.question_budget !== number('orch_discovery_question_budget'), {
+    kind: 'orchestration.discovery.question_budget',
+    value: number('orch_discovery_question_budget'),
+  })
+  push(changes, orchestration.discovery.completion !== value('orch_discovery_completion'), {
+    kind: 'orchestration.discovery.completion',
+    value: /** @type {Config['orchestration']['discovery']['completion']} */ (value('orch_discovery_completion')),
+  })
+  push(changes, orchestration.execution.after_plan_approval !== value('orch_execution_after_plan_approval'), {
+    kind: 'orchestration.execution.after_plan_approval',
+    value: /** @type {Config['orchestration']['execution']['after_plan_approval']} */ (
+      value('orch_execution_after_plan_approval')
+    ),
+  })
+  push(
+    changes,
+    orchestration.execution.uncertain_concurrency !== value('orch_execution_uncertain_concurrency'),
+    {
+      kind: 'orchestration.execution.uncertain_concurrency',
+      value: /** @type {Config['orchestration']['execution']['uncertain_concurrency']} */ (
+        value('orch_execution_uncertain_concurrency')
+      ),
+    },
+  )
+  push(changes, orchestration.execution.repair_attempts !== number('orch_execution_repair_attempts'), {
+    kind: 'orchestration.execution.repair_attempts',
+    value: number('orch_execution_repair_attempts'),
+  })
+  for (const key of QUALITY_KEYS) {
+    const next = boolean(`orch_quality_${key}`)
+    push(changes, orchestration.quality[key] !== next, { kind: 'orchestration.quality', key, value: next })
+  }
+
+  const sources = SKILL_SOURCES.filter((source) => boolean(`orch_skills_sources_${source}`))
+  // Compared as a set rather than as a list, because three checkboxes cannot
+  // express an order: a `config.yaml` that lists `[web, github]` must not be
+  // rewritten into `[github, web]` merely because this panel drew it. When the
+  // set genuinely moves, what goes out is `SkillSourceSchema`'s own order.
+  push(changes, [...orchestration.skills.sources].sort().join(' ') !== [...sources].sort().join(' '), {
+    kind: 'orchestration.skills.sources',
+    value: /** @type {Config['orchestration']['skills']['sources']} */ ([...sources]),
+  })
+  const registries = patterns('orch_skills_trusted_registries')
+  push(changes, JSON.stringify(orchestration.skills.trusted_registries) !== JSON.stringify(registries), {
+    kind: 'orchestration.skills.trusted_registries',
+    value: registries,
+  })
+  push(changes, orchestration.skills.update_mode !== value('orch_skills_update_mode'), {
+    kind: 'orchestration.skills.update_mode',
+    value: /** @type {Config['orchestration']['skills']['update_mode']} */ (value('orch_skills_update_mode')),
+  })
   return changes
 }
 
@@ -377,6 +1128,10 @@ function seedConfigForm(form, config) {
     )
     control.value = String(value)
   }
+  /** @param {string} name @param {boolean} on */
+  const check = (name, on) => {
+    /** @type {HTMLInputElement} */ (form.elements.namedItem(name)).checked = on
+  }
   const autonomous = /** @type {HTMLInputElement} */ (form.elements.namedItem('autonomous'))
   const verifyCache = /** @type {HTMLInputElement} */ (form.elements.namedItem('verify_cache'))
   autonomous.checked = config.autonomous
@@ -390,8 +1145,27 @@ function seedConfigForm(form, config) {
   set('timeout_ms', config.verify.timeout_ms)
   set('lock_timeout_ms', config.verify.lock_timeout_ms)
   for (const key of VERIFY_COMMANDS) set(`patterns_${key}`, config.verify.failure_patterns[key].join('\n'))
-  set('specialists_json', JSON.stringify(config.specialists, null, 2))
-  set('tracks_json', JSON.stringify(config.tracks, null, 2))
+
+  // The orchestration block arrives whole whatever the file holds: every field
+  // is defaulted and every sub-block prefaulted, so a `config.yaml` written
+  // before this key existed still seeds a full set of controls rather than a
+  // half-empty fieldset the first save would fill in by accident.
+  const orchestration = config.orchestration
+  check('orch_profile_auto_accept', orchestration.profile.auto_accept)
+  set('orch_discovery_mode', orchestration.discovery.mode)
+  set('orch_discovery_question_budget', orchestration.discovery.question_budget)
+  set('orch_discovery_completion', orchestration.discovery.completion)
+  set('orch_execution_after_plan_approval', orchestration.execution.after_plan_approval)
+  set('orch_execution_uncertain_concurrency', orchestration.execution.uncertain_concurrency)
+  set('orch_execution_repair_attempts', orchestration.execution.repair_attempts)
+  for (const key of QUALITY_KEYS) check(`orch_quality_${key}`, orchestration.quality[key])
+  for (const source of SKILL_SOURCES) {
+    check(`orch_skills_sources_${source}`, orchestration.skills.sources.includes(source))
+  }
+  set('orch_skills_trusted_registries', orchestration.skills.trusted_registries.join('\n'))
+  set('orch_skills_update_mode', orchestration.skills.update_mode)
+  // `specialists_json` and `tracks_json` are hidden fields now, owned by
+  // `syncStructured()` — the draft is their single writer.
 }
 
 /** @param {HTMLFormElement} form @param {boolean} enabled */
@@ -451,26 +1225,131 @@ function factRow() {
   }
 }
 
-function trackRow() {
-  const { root, slots } = clone('tpl-track')
-  return {
-    root,
-    /** @param {[string, { required: string[], available: string[], max_cycles: number, gate?: { proven_by: string, blocks: string[] } }]} entry */
-    update([name, track]) {
-      const label = slots['name']
-      if (label !== undefined) verbatim(label, name)
-      const required = slots['required']
-      if (required !== undefined) verbatim(required, track.required.join(', '))
-      const available = slots['available']
-      if (available !== undefined) verbatim(available, track.available.join(', ') || '—')
-      const max = slots['max']
-      if (max !== undefined) verbatim(max, String(track.max_cycles))
-      const gate = slots['gate']
-      if (gate !== undefined) {
-        verbatim(gate, track.gate === undefined ? '—' : `${track.gate.proven_by} → ${track.gate.blocks.join(', ')}`)
-      }
-    },
+/**
+ * Every agent name this project has already named, from the draft alone.
+ *
+ * There is no endpoint behind this and there deliberately never will be:
+ * `ops/preflight.ts` records that the engine "has never read and cannot
+ * reliably locate" the agents directory, and a project-local agent may shadow a
+ * plugin one without the engine knowing. So these are *suggestions* — every box
+ * that offers them also accepts a name typed by hand, which is what keeps an
+ * agent scaffolded a minute ago usable the same minute.
+ *
+ * @param {{ specialists: Record<string, string>, tracks: Record<string, any> }} model
+ * @returns {string[]}
+ */
+function knownAgents(model) {
+  const names = new Set(Object.keys(model.specialists))
+  for (const track of Object.values(model.tracks)) {
+    for (const list of ['required', 'available', 'closing']) {
+      for (const agent of track[list] ?? []) names.add(agent)
+    }
+    if (track.gate !== undefined) {
+      names.add(track.gate.proven_by)
+      for (const agent of track.gate.blocks ?? []) names.add(agent)
+    }
+    if (track.map !== undefined) names.add(track.map.drafted_by)
   }
+  names.delete('')
+  return [...names].sort()
+}
+
+/**
+ * `AgentNameSchema` in the browser: the pattern, the `--` rule and the reserved
+ * list. Restated rather than imported because `public/` imports no engine
+ * module — and the server still validates, so this only saves a round trip.
+ *
+ * @param {string} name
+ * @returns {boolean}
+ */
+function validAgent(name) {
+  return NAME.test(name) && !name.includes('--') && !RESERVED_AGENTS.includes(name)
+}
+
+/**
+ * Why the schema would reject this track, in the order a reader meets the
+ * fields. These are the same rules `TrackSchema` and `ConfigSchema.superRefine`
+ * apply — mirrored, never replacing them: the server re-validates the whole
+ * document under the project lock and remains the authority.
+ *
+ * @param {{ specialists: Record<string, string>, tracks: Record<string, any> } | null} model
+ * @param {string} name
+ * @returns {{ id: string, key: string, params: Record<string, string> }[]}
+ */
+function trackProblems(model, name) {
+  const track = model?.tracks[name]
+  if (model === null || track === undefined) return []
+
+  /** @type {{ id: string, key: string, params: Record<string, string> }[]} */
+  const problems = []
+  const seen = new Set()
+  /** @param {string} key @param {string} [agent] */
+  const add = (key, agent) => {
+    const id = agent === undefined ? key : `${key}:${agent}`
+    if (seen.has(id)) return
+    seen.add(id)
+    problems.push({ id, key, params: agent === undefined ? {} : { agent } })
+  }
+
+  const known = new Set([...track.required, ...(track.available ?? []), ...(track.closing ?? [])])
+  const draftable = new Set([...track.required, ...(track.available ?? [])])
+  const forbidden = new Set(
+    Object.entries(model.specialists).filter(([, mode]) => mode === 'never').map(([agent]) => agent),
+  )
+
+  if (track.required.length === 0) add('config.problem.noRequired')
+
+  if (track.gate !== undefined) {
+    if (!known.has(track.gate.proven_by)) add('config.problem.gateUnknown', track.gate.proven_by)
+    for (const agent of track.gate.blocks ?? []) {
+      if (!known.has(agent)) add('config.problem.blockUnknown', agent)
+    }
+    if ((track.gate.blocks ?? []).includes(track.gate.proven_by)) {
+      add('config.problem.gateSelfBlock', track.gate.proven_by)
+    }
+    if ((track.gate.blocks ?? []).length === 0) add('config.problem.noBlocks')
+    if (forbidden.has(track.gate.proven_by)) add('config.problem.forbidden', track.gate.proven_by)
+  }
+
+  if (track.map !== undefined) {
+    if (!draftable.has(track.map.drafted_by)) add('config.problem.mapUnknown', track.map.drafted_by)
+    if (forbidden.has(track.map.drafted_by)) add('config.problem.forbidden', track.map.drafted_by)
+  }
+
+  for (const agent of [...track.required, ...(track.closing ?? [])]) {
+    if (forbidden.has(agent)) add('config.problem.forbidden', agent)
+  }
+
+  return problems
+}
+
+/**
+ * Options for a `<select>` whose choices come from the draft.
+ *
+ * Rebuilt only when the set moved — a `<select>` is not typed into, but
+ * replacing its children while its dropdown is open closes it.
+ *
+ * @param {HTMLSelectElement} select
+ * @param {string[]} names
+ * @param {string} value
+ */
+function fillSelect(select, names, value) {
+  // The current value always appears, even when it names an agent the track no
+  // longer has: dropping it would silently rewrite the config to whatever
+  // happened to be first, and the problem list is what says it is wrong.
+  const offered = [...new Set(value === '' ? names : [value, ...names])].sort()
+  if (select.dataset['offered'] !== offered.join(',')) {
+    select.dataset['offered'] = offered.join(',')
+    select.replaceChildren(
+      ...offered.map((name) => {
+        const option = document.createElement('option')
+        option.value = name
+        option.textContent = name
+        return option
+      }),
+    )
+  }
+  if (select.value !== value) select.value = value
 }
 
 function specialistRow() {
