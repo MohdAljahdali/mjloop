@@ -139,7 +139,10 @@ mjloop-cli config set orchestration.discovery.mode ask
 
 A per-feature choice you state plainly — *skip the questions*, *interview me on this one
 first* — overrides the project default in either direction, for that one request. It is
-recorded where it happened, so that nobody later mistakes a one-off for the project's policy.
+recorded where it happened: the brief carries its own `discovery` block naming the mode and
+the question budget that interview actually ran under, so that nobody later mistakes a
+one-off for the project's policy, or reads a brief against a setting the project has since
+changed.
 
 ### The question budget
 
@@ -154,16 +157,81 @@ tells the plan track exactly where it must not assume, and it tells you what a s
 shorter interview would be about. A guess recorded as an answer is indistinguishable from a
 decision you made, and is found much later by whoever built on it.
 
-### The draft is not stored yet
+### Where a brief lives
 
-The brief lives in the conversation, and so does your approval of it. There is no
-feature-brief record on disk, no directory under `.mjloop/` that holds one, and no engine
-operation that creates or approves one — those arrive with the feature-brief records, which
-this version does not have yet, and until then a brief does not outlive the session that
-produced it.
+A brief outlives the conversation that produced it. Each one is a directory —
+`.mjloop/features/F001-<slug>/` — holding one file per revision: `rev-001.json`, then
+`rev-002.json`, and so on. A draft is written into place as the interview goes, question by
+question, so an interview interrupted halfway is resumed rather than asked again. The moment
+a revision is approved that file stops being writable at all, and the engine enforces it
+rather than trusting whoever holds the tool. Later stories are planned against those bytes,
+and a record that could still move is a record a plan cannot cite.
 
-That is written down rather than left to be found out, because the alternative is worse than
-the gap itself: documentation describing a file nobody writes sends you looking for it.
+So a stored revision only ever says `draft` or `approved`. `superseded` is a third status
+you will see and nothing ever writes it: a revision is superseded when a higher revision of
+the same feature exists, which is worked out when the record is read. Storing it would mean
+writing to the very file the immutability rule exists to protect, and a stored status could
+then disagree with the revisions sitting beside it.
+
+**Approval is compare-and-swap.** It carries the revision number that was put in front of
+you, and if the brief has moved on since — another window, another session, one last
+decision appended — it is refused outright rather than landing on a record nobody read. It
+records who approved it, when, and their own words if they gave any. Approving from the
+cockpit is attributed to the machine's own account and is not a field the page can fill in:
+an approver a browser could type would be a forgeable authorisation for work nobody agreed
+to. It also refuses a brief with no acceptance criteria: a draft may sit without them while
+it is still being assembled, but every later story is judged against them, so approving a
+brief that promises nothing is not a thing the engine allows.
+
+**Changing an approved brief creates a successor.** Revision 2 opens as a draft carrying
+revision 1's content forward and recording that it supersedes it; revision 1 is not touched.
+Rollback is reselection, exactly as it is for the component map: returning to an earlier
+revision means approving its content as a **new** revision, so nothing a run may have pinned
+is ever rewritten or deleted. A feature that went 1 → 2 → back to 1's content approved as 3
+has all three revisions on disk, each still saying what it said.
+
+`.mjloop/features/` is engine-owned, the way `.mjloop/profile/` and `state.json` are:
+Claude Code's `Write` and `Edit` are denied inside it. That denial is what an approved brief
+is worth: a brief a hand edit could reach would let somebody approve a title and a list of
+criteria that a later keystroke replaced, and the record would still read as your approval.
+Briefs are created, read, updated and approved through the engine's own `mjloop_feature_*`
+operations, the way stories are written through `mjloop_story_*`.
+
+The cockpit is allowed exactly two things with a brief: read one, and approve the revision
+it read. It serves a feature's latest revision with the revisions behind it, and accepts one
+kind of write against it — approval, compare-and-swapped on the revision it served. It
+cannot create a brief, edit one, supersede one, or turn one into a plan or a run: authoring
+a brief is the interview's job, and planning or building one is `/mjloop:plan` and
+`/mjloop:build`, which the page queues as commands like everything else. This version ships
+no Features tab, so that is the server's boundary rather than a screen's — said here rather
+than left to be found out by somebody looking for the tab.
+
+### After approval: `discovery.completion`
+
+`orchestration.discovery.completion` is the project's answer to what happens once a brief is
+approved. It is read then and not before: a completion consulted while the brief is still a
+draft is a start decided by policy against decisions nobody has agreed to yet.
+
+| Setting | What follows an approved brief |
+|---|---|
+| `auto-plan` | the plan track opens straight away, against the approved brief |
+| `review` | the brief is recorded and nothing else happens — **the default** |
+| `save-only` | the brief is the whole deliverable |
+
+`auto-plan` starts only from an approved brief. If you asked for changes, went quiet, or the
+budget ran out with the brief still a draft, there is nothing here to plan and it waits
+exactly as `review` does. It skips no gate either — the fit-check and the plan approval
+still stand, against the plan. The config refuses `auto-plan` while `discovery.mode` is
+`off`, because a project with discovery off never produces the brief it would start from.
+
+`review` is the default because approving a brief and asking for it to be built now are two
+different sentences. It stops with the brief recorded and names the feature id so you can
+point at it later; the plan track opens when you say so.
+
+`save-only` is for a project that gathers briefs first and works them later, in an order
+somebody chooses. It records the brief and stops — no plan, no stories, no run — because a
+command that helpfully planned the one it happened to be holding would have chosen that
+order on your behalf.
 
 ## While a run is going
 
@@ -315,6 +383,10 @@ and that is a decision a project makes for itself, once, in writing.
 `always` and `ask` are the two values that turn the interview on, and **Feature discovery**
 above is what they turn on — including what it refuses to do, which a table of accepted
 values cannot say.
+
+`discovery.completion` is read afterwards, once a brief has been approved, and **After
+approval** above is what its three values do — including what each of them declines to do,
+which is the half that matters when a project picks between them.
 
 Two combinations are refused when the document is parsed, each because it is a setting
 that could never take effect and would fail silently:

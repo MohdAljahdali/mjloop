@@ -1,12 +1,15 @@
 import crypto from 'node:crypto'
 import type http from 'node:http'
 import type { WebCode } from './codes.js'
+import { FeatureIdSchema } from '../schemas/feature.js'
 import { PlanIdSchema, StoryIdSchema } from '../schemas/plan.js'
 import { IdSchema } from '../schemas/state.js'
 import {
   NotFoundError,
   readConfigView,
   readCycleDetail,
+  readFeatureDetail,
+  readFeatures,
   readMemories,
   readMemoryEntry,
   readPlanDetail,
@@ -142,6 +145,21 @@ async function route(projectDir: string, segments: readonly string[]): Promise<A
       // route that took a revision would be the first half of one that set it.
       if (segments.length !== 1) break
       return ok(await readProfileView(projectDir))
+
+    case 'features':
+      if (segments.length === 1) return ok(await readFeatures(projectDir))
+      if (segments.length !== 2 || first === undefined) break
+      // `FeatureIdSchema` rather than a retyped `^F\d{3}$`, for the reason this
+      // file's header gives about plan and story ids: the id shape *is* the
+      // traversal guard, and a copy of it here is a copy that can be relaxed
+      // without the schema noticing. `.` is outside the class, so `..` cannot
+      // match.
+      if (!FeatureIdSchema.safeParse(first).success) return fail(400, 'error.badRequest')
+      // No revision segment, and none a later story should add. This serves the
+      // latest revision and the history beside it; a route that selected a
+      // revision would be the first half of one that *set* the selected
+      // revision, and reselection is precisely how a brief is rolled back.
+      return ok(await readFeatureDetail(projectDir, first))
 
     case 'memory':
       if (segments.length === 1) return ok(await readMemories(projectDir))

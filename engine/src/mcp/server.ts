@@ -2,7 +2,9 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import * as z from 'zod'
+import { FeatureDiscoveryModeSchema } from '../schemas/config.js'
 import { AgentNameSchema, AgentResultSchema } from '../schemas/contract.js'
+import { FeatureIdSchema } from '../schemas/feature.js'
 import { MemoryBodySchema, MemoryKindSchema, MemoryTagsSchema, MemoryTitleSchema } from '../schemas/memory.js'
 import { ApprovalDecisionSchema, StoryStatusSchema } from '../schemas/plan.js'
 import { IdSchema, ResultSchema } from '../schemas/state.js'
@@ -18,6 +20,24 @@ import { cycleAdvance, halt, runStart } from '../ops/run.js'
 import { stateSummary } from '../ops/summary.js'
 import { readTelemetry } from '../ops/telemetry.js'
 import { verifyRun } from '../ops/verify.js'
+// The only store this file reaches for directly, and deliberately so: the
+// feature-brief store already *is* the operation. It takes the write lock,
+// writes atomically, compares and swaps on the expected revision, and validates
+// `affectedComponents` against the accepted profile — so an `ops/feature.ts`
+// between here and there would be a file of eight one-line pass-throughs, which
+// is a layer that can only ever be wrong about something.
+import {
+  appendFeatureDecision,
+  approveFeatureBrief,
+  createFeatureBrief,
+  listFeatureRevisions,
+  listFeatureSummaries,
+  readFeatureBrief,
+  readFeatureRevision,
+  supersedeFeatureBrief,
+  updateFeatureDraft,
+  type FeatureDraftPatch,
+} from '../store/feature-store.js'
 import { isEntrypoint } from '../util/entrypoint.js'
 
 /** MCP servers are launched with the project as cwd; the argument is an escape hatch. */
@@ -244,6 +264,295 @@ export function buildServer(): McpServer {
     async ({ project_dir, reason }) => guard(async () => ok(await halt(resolveProjectDir(project_dir), reason))),
   )
 
+  // Four tools over eight store entry points, and the arithmetic is the one
+  // `mjloop_report_get` does below: a declaration is not paid for once, it is
+  // paid for on every turn in every context this server is attached to, so the
+  // question is never "is this tool useful" but "is it worth what every future
+  // turn pays for it". Each merge below is an operation that shares a *record
+  // and a moment* with the one it joins, not merely a prefix.
+  //
+  // create ← create + supersede. Both mint a draft revision of a feature; the
+  //   only difference is where its content comes from — a blank one, or the
+  //   approved revision it replaces. Splitting them buys a discriminator and
+  //   charges a whole declaration for it.
+  // get ← read one revision + read the latest + list features. Three
+  //   projections of one walk over one directory, exactly as telemetry and
+  //   preflight are two projections of one walk over run history. The arguments
+  //   discriminate on their own: no feature means list, no revision means latest.
+  // update ← set fields + append a decision. One act, not two: the interview
+  //   learns something and writes down both what it asked and what that settled.
+  // approve stands alone, and that is the point of it. It is the only
+  //   irreversible write here — the revision it lands on is never rewritten
+  //   again — and the only one a person rather than a model decides. Folded
+  //   into `update` it would be reachable by a mistyped argument.
+  //
+  // Twenty-two tools. `tests/mcp/server.test.ts` asserts the list exactly, so
+  // the twenty-third is an edit to a budget rather than a side effect.
+  server.registerTool(
+    'mjloop_feature_create',
+    {
+      title: 'Open a feature brief',
+      description:
+        'Mint a draft feature brief — what discovery decided, written down so a plan is built on a record rather than on chat scrollback. Returns its id and revision; fill it in with mjloop_feature_update and record the decision with mjloop_feature_approve. With supersedes it instead opens the next revision of an existing feature as a draft, carrying the approved content forward: that is the only way to change an approved brief, and it leaves the approved revision saying exactly what it always said.',
+      inputSchema: {
+        project_dir: projectDirArg,
+        title: z.string().min(1).max(200).optional().describe('One line naming the feature. Omitted only with supersedes'),
+        problem: z
+          .string()
+          .min(1)
+          .max(20000)
+          .optional()
+          .describe('What is wrong today and for whom, in the words of the person who asked. Omitted only with supersedes'),
+        // Recorded rather than read off `.mjloop/config.yaml` here, because the
+        // record must say which policy this interview ran under and the live
+        // config answers a question about the present. A per-feature override
+        // is exactly the case that would otherwise be lost.
+        discovery_mode: FeatureDiscoveryModeSchema.optional().describe(
+          'The discovery policy this brief was produced under — orchestration.discovery.mode, or the per-feature choice that overrode it',
+        ),
+        question_budget: z
+          .number()
+          .int()
+          .min(1)
+          .max(20)
+          .optional()
+          .describe('The question ceiling the interview ran under, from orchestration.discovery.question_budget or its override'),
+        acceptance: z
+          .array(z.string().min(1))
+          .optional()
+          .describe('Checkable conditions. May be empty on a draft; approval refuses a brief that still has none'),
+        affected_components: z
+          .array(IdSchema)
+          .optional()
+          .describe('Component ids from the accepted map in .mjloop/profile/accepted/. Empty is legal; an unknown id is refused'),
+        supersedes: FeatureIdSchema.optional().describe('Feature id whose approved revision this one replaces, e.g. F001'),
+        expect_revision: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe('With supersedes: the approved revision you read. Refused if the feature has moved on since'),
+      },
+    },
+    async ({ project_dir, title, problem, discovery_mode, question_budget, acceptance, affected_components, supersedes, expect_revision }) =>
+      guard(async () => {
+        const dir = resolveProjectDir(project_dir)
+
+        if (supersedes !== undefined) {
+          if (expect_revision === undefined) {
+            throw new Error(
+              'superseding is compare-and-swap: name expect_revision, the approved revision you read. Without it this ' +
+                'would replace whatever happens to be there now, which may be a revision somebody else approved while ' +
+                'you were reading',
+            )
+          }
+          // Refused rather than ignored, for the reason a closing roster that
+          // also names a cycle is refused: a successor copies its predecessor's
+          // content by definition, so content passed here is an answer to a
+          // question this call does not ask. Accepting and dropping it would
+          // report success for a title nobody wrote down.
+          const carried = { title, problem, discovery_mode, question_budget, acceptance, affected_components }
+          const named = Object.entries(carried)
+            .filter(([, value]) => value !== undefined)
+            .map(([key]) => key)
+          if (named.length > 0) {
+            throw new Error(
+              `a successor carries its predecessor's content forward, so it takes none of its own — drop ${named.join(', ')} ` +
+                'and change the draft this returns with mjloop_feature_update',
+            )
+          }
+          return ok(await supersedeFeatureBrief(dir, { id: supersedes, expectRevision: expect_revision }))
+        }
+
+        if (expect_revision !== undefined) {
+          throw new Error('expect_revision belongs to supersedes — a first revision replaces nothing, so there is no revision to swap on')
+        }
+        if (title === undefined || problem === undefined) {
+          throw new Error('a new brief needs a title and a problem, or a supersedes naming the feature whose next revision this is')
+        }
+        // Demanded rather than defaulted: a brief that recorded a policy nobody
+        // chose would read, months later, as evidence of an interview that
+        // never happened.
+        if (discovery_mode === undefined || question_budget === undefined) {
+          throw new Error(
+            'a brief records the policy it was produced under — give discovery_mode and question_budget, reading ' +
+              'orchestration.discovery.mode and orchestration.discovery.question_budget from .mjloop/config.yaml unless ' +
+              'this feature was given its own',
+          )
+        }
+
+        return ok(
+          await createFeatureBrief(dir, {
+            title,
+            problem,
+            discovery: { mode: discovery_mode, questionBudget: question_budget },
+            ...(acceptance === undefined ? {} : { acceptance }),
+            ...(affected_components === undefined ? {} : { affectedComponents: affected_components }),
+          }),
+        )
+      }),
+  )
+
+  server.registerTool(
+    'mjloop_feature_get',
+    {
+      title: 'Read a feature brief',
+      description:
+        'Read the latest revision of one feature, or with revision the exact one a plan was built on, or with no feature at all a summary of every feature this project has raised. A single read also returns the revision list and a digest of the record, which are what an expect_revision and an expect_digest are taken from. status is superseded when a higher revision exists — it is derived here and never stored.',
+      inputSchema: {
+        project_dir: projectDirArg,
+        feature: FeatureIdSchema.optional().describe('Feature id, e.g. F001. Omit to list every feature'),
+        revision: z.number().int().positive().optional().describe('Read this exact revision instead of the latest'),
+      },
+    },
+    async ({ project_dir, feature, revision }) =>
+      guard(async () => {
+        const dir = resolveProjectDir(project_dir)
+        if (feature === undefined) {
+          if (revision !== undefined) throw new Error('a revision belongs to a feature — name one, or drop revision to list every feature')
+          // An empty project is an answer, not an error: nothing has been
+          // raised yet, and that is exactly what the caller asked.
+          return ok({ features: await listFeatureSummaries(dir) })
+        }
+
+        // The store reads a missing feature as null, which is right for a read
+        // model that wants a cheap 404. A model asking this question needs the
+        // opposite: an absent answer it can act on, naming what does exist.
+        const revisions = await listFeatureRevisions(dir, feature)
+        if (revisions.length === 0) {
+          throw new Error(`no feature ${feature} in this project — call mjloop_feature_get with no feature to see which exist`)
+        }
+        const record = revision === undefined ? await readFeatureBrief(dir, feature) : await readFeatureRevision(dir, feature, revision)
+        if (record === null) {
+          throw new Error(`${feature} has no revision ${String(revision)} — it has ${revisions.join(', ')}`)
+        }
+        return ok({ ...record, revisions })
+      }),
+  )
+
+  server.registerTool(
+    'mjloop_feature_update',
+    {
+      title: 'Update a feature draft',
+      description:
+        'Record what the interview just learned: a question with the recommendation you made and the answer that came back, and the acceptance criteria, components, title or problem that answer settled. A question with no answer is a real record — it is the decision the budget ran out on, and dropping it would make the brief look more settled than it is. Draft only: an approved revision is never rewritten, and mjloop_feature_create with supersedes is the way to change one.',
+      inputSchema: {
+        project_dir: projectDirArg,
+        feature: FeatureIdSchema.describe('Feature id, e.g. F001'),
+        question: z.string().min(1).max(2000).optional().describe('A decision question the interview asked'),
+        recommendation: z.string().min(1).max(2000).nullish().describe('What you recommended, and why, when you asked it'),
+        answer: z.string().min(1).max(4000).nullish().describe("The answer in the user's own words. Omit for a question the budget ran out on"),
+        title: z.string().min(1).max(200).optional(),
+        problem: z.string().min(1).max(20000).optional(),
+        acceptance: z.array(z.string().min(1)).optional().describe('Replaces the list; approval refuses a brief with none'),
+        affected_components: z.array(IdSchema).optional().describe('Replaces the list. Every id must be in the accepted component map'),
+        // A successor inherits its predecessor's discovery block along with the
+        // rest of its content, and the interview behind revision 2 is not the
+        // interview behind revision 1: it may run under a mode the project has
+        // since moved to, or under an override stated for this request alone.
+        // `mjloop_feature_create` refuses these alongside `supersedes` and names
+        // this tool as where they belong, so they have to be reachable here or
+        // that refusal points at nothing.
+        discovery_mode: FeatureDiscoveryModeSchema.optional().describe(
+          'The discovery policy this revision\'s own interview ran under, when it is not the one carried forward',
+        ),
+        question_budget: z
+          .number()
+          .int()
+          .min(1)
+          .max(20)
+          .optional()
+          .describe('The question ceiling this revision\'s own interview ran under'),
+        discovery_complete: z
+          .boolean()
+          .optional()
+          .describe('true when the interview has stopped asking, false to reopen it. The engine stamps the time'),
+      },
+    },
+    async ({ project_dir, feature, question, recommendation, answer, title, problem, acceptance, affected_components, discovery_mode, question_budget, discovery_complete }) =>
+      guard(async () => {
+        const dir = resolveProjectDir(project_dir)
+        if (question === undefined && (recommendation !== undefined || answer !== undefined)) {
+          throw new Error('a recommendation and an answer belong to a question — name the question this decision answers')
+        }
+
+        const patch: FeatureDraftPatch = {
+          ...(title === undefined ? {} : { title }),
+          ...(problem === undefined ? {} : { problem }),
+          ...(acceptance === undefined ? {} : { acceptance }),
+          ...(affected_components === undefined ? {} : { affectedComponents: affected_components }),
+          ...(discovery_mode === undefined ? {} : { discoveryMode: discovery_mode }),
+          ...(question_budget === undefined ? {} : { discoveryQuestionBudget: question_budget }),
+          // The timestamp is the engine's, exactly as a decision's `at` is. A
+          // caller asked for an ISO string invents one, and a brief's only
+          // claim about when its interview ended would then be a guess.
+          ...(discovery_complete === undefined
+            ? {}
+            : { discoveryCompletedAt: discovery_complete ? new Date().toISOString() : null }),
+        }
+
+        const patched = Object.keys(patch).length === 0 ? null : await updateFeatureDraft(dir, feature, patch)
+        if (question === undefined) {
+          // Reporting success for a call that moved no file would tell the
+          // interview its answer was written down when nothing was.
+          if (patched === null) throw new Error('nothing to change — pass a question to record a decision, or a field to set')
+          return ok(patched)
+        }
+        // The append runs last on purpose. Setting a field is idempotent and
+        // appending a decision is not, so a call that fails part-way is safe to
+        // retry: the patch re-applies to the same value and the decision is
+        // recorded once. The other order would duplicate the decision.
+        return ok(
+          await appendFeatureDecision(dir, feature, {
+            question,
+            recommendation: recommendation ?? null,
+            answer: answer ?? null,
+          }),
+        )
+      }),
+  )
+
+  server.registerTool(
+    'mjloop_feature_approve',
+    {
+      title: 'Record a decision about a feature brief',
+      description:
+        'Approve a draft brief, which is what lets a plan be built on it and is the last write that revision ever takes. Ask the user and record their answer, including their own words in note. Never record an approval nobody gave. Refused unless expect_revision and expect_digest are the revision and the digest of the brief you actually showed them, so a brief that was changed while you were waiting is refused rather than approved unread, and refused if the brief still has no acceptance criteria.',
+      inputSchema: {
+        project_dir: projectDirArg,
+        feature: FeatureIdSchema.describe('Feature id, e.g. F001'),
+        expect_revision: z
+          .number()
+          .int()
+          .positive()
+          .describe('The revision you read and showed the user. Refused if the brief has moved on since'),
+        // The revision number alone is not a precondition on a draft: it does
+        // not move while the record is editable, which is the whole of the
+        // window an approval waits in. The digest does, so it is required
+        // rather than optional — an approval that could omit it would be an
+        // approval that could be built on a brief nobody read.
+        expect_digest: z
+          .string()
+          .regex(/^[a-f0-9]{64}$/)
+          .describe('The digest returned beside the brief you showed the user. Refused if a word of it has changed since'),
+        by: z.string().min(1).describe('Who decided. Use the user name or identifier, not the agent'),
+        note: z.string().min(1).nullish().describe("The approver's own words"),
+      },
+    },
+    async ({ project_dir, feature, expect_revision, expect_digest, by, note }) =>
+      guard(async () =>
+        ok(
+          await approveFeatureBrief(resolveProjectDir(project_dir), {
+            id: feature,
+            expectRevision: expect_revision,
+            expectDigest: expect_digest,
+            by,
+            ...(note === undefined ? {} : { note }),
+          }),
+        ),
+      ),
+  )
+
   server.registerTool(
     'mjloop_plan_create',
     {
@@ -453,7 +762,9 @@ export function buildServer(): McpServer {
   // declaration on every turn. Neither can be served by the cockpit alone —
   // the leader needs the preflight estimate under gates.preflight: human, and
   // a slash command cannot make an HTTP request to a server that may not be
-  // running. Eighteen tools, not nineteen and not seventeen.
+  // running. Eighteen tools when this was written, not nineteen and not
+  // seventeen; `tests/mcp/server.test.ts` keeps the running count, because a
+  // total stated here goes stale the moment a later story adds one.
   server.registerTool(
     'mjloop_report_get',
     {

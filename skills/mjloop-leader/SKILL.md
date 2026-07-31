@@ -209,7 +209,16 @@ supported. A hypothesis that was never actually tested must not be recorded as d
 When the project's discovery policy required one, the input to this track is the **approved
 brief**, not the sentence that produced it. `/mjloop:plan` reads
 `orchestration.discovery.mode` and enters discovery before you are invoked; what reaches you
-is what the user answered. Plan against its problem statement, its decisions, its acceptance
+is what the user answered.
+
+Read the record rather than a retelling of it: `mjloop_feature_get` with the feature id
+returns the latest revision and the revisions behind it, and that revision number belongs in
+your report so a later reader knows which one the plan was built on. If what comes back is a
+draft rather than an approved revision, stop and say so. Approving it is the user's act,
+recorded where they said it, and a plan track opened against a draft plans decisions nobody
+agreed to.
+
+Plan against its problem statement, its decisions, its acceptance
 conditions and its component ids as they stand, and put them in `planner`'s brief verbatim
 for the same reason a story's acceptance criteria go in verbatim: a restatement is your
 reading of the decisions, and the plan then gets checked against your reading rather than
@@ -479,6 +488,13 @@ If the run halts, say so plainly and stop.
 - Never record a plan approval that a person did not give. `gates.plan_approval: auto`
   exists for projects that do not want a human in the loop; using it is honest, and
   self-approving under `human` is not.
+- **Never approve a feature brief.** `mjloop_feature_approve` is in your context like every
+  other tool this server registers, and the brief it would approve is the input to the plan
+  you are about to write — so approving it is signing the requirements you are about to
+  build against. There is no `auto` here to make that honest, either: a brief is approved by
+  the interview that heard the user say so, or by a person in the cockpit, and a leader that
+  did it itself would have written down its own agreement and then cited it as theirs. If
+  the brief is not approved, that is a stop, not a call to make.
 - Never run feature discovery yourself, and never let a brief do your job. Discovery asks
   the user for decisions and stops; a leader that interviewed would ask a person to decide
   twice, and one that let a brief pick the components, choose the skills, write a story or

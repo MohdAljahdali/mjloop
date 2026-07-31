@@ -5,7 +5,8 @@ import { describe, expect, it } from 'vitest'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { buildServer } from '../../src/mcp/server.js'
-import { FeatureDiscoveryModeSchema, OrchestrationSchema } from '../../src/schemas/config.js'
+import { DiscoveryCompletionSchema, FeatureDiscoveryModeSchema, OrchestrationSchema } from '../../src/schemas/config.js'
+import { FeatureBriefSchema } from '../../src/schemas/feature.js'
 import { acceptedRevisionFile } from '../../src/store/project-profile-store.js'
 import { resolveLoopPaths } from '../../src/store/paths.js'
 
@@ -16,10 +17,13 @@ import { resolveLoopPaths } from '../../src/store/paths.js'
  * The second suite to read outside `engine/`, and it exists for the reason
  * `agents.test.ts` states in its own header: a tool a subagent was never
  * granted is *absent*, not an error, and a model that is told to call one
- * improvises instead. This skill is written before the records it will one day
- * write exist at all, so the failure it defends against is concrete: a sentence
- * naming `mjloop_feature_create` would read as instruction, resolve to nothing,
- * and be answered by a model inventing a file layout nobody designed.
+ * improvises instead. That was the whole of it while the feature-brief records
+ * were unwritten — a sentence naming `mjloop_feature_create` resolved to
+ * nothing and was answered by a model inventing a file layout nobody designed.
+ * S04 registered those four operations, so the danger inverted rather than
+ * going away: the skill names tools now, every name in it resolves, and the
+ * question this file answers is whether the ones it names are the four its
+ * boundary admits. A fifth would not fail silently — it would work.
  *
  * The rest of the suite defends the skill's boundary. Discovery interviews and
  * stops; the plan track's fit-check gate and human approval gate come after it.
@@ -52,6 +56,18 @@ const SKILL_NAME = 'mjloop-feature-discovery'
 const SKILL_FILE = path.join(SKILLS_DIR, SKILL_NAME, 'SKILL.md')
 const PLAN_COMMAND = path.join(COMMANDS_DIR, 'plan.md')
 const LEADER_SKILL = path.join(SKILLS_DIR, 'mjloop-leader', 'SKILL.md')
+
+/**
+ * The plan command's two policy branches, by heading.
+ *
+ * They are read separately because they are different settings that happen to
+ * be documented in the same bullet shape: one decides whether an interview
+ * happens, the other decides what happens to what it produced. A scan over the
+ * whole document would read `always | ask | off | auto-plan | review |
+ * save-only` as one list and match neither schema.
+ */
+const DISCOVERY_SECTION = '## Before the plan track: the discovery branch'
+const COMPLETION_SECTION = '## After the brief: the completion branch'
 
 const skill = await fs.readFile(SKILL_FILE, 'utf8')
 const planCommand = await fs.readFile(PLAN_COMMAND, 'utf8')
@@ -181,16 +197,15 @@ describe('the feature discovery skill', () => {
   })
 
   it('names no MCP tool the engine does not register', () => {
-    // The assertion that matters most, and the one that catches the S04 seam.
-    // The feature-brief records and their MCP operations do not exist yet; a
-    // skill that named `mjloop_feature_create` today would instruct a model to
-    // call a tool it was never granted, and the tool would simply be missing.
-    // When S04 registers them, this test goes green on its own and the author
-    // finds the seam rather than the seam finding them.
+    // Still the first thing asked, and it now bites on a real name rather than
+    // on the absence of all of them: a skill that told a model to call
+    // `mjloop_feature_upsert` would be naming an operation this project
+    // considered and did not build, and the model would improvise the nearest
+    // thing it could reach.
     expect(toolsNamedIn(skill).filter((tool) => !registered.has(tool))).toEqual([])
   })
 
-  it('names no engine tool at all, so it can neither plan, route, run, nor write', () => {
+  it('names only the four feature-brief tools, so it can neither plan, route, nor run', () => {
     // The tools that would break the boundary outright, named so that a reader
     // sees what is at stake and so that a rename in the engine fails here
     // rather than quietly emptying a filter.
@@ -200,15 +215,42 @@ describe('the feature discovery skill', () => {
     // forbidden leaves everything nobody thought of permitted. The prefix-and-
     // anchor filter this replaces covered eleven of the registered tools and
     // left `mjloop_memory_add`, `mjloop_index_render` and `mjloop_init`
-    // allowed — all three writers, and `memory_add` is the tempting one:
-    // persisting a brief with it is exactly the shortcut this skill must not
-    // take while the feature-brief records are unwritten.
+    // allowed — all three writers, and `memory_add` is still the tempting one:
+    // a brief persisted there is a record with no revision, no approval and no
+    // immutability, which is every property `.mjloop/features/` exists to give
+    // it.
     //
-    // The skill's own sentence is the standard — it "reads files and asks
-    // questions; it writes nothing" — so the allowlist is empty. S04 opens the
-    // seam by adding to it deliberately rather than by finding a gap in it.
-    const READ_ONLY_TOOLS: string[] = []
-    expect(toolsNamedIn(skill).filter((tool) => !READ_ONLY_TOOLS.includes(tool))).toEqual([])
+    // The allowlist was empty until S04, because the skill wrote nothing. It is
+    // now exactly the four operations that open a brief, fill it in, read one
+    // back and record the user's approval of it — hand-written for the reason
+    // the CLI allowlist below is hand-written: the engine carries no marker
+    // saying which of its tools this skill's boundary admits, so a fifth is a
+    // deliberate edit here rather than a gap somebody found in a prefix match.
+    // Why each is on it:
+    //
+    // - `_get` — the interview reads earlier briefs before its first question.
+    //   A decision the user already made is a fact, and this is the only way to
+    //   see one.
+    // - `_create` — the brief is the skill's entire output. Writing down what
+    //   the user decided is not planning, routing or executing: the record
+    //   names no approach, no agent, no skill and no command.
+    // - `_update` — a decision is recorded as it is made rather than batched at
+    //   the end, so an interrupted interview resumes instead of being re-asked.
+    // - `_approve` — approval is the user's word in this conversation, and this
+    //   skill is the only thing present to hear it. The leader is forbidden it
+    //   (asserted below) and the cockpit's copy is a person clicking, so a
+    //   skill that could not record an approval would leave the browser as the
+    //   only way an approved brief ever comes into existence.
+    const FEATURE_BRIEF_TOOLS = ['mjloop_feature_approve', 'mjloop_feature_create', 'mjloop_feature_get', 'mjloop_feature_update']
+    // Proved against the server, so a rename there fails here instead of
+    // widening the allowlist to a tool nobody registers.
+    for (const tool of FEATURE_BRIEF_TOOLS) expect(registered, tool).toContain(tool)
+    expect(toolsNamedIn(skill).filter((tool) => !FEATURE_BRIEF_TOOLS.includes(tool)), 'a tool this skill may not call').toEqual([])
+    // And exactly those four, not some subset of them. A skill that stopped
+    // naming `_approve` would present a draft nobody can approve, and one that
+    // stopped naming `_get` would ask the user a question they answered in an
+    // earlier brief — both read as tidying, and each re-opens a debt S04 closed.
+    expect(toolsNamedIn(skill), 'the four it must name').toEqual(FEATURE_BRIEF_TOOLS)
   })
 
   it('names no agent', () => {
@@ -293,20 +335,34 @@ describe('the feature discovery skill', () => {
     expect(boundary.filter((rule) => !/^- No /.test(rule))).toEqual([])
   })
 
-  it('shapes the draft with exactly the fields S04 will persist', () => {
-    // S04 (`engine/src/schemas/feature.ts`) introduces `FeatureBrief` with
-    // these five field names. They cannot be imported yet — the schema does not
-    // exist — so they are written here, and this comment is the pointer that
-    // makes the duplication findable when it does.
-    const FEATURE_BRIEF_FIELDS = ['title', 'problem', 'decisions', 'acceptance', 'affectedComponents']
+  it('shapes the draft with exactly the fields a stored brief carries', () => {
+    // The previous version of this test retyped the field list and left a
+    // comment saying why: `engine/src/schemas/feature.ts` did not exist. It
+    // does now, so the list is imported from the schema that stores it and the
+    // duplication is closed.
+    //
+    // Seven of the thirteen fields are minted by the engine, and a draft
+    // presented in a conversation cannot know them: it has no id or revision
+    // until `mjloop_feature_create` returns, its status and approval are the
+    // engine's answer rather than its own claim, and `schema`, `supersedes` and
+    // `createdAt` are bookkeeping nobody approves. They are excluded by name,
+    // so a field added to the schema later fails here until somebody decides
+    // which of the two lists it joins.
+    const stored = Object.keys(FeatureBriefSchema.shape)
+    const MINTED = ['schema', 'id', 'revision', 'status', 'approval', 'supersedes', 'createdAt']
+    expect(stored.filter((field) => MINTED.includes(field)), 'a minted field the schema no longer has').toEqual(MINTED)
+
     const fence = [...skill.matchAll(/```[a-z]*\n([\s\S]*?)```/g)]
       .map((match) => match[1] ?? '')
       .find((body) => body.startsWith('Feature Brief Draft'))
     expect(fence, 'the skill has no named draft block').toBeDefined()
     const fields = [...(fence ?? '').matchAll(/^([A-Za-z]\w*):/gm)].map((match) => match[1] ?? '')
-    // Ordered equality: an extra field is a record S04 cannot store, and a
-    // missing one is an output the plan track will not receive.
-    expect(fields).toEqual(FEATURE_BRIEF_FIELDS)
+    // Ordered equality, in the schema's own order: an extra field is a record
+    // the engine cannot store, and a missing one is an output the plan track
+    // will not receive. `discovery` is the field S04 added — it is where a
+    // per-feature override of the project's mode is written down, and without
+    // it in this block the interview has nowhere to put one.
+    expect(fields).toEqual(stored.filter((field) => !MINTED.includes(field)))
   })
 
   it('records where its behaviour came from', () => {
@@ -334,7 +390,7 @@ describe('the plan command', () => {
     // that bullet and not merely somewhere in the file. That the directory
     // exists is proved by the module-level read of `SKILL_FILE` above: a
     // renamed skill makes this whole suite fail to load.
-    const always = bullets(planCommand).find((rule) => rule.startsWith('- **`always`**')) ?? ''
+    const always = bullets(section(planCommand, DISCOVERY_SECTION)).find((rule) => rule.startsWith('- **`always`**')) ?? ''
     expect(always).toContain(SKILL_NAME)
   })
 
@@ -343,17 +399,47 @@ describe('the plan command', () => {
     // against their engine schema: a fourth mode added to `config.ts` fails
     // here rather than being silently undocumented, and a mode documented
     // after the schema dropped it fails here too.
-    const documented = [...planCommand.matchAll(/^- \*\*`([a-z-]+)`\*\* —/gm)].map((match) => match[1] ?? '')
+    //
+    // Read from the discovery branch's own section rather than from the whole
+    // file, because the completion branch below states its three settings in
+    // the same bullet shape and a document-wide scan would read the two lists
+    // as one six-valued setting. A renamed heading empties the match and fails
+    // here, which is the right outcome for a document whose two branches this
+    // suite is asserting separately.
+    const documented = [...section(planCommand, DISCOVERY_SECTION).matchAll(/^- \*\*`([a-z-]+)`\*\* —/gm)].map((match) => match[1] ?? '')
     expect(documented.sort()).toEqual([...FeatureDiscoveryModeSchema.options].sort())
   })
 
-  it("calls the engine's own default the default", () => {
+  it('branches on exactly the completion settings the schema declares', () => {
+    // `orchestration.discovery.completion` was dead policy when S03 landed:
+    // the schema had it, the docs listed it, and nothing read it. This is the
+    // assertion that says it is a branch of this command now, and it is
+    // derived from the same schema for the same reason as the modes above.
+    const documented = [...section(planCommand, COMPLETION_SECTION).matchAll(/^- \*\*`([a-z-]+)`\*\* —/gm)].map((match) => match[1] ?? '')
+    expect(documented.sort()).toEqual([...DiscoveryCompletionSchema.options].sort())
+  })
+
+  it('starts auto-plan only against an approved brief', () => {
+    // The one completion branch that begins work without asking, and so the
+    // one sentence in this file whose loss would let a plan track open against
+    // decisions nobody agreed to. Structural, like the skill's boundary
+    // assertion: it reads that the bullet still turns on approval, not that
+    // the prose around it still means what it means.
+    const autoPlan = bullets(section(planCommand, COMPLETION_SECTION)).find((rule) => rule.startsWith('- **`auto-plan`**')) ?? ''
+    expect(autoPlan, 'auto-plan no longer names approval').toMatch(/approved/)
+  })
+
+  it("calls the engine's own default the default, in both branches", () => {
     // The compatibility promise of this whole feature is that an existing
     // project's plan flow is unchanged. A command that documented a different
-    // branch as the default would be describing a flow nobody configured.
-    const fallback = OrchestrationSchema.parse({}).discovery.mode
-    const line = planCommand.split('\n').find((text) => text.startsWith(`- **\`${fallback}\`**`)) ?? ''
-    expect(line).toMatch(/default/)
+    // branch as the default would be describing a flow nobody configured —
+    // and that holds for what happens after a brief exactly as it holds for
+    // whether one is produced at all.
+    const { mode, completion } = OrchestrationSchema.parse({}).discovery
+    for (const fallback of [mode, completion]) {
+      const line = planCommand.split('\n').find((text) => text.startsWith(`- **\`${fallback}\`**`)) ?? ''
+      expect(line, fallback).toMatch(/default/)
+    }
   })
 
   it('keeps both existing gates and its frontmatter', () => {
@@ -383,10 +469,39 @@ describe('the leader skill', () => {
     expect(section(leader, '### 3d. Running the plan track')).toMatch(/approved\s+(feature\s+)?brief/i)
   })
 
-  it('gained a prohibition naming feature discovery', () => {
+  /**
+   * `## What you never do`, read the way the skill's own boundary is read.
+   *
+   * A filter on the words a rule contains is not enough here, and the proof is
+   * cheap: rewriting *Never approve a feature brief* into *Approve the feature
+   * brief when it looks right* leaves both words in place, and a
+   * contains-check goes green on the exact edit the rule exists to reject. So
+   * the polarity is asserted over the whole list — it is titled "what you never
+   * do", every one of its eighteen entries is stated that way, and a bullet
+   * that stopped being a prohibition would be in the wrong list even if its
+   * advice were sound.
+   */
+  const neverDo = (): string[] => {
     const forbidden = bullets(section(leader, '## What you never do'))
-    expect(forbidden.length).toBeGreaterThan(0)
-    expect(forbidden.filter((rule) => /discovery/i.test(rule) && /brief/i.test(rule))).not.toEqual([])
+    expect(forbidden.length, 'the leader has no list of prohibitions').toBeGreaterThan(0)
+    expect(forbidden.filter((rule) => !/^- (\*\*)?Never /.test(rule)), 'stated as permission').toEqual([])
+    return forbidden
+  }
+
+  it('gained a prohibition naming feature discovery', () => {
+    expect(neverDo().filter((rule) => /discovery/i.test(rule) && /brief/i.test(rule))).not.toEqual([])
+  })
+
+  it('is forbidden from approving a brief itself', () => {
+    // The prohibition S04 adds, and the reason it has to be written down: the
+    // leader holds `mjloop_feature_approve` — every tool this server registers
+    // is in its context — and the brief it would approve is the input to the
+    // plan it is about to write. Unlike `gates.plan_approval` there is no
+    // `auto` here that would make doing it honest, so the rule is absolute and
+    // the assertion is separate from the discovery one above: they forbid two
+    // different acts, and a rewrite that merged them into one bullet would be
+    // dropping one of them.
+    expect(neverDo().filter((rule) => /brief/i.test(rule) && /approv/i.test(rule))).not.toEqual([])
   })
 })
 

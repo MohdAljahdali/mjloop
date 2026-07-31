@@ -4,6 +4,7 @@ import { gateSet, planCreate, storyAdd } from '../../src/ops/plan.js'
 import { TELEMETRY_MAX_ROWS } from '../../src/ops/telemetry.js'
 import { etag, handleApi } from '../../src/web/api.js'
 import { WEB_CODES } from '../../src/web/codes.js'
+import { approveFeatureBrief, createFeatureBrief, updateFeatureDraft } from '../../src/store/feature-store.js'
 import { acceptProfile } from '../../src/store/project-profile-store.js'
 import { makeTmpProject, type TmpProject } from '../helpers/tmp-project.js'
 
@@ -94,6 +95,64 @@ describe('handleApi', () => {
     expect((await call('/api/profile/../../etc'))?.status).toBe(404)
   })
 
+  it('serves a feature brief and its history, and offers no way to author one', async () => {
+    await createFeatureBrief(
+      project.dir,
+      {
+        title: 'Passwordless sign-in',
+        problem: 'Password resets are the top support cost.',
+        discovery: { mode: 'ask', questionBudget: 8 },
+      },
+      clock,
+    )
+    const draft = await updateFeatureDraft(project.dir, 'F001', { acceptance: ['a mailed link signs the user in'] })
+    await approveFeatureBrief(
+      project.dir,
+      { id: 'F001', expectRevision: 1, expectDigest: draft.digest, by: 'Mohd' },
+      clock,
+    )
+
+    expect((await call('/api/features'))?.status).toBe(200)
+    const detail = await call('/api/features/F001')
+    expect(detail?.status).toBe(200)
+    expect(detail?.body).toMatchObject({
+      status: 'approved',
+      revisions: [{ revision: 1, status: 'approved' }],
+      // What the operator's Approve button hands back, so that a click can be
+      // made conditional on the words this response actually showed.
+      digest: expect.stringMatching(/^[a-f0-9]{64}$/),
+    })
+
+    // An approved brief is what a later plan is built on. There are two routes
+    // that read one and deliberately none that writes one: the single feature
+    // write a browser may perform is an approval, and it goes through the
+    // guarded socket door in `writes.ts` where it can be made conditional on
+    // the revision the operator was actually looking at.
+    for (const method of ['POST', 'PUT', 'DELETE', 'PATCH']) {
+      expect((await call('/api/features', method))?.status).toBe(405)
+      expect((await call('/api/features/F001', method))?.status).toBe(405)
+    }
+    // A revision is not selectable here. The route serves the latest and the
+    // history beside it, and a route that took a revision would be the first
+    // half of one that set it.
+    expect((await call('/api/features/F001/1'))?.status).toBe(404)
+    expect((await call('/api/features/F001/rev-001.json'))?.status).toBe(404)
+  })
+
+  it('answers for a project that has raised no feature without describing it', async () => {
+    // An empty list, not a 404: unlike the component map, whose absence changes
+    // how every later run is routed, no feature yet is the ordinary state of a
+    // freshly provisioned project.
+    expect((await call('/api/features'))?.body).toEqual([])
+    const missing = await call('/api/features/F404')
+    expect(missing?.status).toBe(404)
+    expect(missing?.body).toEqual({ error: { code: 'error.notFound' } })
+    // Refused by the engine's own id schema before anything reads a directory.
+    expect((await call('/api/features/nonsense'))?.status).toBe(400)
+    expect((await call('/api/features/F1'))?.status).toBe(400)
+    expect((await call('/api/features/f001'))?.status).toBe(400)
+  })
+
   it('answers for a project nothing has ever mapped without describing it', async () => {
     const bare = await makeTmpProject()
     try {
@@ -150,6 +209,9 @@ describe('handleApi', () => {
       '/api/telemetry/../../etc',
       '/api/profile/../../etc',
       '/api/profile/..%2F..%2Fconfig.yaml',
+      '/api/features/../../etc',
+      '/api/features/..%2F..%2Fconfig.yaml',
+      '/api/features/F001/../../state.json',
       // An un-normalised path, which a browser would never send but a raw
       // socket can: it is still ours to refuse rather than to resolve.
       '/api/../app.js',
@@ -177,6 +239,8 @@ describe('handleApi', () => {
       await call('/api/preflight/nonsense'),
       await call('/api/preflight/not a track'),
       await call('/api/profile/1'),
+      await call('/api/features/nonsense'),
+      await call('/api/features/F404'),
     ]
     for (const failure of failures) {
       const error = (failure?.body as { error?: Record<string, unknown> }).error ?? {}

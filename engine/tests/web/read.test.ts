@@ -16,6 +16,8 @@ import {
   NotFoundError,
   readConfigView,
   readCycleDetail,
+  readFeatureDetail,
+  readFeatures,
   readMemories,
   readMemoryEntry,
   readPlanDetail,
@@ -29,6 +31,12 @@ import {
   readTelemetryReport,
 } from '../../src/web/read.js'
 import { configRevision } from '../../src/store/config-mutation.js'
+import {
+  approveFeatureBrief,
+  createFeatureBrief,
+  supersedeFeatureBrief,
+  updateFeatureDraft,
+} from '../../src/store/feature-store.js'
 import { acceptProfile, writeProposedProfile } from '../../src/store/project-profile-store.js'
 import { makeTmpProject, type TmpProject } from '../helpers/tmp-project.js'
 
@@ -114,6 +122,38 @@ async function seed(): Promise<void> {
   await memoryAdd(project.dir, { kind: 'decision', title: 'Cookies over tokens', body: 'Because of SSR.' }, clock)
 }
 
+/**
+ * A brief raised the way the interview raises one: a draft first, acceptance
+ * criteria only once there are any. Built through the store rather than written
+ * out as a literal, so the fixture cannot drift from the record — and so the
+ * empty-`acceptance` draft this produces is the real thing the read side has to
+ * be able to serve.
+ */
+async function raiseFeature(title = 'Passwordless sign-in'): Promise<string> {
+  const record = await createFeatureBrief(
+    project.dir,
+    { title, problem: 'Password resets are the top support cost.', discovery: { mode: 'ask', questionBudget: 8 } },
+    clock,
+  )
+  return record.brief.id
+}
+
+/**
+ * …and carried to the point where it can be approved.
+ *
+ * The digest comes from the write that last touched the draft, which is where
+ * a real caller gets it too: approval swaps on what the record said, not only
+ * on which revision it was.
+ */
+async function approveFeature(id: string, revision: number): Promise<void> {
+  const draft = await updateFeatureDraft(project.dir, id, { acceptance: ['a mailed link signs the user in'] })
+  await approveFeatureBrief(
+    project.dir,
+    { id, expectRevision: revision, expectDigest: draft.digest, by: 'Mohd', note: 'ship it' },
+    clock,
+  )
+}
+
 describe('read', () => {
   it('writes nothing, including against a clobbered PLAN.md', async () => {
     await seed()
@@ -139,6 +179,14 @@ describe('read', () => {
       basis: ['web/package.json', 'worker/pyproject.toml'],
     })
 
+    // A feature carried all the way to a superseded revision, so the readers
+    // below walk an approved record as well as a draft. An approved brief is
+    // what a later plan is built on, which makes a poller that could touch one
+    // the worst kind of write there is here.
+    await raiseFeature()
+    await approveFeature('F001', 1)
+    await supersedeFeatureBrief(project.dir, { id: 'F001', expectRevision: 1 }, clock)
+
     const before = await hashTree(project.dir)
     await Promise.all([
       readState(project.dir),
@@ -159,6 +207,11 @@ describe('read', () => {
       // able to change: this reader neither accepts a proposal nor rescans, so
       // it cannot write even when the proposal and the accepted map disagree.
       readProfileView(project.dir),
+      // Reading a brief must not be how one gets edited. `superseded` is
+      // derived on the way out for exactly this reason: storing it would mean
+      // this call rewriting the immutable record it was asked to describe.
+      readFeatures(project.dir),
+      readFeatureDetail(project.dir, 'F001'),
     ])
     expect(await hashTree(project.dir)).toEqual(before)
   })
@@ -530,6 +583,125 @@ describe('read', () => {
     // whose revision is sitting right there would route every later run as
     // though it had never been mapped — silently.
     await expect(readProfileView(project.dir)).rejects.not.toBeInstanceOf(NotFoundError)
+  })
+
+  it('reports a brief\'s latest revision and every revision behind it', async () => {
+    await initLoop(project.dir, clock)
+    await raiseFeature()
+    await approveFeature('F001', 1)
+
+    const detail = await readFeatureDetail(project.dir, 'F001')
+    expect(detail.brief.revision).toBe(1)
+    expect(detail.status).toBe('approved')
+    // The whole approval record, not just the fact of one — the same position
+    // `readPlanDetail` takes: an approval is auditable or it is a flag.
+    expect(detail.brief.approval).toMatchObject({ by: 'Mohd', note: 'ship it' })
+    expect(detail.brief.acceptance).toEqual(['a mailed link signs the user in'])
+    expect(detail.revisions).toEqual([{ revision: 1, status: 'approved' }])
+  })
+
+  it('serves a draft that has not earned its acceptance criteria yet', async () => {
+    await initLoop(project.dir, clock)
+    await raiseFeature()
+
+    // The interview writes a brief down one answer at a time, so the state this
+    // route serves most often is the half-assembled one. A reader that could
+    // only render a finished brief would have nothing to show while it is being
+    // assembled, which is the only time anybody is watching.
+    const detail = await readFeatureDetail(project.dir, 'F001')
+    expect(detail.status).toBe('draft')
+    expect(detail.brief.acceptance).toEqual([])
+    expect(detail.brief.approval).toBe(null)
+    expect(detail.brief.discovery).toEqual({ mode: 'ask', questionBudget: 8, completedAt: null })
+  })
+
+  it('derives superseded from a higher revision existing, and stores the word nowhere', async () => {
+    await initLoop(project.dir, clock)
+    await raiseFeature()
+    await approveFeature('F001', 1)
+    await supersedeFeatureBrief(project.dir, { id: 'F001', expectRevision: 1 }, clock)
+
+    const detail = await readFeatureDetail(project.dir, 'F001')
+    expect(detail.brief.revision).toBe(2)
+    expect(detail.status).toBe('draft')
+    // Revision 1 is superseded because 2 exists, and for no other reason. It is
+    // still byte-for-byte the approved record somebody signed.
+    expect(detail.revisions).toEqual([
+      { revision: 1, status: 'superseded' },
+      { revision: 2, status: 'draft' },
+    ])
+
+    const stored = await fs.readFile(
+      path.join(project.dir, '.mjloop', 'features', 'F001-passwordless-sign-in', 'rev-001.json'),
+      'utf8',
+    )
+    expect(JSON.parse(stored)).toMatchObject({ status: 'approved' })
+    expect(stored).not.toContain('superseded')
+  })
+
+  it('lists what has been raised and what planning may consume', async () => {
+    await initLoop(project.dir, clock)
+    await raiseFeature()
+    await approveFeature('F001', 1)
+    await supersedeFeatureBrief(project.dir, { id: 'F001', expectRevision: 1 }, clock)
+    await raiseFeature('Audit log export')
+
+    const features = await readFeatures(project.dir)
+    expect(features).toEqual([
+      {
+        id: 'F001',
+        title: 'Passwordless sign-in',
+        // The latest revision's status, which by construction is never
+        // `superseded`, beside the highest revision an approval stands behind —
+        // the only revision a plan may be built on.
+        status: 'draft',
+        latestRevision: 2,
+        approvedRevision: 1,
+        revisions: [1, 2],
+        createdAt: NOW.toISOString(),
+      },
+      {
+        id: 'F002',
+        title: 'Audit log export',
+        status: 'draft',
+        latestRevision: 1,
+        approvedRevision: null,
+        revisions: [1],
+        createdAt: NOW.toISOString(),
+      },
+    ])
+  })
+
+  it('answers a project that has raised no feature with an empty list', async () => {
+    await initLoop(project.dir, clock)
+    // Deliberately unlike `readProfileView`, which raises for a project nothing
+    // has mapped. "No component map" changes how every later run is routed and
+    // must not read as a quiet default; "no feature raised yet" is the ordinary
+    // state of every project on the day it is provisioned.
+    expect(await readFeatures(project.dir)).toEqual([])
+  })
+
+  it('raises NotFound for a feature this project never raised', async () => {
+    await initLoop(project.dir, clock)
+    await raiseFeature()
+    await expect(readFeatureDetail(project.dir, 'F999')).rejects.toBeInstanceOf(NotFoundError)
+  })
+
+  it('refuses to pretend an unreadable brief is no brief at all', async () => {
+    await initLoop(project.dir, clock)
+    await raiseFeature()
+    await fs.writeFile(
+      path.join(project.dir, '.mjloop', 'features', 'F001-passwordless-sign-in', 'rev-001.json'),
+      '{"schema":1}',
+      'utf8',
+    )
+
+    // The same asymmetry the accepted profile has, and it decides the same
+    // thing: this side repairs nothing, and answering "no such feature" for a
+    // record plainly sitting on disk would let planning proceed as though the
+    // interview had never happened.
+    await expect(readFeatureDetail(project.dir, 'F001')).rejects.not.toBeInstanceOf(NotFoundError)
+    await expect(readFeatures(project.dir)).rejects.toThrow()
   })
 
   it('serves memory whole so the page can facet it', async () => {

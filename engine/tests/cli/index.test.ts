@@ -128,6 +128,63 @@ describe('evaluateStateGuard', () => {
     expect(verdict.reason).toContain('profile')
   })
 
+  it('denies a hand edit to a feature brief revision', () => {
+    // An approved brief is the evidence a later plan is built on, and the
+    // approval it carries was a decision somebody made about one particular set
+    // of words. A model that could edit a revision could approve work nobody
+    // agreed to, and nothing on disk would show the words had moved.
+    const verdict = evaluateStateGuard({
+      tool_name: 'Edit',
+      tool_input: { file_path: '/repo/.mjloop/features/F001-passwordless-sign-in/rev-001.json' },
+    })
+    expect(verdict.deny).toBe(true)
+    expect(verdict.reason).toContain('features')
+    // Each protected directory has to name its own way back in. Sending
+    // somebody who was editing a brief to `mjloop-cli profile accept` would
+    // point them at a different record entirely.
+    expect(verdict.reason).not.toContain('profile')
+    expect(verdict.reason).toContain('mjloop_feature_')
+  })
+
+  it('denies the features directory through those same path shapes', () => {
+    const denies = (filePath: string): boolean =>
+      evaluateStateGuard({ tool_name: 'Write', tool_input: { file_path: filePath } }).deny
+    expect(denies('/repo/.mjloop//features/F001-auth/rev-001.json')).toBe(true)
+    expect(denies('/repo/.mjloop/plans/../features/F001-auth/rev-002.json')).toBe(true)
+    expect(denies('/repo/.mjloop/./features/F001-auth/rev-001.json')).toBe(true)
+  })
+
+  it('allows a features directory that is not the loop\'s', () => {
+    const denies = (filePath: string): boolean =>
+      evaluateStateGuard({ tool_name: 'Write', tool_input: { file_path: filePath } }).deny
+    expect(denies('/repo/src/features/signin.ts')).toBe(false)
+    expect(denies('/repo/.mjloop/features-archive/notes.md')).toBe(false)
+  })
+
+  it.each([
+    ['/repo/.mjloop/State.json', 'a protected basename'],
+    ['/repo/.mjloop/runs/2026-07-28-001--adhoc--build/Verify-Pinned.json', 'the verify pin'],
+    ['/repo/.mjloop/Profile/proposed.json', 'a protected directory'],
+    ['/repo/.mjloop/Features/F001-auth/rev-001.json', 'the other protected directory'],
+    ['/repo/.MJLOOP/profile/accepted/rev-001.json', 'the loop directory itself'],
+  ])('denies %s — on a case-insensitive volume it names %s', (filePath) => {
+    // macOS and Windows volumes are case-insensitive by default, and this
+    // repository lives on one. Every path here resolves to a file the guard
+    // exists to protect; a case-sensitive comparison returned `deny: false` for
+    // all five, which is a bypass requiring nothing but the shift key.
+    expect(evaluateStateGuard({ tool_name: 'Write', tool_input: { file_path: filePath } }).deny).toBe(true)
+  })
+
+  it('still allows a path that only looks like a protected one', () => {
+    // Folding must not turn into substring matching. These differ by more than
+    // case and remain a user's own files.
+    const denies = (filePath: string): boolean =>
+      evaluateStateGuard({ tool_name: 'Write', tool_input: { file_path: filePath } }).deny
+    expect(denies('/repo/.mjloop/Profiles/notes.md')).toBe(false)
+    expect(denies('/repo/.mjloopx/profile/proposed.json')).toBe(false)
+    expect(denies('/repo/.mjloop/plans/P001-auth/States.json')).toBe(false)
+  })
+
   it('denies the protected directory through path shapes that name the same file', () => {
     // `//` from joining a path that already ended in a separator, a `.` from a
     // relative reference, and an interior `..` that cancels the directory

@@ -65,9 +65,30 @@ recommended answer — up to `discovery.question_budget` questions, marking what
 left unresolved as unresolved instead of guessing it. It stops at a draft brief for a person
 to approve, and plans against the brief they approved. It plans nothing, routes nothing, and
 starts nothing itself: the fit-check and the human approval gate still stand behind it,
-against the plan. The draft lives in the conversation for now — the records that persist a
-brief are not built yet — and the mode defaults to `off`, so `/mjloop:plan` in an existing
-project is unchanged.
+against the plan. The brief it writes is a record on disk rather than a paragraph in a chat —
+see below — and the mode defaults to `off`, so `/mjloop:plan` in an existing project is
+unchanged.
+
+Latest — **an approved brief is evidence, and it is immutable.** A feature brief lives in
+`.mjloop/features/F###-<slug>/` as numbered revision files. A draft is written into place
+as the interview goes, so an interrupted interview resumes instead of being re-asked;
+approval freezes that revision, and the store refuses every later write to it rather than
+trusting the caller. Approving is compare-and-swap on the revision the approver was shown —
+a brief that moved in the meantime is refused outright — and it records who approved, when,
+and their own words if they gave any, with the cockpit's approver taken from the machine's
+own account rather than from anything the page can type. It refuses a brief with no
+acceptance criteria, because that is what every later story is judged against. Changing
+an approved brief mints a successor draft carrying its content forward, and rollback is
+approving an earlier revision's content as a new one, so no record a run may have pinned is
+rewritten or deleted. `superseded` is derived when a record is read — a revision is
+superseded once a higher one exists — and never stored, since storing it would mean writing
+to the file the rule exists to protect. `.mjloop/features/` is engine-owned like
+`.mjloop/profile/`: `Write` and `Edit` are denied inside it, and briefs are created, read,
+updated and approved through the four `mjloop_feature_*` operations. Once a brief is
+approved, `orchestration.discovery.completion` decides what follows — `auto-plan` opens the
+plan track against it, `review` records it and stops, `save-only` treats the brief itself as
+the deliverable. The cockpit may read a brief with its revision history and approve the
+revision it read; it may not create, edit, supersede, route, or execute one.
 
 ## Install
 

@@ -29,12 +29,42 @@ straight through on the next, and the difference would look like the loop having
 
 A per-feature choice the user states plainly — *skip the questions*, *interview me on this
 one first* — overrides the project default in either direction. Record it where a later
-reader will find it: in the brief when discovery ran, and in the plan's own prose when it
-was declined, so nobody mistakes a one-off for the project's policy.
+reader will find it: in the brief's own `discovery` block when discovery ran, which carries
+the mode and the budget that interview actually ran under rather than the project's, and in
+the plan's own prose when it was declined, so nobody mistakes a one-off for the project's
+policy.
 
 Discovery is not a third gate, and it does not stand in for the two below. It produces the
 plan track's input and then stops; the fit-check and the approval still happen afterwards,
 against the plan, exactly as they always did.
+
+## After the brief: the completion branch
+
+`orchestration.discovery.completion` is what the project decided happens to a brief once it
+exists. Read it **after** the user's approval has been recorded, and branch on it as
+explicitly as on the mode above. Consulting it earlier is the one mistake worth naming: a
+completion read while the brief is still a draft is a start decided by policy against
+decisions nobody has agreed to yet.
+
+- **`auto-plan`** — open the plan track below straight away, without asking again, against
+  the approved brief. **Only against an approved one.** A draft is not an input: if the user
+  has not approved it — they asked for changes, they went quiet, the interview ran out of
+  budget — there is nothing here to plan, and this branch waits exactly as `review` does.
+  It skips no gate either: the fit-check and the plan approval still happen. It is refused
+  by the config schema when `orchestration.discovery.mode` is `off`, because a project with
+  discovery off never produces the brief this branch starts from.
+- **`review`** — the default. Stop with the brief recorded and let the user decide when, or
+  whether, it is planned. Say what was approved and name the feature id, so they can point
+  at it later. Do not open the plan track, do not create a plan, do not add a story and do
+  not start a run: their approval was of the brief, not of building it now, and treating one
+  as the other is how a `review` project discovers it had `auto-plan` all along.
+- **`save-only`** — the brief is the whole deliverable. Record it and stop: no plan, no
+  stories, no run, and no suggestion that one is started. A project sets this when briefs
+  are gathered first and worked later, in an order somebody chooses; a command that
+  helpfully planned the one it happened to be holding would have chosen that order for them.
+
+When discovery did not run — `off`, or an `ask` the user declined — none of this applies.
+There is no brief, so there is no completion to honour: go straight to the plan track.
 
 ## The plan track
 

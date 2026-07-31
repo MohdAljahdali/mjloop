@@ -10,6 +10,7 @@ export interface LoopPaths {
   runs: string
   memory: string
   profile: string
+  features: string
   lock: string
   verifyLock: string
 }
@@ -36,6 +37,17 @@ export function resolveLoopPaths(projectDir: string): LoopPaths {
      * `.mjloop/` is *rooted*, not the place any of them are interpreted.
      */
     profile: path.join(root, 'profile'),
+    /**
+     * The feature briefs: one directory per feature, `F001-<slug>/`, holding
+     * immutable numbered revisions of what a discovery interview decided.
+     *
+     * Named here and interpreted in `feature-store.ts`, for the reason the
+     * profile above is: this map is where every path in `.mjloop/` is *rooted*,
+     * not where any of them is given meaning. Which revision is current, and
+     * the fact that it is simply the highest-numbered one rather than whatever
+     * a mutable pointer claims, belong to the store.
+     */
+    features: path.join(root, 'features'),
     lock: path.join(root, '.lock'),
     /**
      * Mutual exclusion for verify *execution*, and never the same directory as
@@ -86,5 +98,12 @@ export const PROTECTED_BASENAMES = ['state.json', 'manifest.json', 'verify-pinne
  * `proposed.json` is disposable, but it is also `profile accept`'s only input:
  * a model that can rewrite the proposal can put any component map it likes in
  * front of the person accepting, and the acceptance that follows is genuine.
+ *
+ * `features` is here for the sharper form of that same argument. An approved
+ * brief is the evidence every later plan is built on — the record that exists
+ * precisely so planning does not rest on chat text a model can rewrite — and
+ * approval is a decision a person made about a *particular* set of words. A
+ * model that could edit a revision could approve work nobody agreed to, without
+ * anything on disk showing that the words moved after the decision.
  */
-export const PROTECTED_DIRECTORIES = ['profile'] as const
+export const PROTECTED_DIRECTORIES = ['profile', 'features'] as const

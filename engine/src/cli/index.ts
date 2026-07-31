@@ -903,10 +903,21 @@ export function evaluateStateGuard(input: unknown): GuardVerdict {
   // three shapes live — which is exactly why the directory rule needs the line
   // and the one above it does not.
   const normalised = path.normalize(filePath)
-  const segments = normalised.split(path.sep)
+  // Compared case-folded, because macOS and Windows volumes are case-insensitive
+  // by default: `.mjloop/State.json` and `.mjloop/Profile/proposed.json` name
+  // *exactly the files this guard exists to protect* on the machine most of this
+  // plugin's users are on, and a case-sensitive comparison hands both back with
+  // a permission to write. Every name being matched here — `.mjloop` itself, the
+  // three basenames, the protected directories — is a literal the engine writes
+  // in lowercase and nobody types, so folding can only ever catch a spelling of
+  // the engine's own file. On a case-sensitive volume it costs a user who
+  // deliberately put an unrelated `.mjloop/Profile/` beside the engine's own
+  // records, which is a directory nobody has, and the denial says which record
+  // it thought they meant.
+  const segments = normalised.split(path.sep).map((segment) => segment.toLowerCase())
   if (!segments.includes('.mjloop')) return { deny: false, reason: '' }
 
-  const basename = path.basename(normalised)
+  const basename = path.basename(normalised).toLowerCase()
   if (PROTECTED_BASENAMES.includes(basename as (typeof PROTECTED_BASENAMES)[number])) {
     return {
       deny: true,
@@ -915,15 +926,30 @@ export function evaluateStateGuard(input: unknown): GuardVerdict {
   }
 
   const directory = protectedDirectory(segments)
-  if (directory !== null) {
-    return {
-      deny: true,
-      reason: `.mjloop/${directory}/ is owned by the mjloop engine: an accepted revision is immutable, and the proposal is what an acceptance reads. Use mjloop-cli profile accept and mjloop-cli profile reject (mjloop-cli profile show first) instead of editing these files directly.`,
-    }
-  }
+  if (directory !== null) return { deny: true, reason: PROTECTED_DIRECTORY_REASONS[directory] }
 
   return { deny: false, reason: '' }
 }
+
+/**
+ * Why each protected directory is closed, and the route back in that replaces
+ * the edit.
+ *
+ * One sentence per directory rather than one shared sentence, because a denial
+ * that names the wrong record is worse than a terse one: telling somebody who
+ * was editing a feature brief to run `mjloop-cli profile accept` sends them to
+ * a different record with a different lifecycle, and they will do it.
+ *
+ * `satisfies` rather than a plain annotation, so that adding a name to
+ * `PROTECTED_DIRECTORIES` and forgetting to say what to do instead is a
+ * compile error rather than a guard that denies without guidance.
+ */
+const PROTECTED_DIRECTORY_REASONS = {
+  profile:
+    '.mjloop/profile/ is owned by the mjloop engine: an accepted revision is immutable, and the proposal is what an acceptance reads. Use mjloop-cli profile accept and mjloop-cli profile reject (mjloop-cli profile show first) instead of editing these files directly.',
+  features:
+    '.mjloop/features/ is owned by the mjloop engine: an approved feature brief is what a later plan is built on, and a revision is never rewritten once it is approved. Use the mjloop_feature_* tools (mjloop_feature_create, mjloop_feature_update, mjloop_feature_approve) instead of editing these files directly.',
+} as const satisfies Record<(typeof PROTECTED_DIRECTORIES)[number], string>
 
 /**
  * The protected directory this path lies inside, or null.
@@ -935,13 +961,11 @@ export function evaluateStateGuard(input: unknown): GuardVerdict {
  * rather than the first, because a path may hold more than one and only the one
  * the protected directory actually sits under decides anything.
  */
-function protectedDirectory(segments: string[]): string | null {
+function protectedDirectory(segments: string[]): (typeof PROTECTED_DIRECTORIES)[number] | null {
   for (const [index, segment] of segments.entries()) {
     if (segment !== '.mjloop') continue
-    const child = segments[index + 1]
-    if (child !== undefined && PROTECTED_DIRECTORIES.includes(child as (typeof PROTECTED_DIRECTORIES)[number])) {
-      return child
-    }
+    const child = segments[index + 1] as (typeof PROTECTED_DIRECTORIES)[number] | undefined
+    if (child !== undefined && PROTECTED_DIRECTORIES.includes(child)) return child
   }
   return null
 }
