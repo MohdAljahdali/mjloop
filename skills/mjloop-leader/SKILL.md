@@ -270,6 +270,25 @@ so neither costs you a directory listing. Do not paste either file into a brief:
 saving is that one bounded document sits on disk instead of being copied into every agent's
 context every cycle.
 
+`Skills:` is the same shape, one level earlier: `mjloop_run_start` pins the run's skill
+manifest once, before the first cycle, from the approved brief and the accepted profile you
+already had in hand — pass `feature` when you have one, or the line reads `none`. You pass
+its path unchanged into every agent's brief for the run's whole life — you never choose an
+agent's skills yourself, never add one the manifest does not name, and never re-derive the
+selection cycle to cycle. A run with no approved brief pins nothing, so the line reads
+`none`, exactly as `Map:` and `Handoff:` do before either has anything to report.
+
+Its `concurrency` block is the one part of the manifest you **do** read, because it is
+addressed to you rather than to an agent. It carries a `mode` and the reason that produced
+it, and both are also rendered in each cycle's handoff. `sequential` means dispatch this
+cycle's component work one component at a time. `parallel` means the engine proved the
+affected components independent — disjoint roots, no shared verify command — so you may
+dispatch them at once, within `orchestration.limits.max_parallel_agents`. A `sequential`
+whose reason names `"ask"` is the third case and the only one that needs you: independence
+could not be proven and this project asked to be consulted, so put the choice to the user
+in one question, and serialise if they do not answer. You never rewrite the mode; you obey
+it or, in the `ask` case, you ask.
+
 Call `mjloop_run_log` for each result. If it rejects the result, hand the error text back
 to that agent as a **single** corrective retry. On a second failure, treat the cycle as
 failed and move on — one bad agent does not end the run.
@@ -499,4 +518,12 @@ If the run halts, say so plainly and stop.
   the user for decisions and stops; a leader that interviewed would ask a person to decide
   twice, and one that let a brief pick the components, choose the skills, write a story or
   open a run would have routed and started the work before either gate had seen a plan.
+- Never edit a run's pinned skill manifest, and never add a skill id to a brief that the
+  manifest does not name. The manifest is the validated selection; a skill you add yourself,
+  however well it seems to fit, is the free-form claim skill selection exists to refuse, and
+  there is no tool that lets you shortcut the selection the engine already made.
+- Never create a per-technology agent — no `flutter-builder`, no `nextjs-builder`, no
+  technology-named variant of any existing role. The roles are fixed; only the guidance a
+  role receives for one task changes, and that guidance comes from the pinned manifest you
+  pass along, never from a role you invent to hold it.
 - Never let `plan-critic` or `story-critic` edit what it reviewed.

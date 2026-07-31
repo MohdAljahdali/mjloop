@@ -18,6 +18,7 @@ Goal:       <what this run must achieve>
 Story:      P001-S02 | none
 Map:        .mjloop/runs/<run>/map.md | none
 Handoff:    .mjloop/runs/<run>/cycle-02/handoff.md | none
+Skills:     .mjloop/runs/<run>/skill-selection.json | none
 Verify:     test="npm test" lint="npm run lint" build=null
 Return:     the loop agent contract, and nothing else
 ```
@@ -33,6 +34,21 @@ findings became a forty-entry line delivered to every agent of every later cycle
 documents own those lists now, each bounded, and the agent that needs one opens it. Cycle 1
 has neither, so both read `none` and the brief is shorter still.
 
+`Skills:` carries a path for the same reason. It names the run's pinned skill manifest —
+which accepted skills this run selected for each component and each agent role, and why —
+written once by the engine at run start from the approved brief and the accepted profile,
+and untouched by anything that happens after. That is what makes it safe to hand out: a
+project's skill library can change mid-run without rewriting what an agent already
+dispatched was told. Open it, find the selection naming your component and your role, and
+follow the skills it lists — nothing invented, nothing carried over from a different
+project. The instruction itself is in the file's `guidance` block, keyed by skill id: the
+selection gives you the id and the reason it was chosen, and `guidance` gives you the text
+to apply. A skill id with no guidance entry cannot happen — the engine refuses to write such
+a manifest — so if you find one, the file is not the one the engine wrote. Its `concurrency`
+block is addressed to the leader, not to you. A run with no approved brief pins nothing, so
+the line reads `none` exactly as `Map:` and `Handoff:` do in cycle 1, and behaves exactly as
+it always has.
+
 ## The shape every agent returns
 
 ```json
@@ -42,6 +58,7 @@ has neither, so both read `none` and the brief is shorter still.
   "evidence": [{ "kind": "command | file | test", "ref": "npm test", "excerpt": "12 passed" }],
   "findings": [{ "severity": "high | medium | low", "file": "src/a.ts", "line": 14, "claim": "..." }],
   "files_touched": ["src/a.ts"],
+  "skills_used": ["skill-id"],
   "next_hint": "optional single suggestion, or null"
 }
 ```
@@ -50,6 +67,15 @@ has neither, so both read `none` and the brief is shorter still.
 
 - **Exact shape.** No extra keys. `mjloop_run_log` rejects unknown fields, so a smuggled
   `confidence` field fails the whole call.
+- **`skills_used` names only what `Skills:` actually selected for you.** Every id in it must
+  be one the run's pinned manifest named for your role — no model may add a skill id the
+  manifest did not produce, however well it thinks one would fit. This is not advice:
+  `mjloop_run_log` opens the manifest and rejects the whole result when an id is not in it,
+  the same way it rejects a `pass` the verify ledger contradicts. Omit the key, or send `[]`,
+  when you were handed nothing or applied none of what you were handed; the engine defaults
+  it to `[]` so a result written before this field existed keeps parsing. If your role has no
+  row in the manifest at all — most roles, on most runs — then nothing was selected for you
+  and `[]` is the only answer the engine will take.
 - **`status: "pass"` needs evidence.** An empty `evidence` array with a pass is an
   unproven claim.
 - **`blocked` is a real answer.** Use it when you are missing a command, a decision, or

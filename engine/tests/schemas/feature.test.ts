@@ -194,4 +194,22 @@ describe('FeatureBriefSchema', () => {
   it('rejects a record written by a schema version this engine does not know', () => {
     expect(FeatureBriefSchema.safeParse(brief({ schema: 2 })).success).toBe(false)
   })
+
+  it('defaults tags to an empty list for a record written before the field existed', () => {
+    // The schema is strict, so a record written before `tags` existed has no
+    // such key at all — this is the same shape `skillTags` gains on an
+    // old ProjectComponent, and for the same reason.
+    const raw = brief() as Record<string, unknown>
+    const { tags: _dropped, ...withoutTags } = raw
+    const parsed = FeatureBriefSchema.parse(withoutTags)
+    expect(parsed.tags).toEqual([])
+  })
+
+  it('accepts declared tags and rejects an empty one', () => {
+    expect(FeatureBriefSchema.parse(brief({ tags: ['security', 'authentication'] })).tags).toEqual([
+      'security',
+      'authentication',
+    ])
+    expect(FeatureBriefSchema.safeParse(brief({ tags: [''] })).success).toBe(false)
+  })
 })

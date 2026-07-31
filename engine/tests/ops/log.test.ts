@@ -14,11 +14,13 @@ import {
   InvalidAgentResultError,
   RunReplacedError,
   UnknownAgentError,
+  UnselectedSkillError,
   runLog,
 } from '../../src/ops/log.js'
 import { initLoop } from '../../src/ops/init.js'
 import { NoActiveRunError, UnknownTrackError, cycleAdvance, runDirPath, runStart } from '../../src/ops/run.js'
 import { EVIDENCE_EXCERPT_MAX } from '../../src/schemas/contract.js'
+import { SkillManifestSchema } from '../../src/schemas/skill-selection.js'
 import { loadConfig, writeConfig } from '../../src/store/config-store.js'
 import { StateStore } from '../../src/store/state-store.js'
 import { makeTmpProject, type TmpProject } from '../helpers/tmp-project.js'
@@ -267,6 +269,129 @@ describe('runLog instances', () => {
     )
     expect(second.path).toBe(first.path)
     expect(JSON.parse(await fs.readFile(first.path, 'utf8')).summary).toBe('Revised verdict.')
+  })
+})
+
+/**
+ * The story's other stop condition: "do not let a model add a skill id absent
+ * from the validated selection."
+ *
+ * Its sibling — "no per-technology agent" — got a mechanical test, and this one
+ * has to have the same, because prose in a skill file is precisely the
+ * free-form model claim the pinned manifest exists to replace. The manifest is
+ * on disk, protected from edits, and names exactly which skills each role was
+ * offered; a `skills_used` nobody joins against it is a claim with a witness
+ * standing right there, unasked.
+ */
+describe('runLog against the run pinned skill manifest', () => {
+  /** A manifest as `runStart` pins one, with whatever selections a case needs. */
+  async function writeManifest(selections: Array<Record<string, unknown>>): Promise<void> {
+    const guidance = Object.fromEntries(
+      selections
+        .flatMap((selection) => selection.skillIds as string[])
+        .map((skillId) => [skillId, `follow ${skillId}`]),
+    )
+    const manifest = SkillManifestSchema.parse({
+      schema: 1,
+      generatedAt: NOW.toISOString(),
+      sourceBrief: { id: 'F001', revision: 1 },
+      profileRevision: 1,
+      selections,
+      guidance,
+      concurrency: { mode: 'sequential', reason: 'fewer than two affected components' },
+    })
+    await fs.writeFile(
+      path.join(await runDir(), 'skill-selection.json'),
+      `${JSON.stringify(manifest, null, 2)}\n`,
+      'utf8',
+    )
+  }
+
+  function selection(agent: string, skillIds: string[]): Record<string, unknown> {
+    return {
+      component: 'web',
+      agent,
+      skillIds,
+      reasons: skillIds.map((skillId) => `"${skillId}" matches component "web"'s skillTag "nextjs"`),
+      sourceBrief: { id: 'F001', revision: 1 },
+    }
+  }
+
+  it('records the skills an agent used when the manifest selected exactly those', async () => {
+    await writeManifest([selection('editor', ['eslint-strict'])])
+    const { path: file } = await runLog(
+      project.dir,
+      { agent: 'editor', result: { ...RESULT, skills_used: ['eslint-strict'] } },
+      clock,
+    )
+    expect(JSON.parse(await fs.readFile(file, 'utf8')).skills_used).toEqual(['eslint-strict'])
+  })
+
+  it('refuses a skill id the manifest never selected for this agent', async () => {
+    await writeManifest([selection('editor', ['eslint-strict'])])
+    await expect(
+      runLog(project.dir, { agent: 'editor', result: { ...RESULT, skills_used: ['invented-skill'] } }, clock),
+    ).rejects.toBeInstanceOf(UnselectedSkillError)
+
+    // The same property every other refusal in this function has: nothing was
+    // written, so a corrective retry starts from the same state the first
+    // attempt did.
+    const state = await new StateStore(project.dir).get()
+    expect(state.findings).toEqual([])
+    expect(await fs.readdir(path.join(runDirPath(project.dir, state), 'cycle-01')).catch(() => [])).toEqual([])
+  })
+
+  it('refuses a skill the manifest selected for a different role', async () => {
+    // The join is per (agent) and not merely per manifest: a skill offered to
+    // `verifier` is not one `editor` was told to follow, and accepting it would
+    // make "which agent was told what" unanswerable from the record.
+    await writeManifest([selection('verifier', ['eslint-strict'])])
+    await expect(
+      runLog(project.dir, { agent: 'editor', result: { ...RESULT, skills_used: ['eslint-strict'] } }, clock),
+    ).rejects.toBeInstanceOf(UnselectedSkillError)
+  })
+
+  it('refuses any claimed skill on a run that pinned no manifest at all', async () => {
+    // Today's universal case, and the one where a model is most likely to
+    // invent an id: nothing was selected, so nothing may be claimed.
+    await expect(
+      runLog(project.dir, { agent: 'editor', result: { ...RESULT, skills_used: ['security-auth-guard'] } }, clock),
+    ).rejects.toBeInstanceOf(UnselectedSkillError)
+  })
+
+  it('says which ids were refused and which were on offer', async () => {
+    await writeManifest([selection('editor', ['eslint-strict'])])
+    await expect(
+      runLog(project.dir, { agent: 'editor', result: { ...RESULT, skills_used: ['invented-skill'] } }, clock),
+    ).rejects.toThrow(/invented-skill/)
+    await expect(
+      runLog(project.dir, { agent: 'editor', result: { ...RESULT, skills_used: ['invented-skill'] } }, clock),
+    ).rejects.toThrow(/eslint-strict/)
+  })
+
+  it('leaves a result that claims nothing entirely alone', async () => {
+    // The unchanged-by-default case. `skills_used` defaults to `[]`, so every
+    // result written before this field existed, and every agent that was handed
+    // nothing, takes no new code path at all — the manifest is not even read.
+    const { path: file } = await runLog(project.dir, { agent: 'editor', result: RESULT }, clock)
+    expect(JSON.parse(await fs.readFile(file, 'utf8')).skills_used).toEqual([])
+  })
+
+  it('applies the same refusal to a closing agent', async () => {
+    // A closing agent writes outside every cycle directory and skips the gate,
+    // the roster and the ledger contradiction check — so if the join were
+    // placed inside the ordinary path it would be the one result that could
+    // carry an unbacked claim, and it is the result a commit rests on.
+    const config = await loadConfig(project.dir)
+    config.tracks.edit = { ...config.tracks.edit, closing: ['docs'] }
+    await writeConfig(project.dir, config)
+    await new StateStore(project.dir, clock).update((draft) => {
+      draft.status = 'done'
+    })
+
+    await expect(
+      runLog(project.dir, { agent: 'docs', result: { ...RESULT, status: 'pass', skills_used: ['invented-skill'] } }, clock),
+    ).rejects.toBeInstanceOf(UnselectedSkillError)
   })
 })
 

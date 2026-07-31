@@ -69,7 +69,7 @@ against the plan. The brief it writes is a record on disk rather than a paragrap
 see below — and the mode defaults to `off`, so `/mjloop:plan` in an existing project is
 unchanged.
 
-Latest — **an approved brief is evidence, and it is immutable.** A feature brief lives in
+Then — **an approved brief is evidence, and it is immutable.** A feature brief lives in
 `.mjloop/features/F###-<slug>/` as numbered revision files. A draft is written into place
 as the interview goes, so an interrupted interview resumes instead of being re-asked;
 approval freezes that revision, and the store refuses every later write to it rather than
@@ -89,6 +89,24 @@ approved, `orchestration.discovery.completion` decides what follows — `auto-pl
 plan track against it, `review` records it and stops, `save-only` treats the brief itself as
 the deliverable. The cockpit may read a brief with its revision history and approve the
 revision it read; it may not create, edit, supersede, route, or execute one.
+
+Latest — **an approved brief can also tell the loop which skills to bring, without inventing a
+new agent to hold them.** A run built against one routes each of `planner`, `builder`, `critic`,
+and `verifier` to the project's own accepted skills — never to a permanent per-technology
+variant: there is no `flutter-builder`, and there never will be, because a role is fixed and only
+the guidance it receives for one task changes. Selection joins the brief's affected component ids
+against a skill's tags, matching either the component's own technology-derived tags or a tag the
+brief declares for itself — declared by a person during discovery, never inferred from the
+brief's prose, which is exactly the free-form guess this design refuses to make on anyone's
+behalf. The whole routing decision, and a proof-or-fallback verdict on whether this run's
+components can run in parallel at all, is computed once and pinned into `skill-selection.json`
+beside `verify-pinned.json`, so a later change to the project's skill library cannot rewrite what
+a task already in flight was told; a cycle's handoff renders the selections and the reasons
+behind them beside everything else it already records. Independence is only ever proven from
+disjoint component roots and no shared verify command — never guessed — and anything short of
+that falls to `orchestration.execution.uncertain_concurrency`, sequential by default. No skill
+library exists yet, so every selection this manifest can produce today is empty; that is the
+next story.
 
 ## Install
 

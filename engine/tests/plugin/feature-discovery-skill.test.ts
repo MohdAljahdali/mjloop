@@ -365,6 +365,28 @@ describe('the feature discovery skill', () => {
     expect(fields).toEqual(stored.filter((field) => !MINTED.includes(field)))
   })
 
+  it('tells the interview that a tag is declared by the user and never inferred from prose', () => {
+    // The field-list assertion above proves `tags` is *presented*. It cannot
+    // prove the interview ever produces one, and a field nobody is told to ask
+    // about is a field that stays empty forever: `tags` is the only join key
+    // that can reach a cross-cutting skill — a component's `skillTags` are
+    // derived from its technology and can never carry `security` — so a
+    // discovery skill that never elicits one makes that whole branch of
+    // selection unreachable through the only surface allowed to write a brief.
+    //
+    // The polarity is asserted as well as the presence, because the wrong way
+    // to fill this field is worse than leaving it empty: a skill that inferred
+    // a tag from the `problem` text would be making exactly the free-form model
+    // claim `ops/skill-selection.ts` refuses to route on.
+    const rules = section(skill, '### The draft')
+    expect(rules, 'the draft section says nothing about tags').toMatch(/\btags\b/)
+    expect(rules).toMatch(/never inferred|not inferred|never infer/)
+    // And it has to be writable: `mjloop_feature_update` is the only call that
+    // takes `tags`, so the step that lists that call's fields must name it or
+    // an interview that decided on a tag has nowhere to put it.
+    expect(section(skill, '## The record this writes')).toMatch(/`tags`/)
+  })
+
   it('records where its behaviour came from', () => {
     // The master plan requires source attribution for the upstream skill this
     // adapts. Only the source is asserted — a licence claim is a legal

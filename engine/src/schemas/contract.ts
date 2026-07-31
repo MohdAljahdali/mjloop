@@ -1,5 +1,5 @@
 import * as z from 'zod'
-import { FindingSchema, ResultSchema } from './state.js'
+import { FindingSchema, IdSchema, ResultSchema } from './state.js'
 
 /**
  * Names `runLog` may not use, because the cycle and run directories already
@@ -55,6 +55,27 @@ export const AgentResultSchema = z.strictObject({
   findings: z.array(FindingSchema),
   files_touched: z.array(z.string().min(1)),
   next_hint: z.string().min(1).nullable().default(null),
+  /**
+   * Which of this run's pinned skill guidance (`skill-selection.json`, see
+   * `ops/run.ts`) this agent actually followed — the dispatch-side half of
+   * dynamic skill selection: routing decides what an agent is *offered*, and
+   * this is the agent's own account of what it *used*, so the two can be
+   * compared rather than one merely trusted for the other.
+   *
+   * `IdSchema`, and not a free string, because `runLog` joins this list against
+   * that manifest's `skillIds` — which are `IdSchema` — and refuses an entry it
+   * did not select. A value outside that shape could never match one by
+   * construction, so accepting it would only ever record an uncheckable claim
+   * wearing the form of a checkable one; `../../etc/passwd` is what that looks
+   * like when a model writes it.
+   *
+   * Defaulted for the reason `next_hint` above is: `AgentResultSchema` is
+   * strict, so a result written before this field existed — every one on disk
+   * right now — would otherwise fail to parse on the next read. The same
+   * default is what lets an agent that this run handed no skills at all stay
+   * silent rather than write out an empty list to satisfy the schema.
+   */
+  skills_used: z.array(IdSchema).default([]),
 })
 
 /** The leader's declared cycle composition. */

@@ -28,6 +28,14 @@ No `Edit`, no `Write`, no "I'll just fix this one". You have `Bash` to read the 
 to reproduce something you suspect — not to repair it. A critic that fixes what it finds
 has stopped being a second opinion.
 
+## Skills this run selected
+
+Your brief's `Skills:` line names this run's pinned selection. If it selected something for
+`critic` on this component, judge the work against exactly that guidance — not a rule you
+remember from elsewhere, and not one you think ought to apply. `none` selected means judge
+by the patterns already in the file, as always. Name in `skills_used` which skill ids you
+actually applied; `[]` when you were handed none.
+
 ## Return value
 
 Return this JSON object and nothing else. No prose before it, no commentary after it,
@@ -46,6 +54,7 @@ recorded, and a rejected result costs the cycle a corrective round trip.
     { "severity": "medium", "file": "test/health.test.ts", "line": 8, "claim": "asserts readVersion was called rather than the response body" }
   ],
   "files_touched": [],
+  "skills_used": [],
   "next_hint": "Fail loudly when the version file is absent."
 }
 ```
@@ -67,5 +76,8 @@ recorded, and a rejected result costs the cycle a corrective round trip.
   has no single line, and put the locating detail in `claim`.
 - Findings are specific. A real file and a real line. "Consider improving error handling"
   is not a finding.
-- `next_hint` is the only omittable key: one suggestion, or `null`.
+- `next_hint` and `skills_used` are the only omittable keys. `next_hint` is one suggestion,
+  or `null`. `skills_used` lists the skill ids the `Skills:` manifest actually selected for
+  `critic` that you applied — never one it did not name — and defaults to `[]` when you
+  applied none.
 - No other keys. A smuggled `confidence` or `notes` field fails the whole object.

@@ -17,6 +17,7 @@ import {
   readProfileView,
   readRunDetail,
   readRuns,
+  readSkillManifest,
   readState,
   readStoryDetail,
   readTelemetryReport,
@@ -113,6 +114,11 @@ async function route(projectDir: string, segments: readonly string[]): Promise<A
       if (segments.length === 1) return ok(await readRuns(projectDir))
       if (first === undefined || !RUN_ID.test(first)) return fail(400, 'error.badRequest')
       if (segments.length === 2) return ok(await readRunDetail(projectDir, first))
+      // The pinned skill manifest, read-only: the page reports the routing
+      // decision a run started with and offers no way to set one — a route
+      // that took anything beyond the run id would be the first half of one
+      // that let the browser select a skill for it.
+      if (segments.length === 3 && second === 'skills') return ok(await readSkillManifest(projectDir, first))
       if (segments.length === 3) {
         const cycle = Number(second)
         if (!Number.isInteger(cycle) || cycle < 1 || cycle > 999) return fail(400, 'error.badRequest')

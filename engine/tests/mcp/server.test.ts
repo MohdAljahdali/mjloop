@@ -1,3 +1,5 @@
+import fs from 'node:fs/promises'
+import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
@@ -858,6 +860,42 @@ describe('feature briefs', () => {
     // this one look like it was never interviewed.
     expect(record.brief.discovery).toEqual({ mode: 'always', questionBudget: 8, completedAt: null })
     expect(record.brief.approval).toBeNull()
+    // No tag is declared until a person names one during discovery.
+    expect(record.brief.tags).toEqual([])
+  })
+
+  // Skill selection joins on this list, and the story is explicit that it
+  // must be declared rather than derived — so the tool that lets an
+  // interview record one is the only surface tested here; reading it back out
+  // of `problem` or `acceptance` text is a defect this repository does not
+  // ship.
+  it('lets the interview declare a cross-cutting tag through mjloop_feature_update', async () => {
+    const id = JSON.parse(textOf(await createDraft())).brief.id
+    const tagged = await client.callTool({
+      name: 'mjloop_feature_update',
+      arguments: { project_dir: project.dir, feature: id, tags: ['security'] },
+    })
+    expect(isError(tagged)).toBe(false)
+    expect(JSON.parse(textOf(tagged)).brief.tags).toEqual(['security'])
+
+    const read = await client.callTool({
+      name: 'mjloop_feature_get',
+      arguments: { project_dir: project.dir, feature: id },
+    })
+    expect(JSON.parse(textOf(read)).brief.tags).toEqual(['security'])
+  })
+
+  it('replaces the declared tags rather than appending to them', async () => {
+    const id = JSON.parse(textOf(await createDraft())).brief.id
+    await client.callTool({
+      name: 'mjloop_feature_update',
+      arguments: { project_dir: project.dir, feature: id, tags: ['security', 'billing'] },
+    })
+    const replaced = await client.callTool({
+      name: 'mjloop_feature_update',
+      arguments: { project_dir: project.dir, feature: id, tags: ['security'] },
+    })
+    expect(JSON.parse(textOf(replaced)).brief.tags).toEqual(['security'])
   })
 
   // A draft is assembled, so the first call cannot carry acceptance criteria.
@@ -1288,5 +1326,51 @@ describe('feature briefs', () => {
     // Neither predecessor moved, and both still say what they said.
     expect((await readFeatureRevision(project.dir, id, 1))?.brief).toEqual(original)
     expect((await readFeatureRevision(project.dir, id, 2))?.brief.acceptance).toEqual(['A one-time code arrives by SMS'])
+  })
+
+  // `mjloop_run_start` is the only surface in the product that opens a run —
+  // the cockpit denies `runStart` permanently (`web/writes.ts`), `/mjloop:resume`
+  // is told not to call it, and the CLI registers no subcommand for it. So a
+  // `feature` the tool does not accept is a `feature` nothing can ever reach,
+  // and the manifest `runStart` was extended to pin would be pinned only by
+  // tests while three documents and the leader skill described it as shipping
+  // behaviour. Worse than dead: the SDK drops an unknown argument silently, so
+  // a leader that passed one would get a normal-looking run and no manifest.
+  it('lets a run be started against an approved feature, and pins the manifest for it', async () => {
+    await client.callTool({ name: 'mjloop_init', arguments: { project_dir: project.dir } })
+    await acceptComponents(['mobile'])
+    const id = await approvableDraft()
+    await client.callTool({
+      name: 'mjloop_feature_update',
+      arguments: { project_dir: project.dir, feature: id, affected_components: ['mobile'] },
+    })
+    await client.callTool({
+      name: 'mjloop_feature_approve',
+      arguments: { project_dir: project.dir, feature: id, ...(await precondition(id)), by: 'mohd' },
+    })
+
+    const started = await client.callTool({
+      name: 'mjloop_run_start',
+      arguments: { project_dir: project.dir, track: 'edit', goal: 'Add link login', feature: id },
+    })
+    expect(isError(started)).toBe(false)
+
+    const state = JSON.parse(textOf(started))
+    const dir = path.join(project.dir, '.mjloop', 'runs', `${state.run_id}--adhoc--edit`)
+    expect((await fs.readdir(dir)).sort()).toEqual(['skill-selection.json', 'verify-pinned.json'])
+    const manifest = JSON.parse(await fs.readFile(path.join(dir, 'skill-selection.json'), 'utf8'))
+    expect(manifest.sourceBrief).toEqual({ id, revision: 1 })
+  })
+
+  it('refuses a feature id that is not shaped like one, rather than dropping it', async () => {
+    // The failure mode the nullish argument has to avoid: an unparseable id
+    // that reaches `runStart` anyway would half-start a run, and one silently
+    // ignored would start a run the caller believes is routed and is not.
+    await client.callTool({ name: 'mjloop_init', arguments: { project_dir: project.dir } })
+    const started = await client.callTool({
+      name: 'mjloop_run_start',
+      arguments: { project_dir: project.dir, track: 'edit', goal: 'x', feature: 'not-a-feature' },
+    })
+    expect(isError(started)).toBe(true)
   })
 })

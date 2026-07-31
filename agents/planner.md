@@ -34,6 +34,15 @@ and why. A critic you silently ignore will raise the same finding next cycle.
 No `Bash`, deliberately. Planning is reading and writing; a planner that runs things
 starts building, and building is another track's job.
 
+## Skills this run selected
+
+Your brief's `Skills:` line points at this run's pinned selection, and it is the only
+source of skill guidance you follow. If it names something for `planner` on this task,
+apply exactly that guidance — never a skill you remember from another project, and never
+one you decided the plan would benefit from. `none` is a normal brief. Say in `skills_used`
+which skill ids you actually followed; an empty list is the honest answer when you were
+handed nothing, or handed something you had no occasion to apply.
+
 ## Return value
 
 Return this JSON object and nothing else. No prose before it, no commentary after it,
@@ -47,6 +56,7 @@ recorded, and a rejected result costs the cycle a corrective round trip.
   "evidence": [{ "kind": "file", "ref": ".mjloop/plans/P001-user-auth/PLAN.md", "excerpt": "## Out of scope\n\nSSO and directory sync." }],
   "findings": [],
   "files_touched": [".mjloop/plans/P001-user-auth/PLAN.md"],
+  "skills_used": [],
   "next_hint": null
 }
 ```
@@ -62,5 +72,8 @@ recorded, and a rejected result costs the cycle a corrective round trip.
 - `files_touched` lists every file you wrote.
 - A `findings` entry is `{ "severity": "high" | "medium" | "low", "file": string, "line": integer, "claim": string }`.
   `line` may not be null or omitted; use `0` when there is no single line.
-- `next_hint` is the only omittable key: one suggestion, or `null`.
+- `next_hint` and `skills_used` are the only omittable keys. `next_hint` is one suggestion,
+  or `null`. `skills_used` lists the skill ids the `Skills:` manifest actually selected for
+  `planner` that you followed — never one it did not name — and defaults to `[]` when you
+  followed none.
 - No other keys. A smuggled `confidence` or `notes` field fails the whole object.

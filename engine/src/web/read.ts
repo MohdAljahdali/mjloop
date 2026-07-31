@@ -9,6 +9,7 @@ import { AgentResultSchema, RosterSchema } from '../schemas/contract.js'
 import type { FeatureBrief, FeatureBriefStatus } from '../schemas/feature.js'
 import { FindingSchema, type State } from '../schemas/state.js'
 import { ManifestSchema, PlanFrontmatterSchema, StoryFrontmatterSchema } from '../schemas/plan.js'
+import { SkillManifestSchema, type SkillManifest } from '../schemas/skill-selection.js'
 import type { LedgerEntry } from '../schemas/verify.js'
 import { configRevision } from '../store/config-mutation.js'
 import { loadConfig, ConfigMissingError } from '../store/config-store.js'
@@ -418,6 +419,31 @@ export async function readRunDetail(projectDir: string, runId: string): Promise<
       .map((entry) => Number(entry.slice('cycle-'.length)))
       .sort((a, b) => a - b),
   }
+}
+
+/**
+ * This run's pinned skill routing decision — `skill-selection.json`, written
+ * once by `runStart` beside `verify-pinned.json` — or `null` when the run
+ * pinned none.
+ *
+ * A read of a file the engine itself writes once and never edits, so there is
+ * nothing here for a browser to invent or mutate: this route can only ever
+ * report the manifest a run started with, exactly as `readCycleDetail` reports
+ * the handoff a cycle closed with. `null` is not an error — most runs today
+ * name no feature at all, and `pinSkillManifest` pins nothing for them — so a
+ * missing manifest reads the same as an existing one that failed to parse: the
+ * absence of a decision, not a defect in reading one.
+ *
+ * The run directory's own existence is still checked and still a 404: an
+ * unknown run id is the operator asking about something that was never
+ * started, which is a different fact from "this run started and pinned
+ * nothing."
+ */
+export async function readSkillManifest(projectDir: string, runId: string): Promise<SkillManifest | null> {
+  const dir = path.join(resolveLoopPaths(projectDir).runs, runId)
+  const exists = await fs.readdir(dir).catch(() => null)
+  if (exists === null) throw new NotFoundError('run')
+  return readJson(path.join(dir, 'skill-selection.json'), SkillManifestSchema)
 }
 
 /**

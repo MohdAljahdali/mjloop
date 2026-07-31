@@ -553,6 +553,13 @@ export interface FeatureDraftPatch {
   acceptance?: string[]
   affectedComponents?: string[]
   /**
+   * What the brief declares itself to be about, beyond its component ids.
+   * Replaces the list, exactly as `affectedComponents` does — the interview
+   * records a tag because a person decided it belonged, never because this
+   * store inferred one from `problem` or `acceptance` text.
+   */
+  tags?: string[]
+  /**
    * The policy the interview behind *this* revision ran under.
    *
    * Patchable rather than fixed at creation, because a successor inherits its
@@ -595,6 +602,7 @@ export async function updateFeatureDraft(
       problem: patch.problem ?? current.brief.problem,
       acceptance: patch.acceptance ?? current.brief.acceptance,
       affectedComponents: patch.affectedComponents ?? current.brief.affectedComponents,
+      tags: patch.tags ?? current.brief.tags,
       discovery: {
         ...current.brief.discovery,
         mode: patch.discoveryMode ?? current.brief.discovery.mode,

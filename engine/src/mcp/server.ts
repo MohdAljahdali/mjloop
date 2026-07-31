@@ -104,9 +104,13 @@ export function buildServer(): McpServer {
         goal: z.string().min(1).describe('What this run must achieve'),
         plan: IdSchema.nullish().describe('Plan id, e.g. P001'),
         story: IdSchema.nullish().describe('Story id, e.g. P001-S02'),
+        feature: FeatureIdSchema.nullish().describe(
+          'Approved feature brief id, e.g. F001. Pins this run\'s skill manifest from that brief and the accepted ' +
+            'component map. Omit it and the run behaves exactly as it always has.',
+        ),
       },
     },
-    async ({ project_dir, track, goal, plan, story }) =>
+    async ({ project_dir, track, goal, plan, story, feature }) =>
       guard(async () =>
         ok(
           await runStart(resolveProjectDir(project_dir), {
@@ -114,6 +118,11 @@ export function buildServer(): McpServer {
             goal,
             plan: plan ?? null,
             story: story ?? null,
+            // Validated by `FeatureIdSchema` on the way in rather than left to
+            // `readFeatureBrief` to reject: this is the only surface that opens
+            // a run, so a shape refused here is refused before anything is
+            // read, and the caller is told which argument it got wrong.
+            feature: feature ?? null,
           }),
         ),
       ),
@@ -446,6 +455,15 @@ export function buildServer(): McpServer {
         problem: z.string().min(1).max(20000).optional(),
         acceptance: z.array(z.string().min(1)).optional().describe('Replaces the list; approval refuses a brief with none'),
         affected_components: z.array(IdSchema).optional().describe('Replaces the list. Every id must be in the accepted component map'),
+        tags: z
+          .array(z.string().min(1))
+          .optional()
+          .describe(
+            'Replaces the list. What the brief declares itself to be about, beyond its component ids — joined ' +
+              "against a component's skillTags by skill selection, for a cross-cutting concern like an " +
+              'authentication boundary. Name a tag only because a person decided it belonged during discovery; never ' +
+              'infer one from problem or acceptance text',
+          ),
         // A successor inherits its predecessor's discovery block along with the
         // rest of its content, and the interview behind revision 2 is not the
         // interview behind revision 1: it may run under a mode the project has
@@ -469,7 +487,7 @@ export function buildServer(): McpServer {
           .describe('true when the interview has stopped asking, false to reopen it. The engine stamps the time'),
       },
     },
-    async ({ project_dir, feature, question, recommendation, answer, title, problem, acceptance, affected_components, discovery_mode, question_budget, discovery_complete }) =>
+    async ({ project_dir, feature, question, recommendation, answer, title, problem, acceptance, affected_components, tags, discovery_mode, question_budget, discovery_complete }) =>
       guard(async () => {
         const dir = resolveProjectDir(project_dir)
         if (question === undefined && (recommendation !== undefined || answer !== undefined)) {
@@ -481,6 +499,7 @@ export function buildServer(): McpServer {
           ...(problem === undefined ? {} : { problem }),
           ...(acceptance === undefined ? {} : { acceptance }),
           ...(affected_components === undefined ? {} : { affectedComponents: affected_components }),
+          ...(tags === undefined ? {} : { tags }),
           ...(discovery_mode === undefined ? {} : { discoveryMode: discovery_mode }),
           ...(question_budget === undefined ? {} : { discoveryQuestionBudget: question_budget }),
           // The timestamp is the engine's, exactly as a decision's `at` is. A

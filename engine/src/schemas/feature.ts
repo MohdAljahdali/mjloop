@@ -121,6 +121,26 @@ export const FeatureBriefSchema = z
     decisions: z.array(DecisionSchema),
     acceptance: z.array(z.string().min(1)),
     affectedComponents: z.array(IdSchema),
+    /**
+     * What this brief declares itself to be about, beyond its component ids —
+     * joined against a component's `skillTags` by skill selection, for the
+     * case a component's technology cannot express: an authentication
+     * boundary is not a Flutter or a Next.js concern, it is a concern that
+     * cuts across whichever component happens to hold the login form.
+     *
+     * **Declared only, and never derived from `problem` or `acceptance`
+     * text.** A tag inferred by scanning prose for a word like
+     * "authentication" is exactly the free-form model claim skill selection
+     * is built to refuse — the interview names a tag during discovery because
+     * a person decided it belonged, or the tag is absent and no skill routes
+     * on it. Reading it back out of the words the person used to describe the
+     * problem would make that decision the model's to make after all.
+     *
+     * Defaulted for the reason every other default in this strict schema is:
+     * a brief written before this field existed would otherwise fail
+     * validation on read rather than gain the field on its next write.
+     */
+    tags: z.array(z.string().min(1)).default([]),
     discovery: DiscoverySchema,
     approval: FeatureApprovalSchema.nullable(),
     /** The revision this one replaces, or null for the first. */

@@ -22,13 +22,19 @@ You build the thing. You do not judge it, and you do not record it in history.
 
    Either line reads `none` in cycle 1, or on a track that hands nothing forward. Then,
    and only then, explore.
-2. Work the task list in your brief. On a cycle after the first, that list is the findings
+2. Read the third document your brief names before you write anything: `Skills:`, this
+   run's pinned skill manifest. Find the selection naming your component and `builder`, and
+   follow exactly the guidance it carries — not a skill you recall from a different project,
+   and not one you decided this task needed. `none` selected is a normal brief, and building
+   without it is the ordinary case, not a gap. Record which skill ids you actually followed
+   in `skills_used`.
+3. Work the task list in your brief. On a cycle after the first, that list is the findings
    the leader is asking you to work — they are the work, not background reading. The brief
    no longer inlines the whole open-findings array or a file list: the handoff and the map
    own those, which is why you read them first.
-3. Write the code and the test that covers it. A behaviour change with no test is
+4. Write the code and the test that covers it. A behaviour change with no test is
    incomplete, and the next cycle's `verifier` will say so.
-4. Follow the patterns already in the file you are editing. A correct change in a foreign
+5. Follow the patterns already in the file you are editing. A correct change in a foreign
    style is a finding waiting to happen.
 
 ## Two things you never do
@@ -60,6 +66,7 @@ recorded, and a rejected result costs the cycle a corrective round trip.
   ],
   "findings": [],
   "files_touched": ["src/routes/health.ts", "src/routes/index.ts", "test/health.test.ts"],
+  "skills_used": [],
   "next_hint": null
 }
 ```
@@ -80,5 +87,8 @@ recorded, and a rejected result costs the cycle a corrective round trip.
 - An `evidence` entry is `{ "kind": "command" | "file" | "test", "ref": string, "excerpt": string }`.
 - A `findings` entry is `{ "severity": "high" | "medium" | "low", "file": string, "line": integer, "claim": string }`.
   `line` may not be null or omitted; use `0` when the problem has no single line.
-- `next_hint` is the only omittable key: one suggestion, or `null`.
+- `next_hint` and `skills_used` are the only omittable keys. `next_hint` is one suggestion,
+  or `null`. `skills_used` lists the skill ids the `Skills:` manifest actually selected for
+  `builder` that you followed — never one it did not name — and defaults to `[]` when you
+  followed none.
 - No other keys. A smuggled `confidence` or `notes` field fails the whole object.

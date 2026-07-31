@@ -7,7 +7,7 @@ import { memoryAdd } from '../../src/ops/memory.js'
 import { gateSet, planCreate, storyAdd } from '../../src/ops/plan.js'
 import { rosterSet } from '../../src/ops/roster.js'
 import { runLog } from '../../src/ops/log.js'
-import { runStart } from '../../src/ops/run.js'
+import { runDirName, runStart } from '../../src/ops/run.js'
 import { LedgerEntrySchema, type LedgerEntry } from '../../src/schemas/verify.js'
 import type { ProjectComponent } from '../../src/schemas/project-profile.js'
 import {
@@ -26,6 +26,7 @@ import {
   readRosterProgress,
   readRunDetail,
   readRuns,
+  readSkillManifest,
   readState,
   readStoryDetail,
   readTelemetryReport,
@@ -195,6 +196,7 @@ describe('read', () => {
       readStoryDetail(project.dir, 'P001-S01'),
       readRuns(project.dir),
       readCycleDetail(project.dir, runId, 1),
+      readSkillManifest(project.dir, runId),
       readMemories(project.dir),
       readMemoryEntry(project.dir, 'M001'),
       // Both cross-run reports walk every run directory in the project. A walk
@@ -250,6 +252,31 @@ describe('read', () => {
     const detail = await readRunDetail(project.dir, runs[0]?.id ?? '')
     expect(detail.cycles).toEqual([1])
     expect(detail.halt).toBe(null)
+  })
+
+  it("serves a run's pinned skill manifest, and null for one that pinned none", async () => {
+    await initLoop(project.dir, clock)
+    await acceptProfile(
+      project.dir,
+      { components: [component({ id: 'web' })], by: 'Mohd', generatedAt: NOW.toISOString(), expectRevision: null },
+      clock,
+    )
+    await raiseFeature()
+    await approveFeature('F001', 1)
+
+    // Most runs today name no feature at all, and `pinSkillManifest` pins
+    // nothing for them — `null` here is that ordinary case, not an error.
+    const bare = await runStart(project.dir, { track: 'edit', goal: 'Rename the submit label' }, clock)
+    expect(await readSkillManifest(project.dir, runDirName(bare))).toBe(null)
+
+    const routed = await runStart(project.dir, { track: 'edit', goal: 'Add link login', feature: 'F001' }, clock)
+    const manifest = await readSkillManifest(project.dir, runDirName(routed))
+    expect(manifest).toMatchObject({ schema: 1, sourceBrief: { id: 'F001', revision: 1 }, profileRevision: 1 })
+  })
+
+  it('raises NotFound for a skill manifest on a run that never started', async () => {
+    await initLoop(project.dir, clock)
+    await expect(readSkillManifest(project.dir, 'nope')).rejects.toBeInstanceOf(NotFoundError)
   })
 
   it('keeps the agents the leader skipped, and its reason for each', async () => {

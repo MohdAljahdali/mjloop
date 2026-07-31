@@ -531,6 +531,65 @@ there. Accepting a map activates routing for every later run, which is exactly t
 of write the browser is permanently denied — so it reports the difference and never
 resolves it.
 
+## Skill selection
+
+A run built against an approved feature brief can hand each of four existing roles —
+`planner`, `builder`, `critic`, and `verifier` — skill guidance drawn from what the project
+has itself accepted. **The roles do not change, and there is no `flutter-builder`, no
+`nextjs-builder`, and there never will be.** A Flutter project and a Next.js project
+dispatch the same four roles; what differs between them is the guidance a role is handed
+for one task, never who holds the responsibility — inventing a role per technology is
+exactly what this design refuses to do.
+
+Selection is a match, not a guess. A skill is offered to a component when the skill's own
+tags intersect that component's skill tags — the tags the accepted component map already
+derives from its declared technology — or when they intersect the brief's own declared
+tags, which is what lets a concern that cuts across every component's technology, an
+authentication boundary for instance, add a skill without that skill needing to pretend it
+is a Flutter or a Next.js concern. Only a skill this project has accepted, still active, and
+found compatible with this host is ever a candidate: an unaccepted, disabled, incompatible,
+or simply unrelated skill is never selected, however well its tags happen to match.
+
+**A brief's tags are declared, never inferred.** They are set through the engine's own
+`mjloop_feature_*` operations, by a person deciding a tag belongs to the work — never by
+reading `problem` or `acceptance` prose for a cue like "authentication", which is exactly
+the free-form guess this design keeps out of a routing decision. A brief that names no tag
+selects on its component ids alone, which is the ordinary case and not a gap.
+
+**The manifest is pinned once, when the run starts,** into `skill-selection.json` beside
+`verify-pinned.json` — the same reasoning as the verify pin: what a run's agents are told is
+decided once, and a later change to the project's skill library, or a later edit to the
+brief, must not rewrite the context a task already in flight is working from. Every
+dispatched agent is handed the manifest's path rather than its contents, follows only the
+selection naming its own component and role, and reports which skill ids it actually used.
+A run that names no feature, or names one this project has not yet accepted a component map
+for, pins nothing at all — it behaves exactly as it always has.
+
+**Work runs in parallel only when independence is proven, never guessed.** More than one
+affected component is necessary but not sufficient: the analysis also requires that no two
+components' roots name or contain each other — the project root `.` is never independent of
+anything beside it — and that no two components share a verify command string in any slot,
+since a shared `npm test` means one suite already covers both, and two agents racing it
+would contend for the same verify lock. Proven-independent work still only goes parallel
+when `orchestration.execution.uncertain_concurrency` is `parallel`; the default,
+`sequential`, and `ask` all serialise it, because a pure analysis has no way to put a
+question to anyone — `ask` names itself in the reason so the leader knows to offer the
+choice rather than silently falling back to sequential. Whatever a run decides, the reason
+is recorded in full, so that anyone reading it afterward can see exactly why the work
+serialised rather than ran in parallel.
+
+**The evidence lands in the cycle's handoff.** Each cycle already writes one — a record,
+kept beside the run, of what happened and why — and skill selection adds one more section
+to it: every skill this run's manifest actually matched, naming the component, the role it
+was offered to, the skill id, and the one reason recorded for choosing it. A run that pinned
+no manifest gets no such section: everything else about the handoff stays exactly as it was.
+
+**No skill library exists yet.** This story selects and pins; it does not import, vet, or
+store a single skill — that is the next one. Until it ships, every project has accepted
+nothing, so every selection this manifest can produce is empty. Say so plainly rather than
+describe a feature nobody can use yet: today a run pins a manifest with a concurrency
+verdict and no skills in it, because there are none on this project to select from.
+
 ## Plans and stories
 
 A plan lives in `.mjloop/plans/P001-<slug>/`:

@@ -140,6 +140,8 @@ decisions:          one entry per question — the question, your recommendation
                     verbatim; unresolved ones marked unresolved, with the options
 acceptance:         the checkable conditions this feature must meet
 affectedComponents: component ids from the accepted map, and nothing invented
+tags:               the cross-cutting concerns the user named, in their words; empty when
+                    they named none
 discovery:          the mode and the question budget this interview actually ran under —
                     the project's, or the override the user stated for this one request
 ```
@@ -161,6 +163,16 @@ and an id outside it refers to nothing. If the project has **no accepted map**, 
 the draft as a stated condition — *no accepted component map; components unresolved* — and
 leave the field empty. That is a condition of the draft, not a gap to fill in with a guess,
 and the honest answer points at the fix: `mjloop-cli profile show`, then accepting a map.
+
+`tags` names the concerns this feature cuts across that no single component owns —
+authentication, payments, accessibility. They are **declared, never inferred**: a tag belongs
+in the draft when the user's own answer put it there, and the right way to get one is to ask
+for it as an ordinary decision question with a recommendation, the same as every other. Never
+read it out of the `problem` or `acceptance` text you just wrote. A brief whose problem
+mentions authentication has not declared a security concern; a user who answered "yes, treat
+this as a security boundary" has. The distinction is not pedantry — a later run routes work
+by joining these tags, so a tag you inferred routes real work on a guess nobody agreed to,
+and an empty list is the correct and ordinary answer for most features.
 
 `problem` is the user's terms because that field is what the plan is judged against later.
 Rewritten into your own words it becomes your understanding of the problem, and the check
@@ -218,8 +230,11 @@ order:
    given are on disk, and the next session reads them instead of asking again.
 3. **`mjloop_feature_update`** — after each answer, not batched at the end. It takes the
    question, the recommendation you made and the answer in their words; it also takes
-   `acceptance`, `affected_components`, `title` and `problem` as the answers settle them, and
-   `discovery_complete` when you have stopped asking. On a **successor** revision it also
+   `acceptance`, `affected_components`, `tags`, `title` and `problem` as the answers settle
+   them, and `discovery_complete` when you have stopped asking. `tags` is the only one of
+   those the user has to have said out loud — see **The draft** — and it is the only call
+   that takes it, so a concern they named and you did not pass here is one the record does
+   not carry. On a **successor** revision it also
    takes `discovery_mode` and `question_budget`: a successor carries its predecessor's whole
    content forward, that block included, and your interview is not the one that produced it —
    so set them when the policy you are running under is not the one the record already names.

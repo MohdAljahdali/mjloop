@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { initLoop } from '../../src/ops/init.js'
 import { gateSet, planCreate, storyAdd } from '../../src/ops/plan.js'
+import { runDirName, runStart } from '../../src/ops/run.js'
 import { TELEMETRY_MAX_ROWS } from '../../src/ops/telemetry.js'
 import { etag, handleApi } from '../../src/web/api.js'
 import { WEB_CODES } from '../../src/web/codes.js'
@@ -139,6 +140,67 @@ describe('handleApi', () => {
     expect((await call('/api/features/F001/rev-001.json'))?.status).toBe(404)
   })
 
+  it("serves a run's pinned skill manifest, and offers no way to set one", async () => {
+    await acceptProfile(
+      project.dir,
+      {
+        components: [
+          {
+            id: 'web',
+            root: 'web',
+            technology: 'nextjs',
+            verification: { test: 'cd web && npm test', lint: null, build: null },
+            skillTags: ['nextjs'],
+          },
+        ],
+        by: 'Mohd',
+        generatedAt: NOW.toISOString(),
+        expectRevision: null,
+      },
+      clock,
+    )
+    await createFeatureBrief(
+      project.dir,
+      {
+        title: 'Passwordless sign-in',
+        problem: 'Password resets are the top support cost.',
+        discovery: { mode: 'ask', questionBudget: 8 },
+      },
+      clock,
+    )
+    const draft = await updateFeatureDraft(project.dir, 'F001', { acceptance: ['a mailed link signs the user in'] })
+    await approveFeatureBrief(
+      project.dir,
+      { id: 'F001', expectRevision: 1, expectDigest: draft.digest, by: 'Mohd' },
+      clock,
+    )
+
+    // Most runs name no feature at all, and `pinSkillManifest` pins nothing
+    // for them — `null` is that ordinary case, not a 404 and not an invented
+    // empty manifest.
+    const bare = await runStart(project.dir, { track: 'edit', goal: 'Rename' }, clock)
+    const bareResult = await call(`/api/runs/${runDirName(bare)}/skills`)
+    expect(bareResult?.status).toBe(200)
+    expect(bareResult?.body).toBe(null)
+
+    const routed = await runStart(project.dir, { track: 'edit', goal: 'Add link login', feature: 'F001' }, clock)
+    const routedResult = await call(`/api/runs/${runDirName(routed)}/skills`)
+    expect(routedResult?.status).toBe(200)
+    expect(routedResult?.body).toMatchObject({ schema: 1, sourceBrief: { id: 'F001', revision: 1 } })
+
+    // The routing decision a run started with is reported; nothing here lets
+    // the browser set one.
+    for (const method of ['POST', 'PUT', 'DELETE', 'PATCH']) {
+      expect((await call(`/api/runs/${runDirName(routed)}/skills`, method))?.status).toBe(405)
+    }
+  })
+
+  it('answers 404 for a skill manifest on a run that never started', async () => {
+    const result = await call('/api/runs/nope/skills')
+    expect(result?.status).toBe(404)
+    expect(result?.body).toEqual({ error: { code: 'error.notFound' } })
+  })
+
   it('answers for a project that has raised no feature without describing it', async () => {
     // An empty list, not a 404: unlike the component map, whose absence changes
     // how every later run is routed, no feature yet is the ordinary state of a
@@ -236,6 +298,7 @@ describe('handleApi', () => {
       await call('/api/plans/P999'),
       await call('/api/state', 'POST'),
       await call('/api/runs/x/0'),
+      await call('/api/runs/nope/skills'),
       await call('/api/preflight/nonsense'),
       await call('/api/preflight/not a track'),
       await call('/api/profile/1'),
