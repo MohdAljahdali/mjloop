@@ -114,17 +114,17 @@ var require_visit = __commonJS({
     visit.BREAK = BREAK;
     visit.SKIP = SKIP;
     visit.REMOVE = REMOVE;
-    function visit_(key, node, visitor, path7) {
-      const ctrl = callVisitor(key, node, visitor, path7);
+    function visit_(key, node, visitor, path13) {
+      const ctrl = callVisitor(key, node, visitor, path13);
       if (identity.isNode(ctrl) || identity.isPair(ctrl)) {
-        replaceNode(key, path7, ctrl);
-        return visit_(key, ctrl, visitor, path7);
+        replaceNode(key, path13, ctrl);
+        return visit_(key, ctrl, visitor, path13);
       }
       if (typeof ctrl !== "symbol") {
         if (identity.isCollection(node)) {
-          path7 = Object.freeze(path7.concat(node));
+          path13 = Object.freeze(path13.concat(node));
           for (let i = 0; i < node.items.length; ++i) {
-            const ci = visit_(i, node.items[i], visitor, path7);
+            const ci = visit_(i, node.items[i], visitor, path13);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -135,13 +135,13 @@ var require_visit = __commonJS({
             }
           }
         } else if (identity.isPair(node)) {
-          path7 = Object.freeze(path7.concat(node));
-          const ck = visit_("key", node.key, visitor, path7);
+          path13 = Object.freeze(path13.concat(node));
+          const ck = visit_("key", node.key, visitor, path13);
           if (ck === BREAK)
             return BREAK;
           else if (ck === REMOVE)
             node.key = null;
-          const cv = visit_("value", node.value, visitor, path7);
+          const cv = visit_("value", node.value, visitor, path13);
           if (cv === BREAK)
             return BREAK;
           else if (cv === REMOVE)
@@ -162,17 +162,17 @@ var require_visit = __commonJS({
     visitAsync.BREAK = BREAK;
     visitAsync.SKIP = SKIP;
     visitAsync.REMOVE = REMOVE;
-    async function visitAsync_(key, node, visitor, path7) {
-      const ctrl = await callVisitor(key, node, visitor, path7);
+    async function visitAsync_(key, node, visitor, path13) {
+      const ctrl = await callVisitor(key, node, visitor, path13);
       if (identity.isNode(ctrl) || identity.isPair(ctrl)) {
-        replaceNode(key, path7, ctrl);
-        return visitAsync_(key, ctrl, visitor, path7);
+        replaceNode(key, path13, ctrl);
+        return visitAsync_(key, ctrl, visitor, path13);
       }
       if (typeof ctrl !== "symbol") {
         if (identity.isCollection(node)) {
-          path7 = Object.freeze(path7.concat(node));
+          path13 = Object.freeze(path13.concat(node));
           for (let i = 0; i < node.items.length; ++i) {
-            const ci = await visitAsync_(i, node.items[i], visitor, path7);
+            const ci = await visitAsync_(i, node.items[i], visitor, path13);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -183,13 +183,13 @@ var require_visit = __commonJS({
             }
           }
         } else if (identity.isPair(node)) {
-          path7 = Object.freeze(path7.concat(node));
-          const ck = await visitAsync_("key", node.key, visitor, path7);
+          path13 = Object.freeze(path13.concat(node));
+          const ck = await visitAsync_("key", node.key, visitor, path13);
           if (ck === BREAK)
             return BREAK;
           else if (ck === REMOVE)
             node.key = null;
-          const cv = await visitAsync_("value", node.value, visitor, path7);
+          const cv = await visitAsync_("value", node.value, visitor, path13);
           if (cv === BREAK)
             return BREAK;
           else if (cv === REMOVE)
@@ -216,23 +216,23 @@ var require_visit = __commonJS({
       }
       return visitor;
     }
-    function callVisitor(key, node, visitor, path7) {
+    function callVisitor(key, node, visitor, path13) {
       if (typeof visitor === "function")
-        return visitor(key, node, path7);
+        return visitor(key, node, path13);
       if (identity.isMap(node))
-        return visitor.Map?.(key, node, path7);
+        return visitor.Map?.(key, node, path13);
       if (identity.isSeq(node))
-        return visitor.Seq?.(key, node, path7);
+        return visitor.Seq?.(key, node, path13);
       if (identity.isPair(node))
-        return visitor.Pair?.(key, node, path7);
+        return visitor.Pair?.(key, node, path13);
       if (identity.isScalar(node))
-        return visitor.Scalar?.(key, node, path7);
+        return visitor.Scalar?.(key, node, path13);
       if (identity.isAlias(node))
-        return visitor.Alias?.(key, node, path7);
+        return visitor.Alias?.(key, node, path13);
       return void 0;
     }
-    function replaceNode(key, path7, node) {
-      const parent = path7[path7.length - 1];
+    function replaceNode(key, path13, node) {
+      const parent = path13[path13.length - 1];
       if (identity.isCollection(parent)) {
         parent.items[key] = node;
       } else if (identity.isPair(parent)) {
@@ -842,10 +842,10 @@ var require_Collection = __commonJS({
     var createNode = require_createNode();
     var identity = require_identity();
     var Node = require_Node();
-    function collectionFromPath(schema, path7, value) {
+    function collectionFromPath(schema, path13, value) {
       let v = value;
-      for (let i = path7.length - 1; i >= 0; --i) {
-        const k = path7[i];
+      for (let i = path13.length - 1; i >= 0; --i) {
+        const k = path13[i];
         if (typeof k === "number" && Number.isInteger(k) && k >= 0) {
           const a = [];
           a[k] = v;
@@ -864,7 +864,7 @@ var require_Collection = __commonJS({
         sourceObjects: /* @__PURE__ */ new Map()
       });
     }
-    var isEmptyPath = (path7) => path7 == null || typeof path7 === "object" && !!path7[Symbol.iterator]().next().done;
+    var isEmptyPath = (path13) => path13 == null || typeof path13 === "object" && !!path13[Symbol.iterator]().next().done;
     var Collection = class extends Node.NodeBase {
       constructor(type, schema) {
         super(type);
@@ -894,11 +894,11 @@ var require_Collection = __commonJS({
        * be a Pair instance or a `{ key, value }` object, which may not have a key
        * that already exists in the map.
        */
-      addIn(path7, value) {
-        if (isEmptyPath(path7))
+      addIn(path13, value) {
+        if (isEmptyPath(path13))
           this.add(value);
         else {
-          const [key, ...rest] = path7;
+          const [key, ...rest] = path13;
           const node = this.get(key, true);
           if (identity.isCollection(node))
             node.addIn(rest, value);
@@ -912,8 +912,8 @@ var require_Collection = __commonJS({
        * Removes a value from the collection.
        * @returns `true` if the item was found and removed.
        */
-      deleteIn(path7) {
-        const [key, ...rest] = path7;
+      deleteIn(path13) {
+        const [key, ...rest] = path13;
         if (rest.length === 0)
           return this.delete(key);
         const node = this.get(key, true);
@@ -927,8 +927,8 @@ var require_Collection = __commonJS({
        * scalar values from their surrounding node; to disable set `keepScalar` to
        * `true` (collections are always returned intact).
        */
-      getIn(path7, keepScalar) {
-        const [key, ...rest] = path7;
+      getIn(path13, keepScalar) {
+        const [key, ...rest] = path13;
         const node = this.get(key, true);
         if (rest.length === 0)
           return !keepScalar && identity.isScalar(node) ? node.value : node;
@@ -946,8 +946,8 @@ var require_Collection = __commonJS({
       /**
        * Checks if the collection includes a value with the key `key`.
        */
-      hasIn(path7) {
-        const [key, ...rest] = path7;
+      hasIn(path13) {
+        const [key, ...rest] = path13;
         if (rest.length === 0)
           return this.has(key);
         const node = this.get(key, true);
@@ -957,8 +957,8 @@ var require_Collection = __commonJS({
        * Sets a value in this collection. For `!!set`, `value` needs to be a
        * boolean to add/remove the item from the set.
        */
-      setIn(path7, value) {
-        const [key, ...rest] = path7;
+      setIn(path13, value) {
+        const [key, ...rest] = path13;
         if (rest.length === 0) {
           this.set(key, value);
         } else {
@@ -3473,9 +3473,9 @@ var require_Document = __commonJS({
           this.contents.add(value);
       }
       /** Adds a value to the document. */
-      addIn(path7, value) {
+      addIn(path13, value) {
         if (assertCollection(this.contents))
-          this.contents.addIn(path7, value);
+          this.contents.addIn(path13, value);
       }
       /**
        * Create a new `Alias` node, ensuring that the target `node` has the required anchor.
@@ -3550,14 +3550,14 @@ var require_Document = __commonJS({
        * Removes a value from the document.
        * @returns `true` if the item was found and removed.
        */
-      deleteIn(path7) {
-        if (Collection.isEmptyPath(path7)) {
+      deleteIn(path13) {
+        if (Collection.isEmptyPath(path13)) {
           if (this.contents == null)
             return false;
           this.contents = null;
           return true;
         }
-        return assertCollection(this.contents) ? this.contents.deleteIn(path7) : false;
+        return assertCollection(this.contents) ? this.contents.deleteIn(path13) : false;
       }
       /**
        * Returns item at `key`, or `undefined` if not found. By default unwraps
@@ -3572,10 +3572,10 @@ var require_Document = __commonJS({
        * scalar values from their surrounding node; to disable set `keepScalar` to
        * `true` (collections are always returned intact).
        */
-      getIn(path7, keepScalar) {
-        if (Collection.isEmptyPath(path7))
+      getIn(path13, keepScalar) {
+        if (Collection.isEmptyPath(path13))
           return !keepScalar && identity.isScalar(this.contents) ? this.contents.value : this.contents;
-        return identity.isCollection(this.contents) ? this.contents.getIn(path7, keepScalar) : void 0;
+        return identity.isCollection(this.contents) ? this.contents.getIn(path13, keepScalar) : void 0;
       }
       /**
        * Checks if the document includes a value with the key `key`.
@@ -3586,10 +3586,10 @@ var require_Document = __commonJS({
       /**
        * Checks if the document includes a value at `path`.
        */
-      hasIn(path7) {
-        if (Collection.isEmptyPath(path7))
+      hasIn(path13) {
+        if (Collection.isEmptyPath(path13))
           return this.contents !== void 0;
-        return identity.isCollection(this.contents) ? this.contents.hasIn(path7) : false;
+        return identity.isCollection(this.contents) ? this.contents.hasIn(path13) : false;
       }
       /**
        * Sets a value in this document. For `!!set`, `value` needs to be a
@@ -3606,13 +3606,13 @@ var require_Document = __commonJS({
        * Sets a value in this document. For `!!set`, `value` needs to be a
        * boolean to add/remove the item from the set.
        */
-      setIn(path7, value) {
-        if (Collection.isEmptyPath(path7)) {
+      setIn(path13, value) {
+        if (Collection.isEmptyPath(path13)) {
           this.contents = value;
         } else if (this.contents == null) {
-          this.contents = Collection.collectionFromPath(this.schema, Array.from(path7), value);
+          this.contents = Collection.collectionFromPath(this.schema, Array.from(path13), value);
         } else if (assertCollection(this.contents)) {
-          this.contents.setIn(path7, value);
+          this.contents.setIn(path13, value);
         }
       }
       /**
@@ -5572,9 +5572,9 @@ var require_cst_visit = __commonJS({
     visit.BREAK = BREAK;
     visit.SKIP = SKIP;
     visit.REMOVE = REMOVE;
-    visit.itemAtPath = (cst, path7) => {
+    visit.itemAtPath = (cst, path13) => {
       let item = cst;
-      for (const [field, index] of path7) {
+      for (const [field, index] of path13) {
         const tok = item?.[field];
         if (tok && "items" in tok) {
           item = tok.items[index];
@@ -5583,23 +5583,23 @@ var require_cst_visit = __commonJS({
       }
       return item;
     };
-    visit.parentCollection = (cst, path7) => {
-      const parent = visit.itemAtPath(cst, path7.slice(0, -1));
-      const field = path7[path7.length - 1][0];
+    visit.parentCollection = (cst, path13) => {
+      const parent = visit.itemAtPath(cst, path13.slice(0, -1));
+      const field = path13[path13.length - 1][0];
       const coll = parent?.[field];
       if (coll && "items" in coll)
         return coll;
       throw new Error("Parent collection not found");
     };
-    function _visit(path7, item, visitor) {
-      let ctrl = visitor(item, path7);
+    function _visit(path13, item, visitor) {
+      let ctrl = visitor(item, path13);
       if (typeof ctrl === "symbol")
         return ctrl;
       for (const field of ["key", "value"]) {
         const token = item[field];
         if (token && "items" in token) {
           for (let i = 0; i < token.items.length; ++i) {
-            const ci = _visit(Object.freeze(path7.concat([[field, i]])), token.items[i], visitor);
+            const ci = _visit(Object.freeze(path13.concat([[field, i]])), token.items[i], visitor);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -5610,10 +5610,10 @@ var require_cst_visit = __commonJS({
             }
           }
           if (typeof ctrl === "function" && field === "key")
-            ctrl = ctrl(item, path7);
+            ctrl = ctrl(item, path13);
         }
       }
-      return typeof ctrl === "function" ? ctrl(item, path7) : ctrl;
+      return typeof ctrl === "function" ? ctrl(item, path13) : ctrl;
     }
     exports.visit = visit;
   }
@@ -6915,14 +6915,14 @@ var require_parser = __commonJS({
             case "scalar":
             case "single-quoted-scalar":
             case "double-quoted-scalar": {
-              const fs6 = this.flowScalar(this.type);
+              const fs13 = this.flowScalar(this.type);
               if (atNextItem || it.value) {
-                map.items.push({ start, key: fs6, sep: [] });
+                map.items.push({ start, key: fs13, sep: [] });
                 this.onKeyLine = true;
               } else if (it.sep) {
-                this.stack.push(fs6);
+                this.stack.push(fs13);
               } else {
-                Object.assign(it, { key: fs6, sep: [] });
+                Object.assign(it, { key: fs13, sep: [] });
                 this.onKeyLine = true;
               }
               return;
@@ -7050,13 +7050,13 @@ var require_parser = __commonJS({
             case "scalar":
             case "single-quoted-scalar":
             case "double-quoted-scalar": {
-              const fs6 = this.flowScalar(this.type);
+              const fs13 = this.flowScalar(this.type);
               if (!it || it.value)
-                fc.items.push({ start: [], key: fs6, sep: [] });
+                fc.items.push({ start: [], key: fs13, sep: [] });
               else if (it.sep)
-                this.stack.push(fs6);
+                this.stack.push(fs13);
               else
-                Object.assign(it, { key: fs6, sep: [] });
+                Object.assign(it, { key: fs13, sep: [] });
               return;
             }
             case "flow-map-end":
@@ -7245,7 +7245,7 @@ var require_public_api = __commonJS({
         return docs;
       return Object.assign([], { empty: true }, composer$1.streamInfo());
     }
-    function parseDocument(source, options = {}) {
+    function parseDocument2(source, options = {}) {
       const { lineCounter: lineCounter2, prettyErrors } = parseOptions(options);
       const parser$1 = new parser.Parser(lineCounter2?.addNewLine);
       const composer$1 = new composer.Composer(options);
@@ -7271,7 +7271,7 @@ var require_public_api = __commonJS({
       } else if (options === void 0 && reviver && typeof reviver === "object") {
         options = reviver;
       }
-      const doc = parseDocument(src, options);
+      const doc = parseDocument2(src, options);
       if (!doc)
         return null;
       doc.warnings.forEach((warning) => log.warn(doc.options.logLevel, warning));
@@ -7307,7 +7307,7 @@ var require_public_api = __commonJS({
     }
     exports.parse = parse5;
     exports.parseAllDocuments = parseAllDocuments;
-    exports.parseDocument = parseDocument;
+    exports.parseDocument = parseDocument2;
     exports.stringify = stringify3;
   }
 });
@@ -7365,11 +7365,10 @@ var require_dist = __commonJS({
 });
 
 // src/cli/index.ts
-import path6 from "node:path";
-
-// src/ops/summary.ts
-import fs4 from "node:fs/promises";
-import path4 from "node:path";
+import { spawn as nodeSpawn2 } from "node:child_process";
+import fs12 from "node:fs/promises";
+import os3 from "node:os";
+import path12 from "node:path";
 
 // node_modules/zod/v4/core/core.js
 var _a;
@@ -7612,10 +7611,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj, path7) {
-  if (!path7)
+function getElementAtPath(obj, path13) {
+  if (!path13)
     return obj;
-  return path7.reduce((acc, key) => acc?.[key], obj);
+  return path13.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -8024,11 +8023,11 @@ function explicitlyAborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path7, issues) {
+function prefixIssues(path13, issues) {
   return issues.map((iss) => {
     var _a3;
     (_a3 = iss).path ?? (_a3.path = []);
-    iss.path.unshift(path7);
+    iss.path.unshift(path13);
     return iss;
   });
 }
@@ -8175,16 +8174,16 @@ function flattenError(error2, mapper = (issue2) => issue2.message) {
 }
 function formatError(error2, mapper = (issue2) => issue2.message) {
   const fieldErrors = { _errors: [] };
-  const processError = (error3, path7 = []) => {
+  const processError = (error3, path13 = []) => {
     for (const issue2 of error3.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path7, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path13, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path7, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path13, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path7, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path13, ...issue2.path]);
       } else {
-        const fullpath = [...path7, ...issue2.path];
+        const fullpath = [...path13, ...issue2.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue2));
         } else {
@@ -8211,8 +8210,8 @@ function formatError(error2, mapper = (issue2) => issue2.message) {
 }
 function toDotPath(_path) {
   const segs = [];
-  const path7 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
-  for (const seg of path7) {
+  const path13 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
+  for (const seg of path13) {
     if (typeof seg === "number")
       segs.push(`[${seg}]`);
     else if (typeof seg === "symbol")
@@ -9662,6 +9661,73 @@ var $ZodUnion = /* @__PURE__ */ $constructor("$ZodUnion", (inst, def) => {
     return Promise.all(results).then((results2) => {
       return handleUnionResults(results2, payload, inst, ctx);
     });
+  };
+});
+var $ZodDiscriminatedUnion = /* @__PURE__ */ $constructor("$ZodDiscriminatedUnion", (inst, def) => {
+  def.inclusive = false;
+  $ZodUnion.init(inst, def);
+  const _super = inst._zod.parse;
+  defineLazy(inst._zod, "propValues", () => {
+    const propValues = {};
+    for (const option of def.options) {
+      const pv = option._zod.propValues;
+      if (!pv || Object.keys(pv).length === 0)
+        throw new Error(`Invalid discriminated union option at index "${def.options.indexOf(option)}"`);
+      for (const [k, v] of Object.entries(pv)) {
+        if (!propValues[k])
+          propValues[k] = /* @__PURE__ */ new Set();
+        for (const val of v) {
+          propValues[k].add(val);
+        }
+      }
+    }
+    return propValues;
+  });
+  const disc = cached(() => {
+    const opts = def.options;
+    const map = /* @__PURE__ */ new Map();
+    for (const o of opts) {
+      const values = o._zod.propValues?.[def.discriminator];
+      if (!values || values.size === 0)
+        throw new Error(`Invalid discriminated union option at index "${def.options.indexOf(o)}"`);
+      for (const v of values) {
+        if (map.has(v)) {
+          throw new Error(`Duplicate discriminator value "${String(v)}"`);
+        }
+        map.set(v, o);
+      }
+    }
+    return map;
+  });
+  inst._zod.parse = (payload, ctx) => {
+    const input = payload.value;
+    if (!isObject(input)) {
+      payload.issues.push({
+        code: "invalid_type",
+        expected: "object",
+        input,
+        inst
+      });
+      return payload;
+    }
+    const opt = disc.value.get(input?.[def.discriminator]);
+    if (opt) {
+      return opt._zod.run(payload, ctx);
+    }
+    if (def.unionFallback || ctx.direction === "backward") {
+      return _super(payload, ctx);
+    }
+    payload.issues.push({
+      code: "invalid_union",
+      errors: [],
+      note: "No matching discriminator",
+      discriminator: def.discriminator,
+      options: Array.from(disc.value.keys()),
+      input,
+      path: [def.discriminator],
+      inst
+    });
+    return payload;
   };
 });
 var $ZodIntersection = /* @__PURE__ */ $constructor("$ZodIntersection", (inst, def) => {
@@ -12173,6 +12239,18 @@ function union(options, params) {
     ...util_exports.normalizeParams(params)
   });
 }
+var ZodDiscriminatedUnion = /* @__PURE__ */ $constructor("ZodDiscriminatedUnion", (inst, def) => {
+  ZodUnion.init(inst, def);
+  $ZodDiscriminatedUnion.init(inst, def);
+});
+function discriminatedUnion(discriminator, options, params) {
+  return new ZodDiscriminatedUnion({
+    type: "union",
+    options,
+    discriminator,
+    ...util_exports.normalizeParams(params)
+  });
+}
 var ZodIntersection = /* @__PURE__ */ $constructor("ZodIntersection", (inst, def) => {
   $ZodIntersection.init(inst, def);
   ZodType.init(inst, def);
@@ -12451,6 +12529,10 @@ function superRefine(fn, params) {
 // node_modules/zod/v4/classic/external.js
 config(en_default());
 
+// src/ops/summary.ts
+import fs8 from "node:fs/promises";
+import path8 from "node:path";
+
 // src/schemas/state.ts
 var IdSchema = string2().regex(/^[A-Za-z0-9_-]+$/, 'only letters, digits, "-" and "_" are allowed');
 var StatusSchema = _enum(["idle", "running", "paused", "halted", "done", "failed"]);
@@ -12561,7 +12643,28 @@ var AgentResultSchema = strictObject({
   evidence: array(EvidenceSchema),
   findings: array(FindingSchema),
   files_touched: array(string2().min(1)),
-  next_hint: string2().min(1).nullable().default(null)
+  next_hint: string2().min(1).nullable().default(null),
+  /**
+   * Which of this run's pinned skill guidance (`skill-selection.json`, see
+   * `ops/run.ts`) this agent actually followed — the dispatch-side half of
+   * dynamic skill selection: routing decides what an agent is *offered*, and
+   * this is the agent's own account of what it *used*, so the two can be
+   * compared rather than one merely trusted for the other.
+   *
+   * `IdSchema`, and not a free string, because `runLog` joins this list against
+   * that manifest's `skillIds` — which are `IdSchema` — and refuses an entry it
+   * did not select. A value outside that shape could never match one by
+   * construction, so accepting it would only ever record an uncheckable claim
+   * wearing the form of a checkable one; `../../etc/passwd` is what that looks
+   * like when a model writes it.
+   *
+   * Defaulted for the reason `next_hint` above is: `AgentResultSchema` is
+   * strict, so a result written before this field existed — every one on disk
+   * right now — would otherwise fail to parse on the next read. The same
+   * default is what lets an agent that this run handed no skills at all stay
+   * silent rather than write out an empty list to satisfy the schema.
+   */
+  skills_used: array(IdSchema).default([])
 });
 var RosterSchema = strictObject({
   cycle: number2().int().positive(),
@@ -12666,6 +12769,73 @@ var VerifySchema = strictObject({
     build: array(string2().min(1)).default([])
   }).prefault({})
 });
+var FeatureDiscoveryModeSchema = _enum(["always", "ask", "off"]);
+var DiscoveryCompletionSchema = _enum(["auto-plan", "review", "save-only"]);
+var UncertainConcurrencySchema = _enum(["sequential", "ask", "parallel"]);
+var AfterPlanApprovalSchema = _enum(["auto", "manual"]);
+var SkillSourceSchema = _enum(["github", "registry", "web"]);
+var SkillUpdateModeSchema = _enum(["auto", "review", "pinned"]);
+var OrchestrationSchema = strictObject({
+  profile: strictObject({
+    /**
+     * May a scan activate a component map with nobody accepting it?
+     *
+     * Off by default. An accepted profile is what every later run routes on,
+     * so a project that gains one without a person looking has had its
+     * routing decided by a directory walk.
+     */
+    auto_accept: boolean2().default(false)
+  }).prefault({}),
+  discovery: strictObject({
+    /**
+     * Deliberately `off`.
+     *
+     * The compatibility rule this whole feature ships under is that an
+     * existing project's plan flow is unchanged by it landing. Any other
+     * default would silently change what `/mjloop:plan` does in every
+     * already-provisioned project the moment the engine is upgraded — the
+     * command would start asking questions nobody configured it to ask.
+     * Turning it on is a decision a project makes, once, in writing.
+     */
+    mode: FeatureDiscoveryModeSchema.default("off"),
+    /**
+     * A ceiling on questions, not a target. The bound is enforced here rather
+     * than at the caller because `config.yaml` is hand-edited: a `0` would
+     * make a mode of `always` ask nothing and look like a broken feature, and
+     * a `200` is an interview no person finishes.
+     */
+    question_budget: number2().int().min(1).max(20).default(8),
+    completion: DiscoveryCompletionSchema.default("review")
+  }).prefault({}),
+  execution: strictObject({
+    after_plan_approval: AfterPlanApprovalSchema.default("manual"),
+    uncertain_concurrency: UncertainConcurrencySchema.default("sequential"),
+    /**
+     * How many times a failed story may be re-attempted before the run stops
+     * and says so. `0` is a real setting — it means never repair — which is
+     * why the bound starts there rather than at 1.
+     */
+    repair_attempts: number2().int().min(0).max(5).default(1)
+  }).prefault({}),
+  quality: strictObject({
+    independent_plan_review: boolean2().default(false),
+    independent_verification: boolean2().default(false)
+  }).prefault({}),
+  skills: strictObject({
+    /**
+     * An empty list is meaningful and permitted: it is how a project says no
+     * skill may be discovered from outside it at all.
+     */
+    sources: array(SkillSourceSchema).default(["github"]),
+    /**
+     * A registry named here is a place this project will fetch executable
+     * instructions from, so plain `http://` is refused at the schema — the
+     * one place a hand-edited, repository-travelling file can be caught.
+     */
+    trusted_registries: array(string2().min(1).startsWith("https://", "a trusted registry must be an https:// URL")).default([]),
+    update_mode: SkillUpdateModeSchema.default("review")
+  }).prefault({})
+});
 var LEGACY_CONFIG_KEYS = ["custom_dirs"];
 var ConfigSchema = strictObject({
   version: literal(1),
@@ -12715,8 +12885,26 @@ var ConfigSchema = strictObject({
      * always proceeds is a prompt nobody reads.
      */
     preflight: _enum(["human", "auto"]).default("auto")
-  }).default({ plan_approval: "human", commit: "auto", preflight: "auto" })
+  }).default({ plan_approval: "human", commit: "auto", preflight: "auto" }),
+  /** `.prefault({})` for the reason `verify` above uses it, and because this
+   * key is absent from every config written before it existed. */
+  orchestration: OrchestrationSchema.prefault({})
 }).superRefine((config2, ctx) => {
+  const { discovery, skills } = config2.orchestration;
+  if (discovery.completion === "auto-plan" && discovery.mode === "off") {
+    ctx.addIssue({
+      code: "custom",
+      path: ["orchestration", "discovery", "completion"],
+      message: 'orchestration.discovery.completion is "auto-plan" but orchestration.discovery.mode is "off" \u2014 auto-plan names a start driven by an approved feature brief, and a project with discovery off never produces one, so planning would silently never begin the way this setting promises. Set discovery.mode to "ask" or "always", or choose a completion of "review" or "save-only".'
+    });
+  }
+  if (skills.sources.includes("registry") && skills.trusted_registries.length === 0) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["orchestration", "skills", "sources"],
+      message: `orchestration.skills.sources names "registry" but orchestration.skills.trusted_registries is empty \u2014 a source that names no registry admits nothing, so this project believes it enabled a source that can never return a skill. Add the registry's https:// URL to trusted_registries, or drop "registry" from sources.`
+    });
+  }
   const forbidden = new Set(
     Object.entries(config2.specialists).filter(([, mode]) => mode === "never").map(([name]) => name)
   );
@@ -12776,6 +12964,43 @@ function resolveLoopPaths(projectDir) {
     plans: path.join(root, "plans"),
     runs: path.join(root, "runs"),
     memory: path.join(root, "memory"),
+    /**
+     * The project's component map: a mutable `proposed.json` a scan overwrites,
+     * and an `accepted/` directory of immutable numbered revisions.
+     *
+     * Only the directory is named here. What a revision file is called, and the
+     * fact that the accepted profile is simply the highest-numbered one rather
+     * than whatever a mutable pointer says, belong to
+     * `project-profile-store.ts` — this map is the place every path in
+     * `.mjloop/` is *rooted*, not the place any of them are interpreted.
+     */
+    profile: path.join(root, "profile"),
+    /**
+     * The feature briefs: one directory per feature, `F001-<slug>/`, holding
+     * immutable numbered revisions of what a discovery interview decided.
+     *
+     * Named here and interpreted in `feature-store.ts`, for the reason the
+     * profile above is: this map is where every path in `.mjloop/` is *rooted*,
+     * not where any of them is given meaning. Which revision is current, and
+     * the fact that it is simply the highest-numbered one rather than whatever
+     * a mutable pointer claims, belong to the store.
+     */
+    features: path.join(root, "features"),
+    /**
+     * This project's acceptances of packages from the shared, user-local
+     * skill library: one `<skillId>.json` per accepted skill, holding which
+     * digest this project pinned and never a path into the library itself —
+     * see `schemas/skill-acceptance.ts`. The library the digest resolves
+     * against lives under `resolveLibraryRoot` (`library-paths.ts`), which is
+     * deliberately *not* under `.mjloop/`: it is shared by every project on
+     * this machine, where this directory is this one project's own decision.
+     *
+     * Added to `PROTECTED_DIRECTORIES` below now that `mjloop-cli skills
+     * accept|disable|enable|remove` exists: that is the route back in the
+     * denial below names, and the reason the `satisfies` check on
+     * `PROTECTED_DIRECTORY_REASONS` in `cli/index.ts` was written to demand.
+     */
+    skills: path.join(root, "skills"),
     lock: path.join(root, ".lock"),
     /**
      * Mutual exclusion for verify *execution*, and never the same directory as
@@ -12796,7 +13021,8 @@ function resolveLoopPaths(projectDir) {
     verifyLock: path.join(root, ".verify-lock")
   };
 }
-var PROTECTED_BASENAMES = ["state.json", "manifest.json", "verify-pinned.json"];
+var PROTECTED_BASENAMES = ["state.json", "manifest.json", "verify-pinned.json", "skill-selection.json"];
+var PROTECTED_DIRECTORIES = ["profile", "features", "skills"];
 
 // src/store/config-store.ts
 var ConfigMissingError = class extends Error {
@@ -12842,6 +13068,25 @@ var StateCorruptedError = class extends Error {
     this.name = "StateCorruptedError";
   }
 };
+async function writeTextAtomic(file, text, options = {}) {
+  const { backup = true } = options;
+  await fs2.mkdir(path2.dirname(file), { recursive: true });
+  if (backup) {
+    try {
+      await fs2.copyFile(file, `${file}.bak`);
+    } catch (error2) {
+      if (error2.code !== "ENOENT") throw error2;
+    }
+  }
+  const temp = `${file}.${process.pid}.${randomUUID()}.tmp`;
+  try {
+    await fs2.writeFile(temp, text, "utf8");
+    await fs2.rename(temp, file);
+  } catch (error2) {
+    await fs2.rm(temp, { force: true }).catch(() => void 0);
+    throw error2;
+  }
+}
 async function writeJsonAtomic(file, data, options = {}) {
   const { backup = true } = options;
   await fs2.mkdir(path2.dirname(file), { recursive: true });
@@ -12999,7 +13244,231 @@ var StateStore = class {
 };
 
 // src/ops/run.ts
-import path3 from "node:path";
+import path7 from "node:path";
+
+// src/schemas/feature.ts
+var FeatureIdSchema = string2().regex(/^F\d{3}$/, "a feature id looks like F001");
+var FeatureBriefStatusSchema = _enum(["draft", "approved", "superseded"]);
+var DecisionSchema = strictObject({
+  question: string2().min(1).max(2e3),
+  recommendation: string2().min(1).max(2e3).nullable(),
+  answer: string2().min(1).max(4e3).nullable(),
+  /** When it was asked. Stamped by the engine, never by the caller. */
+  at: iso_exports.datetime()
+});
+var DiscoverySchema = strictObject({
+  mode: FeatureDiscoveryModeSchema,
+  /**
+   * Bounded here to the same 1..20 the project policy is bounded to. The two
+   * bounds are the same fact stated in the two places it can be violated: the
+   * config schema catches a hand-edited `question_budget`, and this one catches
+   * a per-feature override that never went through the config at all.
+   */
+  questionBudget: number2().int().min(1).max(20),
+  /** When the interview stopped asking. Null while it is still running. */
+  completedAt: iso_exports.datetime().nullable()
+});
+var FeatureApprovalSchema = strictObject({
+  by: string2().min(1),
+  at: iso_exports.datetime(),
+  /** The approver's own words, so the approval is auditable rather than a flag. */
+  note: string2().nullable()
+});
+var FeatureBriefSchema = strictObject({
+  schema: literal(1),
+  id: FeatureIdSchema,
+  revision: number2().int().positive(),
+  title: string2().min(1).max(200),
+  status: FeatureBriefStatusSchema,
+  problem: string2().min(1).max(2e4),
+  decisions: array(DecisionSchema),
+  acceptance: array(string2().min(1)),
+  affectedComponents: array(IdSchema),
+  /**
+   * What this brief declares itself to be about, beyond its component ids —
+   * joined against a component's `skillTags` by skill selection, for the
+   * case a component's technology cannot express: an authentication
+   * boundary is not a Flutter or a Next.js concern, it is a concern that
+   * cuts across whichever component happens to hold the login form.
+   *
+   * **Declared only, and never derived from `problem` or `acceptance`
+   * text.** A tag inferred by scanning prose for a word like
+   * "authentication" is exactly the free-form model claim skill selection
+   * is built to refuse — the interview names a tag during discovery because
+   * a person decided it belonged, or the tag is absent and no skill routes
+   * on it. Reading it back out of the words the person used to describe the
+   * problem would make that decision the model's to make after all.
+   *
+   * Defaulted for the reason every other default in this strict schema is:
+   * a brief written before this field existed would otherwise fail
+   * validation on read rather than gain the field on its next write.
+   */
+  tags: array(string2().min(1)).default([]),
+  discovery: DiscoverySchema,
+  approval: FeatureApprovalSchema.nullable(),
+  /** The revision this one replaces, or null for the first. */
+  supersedes: strictObject({ id: FeatureIdSchema, revision: number2().int().positive() }).nullable(),
+  createdAt: iso_exports.datetime()
+}).superRefine((brief, ctx) => {
+  if (brief.status === "superseded") {
+    ctx.addIssue({
+      code: "custom",
+      path: ["status"],
+      message: 'a stored revision is only ever "draft" or "approved" \u2014 "superseded" is derived on read from the existence of a higher revision, because writing it would mean editing the immutable record it describes'
+    });
+  }
+  if (brief.status === "approved" && brief.acceptance.length === 0) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["acceptance"],
+      message: "an approved brief must carry at least one acceptance criterion \u2014 later stories plan against these, and a draft is where an empty list belongs"
+    });
+  }
+  if (brief.status === "approved" && brief.approval === null) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["approval"],
+      message: "an approved brief must record who approved it and when"
+    });
+  }
+  if (brief.status === "draft" && brief.approval !== null) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["approval"],
+      message: "a draft cannot carry an approval \u2014 approving is what makes a revision stop being a draft"
+    });
+  }
+  if (brief.revision === 1 && brief.supersedes !== null) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["supersedes"],
+      message: "the first revision of a feature supersedes nothing"
+    });
+  }
+  if (brief.revision > 1 && brief.supersedes === null) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["supersedes"],
+      message: `revision ${brief.revision} exists because it replaced an earlier one, and must name it`
+    });
+  }
+  if (brief.supersedes !== null) {
+    if (brief.supersedes.id !== brief.id) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["supersedes", "id"],
+        message: `revision ${brief.revision} of ${brief.id} cannot supersede ${brief.supersedes.id} \u2014 a successor replaces an earlier revision of its own feature`
+      });
+    }
+    if (brief.supersedes.revision >= brief.revision) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["supersedes", "revision"],
+        message: `revision ${brief.revision} cannot supersede revision ${brief.supersedes.revision} \u2014 a predecessor comes before its successor`
+      });
+    }
+  }
+});
+
+// src/schemas/skill-selection.ts
+var AcceptedProjectSkillSchema = strictObject({
+  skillId: IdSchema,
+  /**
+   * Which immutable package version this project accepted. S06 owns the
+   * library and its content-addressed versions; a project record references
+   * a digest and never a path into it, so one project's acceptance can never
+   * be invalidated by another project's update, removal, or a library moved
+   * to a different machine.
+   */
+  packageDigest: string2().regex(/^[a-f0-9]{64}$/),
+  /** Component ids of *this* project the acceptance enables. Empty means none. */
+  components: array(IdSchema),
+  /**
+   * What the skill claims to be for. Joined against a component's
+   * `skillTags`, and against the brief's own declared `tags` for the
+   * cross-cutting case — an authentication boundary is not a component's
+   * technology, so the join has to be able to reach the brief as well as the
+   * component.
+   */
+  tags: array(string2().min(1)),
+  /** Which fixed roles may receive it. An unknown role name here selects nothing. */
+  agents: array(AgentNameSchema),
+  /**
+   * The bounded text a receiving agent is handed. Bounded because it is
+   * copied into a brief on every dispatch: an unbounded guidance string would
+   * make every run's brief as large as the largest skill a project has ever
+   * accepted, on every cycle, whether or not that skill was even selected.
+   */
+  guidance: string2().min(1).max(4e3),
+  status: _enum(["active", "disabled"]),
+  /**
+   * The per-project host compatibility result. An incompatible skill is
+   * never selected, however well its tags match — compatibility is a fact
+   * about whether the skill can run *here at all*, and a good match on a host
+   * that cannot run it is not a selectable skill.
+   */
+  compatible: boolean2()
+});
+var SkillSelectionSchema = strictObject({
+  component: IdSchema,
+  agent: AgentNameSchema,
+  skillIds: array(IdSchema),
+  reasons: array(string2().min(1)),
+  sourceBrief: strictObject({ id: FeatureIdSchema, revision: number2().int().positive() })
+}).superRefine((selection, ctx) => {
+  if (selection.skillIds.length !== selection.reasons.length) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["reasons"],
+      message: `${selection.skillIds.length} skill(s) selected for component "${selection.component}" / agent "${selection.agent}" but ${selection.reasons.length} reason(s) recorded \u2014 the two arrays are index-aligned by construction, and one reason per skill is what lets the evidence view attribute a routing decision to the tag that actually matched rather than to whichever skill happens to share its position.`
+    });
+  }
+});
+var ConcurrencyDecisionSchema = strictObject({
+  mode: _enum(["parallel", "sequential"]),
+  reason: string2().min(1)
+});
+var SkillManifestSchema = strictObject({
+  schema: literal(1),
+  generatedAt: iso_exports.datetime(),
+  sourceBrief: strictObject({ id: FeatureIdSchema, revision: number2().int().positive() }),
+  profileRevision: number2().int().positive(),
+  selections: array(SkillSelectionSchema),
+  /**
+   * The bounded guidance text for every skill the selections above name,
+   * keyed by skill id — the half of the dispatch contract that makes the
+   * other half actionable. A selection carries an id and the reason it was
+   * chosen; neither tells a receiving agent what to *do*, and an agent
+   * instructed to "apply exactly the guidance it carries" against a file
+   * carrying none would be left inventing the skill's meaning, which is the
+   * free-form claim this whole record exists to replace.
+   *
+   * A map rather than a per-selection array because one skill routinely
+   * lands on several (component, agent) rows: `AcceptedProjectSkill.guidance`
+   * is capped at 4000 characters so that copying it is affordable, and
+   * repeating the same 4000 characters once per row would spend that budget
+   * as many times as the manifest has rows. The cap is restated here rather
+   * than inherited, because this record is read by agents that never see an
+   * acceptance record and its own bound has to hold on its own terms.
+   *
+   * Defaulted to `{}` for the reason every default in this codebase exists:
+   * no project has accepted a skill yet — S06 owns the library — so every
+   * manifest pinned today selects nothing and has nothing to render, and an
+   * empty map is that fact rather than a missing field.
+   */
+  guidance: record(IdSchema, string2().min(1).max(4e3)).default({}),
+  concurrency: ConcurrencyDecisionSchema
+}).superRefine((manifest, ctx) => {
+  const selected = [...new Set(manifest.selections.flatMap((selection) => selection.skillIds))];
+  const unguided = selected.filter((skillId) => manifest.guidance[skillId] === void 0);
+  if (unguided.length > 0) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["guidance"],
+      message: `${unguided.map((skillId) => `"${skillId}"`).join(", ")} is selected by this manifest but carries no guidance \u2014 an agent handed a skill id and no text to follow has been told which skill to apply and nothing about how, which leaves it deciding for itself what the skill meant.`
+    });
+  }
+});
 
 // src/schemas/verify.ts
 var VerifySlotSchema = _enum(["test", "lint", "build"]);
@@ -13059,6 +13528,231 @@ var PinnedVerifySchema = strictObject({
   pinned_at: string2().min(1),
   verify: VerifySchema
 });
+
+// src/store/precondition.ts
+var StalePreconditionError = class extends Error {
+  constructor(subject, id, actual) {
+    super(`${subject} ${id} has moved on \u2014 it is now ${actual ?? "unset"}`);
+    this.subject = subject;
+    this.id = id;
+    this.actual = actual;
+    this.name = "StalePreconditionError";
+  }
+};
+
+// src/store/project-profile-store.ts
+import fs4 from "node:fs/promises";
+import path3 from "node:path";
+
+// src/schemas/project-profile.ts
+var ComponentTechnologySchema = _enum(["flutter", "nextjs", "python", "unknown"]);
+var ComponentRootSchema = string2().min(1).refine((root) => !root.includes("\\"), {
+  error: 'a component root is a POSIX path \u2014 "\\" is not a separator here'
+}).refine((root) => !root.startsWith("/") && !/^[A-Za-z]:/.test(root), {
+  error: "a component root is relative to the project root, never absolute"
+}).refine(
+  (root) => root === "." || root.split("/").every((segment) => segment !== "" && segment !== "." && segment !== ".."),
+  { error: 'a component root may not contain an empty, "." or ".." segment' }
+);
+var ComponentVerificationSchema = strictObject({
+  test: string2().min(1).nullable(),
+  lint: string2().min(1).nullable(),
+  build: string2().min(1).nullable()
+});
+var ProjectComponentSchema = strictObject({
+  /** Derived from `root` by the detector, and constrained by the schema every
+   * other id that reaches the filesystem goes through. */
+  id: IdSchema,
+  root: ComponentRootSchema,
+  technology: ComponentTechnologySchema,
+  verification: ComponentVerificationSchema,
+  /**
+   * The join later stories select skills on, derived from `technology`. The
+   * default is load-bearing for the reason every other default in these schemas
+   * is: the object is strict, so a record written before this field existed
+   * would fail validation on read rather than gain the field.
+   */
+  skillTags: array(string2().min(1)).default([])
+});
+var ComponentsSchema = array(ProjectComponentSchema).superRefine((components, ctx) => {
+  const seen = /* @__PURE__ */ new Set();
+  for (const [index, component] of components.entries()) {
+    if (seen.has(component.id)) {
+      ctx.addIssue({
+        code: "custom",
+        path: [index, "id"],
+        message: `two components claim the id "${component.id}" \u2014 it is what later stories join skills and verification on, so one of the two would silently never be selected`
+      });
+    }
+    seen.add(component.id);
+    const previous = components[index - 1];
+    if (previous !== void 0 && !(previous.id < component.id)) {
+      ctx.addIssue({
+        code: "custom",
+        path: [index, "id"],
+        message: `components must be sorted by id \u2014 "${component.id}" follows "${previous.id}"`
+      });
+    }
+  }
+});
+var ProposedProfileSchema = strictObject({
+  schema: literal(1),
+  generatedAt: iso_exports.datetime(),
+  components: ComponentsSchema,
+  /**
+   * The manifest paths the detection rests on, project-relative. Recorded so a
+   * person reading a proposal can check the conclusion against the evidence
+   * rather than take the detector's word for it — including the corroborating
+   * files (a `next.config.*`, an `analysis_options.yaml`) that were consulted
+   * but were not on their own sufficient.
+   */
+  basis: array(string2().min(1))
+});
+var ProjectProfileSchema = strictObject({
+  schema: literal(1),
+  revision: number2().int().positive(),
+  /** When the scan behind these components ran, carried over from the proposal. */
+  generatedAt: iso_exports.datetime(),
+  acceptedAt: iso_exports.datetime(),
+  /** Who accepted it. Free text: the engine cannot verify it, and pretending
+   * otherwise would be worse — the same reason `ApprovalSchema.by` is. */
+  acceptedBy: string2().min(1),
+  components: ComponentsSchema,
+  /** The revision this one replaces, or null for the first. */
+  supersedes: number2().int().positive().nullable()
+});
+
+// src/store/project-profile-store.ts
+var InvalidProfileRecordError = class extends Error {
+  constructor(file, detail) {
+    super(`${file} is not a valid project profile:
+${detail}`);
+    this.name = "InvalidProfileRecordError";
+  }
+};
+var ProfileRevisionExistsError = class extends Error {
+  constructor(file) {
+    super(`${file} already exists \u2014 an accepted profile revision is never rewritten`);
+    this.name = "ProfileRevisionExistsError";
+  }
+};
+var StaleProfileRevisionError = class extends StalePreconditionError {
+  constructor(actualRevision, expectedRevision) {
+    super("run", "profile revision", actualRevision === null ? null : String(actualRevision));
+    this.actualRevision = actualRevision;
+    this.expectedRevision = expectedRevision;
+    this.name = "StaleProfileRevisionError";
+    this.message = `the accepted profile revision has moved on \u2014 this acceptance was built on ${expectedRevision === null ? "no revision at all" : `revision ${expectedRevision}`}, and the project is now on ${actualRevision === null ? "no revision at all" : `revision ${actualRevision}`}`;
+  }
+};
+var RevisionSchema = number2().int().positive();
+function proposedProfileFile(projectDir) {
+  return path3.join(resolveLoopPaths(projectDir).profile, "proposed.json");
+}
+function acceptedDir(projectDir) {
+  return path3.join(resolveLoopPaths(projectDir).profile, "accepted");
+}
+function revisionFileName(revision) {
+  return `rev-${String(revision).padStart(3, "0")}.json`;
+}
+function acceptedRevisionFile(projectDir, revision) {
+  return path3.join(acceptedDir(projectDir), revisionFileName(RevisionSchema.parse(revision)));
+}
+async function readProposedProfile(projectDir) {
+  const file = proposedProfileFile(projectDir);
+  for (const candidate of [file, `${file}.bak`]) {
+    let raw;
+    try {
+      raw = await fs4.readFile(candidate, "utf8");
+    } catch {
+      continue;
+    }
+    const parsed = ProposedProfileSchema.safeParse(parseJson(raw));
+    if (parsed.success) return parsed.data;
+  }
+  return null;
+}
+async function listAcceptedRevisions(projectDir) {
+  let entries;
+  try {
+    entries = await fs4.readdir(acceptedDir(projectDir), { withFileTypes: true });
+  } catch (error2) {
+    if (error2.code !== "ENOENT") throw error2;
+    return [];
+  }
+  const revisions = [];
+  for (const entry of entries) {
+    if (!entry.isFile()) continue;
+    const match = /^rev-(\d+)\.json$/.exec(entry.name);
+    if (match?.[1] === void 0) continue;
+    const revision = Number(match[1]);
+    if (!RevisionSchema.safeParse(revision).success) continue;
+    if (revisionFileName(revision) !== entry.name) continue;
+    revisions.push(revision);
+  }
+  return revisions.sort((a, b) => a - b);
+}
+async function readAcceptedRevision(projectDir, revision) {
+  const file = acceptedRevisionFile(projectDir, revision);
+  let raw;
+  try {
+    raw = await fs4.readFile(file, "utf8");
+  } catch (error2) {
+    if (error2.code === "ENOENT") return null;
+    throw error2;
+  }
+  const parsed = ProjectProfileSchema.safeParse(parseJson(raw));
+  if (!parsed.success) throw new InvalidProfileRecordError(file, prettifyError(parsed.error));
+  return parsed.data;
+}
+async function readAcceptedProfile(projectDir) {
+  const revisions = await listAcceptedRevisions(projectDir);
+  const highest = revisions.at(-1);
+  if (highest === void 0) return null;
+  return readAcceptedRevision(projectDir, highest);
+}
+async function acceptProfile(projectDir, input, now = () => /* @__PURE__ */ new Date()) {
+  const paths = resolveLoopPaths(projectDir);
+  await fs4.mkdir(paths.root, { recursive: true });
+  return withLock(paths.lock, async () => {
+    const revisions = await listAcceptedRevisions(projectDir);
+    const current = revisions.at(-1) ?? null;
+    if (current !== input.expectRevision) throw new StaleProfileRevisionError(current, input.expectRevision);
+    const next = (current ?? 0) + 1;
+    const file = acceptedRevisionFile(projectDir, next);
+    if (await exists(file)) throw new ProfileRevisionExistsError(file);
+    const parsed = ProjectProfileSchema.safeParse({
+      schema: 1,
+      revision: next,
+      generatedAt: input.generatedAt,
+      acceptedAt: now().toISOString(),
+      acceptedBy: input.by,
+      components: input.components,
+      supersedes: current
+    });
+    if (!parsed.success) throw new InvalidProfileRecordError(file, prettifyError(parsed.error));
+    await writeJsonAtomic(file, parsed.data, { backup: false });
+    return parsed.data;
+  });
+}
+function parseJson(raw) {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return void 0;
+  }
+}
+async function exists(file) {
+  try {
+    await fs4.lstat(file);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// src/store/feature-store.ts
+var RevisionSchema2 = number2().int().positive();
 
 // src/schemas/plan.ts
 var StoryStatusSchema = _enum(["todo", "doing", "done", "blocked"]);
@@ -13127,6 +13821,472 @@ var ManifestSchema = strictObject({
 
 // src/store/frontmatter.ts
 var YAML2 = __toESM(require_dist(), 1);
+var FrontmatterError = class extends Error {
+  constructor(message) {
+    super(message);
+    this.name = "FrontmatterError";
+  }
+};
+var FRONTMATTER = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/;
+function splitFrontmatter(raw) {
+  const match = FRONTMATTER.exec(raw);
+  if (match === null) return null;
+  return { yaml: match[1] ?? "", body: (match[2] ?? "").trim() };
+}
+function parseFrontmatter(raw) {
+  const split = splitFrontmatter(raw);
+  if (split === null) {
+    throw new FrontmatterError("no frontmatter block: the file must open with a --- fenced yaml block");
+  }
+  let data;
+  try {
+    data = YAML2.parse(split.yaml);
+  } catch (error2) {
+    throw new FrontmatterError(`the frontmatter is not valid yaml: ${error2.message}`);
+  }
+  return { data, body: split.body };
+}
+
+// src/store/skill-acceptance-store.ts
+import fs7 from "node:fs/promises";
+import path6 from "node:path";
+
+// src/schemas/skill-library.ts
+var DigestSchema = string2().regex(/^[a-f0-9]{64}$/, "a digest is 64 lower-case hex characters");
+var SkillPackageSchema = strictObject({
+  schema: literal(1),
+  /**
+   * Stable across revisions of one source. Two imports of the same GitHub
+   * repository at two different pinned revisions share a `packageId` and
+   * differ in `digest` — `packageId` is "which skill", `digest` is "which
+   * bytes of it".
+   */
+  packageId: IdSchema,
+  /** Of the content; also the directory name under the library root. */
+  digest: DigestSchema,
+  source: strictObject({
+    kind: SkillSourceSchema,
+    url: string2().url().startsWith("https://"),
+    /**
+     * A pinned commit or tag, never a moving ref such as a branch name. A
+     * branch would let the *same recorded revision* resolve to different
+     * bytes over time, which is precisely what content-addressing by digest
+     * is here to make impossible — the revision has to hold that promise on
+     * its own terms, not merely happen to agree with the digest today.
+     */
+    revision: string2().min(1)
+  }),
+  license: strictObject({
+    spdx: string2().min(1).nullable(),
+    file: string2().min(1).nullable()
+  }),
+  skillName: string2().min(1).max(200),
+  description: string2().min(1).max(1e3),
+  tags: array(string2().min(1)),
+  dependencies: strictObject({
+    /** An inventory of what the package declares — never a resolution. */
+    executables: array(string2().min(1)),
+    /** Likewise: named, not installed. */
+    packages: array(string2().min(1))
+  }),
+  audit: strictObject({
+    state: _enum(["pending", "passed", "failed"]),
+    findings: array(string2().min(1)),
+    at: iso_exports.datetime().nullable()
+  }),
+  /**
+   * The bounded text S05 hands an agent. Capped at the same 4000 characters
+   * `AcceptedProjectSkill.guidance` is, for the same reason stated there: it
+   * is copied into a brief on every dispatch, so an unbounded string here
+   * would make every dispatch as large as the largest guidance any package
+   * in the library has ever carried.
+   */
+  guidance: string2().min(1).max(4e3),
+  importedAt: iso_exports.datetime()
+});
+
+// src/schemas/skill-acceptance.ts
+var SKILL_ACCEPTANCE_AGENTS = ["planner", "builder", "critic", "verifier"];
+var ProjectSkillAcceptanceSchema = strictObject({
+  schema: literal(1),
+  skillId: IdSchema,
+  /** Stable across revisions of one source — see `SkillPackageSchema.packageId`. */
+  packageId: IdSchema,
+  /**
+   * A digest, never a path. The stop condition is explicit: no global-library
+   * path may be stored in a project record, because the library moves per
+   * machine and this record is committed.
+   */
+  digest: DigestSchema,
+  components: array(IdSchema),
+  agents: array(AgentNameSchema),
+  tags: array(string2().min(1)),
+  /**
+   * No global fallback of any kind. `orchestration.skills.update_mode` is
+   * only ever a *default offered* at acceptance time by whichever caller
+   * assembles this input — never consulted afterwards — because a global
+   * policy could otherwise silently change what a project's already-accepted
+   * skill does on its next run without that project ever having decided so.
+   */
+  updatePolicy: SkillUpdateModeSchema,
+  status: _enum(["active", "disabled"]),
+  /**
+   * The per-project host compatibility result.
+   *
+   * Nothing in this story determines host compatibility — no field on
+   * `SkillPackage` records what a host needs, and checking `dependencies.
+   * executables` against the machine that will run an agent is squarely the
+   * sandboxed problem S07 owns. `acceptSkill` accepts this as an explicit
+   * input rather than computing it, and defaults it to `true` when the
+   * caller does not know better yet: today nothing here can prove a package
+   * is *incompatible*, so recording an unearned `false` would be a claim as
+   * ungrounded as an unearned `true` — the honest default is the one that
+   * matches what this story can actually establish. A later story that can
+   * compute this for real overwrites it rather than reads a fabricated one.
+   */
+  compatible: boolean2(),
+  /** Who accepted it. Free text; the engine cannot verify it. */
+  acceptedBy: string2().min(1),
+  acceptedAt: iso_exports.datetime()
+});
+
+// src/store/skill-library-store.ts
+import fs6 from "node:fs/promises";
+import path5 from "node:path";
+
+// src/store/library-paths.ts
+import fs5 from "node:fs";
+import path4 from "node:path";
+import os from "node:os";
+var LibraryRootCollisionError = class extends Error {
+  constructor(root, projectDir) {
+    super(
+      `the resolved skill library root "${root}" is inside the project directory "${projectDir}" or inside a ".mjloop" directory \u2014 the library is shared across every project on this machine and must never live inside one project's checkout or its .mjloop state`
+    );
+    this.name = "LibraryRootCollisionError";
+  }
+};
+function resolveLibraryRoot(projectDir) {
+  const root = pickRoot();
+  const resolvedRoot = path4.resolve(root);
+  const resolvedProject = path4.resolve(projectDir);
+  const canonicalRoot = canonicalize(resolvedRoot);
+  const canonicalProject = canonicalize(resolvedProject);
+  const insideProject = canonicalRoot === canonicalProject || canonicalRoot.startsWith(canonicalProject + path4.sep);
+  const insideDotMjloop = canonicalRoot.split(path4.sep).some((segment) => segment === ".mjloop");
+  if (insideProject || insideDotMjloop) throw new LibraryRootCollisionError(resolvedRoot, resolvedProject);
+  return resolvedRoot;
+}
+function canonicalize(target) {
+  const trailing = [];
+  let existing = target;
+  for (; ; ) {
+    try {
+      return path4.join(fs5.realpathSync(existing), ...trailing);
+    } catch {
+      const parent = path4.dirname(existing);
+      if (parent === existing) return target;
+      trailing.unshift(path4.basename(existing));
+      existing = parent;
+    }
+  }
+}
+function pickRoot() {
+  const dataHome = process.env.MJLOOP_DATA_HOME;
+  if (dataHome !== void 0 && dataHome !== "" && path4.isAbsolute(dataHome)) return dataHome;
+  const xdgDataHome = process.env.XDG_DATA_HOME;
+  if (xdgDataHome !== void 0 && xdgDataHome !== "" && path4.isAbsolute(xdgDataHome)) {
+    return path4.join(xdgDataHome, "mjloop");
+  }
+  return path4.join(os.homedir(), ".local", "share", "mjloop");
+}
+function packagesDir(projectDir) {
+  return path4.join(resolveLibraryRoot(projectDir), "packages");
+}
+
+// src/store/skill-library-store.ts
+var InvalidSkillPackageError = class extends Error {
+  constructor(file, detail) {
+    super(`${file} is not a valid skill package:
+${detail}`);
+    this.name = "InvalidSkillPackageError";
+  }
+};
+var InvalidDigestError = class extends Error {
+  constructor(digest) {
+    super(`"${digest}" is not a valid package digest \u2014 a digest is 64 lower-case hex characters`);
+    this.name = "InvalidDigestError";
+  }
+};
+var InvalidPackageContentError = class extends Error {
+  constructor(entry) {
+    super(
+      `package content contains a symlink at "${entry}" \u2014 a package directory must be self-contained bytes, because its digest names its content and a link names something outside it`
+    );
+    this.name = "InvalidPackageContentError";
+  }
+};
+var PackageAlreadyExistsError = class extends Error {
+  constructor(digest) {
+    super(
+      `a package already exists at digest "${digest}" \u2014 content-addressing means identical digests are identical bytes, so a second write of the same digest is either a no-op that need not happen or a corruption that must be noticed, and refusing is how the second case gets noticed`
+    );
+    this.name = "PackageAlreadyExistsError";
+  }
+};
+function validateDigest(digest) {
+  const parsed = DigestSchema.safeParse(digest);
+  if (!parsed.success) throw new InvalidDigestError(digest);
+  return parsed.data;
+}
+function packageDirFor(projectDir, digest) {
+  return path5.join(packagesDir(projectDir), validateDigest(digest));
+}
+function packageRecordFileFor(projectDir, digest) {
+  return path5.join(packageDirFor(projectDir, digest), "package.json");
+}
+async function listPackages(projectDir) {
+  let entries;
+  try {
+    entries = await fs6.readdir(packagesDir(projectDir));
+  } catch (error2) {
+    if (error2.code !== "ENOENT") throw error2;
+    return { packages: [], unreadable: [] };
+  }
+  const packages = [];
+  const unreadable = [];
+  for (const entry of entries.sort()) {
+    if (!DigestSchema.safeParse(entry).success) continue;
+    try {
+      const record2 = await readPackage(projectDir, entry);
+      if (record2 !== null) packages.push(record2);
+    } catch (error2) {
+      unreadable.push({ digest: entry, reason: error2 instanceof Error ? error2.message : String(error2) });
+    }
+  }
+  return { packages, unreadable };
+}
+async function readPackage(projectDir, digest) {
+  const file = packageRecordFileFor(projectDir, digest);
+  let raw;
+  try {
+    raw = await fs6.readFile(file, "utf8");
+  } catch (error2) {
+    const code = error2.code;
+    if (code === "ENOENT" || code === "ENOTDIR") return null;
+    throw error2;
+  }
+  const parsed = SkillPackageSchema.safeParse(parseJson2(raw));
+  if (!parsed.success) throw new InvalidSkillPackageError(file, prettifyError(parsed.error));
+  return parsed.data;
+}
+async function writePackage(projectDir, record2, contentDir) {
+  const parsed = SkillPackageSchema.parse(record2);
+  const digest = validateDigest(parsed.digest);
+  const dir = packageDirFor(projectDir, digest);
+  if (await exists2(dir)) throw new PackageAlreadyExistsError(digest);
+  await assertNoSymlinks(contentDir);
+  await fs6.mkdir(dir, { recursive: true });
+  await fs6.cp(contentDir, path5.join(dir, "content"), { recursive: true, verbatimSymlinks: true });
+  await writeJsonAtomic(path5.join(dir, "package.json"), parsed, { backup: false });
+}
+async function assertNoSymlinks(contentDir, relative = "") {
+  const stats = await fs6.lstat(contentDir);
+  if (stats.isSymbolicLink()) throw new InvalidPackageContentError(relative === "" ? contentDir : relative);
+  if (!stats.isDirectory()) return;
+  for (const entry of await fs6.readdir(contentDir, { withFileTypes: true })) {
+    const child = path5.join(relative, entry.name);
+    if (entry.isSymbolicLink()) throw new InvalidPackageContentError(child);
+    if (entry.isDirectory()) await assertNoSymlinks(path5.join(contentDir, entry.name), child);
+  }
+}
+function parseJson2(raw) {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return void 0;
+  }
+}
+async function exists2(file) {
+  try {
+    await fs6.lstat(file);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// src/store/skill-acceptance-store.ts
+var InvalidSkillIdError = class extends Error {
+  constructor(skillId) {
+    super(`"${skillId}" is not a valid skill id \u2014 a skill id is letters, digits, "-" and "_" only`);
+    this.name = "InvalidSkillIdError";
+  }
+};
+var InvalidSkillAcceptanceRecordError = class extends Error {
+  constructor(file, detail) {
+    super(`${file} is not a valid skill acceptance:
+${detail}`);
+    this.name = "InvalidSkillAcceptanceRecordError";
+  }
+};
+var SkillAcceptanceNotFoundError = class extends Error {
+  constructor(skillId, dir) {
+    super(`no accepted skill "${skillId}" under ${dir}`);
+    this.name = "SkillAcceptanceNotFoundError";
+  }
+};
+var PackageNotFoundError = class extends Error {
+  constructor(digest) {
+    super(
+      `no package at digest "${digest}" in this machine's skill library \u2014 import it first, or check the digest against \`mjloop-cli skills list\``
+    );
+    this.name = "PackageNotFoundError";
+  }
+};
+var PackageNotAuditedError = class extends Error {
+  constructor(digest, state) {
+    super(
+      `package "${digest}" has not passed an audit (audit.state is "${state}") \u2014 nothing in this version of the engine can set a package's audit to "passed", so no package is acceptable yet through the ordinary path. This is expected today, not a bug: the static inspection and sandbox that earn a passed audit are a later story's job.`
+    );
+    this.name = "PackageNotAuditedError";
+  }
+};
+var UnknownAcceptanceComponentError = class extends Error {
+  constructor(unknown2, known) {
+    super(
+      known.length === 0 ? `this project has no accepted component map, so ${quoted(unknown2)} cannot name a component of it. Run \`mjloop-cli profile show\` and \`mjloop-cli profile accept\` first, or accept the skill against no components until the map exists.` : `${quoted(unknown2)} is not in this project's accepted component map, which names ${quoted(known)}. Skill selection joins on these ids, so a component nothing has accepted would route work nowhere.`
+    );
+    this.unknown = unknown2;
+    this.known = known;
+    this.name = "UnknownAcceptanceComponentError";
+  }
+};
+var UnknownAcceptanceAgentError = class extends Error {
+  constructor(unknown2) {
+    super(
+      `${quoted(unknown2)} is not one of the fixed agent roles dynamic skill selection routes to (${SKILL_ACCEPTANCE_AGENTS.join(", ")}) \u2014 an unknown role here would select a skill for a dispatch that never happens.`
+    );
+    this.unknown = unknown2;
+    this.name = "UnknownAcceptanceAgentError";
+  }
+};
+var SkillAlreadyAcceptedError = class extends Error {
+  constructor(skillId) {
+    super(
+      `this project already has an acceptance for "${skillId}" \u2014 remove it first (\`mjloop-cli skills remove\`) if you mean to replace it with a different digest, components, or agents.`
+    );
+    this.name = "SkillAlreadyAcceptedError";
+  }
+};
+function validateSkillId(skillId) {
+  const parsed = IdSchema.safeParse(skillId);
+  if (!parsed.success) throw new InvalidSkillIdError(skillId);
+  return parsed.data;
+}
+function acceptanceFile(projectDir, skillId) {
+  return path6.join(resolveLoopPaths(projectDir).skills, `${validateSkillId(skillId)}.json`);
+}
+async function listAcceptances(projectDir) {
+  let entries;
+  try {
+    entries = await fs7.readdir(resolveLoopPaths(projectDir).skills, { withFileTypes: true });
+  } catch (error2) {
+    if (error2.code !== "ENOENT") throw error2;
+    return [];
+  }
+  const acceptances = [];
+  for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+    if (!entry.isFile() || !entry.name.endsWith(".json")) continue;
+    const skillId = entry.name.slice(0, -".json".length);
+    if (!IdSchema.safeParse(skillId).success) continue;
+    const record2 = await readAcceptance(projectDir, skillId);
+    if (record2 !== null) acceptances.push(record2);
+  }
+  return acceptances;
+}
+async function readAcceptance(projectDir, skillId) {
+  const file = acceptanceFile(projectDir, skillId);
+  let raw;
+  try {
+    raw = await fs7.readFile(file, "utf8");
+  } catch (error2) {
+    if (error2.code === "ENOENT") return null;
+    throw error2;
+  }
+  const parsed = ProjectSkillAcceptanceSchema.safeParse(parseJson3(raw));
+  if (!parsed.success) throw new InvalidSkillAcceptanceRecordError(file, prettifyError(parsed.error));
+  return parsed.data;
+}
+async function acceptSkill(projectDir, input, now = () => /* @__PURE__ */ new Date()) {
+  return locked(projectDir, async () => {
+    const pkg = await readPackage(projectDir, input.packageDigest);
+    if (pkg === null) throw new PackageNotFoundError(input.packageDigest);
+    if (pkg.audit.state !== "passed") throw new PackageNotAuditedError(pkg.digest, pkg.audit.state);
+    const skillId = pkg.packageId;
+    if (await readAcceptance(projectDir, skillId) !== null) throw new SkillAlreadyAcceptedError(skillId);
+    const accepted = await readAcceptedProfile(projectDir);
+    const components = input.components ?? (accepted?.components ?? []).map((component) => component.id);
+    await assertKnownComponents(projectDir, components);
+    const agents = input.agents ?? [...SKILL_ACCEPTANCE_AGENTS];
+    const unknownAgents = agents.filter(
+      (agent) => !SKILL_ACCEPTANCE_AGENTS.includes(agent)
+    );
+    if (unknownAgents.length > 0) throw new UnknownAcceptanceAgentError(unknownAgents);
+    const parsed = ProjectSkillAcceptanceSchema.parse({
+      schema: 1,
+      skillId,
+      packageId: pkg.packageId,
+      digest: pkg.digest,
+      components,
+      agents,
+      tags: pkg.tags,
+      updatePolicy: input.updatePolicy,
+      status: "active",
+      compatible: input.compatible ?? true,
+      acceptedBy: input.acceptedBy,
+      acceptedAt: now().toISOString()
+    });
+    await writeJsonAtomic(acceptanceFile(projectDir, skillId), parsed, { backup: false });
+    return parsed;
+  });
+}
+async function setAcceptanceStatus(projectDir, skillId, status) {
+  return locked(projectDir, async () => {
+    const current = await readAcceptance(projectDir, skillId);
+    if (current === null) throw new SkillAcceptanceNotFoundError(skillId, resolveLoopPaths(projectDir).skills);
+    const parsed = ProjectSkillAcceptanceSchema.parse({ ...current, status });
+    await writeJsonAtomic(acceptanceFile(projectDir, skillId), parsed, { backup: false });
+    return parsed;
+  });
+}
+async function removeAcceptance(projectDir, skillId) {
+  await locked(projectDir, async () => {
+    await fs7.rm(acceptanceFile(projectDir, skillId), { force: true });
+  });
+}
+async function assertKnownComponents(projectDir, ids) {
+  if (ids.length === 0) return;
+  const profile = await readAcceptedProfile(projectDir);
+  const known = (profile?.components ?? []).map((component) => component.id);
+  const unknown2 = ids.filter((id) => !known.includes(id));
+  if (unknown2.length > 0) throw new UnknownAcceptanceComponentError(unknown2, known);
+}
+async function locked(projectDir, fn) {
+  const paths = resolveLoopPaths(projectDir);
+  await fs7.mkdir(paths.root, { recursive: true });
+  return withLock(paths.lock, fn);
+}
+function parseJson3(raw) {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return void 0;
+  }
+}
+function quoted(ids) {
+  return ids.map((id) => `"${id}"`).join(", ");
+}
 
 // src/ops/run.ts
 var NoActiveRunError = class extends Error {
@@ -13140,7 +14300,7 @@ function runDirName(state) {
   return `${state.run_id}--${state.current.story ?? "adhoc"}--${state.track}`;
 }
 function runDirPath(projectDir, state) {
-  return path3.join(resolveLoopPaths(projectDir).runs, runDirName(state));
+  return path7.join(resolveLoopPaths(projectDir).runs, runDirName(state));
 }
 
 // src/ops/summary.ts
@@ -13148,7 +14308,7 @@ var NO_FINDINGS = { high: 0, medium: 0, low: 0 };
 var MAP_FILE = "map.md";
 async function hasDesignSystem(projectDir) {
   try {
-    return (await fs4.stat(resolveLoopPaths(projectDir).designSystem)).isFile();
+    return (await fs8.stat(resolveLoopPaths(projectDir).designSystem)).isFile();
   } catch {
     return false;
   }
@@ -13156,11 +14316,11 @@ async function hasDesignSystem(projectDir) {
 async function runMap(projectDir, state) {
   if (state.run_id === null || state.track === null) return null;
   try {
-    if (!(await fs4.stat(path4.join(runDirPath(projectDir, state), MAP_FILE))).isFile()) return null;
+    if (!(await fs8.stat(path8.join(runDirPath(projectDir, state), MAP_FILE))).isFile()) return null;
   } catch {
     return null;
   }
-  return path4.join(".mjloop", "runs", runDirName(state), MAP_FILE);
+  return path8.join(".mjloop", "runs", runDirName(state), MAP_FILE);
 }
 async function stateSummary(projectDir) {
   let config2 = null;
@@ -13251,34 +14411,1051 @@ function renderSummaryLine(summary) {
   return `Loop: ${summary.status} \xB7 track ${summary.track} \xB7 ${target} \xB7 cycle ${summary.cycle}/${cap} \xB7 stage ${summary.stage} \xB7 findings ${findings}${gate}${config2}${tail}`;
 }
 
+// src/util/bounded-body.ts
+async function readBoundedText(response, capBytes, tooLarge) {
+  const declared = Number(response.headers.get("content-length"));
+  if (Number.isFinite(declared) && declared > capBytes) throw tooLarge();
+  const body = response.body;
+  if (body === null) return "";
+  const reader = body.getReader();
+  const chunks = [];
+  let total = 0;
+  try {
+    for (; ; ) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > capBytes) throw tooLarge();
+      chunks.push(Buffer.from(value));
+    }
+  } finally {
+    await reader.cancel().catch(() => void 0);
+  }
+  return Buffer.concat(chunks).toString("utf8");
+}
+
+// src/schemas/skill-import.ts
+var SkillCandidateSchema = strictObject({
+  source: SkillSourceSchema,
+  /** The page a person would open to look at this candidate. */
+  url: string2().url().startsWith("https://"),
+  /** `owner/name` for GitHub, or whatever the registry's own scheme is. */
+  repository: string2().min(1),
+  /**
+   * The ref the candidate was found at — commonly a branch, so **not**
+   * assumed to be immutable here. `inspectCandidate` resolves this to a
+   * pinned commit sha before fetching anything; a candidate itself makes no
+   * such promise.
+   */
+  ref: string2().min(1),
+  skillName: string2().min(1).max(200),
+  description: string2().min(1).max(1e3),
+  /** Absent when the source does not report a popularity signal. */
+  stars: number2().int().min(0).optional()
+});
+var SandboxCheckResultSchema = strictObject({
+  /** A bare argv array — never a shell string; see the story's rule 7. */
+  argv: array(string2().min(1)).min(1),
+  exitCode: number2().int().nullable(),
+  timedOut: boolean2()
+});
+var SANDBOX_OUTPUT_CAP = 2e4;
+var SandboxOutputSchema = strictObject({
+  text: string2().max(SANDBOX_OUTPUT_CAP),
+  truncated: boolean2()
+});
+var SandboxResultSchema = discriminatedUnion("state", [
+  strictObject({
+    state: literal("skipped"),
+    /** Always "no executable content" today — the common, markdown-only case. */
+    reason: string2().min(1)
+  }),
+  strictObject({
+    state: literal("unavailable"),
+    /** Names the backend that would let this machine verify it, e.g. sandbox-exec or bwrap. */
+    reason: string2().min(1)
+  }),
+  strictObject({
+    state: literal("passed"),
+    checks: array(SandboxCheckResultSchema),
+    output: SandboxOutputSchema
+  }),
+  strictObject({
+    state: literal("failed"),
+    checks: array(SandboxCheckResultSchema),
+    output: SandboxOutputSchema
+  })
+]);
+var NextActionSchema = strictObject({
+  action: literal("search-alternative"),
+  query: string2().min(1)
+});
+var ImportReportSchema = strictObject({
+  schema: literal(1),
+  candidate: SkillCandidateSchema,
+  /** The commit sha the candidate's `ref` was pinned to before anything was fetched, or `null` if pinning failed. */
+  revision: string2().min(1).nullable(),
+  /** sha256 over the canonical sorted content — the same digest `SkillPackageSchema` addresses a package by. */
+  digest: DigestSchema.nullable(),
+  skillName: string2().min(1).max(200).nullable(),
+  description: string2().min(1).max(1e3).nullable(),
+  license: strictObject({
+    spdx: string2().min(1).nullable(),
+    file: string2().min(1).nullable()
+  }).nullable(),
+  dependencies: strictObject({
+    executables: array(string2().min(1)),
+    packages: array(string2().min(1))
+  }).nullable(),
+  /** Paths classified as executable content — read to classify, never executed to do so. */
+  executableFiles: array(string2().min(1)),
+  /** Every refusal and every concern, each a sentence naming what and why. */
+  findings: array(string2().min(1)),
+  /** Whether any finding above blocks acceptance outright (e.g. a missing license, a hostile path). */
+  blocking: boolean2(),
+  /** `null` until the sandbox phase has run; inspection alone never sets this. */
+  sandbox: SandboxResultSchema.nullable(),
+  /** `'passed'` only when `blocking` is `false` and `sandbox.state` is `'passed'` or `'skipped'`. */
+  auditState: _enum(["pending", "passed", "failed"]),
+  /** Present only on a failed or blocked report; absent otherwise. */
+  nextAction: NextActionSchema.nullable()
+});
+
+// src/ops/skill-discovery.ts
+var defaultDeps = { fetch: globalThis.fetch };
+var SkillSourceDisabledError = class extends Error {
+  constructor(source) {
+    super(
+      `"${source}" is not in orchestration.skills.sources for this project \u2014 add it in .mjloop/config.yaml (orchestration.skills.sources) before searching this source. General web search in particular is opt-in: a project must add "web" itself, it is never enabled by default.`
+    );
+    this.name = "SkillSourceDisabledError";
+  }
+};
+var CrossHostRedirectError = class extends Error {
+  constructor(requestedHost, actualHost) {
+    super(
+      `refused a redirect from "${requestedHost}" to "${actualHost}" \u2014 a discovery connector never follows a redirect to a different host, because that is exactly how a compromised or malicious endpoint would hand back content this project never asked for`
+    );
+    this.name = "CrossHostRedirectError";
+  }
+};
+var DiscoveryResponseTooLargeError = class extends Error {
+  constructor(url, capBytes) {
+    super(`response from "${url}" exceeded the ${capBytes}-byte discovery response cap \u2014 refused, not truncated`);
+    this.name = "DiscoveryResponseTooLargeError";
+  }
+};
+var WebSearchUnavailableError = class extends Error {
+  constructor() {
+    super(
+      'orchestration.skills.sources allows "web", but no web search provider is configured in this build \u2014 only "github" and "registry" (against orchestration.skills.trusted_registries) resolve real candidates today'
+    );
+    this.name = "WebSearchUnavailableError";
+  }
+};
+var REQUEST_TIMEOUT_MS = 3e4;
+var MAX_RESPONSE_BYTES = 1e6;
+var MAX_CANDIDATES = 20;
+function isRecord(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+async function fetchJson(url, deps, init) {
+  const requestedHost = new URL(url).host;
+  const response = await deps.fetch(url, { ...init, redirect: "manual", signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
+  const actualHost = new URL(response.url || url).host;
+  if (actualHost !== requestedHost) throw new CrossHostRedirectError(requestedHost, actualHost);
+  if (response.status >= 300 && response.status < 400) {
+    throw new CrossHostRedirectError(requestedHost, response.headers.get("location") ?? "(an undisclosed location)");
+  }
+  if (!response.ok) throw new Error(`request to "${url}" failed: ${response.status} ${response.statusText}`);
+  const text = await readBoundedText(response, MAX_RESPONSE_BYTES, () => new DiscoveryResponseTooLargeError(url, MAX_RESPONSE_BYTES));
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(`response from "${url}" is not valid JSON`);
+  }
+}
+var GITHUB_SEARCH_URL = "https://api.github.com/search/repositories";
+async function searchGithub(query, deps) {
+  const url = `${GITHUB_SEARCH_URL}?q=${encodeURIComponent(query)}&per_page=${MAX_CANDIDATES}`;
+  const body = await fetchJson(url, deps, {
+    headers: { Accept: "application/vnd.github+json", "User-Agent": "mjloop-skill-discovery" }
+  });
+  const items = isRecord(body) && Array.isArray(body.items) ? body.items : [];
+  const candidates = [];
+  for (const item of items.slice(0, MAX_CANDIDATES)) {
+    if (!isRecord(item)) continue;
+    const htmlUrl = typeof item.html_url === "string" ? item.html_url : null;
+    const fullName = typeof item.full_name === "string" ? item.full_name : null;
+    const ref = typeof item.default_branch === "string" ? item.default_branch : null;
+    const name = typeof item.name === "string" ? item.name : null;
+    if (htmlUrl === null || fullName === null || ref === null || name === null) continue;
+    const parsed = SkillCandidateSchema.safeParse({
+      source: "github",
+      url: htmlUrl,
+      repository: fullName,
+      ref,
+      skillName: name,
+      description: typeof item.description === "string" && item.description.length > 0 ? item.description : "No description provided.",
+      ...typeof item.stargazers_count === "number" ? { stars: item.stargazers_count } : {}
+    });
+    if (parsed.success) candidates.push(parsed.data);
+  }
+  return candidates;
+}
+async function searchOneRegistry(registry2, query, deps) {
+  const url = `${registry2.replace(/\/$/, "")}/search?q=${encodeURIComponent(query)}`;
+  const body = await fetchJson(url, deps, { headers: { Accept: "application/json" } });
+  const items = isRecord(body) && Array.isArray(body.candidates) ? body.candidates : [];
+  const candidates = [];
+  for (const item of items.slice(0, MAX_CANDIDATES)) {
+    if (!isRecord(item)) continue;
+    const parsed = SkillCandidateSchema.safeParse({ ...item, source: "registry" });
+    if (parsed.success) candidates.push(parsed.data);
+  }
+  return candidates;
+}
+async function searchRegistries(query, trustedRegistries, deps) {
+  const results = [];
+  for (const registry2 of trustedRegistries) {
+    results.push(...await searchOneRegistry(registry2, query, deps));
+  }
+  return results.slice(0, MAX_CANDIDATES);
+}
+async function discoverCandidates(projectDir, options, deps = defaultDeps) {
+  const config2 = await loadConfig(projectDir);
+  if (!config2.orchestration.skills.sources.includes(options.source)) {
+    throw new SkillSourceDisabledError(options.source);
+  }
+  switch (options.source) {
+    case "github":
+      return searchGithub(options.query, deps);
+    case "registry":
+      return searchRegistries(options.query, config2.orchestration.skills.trusted_registries, deps);
+    case "web":
+      throw new WebSearchUnavailableError();
+  }
+}
+
+// src/ops/skill-import.ts
+import path9 from "node:path";
+import { createHash } from "node:crypto";
+var defaultDeps2 = { fetch: globalThis.fetch };
+var UnsupportedInspectionSourceError = class extends Error {
+  constructor(source) {
+    super(
+      `inspection has no fetch contract for source "${source}" yet \u2014 only "github" resolves a pinned revision, a tree, and blob content today; a registry candidate needs its own content endpoint defined before this module can honestly fetch and inspect one, and pretending otherwise would be the exact false boundary claim this pipeline exists to refuse`
+    );
+    this.name = "UnsupportedInspectionSourceError";
+  }
+};
+var CrossHostRedirectError2 = class extends Error {
+  constructor(requestedHost, actualHost) {
+    super(
+      `refused a redirect from "${requestedHost}" to "${actualHost}" \u2014 inspection never follows a redirect to a different host, because that is exactly how a compromised or malicious endpoint would hand back content this project never asked to fetch`
+    );
+    this.name = "CrossHostRedirectError";
+  }
+};
+var ImportResponseTooLargeError = class extends Error {
+  constructor(url, capBytes) {
+    super(`response from "${url}" exceeded the ${capBytes}-byte import API response cap \u2014 refused, not truncated`);
+    this.name = "ImportResponseTooLargeError";
+  }
+};
+var RevisionPinFailedError = class extends Error {
+  constructor(ref, detail) {
+    super(`could not pin ref "${ref}" to a commit sha: ${detail} \u2014 refused rather than fetching an unpinned ref`);
+    this.name = "RevisionPinFailedError";
+  }
+};
+var TreeTooLargeError = class extends Error {
+  constructor(capEntries) {
+    super(`the package tree has more than ${capEntries} entries \u2014 refused, not truncated`);
+    this.name = "TreeTooLargeError";
+  }
+};
+var HostilePathError = class extends Error {
+  constructor(entryPath, reason) {
+    super(`refused entry "${entryPath}": ${reason}`);
+    this.name = "HostilePathError";
+  }
+};
+var PathDepthExceededError = class extends Error {
+  constructor(entryPath, capDepth) {
+    super(`refused entry "${entryPath}": nested deeper than the ${capDepth}-segment path depth cap`);
+    this.name = "PathDepthExceededError";
+  }
+};
+var FileTooLargeError = class extends Error {
+  constructor(entryPath, capBytes) {
+    super(`file "${entryPath}" decoded to more than the ${capBytes}-byte per-file cap \u2014 refused, not truncated`);
+    this.name = "FileTooLargeError";
+  }
+};
+var TotalContentTooLargeError = class extends Error {
+  constructor(capBytes) {
+    super(`the package's total decoded content exceeded the ${capBytes}-byte total content cap \u2014 refused, not truncated`);
+    this.name = "TotalContentTooLargeError";
+  }
+};
+var REQUEST_TIMEOUT_MS2 = 3e4;
+var MAX_API_RESPONSE_BYTES = 2e6;
+var MAX_TREE_ENTRIES = 500;
+var MAX_PATH_DEPTH = 12;
+var MAX_FILE_BYTES = 2e5;
+var MAX_TOTAL_BYTES = 5e6;
+var EXECUTABLE_EXTENSIONS = /* @__PURE__ */ new Set([".sh", ".bash", ".zsh", ".py", ".js", ".mjs", ".cjs", ".ts", ".rb", ".pl", ".ps1"]);
+var SHEBANG = /^#!\s*(?:\/usr\/bin\/env\s+)?(\S+)/;
+var LICENSE_FILE = /^LICEN[SC]E(\.(md|txt))?$/i;
+var COMMIT_SHA = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
+var EXECUTABLE_MODE = "100755";
+var BINARY_MAGICS = ["7f454c46", "feedface", "cefaedfe", "feedfacf", "cffaedfe"];
+function isRecord2(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+async function fetchApiJson(url, deps, init) {
+  const requestedHost = new URL(url).host;
+  const response = await deps.fetch(url, { ...init, redirect: "manual", signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS2) });
+  const actualHost = new URL(response.url || url).host;
+  if (actualHost !== requestedHost) throw new CrossHostRedirectError2(requestedHost, actualHost);
+  if (response.status >= 300 && response.status < 400) {
+    throw new CrossHostRedirectError2(requestedHost, response.headers.get("location") ?? "(an undisclosed location)");
+  }
+  if (!response.ok) throw new Error(`request to "${url}" failed: ${response.status} ${response.statusText}`);
+  const text = await readBoundedText(response, MAX_API_RESPONSE_BYTES, () => new ImportResponseTooLargeError(url, MAX_API_RESPONSE_BYTES));
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(`response from "${url}" is not valid JSON`);
+  }
+}
+var GITHUB_HEADERS = { Accept: "application/vnd.github+json", "User-Agent": "mjloop-skill-import" };
+async function pinRevision(candidate, deps) {
+  const url = `https://api.github.com/repos/${candidate.repository}/commits/${encodeURIComponent(candidate.ref)}`;
+  let body;
+  try {
+    body = await fetchApiJson(url, deps, { headers: GITHUB_HEADERS });
+  } catch (error2) {
+    if (error2 instanceof CrossHostRedirectError2) throw error2;
+    throw new RevisionPinFailedError(candidate.ref, error2 instanceof Error ? error2.message : String(error2));
+  }
+  const sha = isRecord2(body) && typeof body.sha === "string" ? body.sha : null;
+  if (sha === null) throw new RevisionPinFailedError(candidate.ref, "the commits API returned no sha for this ref");
+  if (!COMMIT_SHA.test(sha)) {
+    throw new RevisionPinFailedError(candidate.ref, `the commits API returned "${sha}", which is not a 40- or 64-character hex commit sha`);
+  }
+  return sha;
+}
+function validateEntryPath(entryPath) {
+  if (path9.isAbsolute(entryPath) || entryPath.startsWith("/") || entryPath.startsWith("\\")) {
+    throw new HostilePathError(entryPath, "an absolute path is never a legitimate entry in a package tree");
+  }
+  const segments = entryPath.split("/");
+  if (segments.some((segment) => segment === "..")) {
+    throw new HostilePathError(entryPath, 'a ".." segment escapes the package root and is always refused');
+  }
+  if (segments.length > MAX_PATH_DEPTH) throw new PathDepthExceededError(entryPath, MAX_PATH_DEPTH);
+}
+async function fetchTree(repository, sha, deps) {
+  const url = `https://api.github.com/repos/${repository}/git/trees/${sha}?recursive=1`;
+  const body = await fetchApiJson(url, deps, { headers: GITHUB_HEADERS });
+  if (!isRecord2(body) || !Array.isArray(body.tree)) {
+    throw new Error(`tree response for "${repository}"@"${sha}" is malformed: expected a "tree" array`);
+  }
+  if (body.truncated === true) throw new TreeTooLargeError(MAX_TREE_ENTRIES);
+  const entries = [];
+  for (const raw of body.tree) {
+    if (!isRecord2(raw)) continue;
+    const entryPath = typeof raw.path === "string" ? raw.path : null;
+    const type = typeof raw.type === "string" ? raw.type : null;
+    const entrySha = typeof raw.sha === "string" ? raw.sha : null;
+    if (entryPath === null || type === null || entrySha === null) continue;
+    if (type !== "blob") continue;
+    validateEntryPath(entryPath);
+    entries.push({ path: entryPath, sha: entrySha, mode: typeof raw.mode === "string" ? raw.mode : null });
+    if (entries.length > MAX_TREE_ENTRIES) throw new TreeTooLargeError(MAX_TREE_ENTRIES);
+  }
+  return entries;
+}
+async function fetchBlobs(repository, entries, deps) {
+  const files = [];
+  let total = 0;
+  for (const entry of entries) {
+    const url = `https://api.github.com/repos/${repository}/git/blobs/${entry.sha}`;
+    const body = await fetchApiJson(url, deps, { headers: GITHUB_HEADERS });
+    if (!isRecord2(body) || typeof body.content !== "string") {
+      throw new Error(`blob response for "${entry.path}" is malformed: expected a "content" string`);
+    }
+    const encoding = typeof body.encoding === "string" ? body.encoding : "base64";
+    const buffer = encoding === "base64" ? Buffer.from(body.content, "base64") : Buffer.from(body.content, "utf8");
+    if (buffer.byteLength > MAX_FILE_BYTES) throw new FileTooLargeError(entry.path, MAX_FILE_BYTES);
+    total += buffer.byteLength;
+    if (total > MAX_TOTAL_BYTES) throw new TotalContentTooLargeError(MAX_TOTAL_BYTES);
+    files.push({ path: entry.path, buffer, text: buffer.toString("utf8"), mode: entry.mode });
+  }
+  return files;
+}
+function computePackageDigest(files) {
+  const sorted = [...files].sort((a, b) => a.path.localeCompare(b.path));
+  const hash = createHash("sha256");
+  for (const file of sorted) {
+    hash.update(file.path);
+    hash.update("\0");
+    hash.update(file.buffer);
+    hash.update("\0");
+  }
+  return hash.digest("hex");
+}
+function classifyFile(file) {
+  const shebangMatch = SHEBANG.exec(file.text);
+  if (shebangMatch !== null && shebangMatch[1] !== void 0) {
+    return { executable: true, interpreter: path9.basename(shebangMatch[1]) };
+  }
+  if (file.mode === EXECUTABLE_MODE) return { executable: true, interpreter: null };
+  if (BINARY_MAGICS.includes(file.buffer.subarray(0, 4).toString("hex"))) return { executable: true, interpreter: null };
+  if (EXECUTABLE_EXTENSIONS.has(path9.extname(file.path))) return { executable: true, interpreter: null };
+  return { executable: false, interpreter: null };
+}
+function parsePackageJson(text) {
+  try {
+    const parsed = JSON.parse(text);
+    return isRecord2(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+function parseRequirementsTxt(text) {
+  const names = [];
+  for (const rawLine of text.split("\n")) {
+    const line = rawLine.split("#")[0]?.trim() ?? "";
+    if (line.length === 0) continue;
+    const name = line.split(/[<>=!~\s]/)[0]?.trim();
+    if (name !== void 0 && name.length > 0) names.push(name);
+  }
+  return names;
+}
+async function inspectCandidate(_projectDir, candidate, deps = defaultDeps2) {
+  if (candidate.source !== "github") throw new UnsupportedInspectionSourceError(candidate.source);
+  const revision = await pinRevision(candidate, deps);
+  const entries = await fetchTree(candidate.repository, revision, deps);
+  const files = await fetchBlobs(candidate.repository, entries, deps);
+  const findings = [];
+  let blocking = false;
+  let skillName = null;
+  let description = null;
+  const skillMd = files.find((file) => file.path === "SKILL.md");
+  if (skillMd === void 0) {
+    findings.push("no SKILL.md at the package root \u2014 a package without one is not a skill and is refused");
+    blocking = true;
+  } else {
+    try {
+      const { data } = parseFrontmatter(skillMd.text);
+      const name = isRecord2(data) && typeof data.name === "string" ? data.name : null;
+      const desc = isRecord2(data) && typeof data.description === "string" ? data.description : null;
+      if (name === null || desc === null) {
+        findings.push('SKILL.md frontmatter is missing a required "name" or "description" field');
+        blocking = true;
+      } else {
+        skillName = name;
+        description = desc;
+      }
+    } catch (error2) {
+      if (error2 instanceof FrontmatterError) {
+        findings.push(`SKILL.md has no valid frontmatter block: ${error2.message}`);
+        blocking = true;
+      } else {
+        throw error2;
+      }
+    }
+  }
+  const licenseFileEntry = files.find((file) => !file.path.includes("/") && LICENSE_FILE.test(file.path));
+  const frontmatterLicense = skillMd !== void 0 ? (() => {
+    try {
+      const { data } = parseFrontmatter(skillMd.text);
+      return isRecord2(data) && typeof data.license === "string" ? data.license : null;
+    } catch {
+      return null;
+    }
+  })() : null;
+  const licenseFile = licenseFileEntry?.path ?? null;
+  if (frontmatterLicense === null && licenseFile === null) {
+    findings.push(
+      "no license found: no SPDX id in SKILL.md frontmatter and no LICENSE file at the package root \u2014 a missing license blocks acceptance"
+    );
+    blocking = true;
+  }
+  const executableFiles = [];
+  const interpreters = /* @__PURE__ */ new Set();
+  const packages = /* @__PURE__ */ new Set();
+  for (const file of files) {
+    const classification = classifyFile(file);
+    if (classification.executable) {
+      executableFiles.push(file.path);
+      if (classification.interpreter !== null) interpreters.add(classification.interpreter);
+    }
+    if (file.path === "package.json") {
+      const pkg = parsePackageJson(file.text);
+      if (pkg !== null) {
+        if (isRecord2(pkg.scripts) && Object.keys(pkg.scripts).length > 0 && !executableFiles.includes(file.path)) {
+          executableFiles.push(file.path);
+        }
+        for (const name of Object.keys(pkg.dependencies ?? {})) packages.add(name);
+        for (const name of Object.keys(pkg.devDependencies ?? {})) packages.add(name);
+      }
+    }
+    if (file.path === "requirements.txt") {
+      for (const name of parseRequirementsTxt(file.text)) packages.add(name);
+    }
+  }
+  const digest = computePackageDigest(files);
+  const auditState = blocking ? "failed" : "pending";
+  const nextAction = blocking ? { action: "search-alternative", query: candidate.skillName } : null;
+  return ImportReportSchema.parse({
+    schema: 1,
+    candidate,
+    revision,
+    digest,
+    skillName,
+    description,
+    license: { spdx: frontmatterLicense, file: licenseFile },
+    dependencies: { executables: [...interpreters].sort(), packages: [...packages].sort() },
+    executableFiles,
+    findings,
+    blocking,
+    sandbox: null,
+    auditState,
+    nextAction
+  });
+}
+
+// src/ops/skill-sandbox.ts
+import { spawn as nodeSpawn } from "node:child_process";
+import { existsSync, accessSync, constants as fsConstants } from "node:fs";
+import fs9 from "node:fs/promises";
+import os2 from "node:os";
+import path10 from "node:path";
+var SMOKE_CHECK_TIMEOUT_MS = 3e4;
+var SANDBOX_TOTAL_TIMEOUT_MS = 12e4;
+var STDIO_FLUSH_GRACE_MS = 200;
+var KILL_SETTLE_MS = 500;
+var SANDBOX_EXEC_BIN = "/usr/bin/sandbox-exec";
+function which(bin) {
+  const dirs = (process.env.PATH ?? "").split(path10.delimiter).filter((dir) => dir.length > 0);
+  for (const dir of dirs) {
+    const candidate = path10.join(dir, bin);
+    try {
+      accessSync(candidate, fsConstants.X_OK);
+      return candidate;
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
+function detectSandboxBackend() {
+  if (process.platform === "darwin") {
+    return existsSync(SANDBOX_EXEC_BIN) ? { backend: "sandbox-exec", bin: SANDBOX_EXEC_BIN } : null;
+  }
+  if (process.platform === "linux") {
+    const bin = which("bwrap");
+    return bin === null ? null : { backend: "bwrap", bin };
+  }
+  return null;
+}
+var defaultDeps3 = { detectBackend: detectSandboxBackend, spawn: nodeSpawn };
+function sandboxExecProfile(tempRoot) {
+  return [
+    "(version 1)",
+    "(deny default)",
+    "(allow process-fork)",
+    "(allow process-exec)",
+    // Metadata reads (stat/lstat/path resolution) expose no file content and
+    // every loader and shell needs them to resolve a path at all.
+    "(allow file-read-metadata)",
+    // The root directory itself, not its children: dyld cannot start a process
+    // at all without it, and `(subpath "/usr")` does not cover `/`.
+    '(allow file-read* (literal "/"))',
+    `(allow file-read* (subpath "${tempRoot}"))`,
+    '(allow file-read* (subpath "/usr"))',
+    '(allow file-read* (subpath "/bin"))',
+    '(allow file-read* (subpath "/sbin"))',
+    // Where an interpreter a check names on PATH actually lives on this
+    // platform (`/usr/local` is already covered by `/usr`); a package prefix,
+    // never a credential store.
+    '(allow file-read* (subpath "/opt"))',
+    '(allow file-read* (subpath "/System"))',
+    '(allow file-read* (subpath "/dev"))',
+    '(allow file-read* (subpath "/private/var/db/dyld"))',
+    `(allow file-write* (subpath "${tempRoot}"))`,
+    '(allow file-write* (subpath "/dev"))',
+    "(allow sysctl-read)",
+    "(allow mach-lookup)"
+  ].join("\n");
+}
+function buildSandboxedArgv(detected, argv, tempRoot, workDir) {
+  if (detected.backend === "sandbox-exec") return [detected.bin, "-p", sandboxExecProfile(tempRoot), "--", ...argv];
+  return [
+    detected.bin,
+    "--unshare-all",
+    "--die-with-parent",
+    "--ro-bind",
+    "/usr",
+    "/usr",
+    "--ro-bind",
+    "/bin",
+    "/bin",
+    "--dev",
+    "/dev",
+    "--proc",
+    "/proc",
+    "--bind",
+    tempRoot,
+    tempRoot,
+    "--chdir",
+    workDir,
+    "--",
+    ...argv
+  ];
+}
+function parseSmokeChecks(raw) {
+  if (!Array.isArray(raw)) return null;
+  const checks = [];
+  for (const entry of raw) {
+    if (!Array.isArray(entry) || entry.length === 0) return null;
+    if (!entry.every((item) => typeof item === "string" && item.length > 0)) return null;
+    checks.push(entry);
+  }
+  return checks;
+}
+function killProcessTree(child) {
+  const pid = child.pid;
+  if (typeof pid === "number" && pid > 0) {
+    try {
+      process.kill(-pid, "SIGKILL");
+      return;
+    } catch {
+    }
+  }
+  try {
+    child.kill("SIGKILL");
+  } catch {
+  }
+}
+function runOneCheck(declaredArgv, spawnArgv, cwd, env, deps, timeoutMs) {
+  return new Promise((resolve) => {
+    const child = deps.spawn(spawnArgv[0], spawnArgv.slice(1), { cwd, env, shell: false, detached: true });
+    let stdout = "";
+    let stderr = "";
+    let timedOut = false;
+    let settled = false;
+    let graceTimer = null;
+    const finish = (exitCode) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (graceTimer !== null) clearTimeout(graceTimer);
+      resolve({ result: { argv: declaredArgv, exitCode: timedOut ? null : exitCode, timedOut }, stdout, stderr });
+    };
+    const timer = setTimeout(() => {
+      timedOut = true;
+      if (graceTimer !== null) clearTimeout(graceTimer);
+      killProcessTree(child);
+      graceTimer = setTimeout(() => finish(null), KILL_SETTLE_MS);
+    }, timeoutMs);
+    child.stdout?.on("data", (chunk) => {
+      if (stdout.length < SANDBOX_OUTPUT_CAP) stdout += chunk.toString();
+    });
+    child.stderr?.on("data", (chunk) => {
+      if (stderr.length < SANDBOX_OUTPUT_CAP) stderr += chunk.toString();
+    });
+    child.on("error", () => finish(null));
+    child.on("exit", (code) => {
+      if (settled || graceTimer !== null) return;
+      graceTimer = setTimeout(() => finish(code), STDIO_FLUSH_GRACE_MS);
+    });
+    child.on("close", (code) => finish(code));
+  });
+}
+function appendOutput(existing, addition) {
+  if (existing.truncated) return existing;
+  const combined = existing.text + addition;
+  if (combined.length <= SANDBOX_OUTPUT_CAP) return { text: combined, truncated: false };
+  return { text: combined.slice(0, SANDBOX_OUTPUT_CAP), truncated: true };
+}
+async function runSkillSandbox(input, deps = defaultDeps3) {
+  if (input.executableFiles.length === 0) {
+    return SandboxResultSchema.parse({ state: "skipped", reason: "no executable content" });
+  }
+  const detected = deps.detectBackend();
+  if (detected === null) {
+    return SandboxResultSchema.parse({
+      state: "unavailable",
+      reason: "no sandbox backend detected on this machine \u2014 install sandbox-exec (darwin) or bwrap/bubblewrap (linux) to verify a package with executable content; this machine cannot verify it, and running it unsandboxed is never an acceptable substitute"
+    });
+  }
+  const checks = parseSmokeChecks(input.smokeChecks);
+  if (checks === null) {
+    return SandboxResultSchema.parse({
+      state: "failed",
+      checks: [],
+      output: {
+        text: "mjloop.smoke in SKILL.md frontmatter must be an array of argv arrays, each a non-empty array of strings \u2014 a bare string (a shell command) is refused, not coerced",
+        truncated: false
+      }
+    });
+  }
+  if (checks.length === 0) {
+    return SandboxResultSchema.parse({
+      state: "failed",
+      checks: [],
+      output: {
+        text: "this package carries executable content but declares no mjloop.smoke checks in SKILL.md frontmatter \u2014 it cannot pass without at least one",
+        truncated: false
+      }
+    });
+  }
+  const tempRoot = await fs9.realpath(await fs9.mkdtemp(path10.join(os2.tmpdir(), "mjloop-skill-sandbox-")));
+  try {
+    const packageDir = path10.join(tempRoot, "pkg");
+    const homeDir = path10.join(tempRoot, "home");
+    await fs9.mkdir(packageDir, { recursive: true });
+    await fs9.mkdir(homeDir, { recursive: true });
+    for (const file of input.files) {
+      const dest = path10.join(packageDir, file.path);
+      await fs9.mkdir(path10.dirname(dest), { recursive: true });
+      await fs9.writeFile(dest, file.content);
+    }
+    const env = {
+      PATH: process.env.PATH ?? "/usr/bin:/bin",
+      HOME: homeDir,
+      LANG: process.env.LANG ?? "C"
+    };
+    const results = [];
+    let output = { text: "", truncated: false };
+    let allPassed = true;
+    const perCheckMs = deps.timeoutMs ?? SMOKE_CHECK_TIMEOUT_MS;
+    const totalMs = deps.totalTimeoutMs ?? SANDBOX_TOTAL_TIMEOUT_MS;
+    const startedAt = Date.now();
+    for (const argv of checks) {
+      const remaining = totalMs - (Date.now() - startedAt);
+      if (remaining <= 0) {
+        results.push({ argv, exitCode: null, timedOut: true });
+        allPassed = false;
+        output = appendOutput(output, `$ ${argv.join(" ")}
+not run: the sandbox's ${totalMs}ms total wall-clock budget was already spent
+`);
+        continue;
+      }
+      const spawnArgv = buildSandboxedArgv(detected, argv, tempRoot, packageDir);
+      const outcome = await runOneCheck(argv, spawnArgv, packageDir, env, deps, Math.min(perCheckMs, remaining));
+      results.push(outcome.result);
+      if (outcome.result.exitCode !== 0 || outcome.result.timedOut) allPassed = false;
+      output = appendOutput(output, `$ ${argv.join(" ")}
+${outcome.stdout}${outcome.stderr}
+`);
+    }
+    return SandboxResultSchema.parse({ state: allPassed ? "passed" : "failed", checks: results, output });
+  } finally {
+    await fs9.rm(tempRoot, { recursive: true, force: true });
+  }
+}
+
+// src/store/config-mutation.ts
+var YAML3 = __toESM(require_dist(), 1);
+import crypto from "node:crypto";
+import fs10 from "node:fs/promises";
+var VerifySlotSchema2 = _enum(["test", "lint", "build"]);
+var ConfigChangeSchema = discriminatedUnion("kind", [
+  strictObject({
+    kind: literal("root"),
+    key: _enum(["autonomous", "verify_cache"]),
+    value: boolean2()
+  }),
+  strictObject({
+    kind: literal("limit"),
+    key: _enum(["max_parallel_agents", "no_progress_strikes"]),
+    value: number2().int().positive()
+  }),
+  strictObject({
+    kind: literal("verify.command"),
+    key: VerifySlotSchema2,
+    value: string2().min(1).nullable()
+  }),
+  strictObject({
+    kind: literal("verify.number"),
+    key: _enum(["timeout_ms", "lock_timeout_ms"]),
+    value: number2().int().positive()
+  }),
+  strictObject({
+    kind: literal("verify.patterns"),
+    key: VerifySlotSchema2,
+    value: array(string2().min(1))
+  }),
+  strictObject({
+    kind: literal("gate"),
+    key: _enum(["plan_approval", "commit", "preflight"]),
+    value: _enum(["human", "auto"])
+  }),
+  strictObject({
+    kind: literal("specialist"),
+    agent: AgentNameSchema,
+    value: SpecialistModeSchema.nullable()
+  }),
+  strictObject({
+    kind: literal("track"),
+    track: IdSchema,
+    value: TrackSchema.nullable()
+  }),
+  // One variant per orchestration leaf, rather than one `orchestration` kind
+  // carrying a section and a key. The discriminant is what makes each value
+  // schema exact — a single kind would have to widen `value` to the union of
+  // every leaf's type, and a boolean would then be accepted for
+  // `question_budget` at the wire and only caught by the post-apply re-parse.
+  // Restating the bounds here is deliberate duplication: this is the door the
+  // browser and the CLI push values through, and it must be exactly as strict
+  // as the schema those values are finally validated against.
+  strictObject({
+    kind: literal("orchestration.profile.auto_accept"),
+    value: boolean2()
+  }),
+  strictObject({
+    kind: literal("orchestration.discovery.mode"),
+    value: FeatureDiscoveryModeSchema
+  }),
+  strictObject({
+    kind: literal("orchestration.discovery.question_budget"),
+    value: number2().int().min(1).max(20)
+  }),
+  strictObject({
+    kind: literal("orchestration.discovery.completion"),
+    value: DiscoveryCompletionSchema
+  }),
+  strictObject({
+    kind: literal("orchestration.execution.after_plan_approval"),
+    value: AfterPlanApprovalSchema
+  }),
+  strictObject({
+    kind: literal("orchestration.execution.uncertain_concurrency"),
+    value: UncertainConcurrencySchema
+  }),
+  strictObject({
+    kind: literal("orchestration.execution.repair_attempts"),
+    value: number2().int().min(0).max(5)
+  }),
+  // The one section whose leaves share a type, so one kind with a `key` costs
+  // nothing in strictness — the same shape `gate` and `limit` already use.
+  strictObject({
+    kind: literal("orchestration.quality"),
+    key: _enum(["independent_plan_review", "independent_verification"]),
+    value: boolean2()
+  }),
+  strictObject({
+    kind: literal("orchestration.skills.sources"),
+    value: array(SkillSourceSchema)
+  }),
+  strictObject({
+    kind: literal("orchestration.skills.trusted_registries"),
+    value: array(string2().min(1).startsWith("https://", "a trusted registry must be an https:// URL"))
+  }),
+  strictObject({
+    kind: literal("orchestration.skills.update_mode"),
+    value: SkillUpdateModeSchema
+  })
+]);
+var ConfigPatchSchema = strictObject({
+  revision: string2().regex(/^[a-f0-9]{64}$/),
+  changes: array(ConfigChangeSchema).min(1).max(100)
+});
+var ConfigMutationError = class extends Error {
+  kind;
+  path;
+  constructor(kind, path13 = []) {
+    super(kind);
+    this.name = "ConfigMutationError";
+    this.kind = kind;
+    this.path = path13;
+  }
+};
+function configRevision(raw) {
+  return crypto.createHash("sha256").update(raw).digest("hex");
+}
+async function mutateConfig(projectDir, patch) {
+  const parsedPatch = ConfigPatchSchema.parse(patch);
+  const paths = resolveLoopPaths(projectDir);
+  return withLock(paths.lock, async () => {
+    let raw;
+    try {
+      raw = await fs10.readFile(paths.config, "utf8");
+    } catch (error2) {
+      if (error2.code === "ENOENT") throw new ConfigMutationError("missing");
+      throw error2;
+    }
+    if (configRevision(raw) !== parsedPatch.revision) throw new ConfigMutationError("stale");
+    const document = YAML3.parseDocument(raw, { keepSourceTokens: true });
+    if (document.errors.length > 0) throw new ConfigMutationError("invalid");
+    for (const change of parsedPatch.changes) applyChange(document, change);
+    let candidate;
+    try {
+      candidate = document.toJS();
+    } catch {
+      throw new ConfigMutationError("invalid");
+    }
+    const parsed = ConfigSchema.safeParse(stripLegacy(candidate));
+    if (!parsed.success) {
+      const issue2 = parsed.error.issues[0];
+      const issuePath = issue2?.path.filter((part) => typeof part === "string" || typeof part === "number") ?? [];
+      throw new ConfigMutationError("invalid", issuePath);
+    }
+    const next = document.toString({ lineWidth: 100 });
+    await writeTextAtomic(paths.config, next);
+    return { revision: configRevision(next) };
+  });
+}
+function stripLegacy(document) {
+  if (typeof document !== "object" || document === null || Array.isArray(document)) return document;
+  return Object.fromEntries(
+    Object.entries(document).filter(
+      ([key]) => !LEGACY_CONFIG_KEYS.includes(key)
+    )
+  );
+}
+function applyChange(document, change) {
+  switch (change.kind) {
+    case "root":
+      document.setIn([change.key], change.value);
+      return;
+    case "limit":
+      document.setIn(["limits", change.key], change.value);
+      return;
+    case "verify.command":
+    case "verify.number":
+      document.setIn(["verify", change.key], change.value);
+      return;
+    case "verify.patterns":
+      document.setIn(["verify", "failure_patterns", change.key], change.value);
+      return;
+    case "gate":
+      document.setIn(["gates", change.key], change.value);
+      return;
+    case "specialist":
+      if (change.value === null) document.deleteIn(["specialists", change.agent]);
+      else document.setIn(["specialists", change.agent], change.value);
+      return;
+    case "track":
+      if (change.value === null) document.deleteIn(["tracks", change.track]);
+      else document.setIn(["tracks", change.track], change.value);
+      return;
+    // `setIn` builds the intermediate maps it needs, which is what lets the
+    // very first orchestration setting land in a config.yaml written before
+    // the block existed — the common case on every already-provisioned
+    // project. Only the named leaf is written; every sibling arrives on read
+    // from the schema's prefaults, so one changed setting never rewrites
+    // twelve lines of somebody's hand-edited file.
+    case "orchestration.profile.auto_accept":
+      document.setIn(["orchestration", "profile", "auto_accept"], change.value);
+      return;
+    case "orchestration.discovery.mode":
+      document.setIn(["orchestration", "discovery", "mode"], change.value);
+      return;
+    case "orchestration.discovery.question_budget":
+      document.setIn(["orchestration", "discovery", "question_budget"], change.value);
+      return;
+    case "orchestration.discovery.completion":
+      document.setIn(["orchestration", "discovery", "completion"], change.value);
+      return;
+    case "orchestration.execution.after_plan_approval":
+      document.setIn(["orchestration", "execution", "after_plan_approval"], change.value);
+      return;
+    case "orchestration.execution.uncertain_concurrency":
+      document.setIn(["orchestration", "execution", "uncertain_concurrency"], change.value);
+      return;
+    case "orchestration.execution.repair_attempts":
+      document.setIn(["orchestration", "execution", "repair_attempts"], change.value);
+      return;
+    case "orchestration.quality":
+      document.setIn(["orchestration", "quality", change.key], change.value);
+      return;
+    case "orchestration.skills.sources":
+      document.setIn(["orchestration", "skills", "sources"], change.value);
+      return;
+    case "orchestration.skills.trusted_registries":
+      document.setIn(["orchestration", "skills", "trusted_registries"], change.value);
+      return;
+    case "orchestration.skills.update_mode":
+      document.setIn(["orchestration", "skills", "update_mode"], change.value);
+  }
+}
+
 // src/util/entrypoint.ts
-import fs5 from "node:fs/promises";
-import path5 from "node:path";
+import fs11 from "node:fs/promises";
+import path11 from "node:path";
 import { pathToFileURL } from "node:url";
 async function isEntrypoint(moduleUrl) {
   const argv1 = process.argv[1];
   if (argv1 === void 0) return false;
-  let resolved = path5.resolve(argv1);
+  let resolved = path11.resolve(argv1);
   try {
-    resolved = await fs5.realpath(resolved);
+    resolved = await fs11.realpath(resolved);
   } catch {
   }
   return moduleUrl === pathToFileURL(resolved).href;
 }
 
 // src/cli/index.ts
+var defaultCliDeps = {
+  fetch: globalThis.fetch,
+  detectSandboxBackend,
+  spawn: nodeSpawn2
+};
 var USAGE = `usage: mjloop-cli <command>
 
-  summary [--dir <path>] [--json]   print the current loop state
-  session-start                     SessionStart hook (reads hook JSON on stdin)
-  state-guard                       PreToolUse hook (reads hook JSON on stdin)
-  stop-guard                        Stop hook (reads hook JSON on stdin)
+  summary [--dir <path>] [--json]      print the current loop state
+  config get [--dir <path>] [--json]   print the orchestration settings and the config revision
+  config set <key> <value> [--dir <path>]
+                                       change one orchestration setting through the guarded write
+  profile show [--dir <path>] [--json] print the accepted component map, the proposal, and whether they differ
+  profile accept [--dir <path>] [--expect <revision|none>] [--from <revision>]
+                                       accept the current proposal as the next immutable revision;
+                                       --from reselects an earlier accepted revision's map instead
+  profile reject [--dir <path>]        discard the current proposal, leaving the accepted map active
+  skills list [--dir <path>] [--json]  print this machine's skill library and this project's acceptances
+  skills accept <packageDigest> [--dir <path>] [--components a,b] [--agents builder,critic] [--policy auto|review|pinned]
+                                       accept one digest of a library package into this project
+  skills disable <skillId> [--dir <path>]
+                                       turn off an accepted skill without removing its acceptance
+  skills enable <skillId> [--dir <path>]
+                                       turn a disabled acceptance back on
+  skills remove <skillId> [--dir <path>]
+                                       remove this project's acceptance only \u2014 the package and every
+                                       other project's acceptance are untouched
+  skills search <query> [--source github|registry|web] [--dir <path>] [--json]
+                                       metadata-only candidates from an allowed source \u2014 nothing is
+                                       written, and no candidate becomes active on its own
+  skills inspect <url> [--ref <ref>] [--dir <path>] [--json]
+                                       pin, fetch, and sandbox one candidate; print its report; write nothing
+  skills import <url> [--ref <ref>] [--dir <path>]
+                                       inspect, sandbox, and on a passed audit write the package into
+                                       this machine's library \u2014 this does not accept it into the project;
+                                       accept the printed digest separately with skills accept
+  skills check-updates [--dir <path>] [--json]
+                                       report a new upstream revision as a candidate for each acceptance
+                                       whose policy is not pinned \u2014 never imports, never moves a digest
+  session-start                        SessionStart hook (reads hook JSON on stdin)
+  state-guard                          PreToolUse hook (reads hook JSON on stdin)
+  stop-guard                           Stop hook (reads hook JSON on stdin)
 `;
-async function runCli(argv, stdin) {
+async function runCli(argv, stdin, deps = defaultCliDeps) {
   const [command, ...rest] = argv;
   switch (command) {
     case "summary":
       return summaryCommand(rest);
+    case "config":
+      return configCommand(rest);
+    case "profile":
+      return profileCommand(rest);
+    case "skills":
+      return skillsCommand(rest, deps);
     case "session-start":
       return sessionStartCommand(stdin);
     case "state-guard":
@@ -13297,6 +15474,927 @@ async function summaryCommand(args) {
 ` : `${renderSummaryLine(summary)}
 `;
   return { stdout, exitCode: 0 };
+}
+function asBoolean(raw) {
+  if (raw === "true") return { ok: true, value: true };
+  if (raw === "false") return { ok: true, value: false };
+  return { ok: false, reason: "expects true or false" };
+}
+function asInteger(raw) {
+  if (!/^-?\d+$/.test(raw)) return { ok: false, reason: "expects a whole number" };
+  return { ok: true, value: Number(raw) };
+}
+function asWord(raw) {
+  return { ok: true, value: raw };
+}
+function asList(raw) {
+  return {
+    ok: true,
+    value: raw.split(",").map((entry) => entry.trim()).filter((entry) => entry.length > 0)
+  };
+}
+var SETTINGS = {
+  "orchestration.profile.auto_accept": {
+    read: (orchestration) => orchestration.profile.auto_accept,
+    parse: asBoolean,
+    change: (value) => ({ kind: "orchestration.profile.auto_accept", value })
+  },
+  "orchestration.discovery.mode": {
+    read: (orchestration) => orchestration.discovery.mode,
+    parse: asWord,
+    change: (value) => ({ kind: "orchestration.discovery.mode", value })
+  },
+  "orchestration.discovery.question_budget": {
+    read: (orchestration) => orchestration.discovery.question_budget,
+    parse: asInteger,
+    change: (value) => ({ kind: "orchestration.discovery.question_budget", value })
+  },
+  "orchestration.discovery.completion": {
+    read: (orchestration) => orchestration.discovery.completion,
+    parse: asWord,
+    change: (value) => ({ kind: "orchestration.discovery.completion", value })
+  },
+  "orchestration.execution.after_plan_approval": {
+    read: (orchestration) => orchestration.execution.after_plan_approval,
+    parse: asWord,
+    change: (value) => ({ kind: "orchestration.execution.after_plan_approval", value })
+  },
+  "orchestration.execution.uncertain_concurrency": {
+    read: (orchestration) => orchestration.execution.uncertain_concurrency,
+    parse: asWord,
+    change: (value) => ({ kind: "orchestration.execution.uncertain_concurrency", value })
+  },
+  "orchestration.execution.repair_attempts": {
+    read: (orchestration) => orchestration.execution.repair_attempts,
+    parse: asInteger,
+    change: (value) => ({ kind: "orchestration.execution.repair_attempts", value })
+  },
+  "orchestration.quality.independent_plan_review": {
+    read: (orchestration) => orchestration.quality.independent_plan_review,
+    parse: asBoolean,
+    change: (value) => ({ kind: "orchestration.quality", key: "independent_plan_review", value })
+  },
+  "orchestration.quality.independent_verification": {
+    read: (orchestration) => orchestration.quality.independent_verification,
+    parse: asBoolean,
+    change: (value) => ({ kind: "orchestration.quality", key: "independent_verification", value })
+  },
+  "orchestration.skills.sources": {
+    read: (orchestration) => orchestration.skills.sources,
+    parse: asList,
+    change: (value) => ({ kind: "orchestration.skills.sources", value })
+  },
+  "orchestration.skills.trusted_registries": {
+    read: (orchestration) => orchestration.skills.trusted_registries,
+    parse: asList,
+    change: (value) => ({ kind: "orchestration.skills.trusted_registries", value })
+  },
+  "orchestration.skills.update_mode": {
+    read: (orchestration) => orchestration.skills.update_mode,
+    parse: asWord,
+    change: (value) => ({ kind: "orchestration.skills.update_mode", value })
+  }
+};
+async function configCommand(args) {
+  const [subcommand, ...rest] = args;
+  if (subcommand === "get") return configGetCommand(rest);
+  if (subcommand === "set") return configSetCommand(rest);
+  return { stdout: USAGE, exitCode: 1 };
+}
+async function configGetCommand(args) {
+  const { dir, json, empty } = parseArgs(args);
+  const refusal = refuseEmptyFlag(empty);
+  if (refusal !== null) return refusal;
+  const file = resolveLoopPaths(dir).config;
+  let raw;
+  try {
+    raw = await fs12.readFile(file, "utf8");
+  } catch {
+    return fail(`${file} not found \u2014 run /mjloop:init first`);
+  }
+  let orchestration;
+  try {
+    orchestration = (await loadConfig(dir)).orchestration;
+  } catch (error2) {
+    return fail(describe2(error2));
+  }
+  const revision = configRevision(raw);
+  if (json) return { stdout: `${JSON.stringify({ revision, orchestration }, null, 2)}
+`, exitCode: 0 };
+  return { stdout: renderOrchestration(revision, orchestration), exitCode: 0 };
+}
+async function configSetCommand(args) {
+  const { dir, positional, empty } = parseArgs(args);
+  const refusal = refuseEmptyFlag(empty);
+  if (refusal !== null) return refusal;
+  const [key, raw] = positional;
+  if (key === void 0 || raw === void 0) {
+    return fail("config set needs a key and a value: mjloop-cli config set <key> <value> [--dir <path>]");
+  }
+  const setting = Object.hasOwn(SETTINGS, key) ? SETTINGS[key] : void 0;
+  if (setting === void 0) return fail(`${key} is not a setting. The keys config set accepts:
+${keyList()}`);
+  const parsed = setting.parse(raw);
+  if (!parsed.ok) return fail(`${key} ${parsed.reason} \u2014 got "${raw}"`);
+  const change = ConfigChangeSchema.safeParse(setting.change(parsed.value));
+  if (!change.success) return fail(`${key} does not accept "${raw}":
+${prettifyError(change.error)}`);
+  const file = resolveLoopPaths(dir).config;
+  let current;
+  try {
+    current = await fs12.readFile(file, "utf8");
+  } catch {
+    return fail(`${file} not found \u2014 run /mjloop:init first`);
+  }
+  try {
+    const { revision } = await mutateConfig(dir, { revision: configRevision(current), changes: [change.data] });
+    return { stdout: `${key} = ${renderValue(parsed.value)}
+revision ${revision}
+`, exitCode: 0 };
+  } catch (error2) {
+    if (!(error2 instanceof ConfigMutationError)) return fail(describe2(error2));
+    if (error2.kind === "missing") return fail(`${file} not found \u2014 run /mjloop:init first`);
+    if (error2.kind === "stale") {
+      return fail(`${file} changed after this command read it \u2014 nothing was written. Run the command again.`);
+    }
+    const where = error2.path.length === 0 ? "" : ` at ${error2.path.join(".")}`;
+    return fail(`${key} = ${renderValue(parsed.value)} would make ${file} invalid${where} \u2014 nothing was written.`);
+  }
+}
+function renderOrchestration(revision, orchestration) {
+  const entries = Object.entries(SETTINGS);
+  const width = Math.max(...entries.map(([key]) => key.length));
+  const lines = entries.map(([key, setting]) => `${key.padEnd(width)}  ${renderValue(setting.read(orchestration))}`);
+  return `revision ${revision}
+${lines.join("\n")}
+`;
+}
+function renderValue(value) {
+  if (Array.isArray(value)) return value.length === 0 ? "(none)" : value.join(", ");
+  return String(value);
+}
+function keyList() {
+  return Object.keys(SETTINGS).map((key) => `  ${key}`).join("\n");
+}
+function fail(text) {
+  return { stdout: `${text}
+`, exitCode: 1 };
+}
+function describe2(error2) {
+  return error2 instanceof Error ? error2.message : String(error2);
+}
+var FLAG_VALUES = {
+  "--dir": "the path of the project to act on",
+  "--expect": "a revision number or the word none",
+  "--from": "the number of the accepted revision whose component map to reselect",
+  "--components": "a comma-separated list of component ids from the accepted map",
+  "--agents": "a comma-separated list of agent roles (planner, builder, critic, verifier)",
+  "--policy": "auto, review or pinned",
+  "--source": "github, registry or web",
+  "--ref": "a branch, tag, or commit sha to pin"
+};
+function refuseEmptyFlag(empty) {
+  const flag = empty[0];
+  if (flag === void 0) return null;
+  return fail(`${flag} was given with nothing after it \u2014 it takes ${FLAG_VALUES[flag] ?? "a value"}`);
+}
+function parseArgs(args) {
+  let dir = process.cwd();
+  let json = false;
+  let expected;
+  let from;
+  let components;
+  let agents;
+  let policy;
+  let source;
+  let ref;
+  const positional = [];
+  const empty = [];
+  const valueFlags = {
+    "--dir": (value) => {
+      dir = value;
+    },
+    "--expect": (value) => {
+      expected = value;
+    },
+    "--from": (value) => {
+      from = value;
+    },
+    "--components": (value) => {
+      components = value;
+    },
+    "--agents": (value) => {
+      agents = value;
+    },
+    "--policy": (value) => {
+      policy = value;
+    },
+    "--source": (value) => {
+      source = value;
+    },
+    "--ref": (value) => {
+      ref = value;
+    }
+  };
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg !== void 0 && Object.hasOwn(valueFlags, arg)) {
+      const value = args[index + 1];
+      if (value === void 0) {
+        empty.push(arg);
+        continue;
+      }
+      valueFlags[arg]?.(value);
+      index += 1;
+      continue;
+    }
+    if (arg === "--json") {
+      json = true;
+      continue;
+    }
+    if (arg !== void 0) positional.push(arg);
+  }
+  return { dir, json, expect: expected, from, components, agents, policy, source, ref, positional, empty };
+}
+async function profileCommand(args) {
+  const [subcommand, ...rest] = args;
+  if (subcommand === "show") return profileShowCommand(rest);
+  if (subcommand === "accept") return profileAcceptCommand(rest);
+  if (subcommand === "reject") return profileRejectCommand(rest);
+  return { stdout: USAGE, exitCode: 1 };
+}
+async function profileShowCommand(args) {
+  const { dir, json, empty } = parseArgs(args);
+  const refusal = refuseEmptyFlag(empty);
+  if (refusal !== null) return refusal;
+  let accepted;
+  let proposed;
+  try {
+    accepted = await readAcceptedProfile(dir);
+    proposed = await readProposedProfile(dir);
+  } catch (error2) {
+    return fail(describe2(error2));
+  }
+  const differs = proposed !== null && (accepted === null || !sameComponents(accepted.components, proposed.components));
+  if (json) return { stdout: `${JSON.stringify({ accepted, proposed, differs }, null, 2)}
+`, exitCode: 0 };
+  return { stdout: renderProfile(accepted, proposed, differs), exitCode: 0 };
+}
+async function proposalSource(dir) {
+  const proposed = await readProposedProfile(dir);
+  if (proposed === null) {
+    return {
+      ok: false,
+      refusal: fail(
+        `there is no proposal to accept in ${resolveLoopPaths(dir).profile} \u2014 run mjloop init to scan the project first`
+      )
+    };
+  }
+  return { ok: true, components: proposed.components, generatedAt: proposed.generatedAt, reselected: null };
+}
+async function revisionSource(dir, raw) {
+  const revisions = await listAcceptedRevisions(dir);
+  if (!/^[1-9]\d*$/.test(raw)) {
+    return {
+      ok: false,
+      refusal: fail(`--from takes the number of an accepted revision \u2014 got "${raw}" \u2014 ${onRecord(revisions)}`)
+    };
+  }
+  const wanted = Number(raw);
+  if (!revisions.includes(wanted)) {
+    return { ok: false, refusal: fail(`there is no accepted revision ${wanted} to reselect \u2014 ${onRecord(revisions)}`) };
+  }
+  let source;
+  try {
+    source = await readAcceptedRevision(dir, wanted);
+  } catch (error2) {
+    return { ok: false, refusal: fail(`${describe2(error2)}
+${onRecord(revisions)}`) };
+  }
+  if (source === null) {
+    return {
+      ok: false,
+      refusal: fail(`revision ${wanted} was on record a moment ago and is gone now \u2014 ${onRecord(revisions)}`)
+    };
+  }
+  return { ok: true, components: source.components, generatedAt: source.generatedAt, reselected: wanted };
+}
+function onRecord(revisions) {
+  if (revisions.length === 0) return "no component map has ever been accepted in this project";
+  return `the revisions on record are ${revisions.join(", ")}`;
+}
+async function profileAcceptCommand(args) {
+  const { dir, expect: expected, from, empty } = parseArgs(args);
+  const refusal = refuseEmptyFlag(empty);
+  if (refusal !== null) return refusal;
+  const source = from === void 0 ? await proposalSource(dir) : await revisionSource(dir, from);
+  if (!source.ok) return source.refusal;
+  let expectRevision;
+  if (expected === void 0) {
+    expectRevision = (await listAcceptedRevisions(dir)).at(-1) ?? null;
+  } else if (expected === "none") {
+    expectRevision = null;
+  } else if (/^[1-9]\d*$/.test(expected)) {
+    expectRevision = Number(expected);
+  } else {
+    return fail(`--expect takes a revision number or the word none \u2014 got "${expected}"`);
+  }
+  try {
+    const accepted = await acceptProfile(dir, {
+      components: source.components,
+      by: acceptedBy(),
+      generatedAt: source.generatedAt,
+      expectRevision
+    });
+    const ids = accepted.components.map((component) => component.id);
+    const reselected = source.reselected === null ? "" : `, reselecting revision ${source.reselected}'s component map`;
+    const supersedes = accepted.supersedes === null ? "" : `, superseding revision ${accepted.supersedes}`;
+    return {
+      stdout: `revision ${accepted.revision} accepted${reselected}${supersedes}
+activated ${renderValue(ids)}
+`,
+      exitCode: 0
+    };
+  } catch (error2) {
+    if (error2 instanceof StalePreconditionError) {
+      const again = source.reselected === null ? "then accept again if the proposal is still what you want." : `then reselect revision ${source.reselected} again if its map is still the one you want.`;
+      return fail(
+        `another acceptance landed first \u2014 nothing was written. ${error2.message}. Re-read the project with mjloop-cli profile show, ${again}`
+      );
+    }
+    return fail(describe2(error2));
+  }
+}
+async function profileRejectCommand(args) {
+  const { dir, empty } = parseArgs(args);
+  const refusal = refuseEmptyFlag(empty);
+  if (refusal !== null) return refusal;
+  if (await readProposedProfile(dir) === null) {
+    return fail(`there is no proposal to discard in ${resolveLoopPaths(dir).profile}`);
+  }
+  const active = (await listAcceptedRevisions(dir)).at(-1) ?? null;
+  const file = proposedProfileFile(dir);
+  await fs12.rm(file, { force: true });
+  await fs12.rm(`${file}.bak`, { force: true });
+  const remains = active === null ? "No component map is accepted." : `Revision ${active} is still the accepted component map.`;
+  return { stdout: `proposal discarded. ${remains}
+`, exitCode: 0 };
+}
+function acceptedBy() {
+  let who = "unknown";
+  try {
+    who = os3.userInfo().username;
+  } catch {
+  }
+  return `cli:${who}`;
+}
+function sameComponents(left, right) {
+  if (left.length !== right.length) return false;
+  return left.every((one, index) => {
+    const other = right[index];
+    return other !== void 0 && one.id === other.id && one.root === other.root && one.technology === other.technology && one.verification.test === other.verification.test && one.verification.lint === other.verification.lint && one.verification.build === other.verification.build && one.skillTags.length === other.skillTags.length && one.skillTags.every((tag, tagIndex) => tag === other.skillTags[tagIndex]);
+  });
+}
+function renderProfile(accepted, proposed, differs) {
+  const lines = [];
+  if (accepted === null) {
+    lines.push("no component map is accepted \u2014 nothing is routed by component until one is");
+  } else {
+    const supersedes = accepted.supersedes === null ? "" : ` (supersedes revision ${accepted.supersedes})`;
+    lines.push(`revision ${accepted.revision} accepted ${accepted.acceptedAt} by ${accepted.acceptedBy}${supersedes}`);
+    lines.push(`  scanned ${accepted.generatedAt}`);
+    lines.push(...renderComponents(accepted.components));
+  }
+  lines.push("");
+  if (proposed === null) {
+    lines.push("no proposal on record \u2014 run mjloop init to scan the project");
+  } else {
+    lines.push(`proposal scanned ${proposed.generatedAt}`);
+    lines.push(...renderComponents(proposed.components));
+    lines.push("");
+    if (!differs) {
+      lines.push("the proposal matches the accepted component map \u2014 there is nothing to accept");
+    } else if (accepted === null) {
+      lines.push("the proposal has never been accepted \u2014 accept it with: mjloop-cli profile accept");
+    } else {
+      lines.push(
+        "the proposal differs from the accepted component map \u2014 accept it with: mjloop-cli profile accept",
+        "or discard it and keep the accepted map with: mjloop-cli profile reject"
+      );
+    }
+  }
+  return `${lines.join("\n")}
+`;
+}
+function renderComponents(components) {
+  if (components.length === 0) return ["  (no components)"];
+  return components.flatMap((component) => [
+    `  ${component.id}  root ${component.root}  technology ${component.technology}  tags ${renderValue(component.skillTags)}`,
+    `    test   ${renderSlot(component.verification.test)}`,
+    `    lint   ${renderSlot(component.verification.lint)}`,
+    `    build  ${renderSlot(component.verification.build)}`
+  ]);
+}
+function renderSlot(command) {
+  return command ?? "(none)";
+}
+async function skillsCommand(args, deps) {
+  const [subcommand, ...rest] = args;
+  if (subcommand === "list") return skillsListCommand(rest);
+  if (subcommand === "accept") return skillsAcceptCommand(rest);
+  if (subcommand === "disable") return skillsSetStatusCommand(rest, "disabled");
+  if (subcommand === "enable") return skillsSetStatusCommand(rest, "active");
+  if (subcommand === "remove") return skillsRemoveCommand(rest);
+  if (subcommand === "search") return skillsSearchCommand(rest, deps);
+  if (subcommand === "inspect") return skillsInspectCommand(rest, deps);
+  if (subcommand === "import") return skillsImportCommand(rest, deps);
+  if (subcommand === "check-updates") return skillsCheckUpdatesCommand(rest, deps);
+  return { stdout: USAGE, exitCode: 1 };
+}
+async function skillsListCommand(args) {
+  const { dir, json, empty } = parseArgs(args);
+  const refusal = refuseEmptyFlag(empty);
+  if (refusal !== null) return refusal;
+  let library;
+  let acceptances;
+  try {
+    ;
+    [library, acceptances] = await Promise.all([listPackages(dir), listAcceptances(dir)]);
+  } catch (error2) {
+    return fail(describe2(error2));
+  }
+  if (json) {
+    const held = new Set(library.packages.map((pkg) => pkg.digest));
+    const annotated = acceptances.map((acceptance) => ({ ...acceptance, packageHeld: held.has(acceptance.digest) }));
+    return { stdout: `${JSON.stringify({ ...library, acceptances: annotated }, null, 2)}
+`, exitCode: 0 };
+  }
+  return { stdout: renderSkills(library, acceptances), exitCode: 0 };
+}
+function renderSkills(library, acceptances) {
+  const { packages, unreadable } = library;
+  const lines = ["this machine's skill library:"];
+  if (packages.length === 0) {
+    lines.push("  (none) \u2014 nothing has been imported into this machine's skill library yet");
+  } else {
+    for (const pkg of packages) {
+      lines.push(`  ${pkg.digest}  ${pkg.skillName}  package ${pkg.packageId}`);
+      lines.push(`    source ${pkg.source.kind}  ${pkg.source.url}  revision ${pkg.source.revision}`);
+      lines.push(`    license ${pkg.license.spdx ?? "(none)"}  audit ${pkg.audit.state}`);
+    }
+  }
+  for (const entry of unreadable) {
+    lines.push(`  ${entry.digest}  (unreadable) ${entry.reason.split("\n")[0] ?? ""}`);
+  }
+  lines.push("");
+  lines.push("this project's acceptances:");
+  if (acceptances.length === 0) {
+    lines.push("  (none)");
+  } else {
+    const held = new Set(packages.map((pkg) => pkg.digest));
+    for (const acceptance of acceptances) {
+      const absent = held.has(acceptance.digest) ? "" : "  (package not in this machine's library)";
+      lines.push(
+        `  ${acceptance.skillId}  digest ${acceptance.digest}  status ${acceptance.status}  policy ${acceptance.updatePolicy}${absent}`
+      );
+      lines.push(`    components ${renderValue(acceptance.components)}  agents ${renderValue(acceptance.agents)}`);
+    }
+  }
+  return `${lines.join("\n")}
+`;
+}
+async function skillsAcceptCommand(args) {
+  const { dir, positional, components, agents, policy, empty } = parseArgs(args);
+  const refusal = refuseEmptyFlag(empty);
+  if (refusal !== null) return refusal;
+  const [digest] = positional;
+  if (digest === void 0) {
+    return fail("skills accept needs a package digest: mjloop-cli skills accept <packageDigest> [--dir <path>]");
+  }
+  let updatePolicy;
+  if (policy === void 0) {
+    updatePolicy = "review";
+    try {
+      updatePolicy = (await loadConfig(dir)).orchestration.skills.update_mode;
+    } catch (error2) {
+      if (!(error2 instanceof ConfigMissingError)) return fail(describe2(error2));
+    }
+  } else {
+    const parsedPolicy = SkillUpdateModeSchema.safeParse(policy);
+    if (!parsedPolicy.success) return fail(`--policy takes auto, review or pinned \u2014 got "${policy}"`);
+    updatePolicy = parsedPolicy.data;
+  }
+  try {
+    const accepted = await acceptSkill(dir, {
+      packageDigest: digest,
+      components: components === void 0 ? [] : splitList(components),
+      agents: agents === void 0 ? [] : splitList(agents),
+      updatePolicy,
+      acceptedBy: acceptedBy()
+    });
+    return {
+      stdout: `accepted "${accepted.skillId}" at digest ${accepted.digest}
+components ${renderValue(accepted.components)}
+agents ${renderValue(accepted.agents)}
+policy ${accepted.updatePolicy}
+`,
+      exitCode: 0
+    };
+  } catch (error2) {
+    return fail(describe2(error2));
+  }
+}
+async function skillsSetStatusCommand(args, status) {
+  const { dir, positional, empty } = parseArgs(args);
+  const refusal = refuseEmptyFlag(empty);
+  if (refusal !== null) return refusal;
+  const [skillId] = positional;
+  if (skillId === void 0) {
+    const verb = status === "disabled" ? "disable" : "enable";
+    return fail(`skills ${verb} needs a skill id: mjloop-cli skills ${verb} <skillId> [--dir <path>]`);
+  }
+  try {
+    const updated = await setAcceptanceStatus(dir, skillId, status);
+    return { stdout: `"${updated.skillId}" is now ${updated.status}
+`, exitCode: 0 };
+  } catch (error2) {
+    return fail(describe2(error2));
+  }
+}
+async function skillsRemoveCommand(args) {
+  const { dir, positional, empty } = parseArgs(args);
+  const refusal = refuseEmptyFlag(empty);
+  if (refusal !== null) return refusal;
+  const [skillId] = positional;
+  if (skillId === void 0) {
+    return fail("skills remove needs a skill id: mjloop-cli skills remove <skillId> [--dir <path>]");
+  }
+  try {
+    await removeAcceptance(dir, skillId);
+  } catch (error2) {
+    return fail(describe2(error2));
+  }
+  return {
+    stdout: `removed this project's acceptance of "${skillId}" \u2014 the package itself and every other project's acceptance are untouched
+`,
+    exitCode: 0
+  };
+}
+var GITHUB_URL = /^https:\/\/github\.com\/([^/]+)\/([^/]+?)(?:\.git)?\/?$/;
+function candidateFromUrl(url, ref) {
+  const match = GITHUB_URL.exec(url);
+  if (match === null) return null;
+  const [, owner, name] = match;
+  const repository = `${owner}/${name}`;
+  const parsed = SkillCandidateSchema.safeParse({
+    source: "github",
+    url,
+    repository,
+    ref,
+    skillName: name,
+    description: `candidate discovered at ${repository}`
+  });
+  return parsed.success ? parsed.data : null;
+}
+function isRecordCli(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+async function fetchJsonBounded(url, deps) {
+  const requestedHost = new URL(url).host;
+  const response = await deps.fetch(url, {
+    headers: { Accept: "application/vnd.github+json", "User-Agent": "mjloop-skill-import" },
+    redirect: "manual",
+    signal: AbortSignal.timeout(STAGING_REQUEST_TIMEOUT_MS)
+  });
+  const actualHost = new URL(response.url || url).host;
+  if (actualHost !== requestedHost) {
+    throw new Error(`refused a redirect from "${requestedHost}" to "${actualHost}" while staging package content`);
+  }
+  if (response.status >= 300 && response.status < 400) {
+    throw new Error(`refused a redirect from "${requestedHost}" while staging package content \u2014 a redirect is never followed here`);
+  }
+  if (!response.ok) throw new Error(`request to "${url}" failed: ${response.status} ${response.statusText}`);
+  const text = await readBoundedText(
+    response,
+    STAGING_RESPONSE_CAP,
+    () => new Error(`response from "${url}" exceeded the ${STAGING_RESPONSE_CAP}-byte staging response cap \u2014 refused, not truncated`)
+  );
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(`response from "${url}" is not valid JSON`);
+  }
+}
+var STAGING_REQUEST_TIMEOUT_MS = 3e4;
+var STAGING_RESPONSE_CAP = 2e6;
+var STAGING_TREE_ENTRY_CAP = 500;
+var STAGING_FILE_BYTES_CAP = 2e5;
+var STAGING_TOTAL_BYTES_CAP = 5e6;
+async function fetchGithubPackageFiles(repository, sha, deps) {
+  const treeUrl = `https://api.github.com/repos/${repository}/git/trees/${sha}?recursive=1`;
+  const treeBody = await fetchJsonBounded(treeUrl, deps);
+  if (!isRecordCli(treeBody) || !Array.isArray(treeBody.tree)) {
+    throw new Error(`tree response for "${repository}"@"${sha}" is malformed: expected a "tree" array`);
+  }
+  if (treeBody.truncated === true) throw new Error(`the package tree exceeded the ${STAGING_TREE_ENTRY_CAP}-entry staging cap`);
+  const files = [];
+  let total = 0;
+  for (const raw of treeBody.tree) {
+    if (!isRecordCli(raw)) continue;
+    const entryPath = typeof raw.path === "string" ? raw.path : null;
+    const type = typeof raw.type === "string" ? raw.type : null;
+    const entrySha = typeof raw.sha === "string" ? raw.sha : null;
+    if (entryPath === null || type === null || entrySha === null || type !== "blob") continue;
+    if (path12.isAbsolute(entryPath) || entryPath.split("/").includes("..")) {
+      throw new Error(`refused entry "${entryPath}" while staging package content: an absolute or traversing path is never legitimate`);
+    }
+    if (files.length >= STAGING_TREE_ENTRY_CAP) throw new Error(`the package tree exceeded the ${STAGING_TREE_ENTRY_CAP}-entry staging cap`);
+    const blobUrl = `https://api.github.com/repos/${repository}/git/blobs/${entrySha}`;
+    const blobBody = await fetchJsonBounded(blobUrl, deps);
+    if (!isRecordCli(blobBody) || typeof blobBody.content !== "string") {
+      throw new Error(`blob response for "${entryPath}" is malformed: expected a "content" string`);
+    }
+    const encoding = typeof blobBody.encoding === "string" ? blobBody.encoding : "base64";
+    const buffer = encoding === "base64" ? Buffer.from(blobBody.content, "base64") : Buffer.from(blobBody.content, "utf8");
+    if (buffer.byteLength > STAGING_FILE_BYTES_CAP) throw new Error(`file "${entryPath}" exceeded the ${STAGING_FILE_BYTES_CAP}-byte staging cap`);
+    total += buffer.byteLength;
+    if (total > STAGING_TOTAL_BYTES_CAP) throw new Error(`the package's total staged content exceeded the ${STAGING_TOTAL_BYTES_CAP}-byte cap`);
+    files.push({ path: entryPath, buffer });
+  }
+  return files;
+}
+function extractSmokeChecks(files) {
+  const skillMd = files.find((file) => file.path === "SKILL.md");
+  if (skillMd === void 0) return void 0;
+  try {
+    const { data } = parseFrontmatter(skillMd.buffer.toString("utf8"));
+    if (!isRecordCli(data)) return void 0;
+    if ("mjloop.smoke" in data) return data["mjloop.smoke"];
+    return isRecordCli(data.mjloop) ? data.mjloop.smoke : void 0;
+  } catch {
+    return void 0;
+  }
+}
+function finalizeReport(report, sandbox) {
+  const passed = !report.blocking && (sandbox.state === "passed" || sandbox.state === "skipped");
+  return ImportReportSchema.parse({
+    ...report,
+    sandbox,
+    auditState: passed ? "passed" : "failed",
+    nextAction: passed ? null : { action: "search-alternative", query: report.candidate.skillName }
+  });
+}
+function sandboxFinding(sandbox) {
+  switch (sandbox.state) {
+    case "skipped":
+      return `sandbox skipped: ${sandbox.reason}`;
+    case "unavailable":
+      return `sandbox unavailable: ${sandbox.reason}`;
+    case "passed":
+      return `sandbox passed: ${sandbox.checks.length} declared check(s) ran clean`;
+    case "failed":
+      return `sandbox failed: ${sandbox.checks.length} declared check(s) attempted`;
+  }
+}
+async function refuseDisabledSource(dir, source) {
+  const config2 = await loadConfig(dir);
+  if (!config2.orchestration.skills.sources.includes(source)) throw new SkillSourceDisabledError(source);
+}
+async function runInspectionPipeline(dir, candidate, deps) {
+  await refuseDisabledSource(dir, candidate.source);
+  const report = await inspectCandidate(dir, candidate, { fetch: deps.fetch });
+  if (report.blocking) return { report, files: [] };
+  if (report.revision === null) throw new Error("inspection produced no blocking finding but also no pinned revision \u2014 refusing to stage unpinned content");
+  const files = await fetchGithubPackageFiles(candidate.repository, report.revision, deps);
+  const stagedDigest = computePackageDigest(files);
+  if (stagedDigest !== report.digest) {
+    throw new Error(
+      `the content fetched for staging does not match the content that was inspected: audited digest ${report.digest}, staged digest ${stagedDigest} \u2014 refused, and nothing was written; the source answered two different things for one pinned revision, so nothing it says about this package can be trusted`
+    );
+  }
+  const sandboxDeps = { detectBackend: deps.detectSandboxBackend, spawn: deps.spawn };
+  const sandbox = report.executableFiles.length === 0 ? { state: "skipped", reason: "no executable content" } : await runSkillSandbox(
+    { files: files.map((file) => ({ path: file.path, content: file.buffer })), executableFiles: report.executableFiles, smokeChecks: extractSmokeChecks(files) },
+    sandboxDeps
+  );
+  return { report: finalizeReport(report, sandbox), files };
+}
+function renderReport(report) {
+  const lines = [
+    `candidate  ${report.candidate.source} ${report.candidate.repository} (ref ${report.candidate.ref})`,
+    `revision   ${report.revision ?? "(unpinned)"}`,
+    `digest     ${report.digest ?? "(none)"}`,
+    `license    ${report.license?.spdx ?? report.license?.file ?? "(none)"}`,
+    `audit      ${report.auditState}`
+  ];
+  if (report.findings.length > 0) {
+    lines.push("findings:");
+    for (const finding of report.findings) lines.push(`  - ${finding}`);
+  }
+  if (report.sandbox !== null) lines.push(`sandbox    ${sandboxFinding(report.sandbox)}`);
+  if (report.nextAction !== null) {
+    lines.push(`this candidate did not pass \u2014 search alternative is a user-initiated action for "${report.nextAction.query}"; nothing searches again on its own`);
+  }
+  return `${lines.join("\n")}
+`;
+}
+async function skillsSearchCommand(args, deps) {
+  const { dir, json, positional, source, empty } = parseArgs(args);
+  const refusal = refuseEmptyFlag(empty);
+  if (refusal !== null) return refusal;
+  const [query] = positional;
+  if (query === void 0) {
+    return fail("skills search needs a query: mjloop-cli skills search <query> [--source github|registry|web] [--dir <path>]");
+  }
+  let parsedSource = "github";
+  if (source !== void 0) {
+    const result = SkillSourceSchema.safeParse(source);
+    if (!result.success) return fail(`--source takes github, registry or web \u2014 got "${source}"`);
+    parsedSource = result.data;
+  }
+  try {
+    const candidates = await discoverCandidates(dir, { query, source: parsedSource }, { fetch: deps.fetch });
+    if (json) return { stdout: `${JSON.stringify(candidates, null, 2)}
+`, exitCode: 0 };
+    if (candidates.length === 0) return { stdout: `no candidates found for "${query}" on source "${parsedSource}"
+`, exitCode: 0 };
+    const lines = candidates.map(
+      (candidate) => `  ${candidate.repository}  ref ${candidate.ref}  ${candidate.url}${candidate.stars !== void 0 ? `  stars ${candidate.stars}` : ""}
+    ${candidate.description}`
+    );
+    return {
+      stdout: `candidates for "${query}" (${parsedSource}) \u2014 metadata only; nothing is written and none of these is active:
+${lines.join("\n")}
+inspect one before importing: mjloop-cli skills inspect <url>
+`,
+      exitCode: 0
+    };
+  } catch (error2) {
+    return fail(describe2(error2));
+  }
+}
+async function skillsInspectCommand(args, deps) {
+  const { dir, json, positional, ref, empty } = parseArgs(args);
+  const refusal = refuseEmptyFlag(empty);
+  if (refusal !== null) return refusal;
+  const [url] = positional;
+  if (url === void 0) {
+    return fail("skills inspect needs a candidate url: mjloop-cli skills inspect <url> [--ref <ref>] [--dir <path>]");
+  }
+  const candidate = candidateFromUrl(url, ref ?? "HEAD");
+  if (candidate === null) {
+    return fail(`"${url}" is not a github.com repository url this command can parse \u2014 expected https://github.com/<owner>/<repo>`);
+  }
+  try {
+    const { report } = await runInspectionPipeline(dir, candidate, deps);
+    if (json) return { stdout: `${JSON.stringify(report, null, 2)}
+`, exitCode: 0 };
+    return { stdout: renderReport(report), exitCode: report.auditState === "passed" ? 0 : 1 };
+  } catch (error2) {
+    return fail(describe2(error2));
+  }
+}
+async function skillsImportCommand(args, deps) {
+  const { dir, positional, ref, empty } = parseArgs(args);
+  const refusal = refuseEmptyFlag(empty);
+  if (refusal !== null) return refusal;
+  const [url] = positional;
+  if (url === void 0) {
+    return fail("skills import needs a candidate url: mjloop-cli skills import <url> [--ref <ref>] [--dir <path>]");
+  }
+  const candidate = candidateFromUrl(url, ref ?? "HEAD");
+  if (candidate === null) {
+    return fail(`"${url}" is not a github.com repository url this command can parse \u2014 expected https://github.com/<owner>/<repo>`);
+  }
+  try {
+    const { report, files } = await runInspectionPipeline(dir, candidate, deps);
+    if (report.auditState !== "passed") {
+      return { stdout: renderReport(report), exitCode: 1 };
+    }
+    const pkg = buildSkillPackage(report);
+    const stageDir = await fs12.mkdtemp(path12.join(os3.tmpdir(), "mjloop-skill-import-"));
+    try {
+      for (const file of files) {
+        const dest = path12.join(stageDir, file.path);
+        await fs12.mkdir(path12.dirname(dest), { recursive: true });
+        await fs12.writeFile(dest, file.buffer);
+      }
+      await writePackage(dir, pkg, stageDir);
+    } finally {
+      await fs12.rm(stageDir, { recursive: true, force: true });
+    }
+    return {
+      stdout: `imported "${pkg.skillName}" at digest ${pkg.digest}
+source ${pkg.source.kind} ${pkg.source.url} revision ${pkg.source.revision}
+this writes the package into this machine's library only \u2014 it is not yet accepted into this project.
+accept it with: mjloop-cli skills accept ${pkg.digest}
+`,
+      exitCode: 0
+    };
+  } catch (error2) {
+    return fail(describe2(error2));
+  }
+}
+function derivePackageId(candidate) {
+  const sanitized = candidate.repository.replace(/[^A-Za-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "");
+  return `${candidate.source}-${sanitized}`;
+}
+function buildSkillPackage(report, now = () => /* @__PURE__ */ new Date()) {
+  const skillName = report.skillName ?? report.candidate.skillName;
+  const description = report.description ?? report.candidate.description;
+  return SkillPackageSchema.parse({
+    schema: 1,
+    packageId: derivePackageId(report.candidate),
+    digest: report.digest,
+    source: { kind: report.candidate.source, url: report.candidate.url, revision: report.revision },
+    license: report.license ?? { spdx: null, file: null },
+    skillName,
+    description,
+    tags: [],
+    dependencies: report.dependencies ?? { executables: [], packages: [] },
+    audit: {
+      state: report.auditState,
+      findings: report.sandbox === null ? report.findings : [...report.findings, sandboxFinding(report.sandbox)],
+      at: now().toISOString()
+    },
+    guidance: description,
+    importedAt: now().toISOString()
+  });
+}
+function repositoryFromGithubUrl(url) {
+  const match = GITHUB_URL.exec(url);
+  if (match === null) return null;
+  const [, owner, name] = match;
+  return `${owner}/${name}`;
+}
+async function skillsCheckUpdatesCommand(args, deps) {
+  const { dir, json, empty } = parseArgs(args);
+  const refusal = refuseEmptyFlag(empty);
+  if (refusal !== null) return refusal;
+  const acceptances = await listAcceptances(dir);
+  const reports = [];
+  for (const acceptance of acceptances) {
+    if (acceptance.updatePolicy === "pinned") {
+      reports.push({ skillId: acceptance.skillId, digest: acceptance.digest, status: "pinned", currentRevision: null, candidateRevision: null, detail: null });
+      continue;
+    }
+    const pkg = await readPackage(dir, acceptance.digest);
+    if (pkg === null) {
+      reports.push({ skillId: acceptance.skillId, digest: acceptance.digest, status: "package-missing", currentRevision: null, candidateRevision: null, detail: null });
+      continue;
+    }
+    if (pkg.source.kind !== "github") {
+      reports.push({ skillId: acceptance.skillId, digest: acceptance.digest, status: "unsupported-source", currentRevision: pkg.source.revision, candidateRevision: null, detail: null });
+      continue;
+    }
+    const repository = repositoryFromGithubUrl(pkg.source.url);
+    if (repository === null) {
+      reports.push({ skillId: acceptance.skillId, digest: acceptance.digest, status: "check-failed", currentRevision: pkg.source.revision, candidateRevision: null, detail: "could not parse a repository out of the recorded source url" });
+      continue;
+    }
+    try {
+      await refuseDisabledSource(dir, "github");
+      const candidateRevision = await resolveGithubHeadSha(repository, deps);
+      const changed = candidateRevision !== pkg.source.revision;
+      reports.push({
+        skillId: acceptance.skillId,
+        digest: acceptance.digest,
+        status: changed ? "new-candidate" : "up-to-date",
+        currentRevision: pkg.source.revision,
+        candidateRevision,
+        detail: null
+      });
+    } catch (error2) {
+      reports.push({ skillId: acceptance.skillId, digest: acceptance.digest, status: "check-failed", currentRevision: pkg.source.revision, candidateRevision: null, detail: describe2(error2) });
+    }
+  }
+  if (json) return { stdout: `${JSON.stringify(reports, null, 2)}
+`, exitCode: 0 };
+  if (reports.length === 0) return { stdout: "(no acceptances to check)\n", exitCode: 0 };
+  const lines = reports.map((entry) => {
+    if (entry.status === "pinned") return `  ${entry.skillId}  pinned \u2014 not checked`;
+    if (entry.status === "up-to-date") return `  ${entry.skillId}  up to date at ${entry.currentRevision}`;
+    if (entry.status === "new-candidate") {
+      return `  ${entry.skillId}  new revision available: ${entry.candidateRevision} (currently accepted at ${entry.currentRevision})
+    this is a new candidate, not applied \u2014 import it explicitly, then accept the new digest separately`;
+    }
+    if (entry.status === "package-missing") return `  ${entry.skillId}  package not held in this machine's library \u2014 cannot check`;
+    if (entry.status === "unsupported-source") return `  ${entry.skillId}  source has no update check defined yet`;
+    return `  ${entry.skillId}  could not check: ${entry.detail}`;
+  });
+  return { stdout: `${lines.join("\n")}
+`, exitCode: 0 };
+}
+async function resolveGithubHeadSha(repository, deps) {
+  const repoBody = await fetchJsonBounded(`https://api.github.com/repos/${repository}`, deps);
+  const defaultBranch = isRecordCli(repoBody) && typeof repoBody.default_branch === "string" ? repoBody.default_branch : "HEAD";
+  const commitBody = await fetchJsonBounded(`https://api.github.com/repos/${repository}/commits/${encodeURIComponent(defaultBranch)}`, deps);
+  const sha = isRecordCli(commitBody) && typeof commitBody.sha === "string" ? commitBody.sha : null;
+  if (sha === null) throw new Error(`could not resolve the current revision for "${repository}"`);
+  return sha;
+}
+function splitList(raw) {
+  return raw.split(",").map((entry) => entry.trim()).filter((entry) => entry.length > 0);
 }
 async function sessionStartCommand(stdin) {
   const cwd = readCwd(stdin);
@@ -13333,16 +16431,32 @@ async function stateGuardCommand(stdin) {
 function evaluateStateGuard(input) {
   const filePath = extractFilePath(input);
   if (filePath === null) return { deny: false, reason: "" };
-  const segments = filePath.split(path6.sep);
+  const normalised = path12.normalize(filePath);
+  const segments = normalised.split(path12.sep).map((segment) => segment.toLowerCase());
   if (!segments.includes(".mjloop")) return { deny: false, reason: "" };
-  const basename = path6.basename(filePath);
-  if (!PROTECTED_BASENAMES.includes(basename)) {
-    return { deny: false, reason: "" };
+  const basename = path12.basename(normalised).toLowerCase();
+  if (PROTECTED_BASENAMES.includes(basename)) {
+    return {
+      deny: true,
+      reason: `${basename} is owned by the mjloop MCP server. Use the mjloop_* tools (mjloop_run_start, mjloop_cycle_advance, mjloop_run_log, ...) instead of editing it directly.`
+    };
   }
-  return {
-    deny: true,
-    reason: `${basename} is owned by the mjloop MCP server. Use the mjloop_* tools (mjloop_run_start, mjloop_cycle_advance, mjloop_run_log, ...) instead of editing it directly.`
-  };
+  const directory = protectedDirectory(segments);
+  if (directory !== null) return { deny: true, reason: PROTECTED_DIRECTORY_REASONS[directory] };
+  return { deny: false, reason: "" };
+}
+var PROTECTED_DIRECTORY_REASONS = {
+  profile: ".mjloop/profile/ is owned by the mjloop engine: an accepted revision is immutable, and the proposal is what an acceptance reads. Use mjloop-cli profile accept and mjloop-cli profile reject (mjloop-cli profile show first) instead of editing these files directly.",
+  features: ".mjloop/features/ is owned by the mjloop engine: an approved feature brief is what a later plan is built on, and a revision is never rewritten once it is approved. Use the mjloop_feature_* tools (mjloop_feature_create, mjloop_feature_update, mjloop_feature_approve) instead of editing these files directly.",
+  skills: ".mjloop/skills/ is owned by the mjloop engine: an acceptance names the exact digest, components and agents this project pinned, and a hand edit could silently change what a run treats as accepted without anybody having decided so. Use mjloop-cli skills accept, mjloop-cli skills disable, mjloop-cli skills enable and mjloop-cli skills remove (mjloop-cli skills list first) instead of editing these files directly."
+};
+function protectedDirectory(segments) {
+  for (const [index, segment] of segments.entries()) {
+    if (segment !== ".mjloop") continue;
+    const child = segments[index + 1];
+    if (child !== void 0 && PROTECTED_DIRECTORIES.includes(child)) return child;
+  }
+  return null;
 }
 function evaluateStopGuard(input, summary, autonomous) {
   if (typeof input !== "object" || input === null) return { block: false, reason: "" };

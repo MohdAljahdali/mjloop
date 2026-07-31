@@ -2,31 +2,38 @@
 
 .tag {
   font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
   color: var(--dim);
   border: 1px solid var(--line);
-  border-radius: 999px;
-  padding: 0 7px;
+  border-radius: var(--radius-pill);
+  padding: 1px 9px;
   white-space: nowrap;
+  background: color-mix(in srgb, var(--panel-2) 75%, transparent);
 }
 
 .tag.approval-approved {
   color: var(--ok);
-  border-color: var(--ok);
+  border-color: color-mix(in srgb, var(--ok) 50%, transparent);
+  background: var(--tint-ok);
 }
 
 .tag.approval-rejected {
   color: var(--bad);
-  border-color: var(--bad);
+  border-color: color-mix(in srgb, var(--bad) 50%, transparent);
+  background: var(--tint-bad);
 }
 
 .tag.approval-changes_requested {
   color: var(--warn);
-  border-color: var(--warn);
+  border-color: color-mix(in srgb, var(--warn) 50%, transparent);
+  background: var(--tint-warn);
 }
 
 .tag.ui {
   color: var(--accent);
-  border-color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 50%, transparent);
+  background: var(--tint-accent);
 }
 
 .chips {
@@ -42,9 +49,10 @@
   font-family: var(--mono);
   font-size: 11px;
   color: var(--dim);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: 1px 7px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  padding: 2px 8px;
+  background: color-mix(in srgb, var(--bg) 55%, transparent);
 }
 
 .dot {
@@ -53,18 +61,22 @@
   border-radius: 50%;
   flex: none;
   background: var(--dim);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--dim) 18%, transparent);
 }
 
 .dot.status-done {
   background: var(--ok);
+  box-shadow: 0 0 0 3px var(--tint-ok);
 }
 
 .dot.status-doing {
   background: var(--accent);
+  box-shadow: 0 0 0 3px var(--tint-accent);
 }
 
 .dot.status-blocked {
   background: var(--bad);
+  box-shadow: 0 0 0 3px var(--tint-bad);
 }
 
 /* Appended into a live region that has been in the document since boot: a
@@ -72,8 +84,8 @@
    of a new one. */
 .toasts {
   position: fixed;
-  inset-block-end: 12px;
-  inset-inline-end: 12px;
+  inset-block-end: 16px;
+  inset-inline-end: 16px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -85,38 +97,48 @@
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  background: var(--panel);
-  border: 1px solid var(--warn);
+  background: var(--panel-2);
+  border: 1px solid color-mix(in srgb, var(--warn) 50%, transparent);
   border-radius: var(--radius);
-  padding: 9px 12px;
+  padding: 10px 14px;
   font-size: 13px;
-  box-shadow: 0 6px 18px rgb(0 0 0 / 45%);
+  box-shadow: var(--shadow-3);
+  animation: toast-in 0.18s ease both;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
 }
 
 /* A native <dialog>: the browser owns focus trapping, Escape and the backdrop. */
 dialog {
-  background: var(--panel);
+  background: var(--panel-2);
   color: var(--text);
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  padding: 18px 20px;
+  padding: 22px 24px;
   max-width: min(520px, 92vw);
+  box-shadow: var(--shadow-3);
 }
 
 dialog::backdrop {
-  background: rgb(0 0 0 / 55%);
+  background: rgb(4 6 11 / 62%);
+  backdrop-filter: blur(3px);
 }
 
 dialog h2 {
   margin: 0 0 8px;
-  font-size: 15px;
+  font-size: 16px;
 }
 
 dialog label {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  margin-block-start: 12px;
+  gap: 5px;
+  margin-block-start: 14px;
   font-size: 12px;
   color: var(--dim);
 }
@@ -125,10 +147,10 @@ dialog label {
   display: flex;
   gap: 8px;
   justify-content: flex-end;
-  margin-block-start: 16px;
+  margin-block-start: 18px;
 }
 
 .toast button:not(.icon) {
-  padding: 2px 10px;
+  padding: 3px 11px;
   font-size: 12px;
 }

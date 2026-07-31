@@ -1,5 +1,6 @@
 /**
- * Plans — every plan, every story, and what is actually buildable.
+ * Plans — what can be built now, what each plan is waiting on, and one list of
+ * stories per plan rather than two.
  *
  * Readiness is computed **on the page**, by the same rule as
  * `index-render.ts:23-28`: a story is ready when it is `todo` and every id in
@@ -11,6 +12,18 @@
  * stories' acceptance criteria and evidence are documents, so they are fetched
  * — and they have to be: `acceptance` and `evidence` live in story frontmatter
  * and are deliberately absent from `ManifestEntry`.
+ *
+ * Three things about the shape of this screen are deliberate, and each was a
+ * complaint about the one it replaces:
+ *
+ *  1. Stories are drawn once, in the open plan's detail. They used to be drawn
+ *     inline under every plan row *as well*, so a plan with twenty-two of them
+ *     buried the plan list under a wall nobody could scan.
+ *  2. The buildable stories carry their own title and plan. A chip reading
+ *     `P001-S11` asks the reader to hold an id in their head and then go and
+ *     look it up in the wall from (1).
+ *  3. Every action is a word. A bare `+` on a row is only obvious to whoever
+ *     wrote it.
  */
 import { attr, clone, cls, flag, label, phrase, verbatim } from '../ui/dom.js'
 import { feed } from '../lib/api.js'
@@ -29,13 +42,19 @@ import { submit } from '../ui/writes.js'
  * @typedef {import('../../read.js').StoryDetail} StoryDetail
  */
 
+/** How many buildable stories the start block lists before it says "and n more". */
+const READY_SHOWN = 6
+
+/** The story filters, in the order the picker offers them. */
+export const FILTERS = ['', 'ready', 'doing', 'blocked', 'done']
+
 /**
  * The ids this story is still waiting on: dependencies that are not `done`.
  *
  * A dependency naming a story that does not exist counts as unmet. Silently
  * treating an unknown id as satisfied would turn a typo into a build.
  *
- * @param {StoryView} story
+ * @param {StoryView | StoryDetail} story
  * @param {Map<string, string>} statuses
  * @returns {string[]}
  */
@@ -52,6 +71,22 @@ export function statusIndex(plans) {
   const index = new Map()
   for (const plan of plans) {
     for (const story of plan.stories) index.set(story.id, story.status)
+  }
+  return index
+}
+
+/**
+ * Which plan each story belongs to, so a buildable story can say where it came
+ * from without the reader going to find out.
+ *
+ * @param {readonly PlanView[]} plans
+ * @returns {Map<string, string>}
+ */
+export function planIndex(plans) {
+  /** @type {Map<string, string>} */
+  const index = new Map()
+  for (const plan of plans) {
+    for (const story of plan.stories) index.set(story.id, plan.id)
   }
   return index
 }
@@ -84,6 +119,54 @@ export function ready(plans) {
   )
 }
 
+/**
+ * The five numbers the tally shows. Counted over stories rather than plans:
+ * "three plans" tells you nothing about how much is left.
+ *
+ * @param {readonly PlanView[]} plans
+ * @returns {{ plans: number, ready: number, doing: number, blocked: number, done: number }}
+ */
+export function tally(plans) {
+  const stories = plans.flatMap((plan) => plan.stories)
+  /**
+   * @param {string} status
+   * @returns {number}
+   */
+  const count = (status) => stories.filter((story) => story.status === status).length
+  return {
+    plans: plans.length,
+    ready: ready(plans).length,
+    doing: count('doing'),
+    blocked: count('blocked'),
+    done: count('done'),
+  }
+}
+
+/**
+ * The stories a filter and a search box leave standing.
+ *
+ * `ready` is not a story status — it is a status *and* a dependency check, and
+ * it is the filter people actually want. Pure and exported so it is tested
+ * without a DOM.
+ *
+ * @template {StoryView | StoryDetail} T
+ * @param {readonly T[]} stories
+ * @param {string} query
+ * @param {string} filter One of `FILTERS`.
+ * @param {Map<string, string>} statuses
+ * @returns {T[]}
+ */
+export function sift(stories, query, filter, statuses) {
+  const terms = query.toLowerCase().split(/\s+/).filter((term) => term.length > 0)
+  return stories.filter((story) => {
+    if (filter === 'ready' && !(story.status === 'todo' && unmet(story, statuses).length === 0)) return false
+    if (filter !== '' && filter !== 'ready' && story.status !== filter) return false
+    if (terms.length === 0) return true
+    const haystack = `${story.id} ${story.title}`.toLowerCase()
+    return terms.every((term) => haystack.includes(term))
+  })
+}
+
 /** The plan whose detail is open, or null. */
 let opened = /** @type {string | null} */ (null)
 /** The plan opened by a user action and waiting for its fetched detail. */
@@ -102,8 +185,18 @@ export function mountPlans() {
   const host = pick('plans-list')
   const more = pick('plans-more')
 
+  const tallyBlock = pick('plans-tally-block')
+  const tallySlots = {
+    plans: pick('tally-plans'),
+    ready: pick('tally-ready'),
+    doing: pick('tally-doing'),
+    blocked: pick('tally-blocked'),
+    done: pick('tally-done'),
+  }
+
   const readyBlock = pick('plans-ready')
   const readyList = pick('plans-ready-list')
+  const readyMore = pick('plans-ready-more')
 
   const detail = pick('plan-detail')
   const detailTitle = pick('plan-detail-title')
@@ -113,7 +206,44 @@ export function mountPlans() {
   const reviewDetails = pick('plan-review-details')
   const review = pick('plan-review')
   const detailStories = pick('plan-detail-stories')
+  const storiesEmpty = pick('plan-stories-empty')
+  const storiesMore = pick('plan-stories-more')
   const note = /** @type {HTMLInputElement} */ (document.getElementById('approve-note'))
+  const query = /** @type {HTMLInputElement} */ (document.getElementById('story-query'))
+  const filterPicker = /** @type {HTMLSelectElement} */ (document.getElementById('story-filter'))
+  const decisions = {
+    approved: /** @type {HTMLButtonElement} */ (document.querySelector('[data-act="approve"]')),
+    changes_requested: /** @type {HTMLButtonElement} */ (document.querySelector('[data-act="request-changes"]')),
+    rejected: /** @type {HTMLButtonElement} */ (document.querySelector('[data-act="reject"]')),
+  }
+
+  /** Uncontrolled, like every other box on this page: read on input, never written. */
+  let text = ''
+  let filter = ''
+
+  for (const value of FILTERS) {
+    const option = document.createElement('option')
+    option.value = value
+    filterPicker.append(option)
+  }
+
+  query.addEventListener('input', () => {
+    text = query.value
+    draw()
+  })
+  filterPicker.addEventListener('change', () => {
+    filter = filterPicker.value
+    draw()
+  })
+
+  /** The statuses of the whole project, for the fetched detail's dependency checks. */
+  let statuses = /** @type {Map<string, string>} */ (new Map())
+  /**
+   * The story `--next` would pick. Held here rather than read off the row's
+   * position: `update()` runs before a new row is inserted, so a row cannot ask
+   * the DOM whether it is first.
+   */
+  let first = /** @type {string | null} */ (null)
 
   /** @type {import('../lib/api.js').Feed<PlanDetail>} */
   const plan = feed({
@@ -136,24 +266,46 @@ export function mountPlans() {
       phrase(empty, 'plans.empty')
       flag(empty, 'hidden', plans.length > 0)
 
-      const statuses = statusIndex(plans)
+      statuses = statusIndex(plans)
+      const plansOf = planIndex(plans)
+
+      const counts = tally(plans)
+      flag(tallyBlock, 'hidden', plans.length === 0)
+      // Counts, so they are localised digits: unlike `3/8` these are numbers a
+      // sentence is talking about, not an identifier.
+      phrase(tallySlots.plans, 'plans.number', { n: counts.plans })
+      phrase(tallySlots.ready, 'plans.number', { n: counts.ready })
+      phrase(tallySlots.doing, 'plans.number', { n: counts.doing })
+      phrase(tallySlots.blocked, 'plans.number', { n: counts.blocked })
+      phrase(tallySlots.done, 'plans.number', { n: counts.done })
+
       const { shown, total } = reconcile(host, plans, planKey, () => planRow(statuses))
       flag(more, 'hidden', shown >= total)
       if (shown < total) phrase(more, 'plans.more', { shown, total })
 
       const buildable = ready(plans)
+      first = buildable[0]?.id ?? null
       flag(readyBlock, 'hidden', buildable.length === 0)
-      reconcile(readyList, buildable, (story) => story.id, readyRow)
+      reconcile(readyList, buildable.slice(0, READY_SHOWN), (story) => story.id, () => readyRow(plansOf))
+      flag(readyMore, 'hidden', buildable.length <= READY_SHOWN)
+      if (buildable.length > READY_SHOWN) {
+        phrase(readyMore, 'plans.readyMore', { n: buildable.length - READY_SHOWN })
+      }
+
+      // Translated here rather than at mount, so a locale switch repaints them.
+      for (const option of [...filterPicker.options]) {
+        phrase(option, `plans.filter.${option.value === '' ? 'all' : option.value}`)
+      }
 
       drawDetail(plan.value())
     },
   })
 
   /**
-   * @param {Map<string, string>} statuses
+   * @param {Map<string, string>} index
    * @returns {{ root: HTMLElement, update: (plan: PlanView) => void }}
    */
-  function planRow(statuses) {
+  function planRow(index) {
     const { root, slots } = clone('tpl-plan')
     return {
       root,
@@ -181,6 +333,35 @@ export function mountPlans() {
         // count: `3/8` must not become `٣/٨`.
         if (count !== undefined) verbatim(count, `${done}/${view.stories.length}`)
 
+        // The bar is the part of a plan row that reads at a glance. Written as a
+        // percentage of the row's own width, so it needs no measurement.
+        const total = view.stories.length
+        const percent = total === 0 ? 0 : Math.round((done / total) * 100)
+        const bar = slots['bar']
+        if (bar !== undefined) bar.style.inlineSize = `${percent}%`
+        const progress = slots['progress']
+        if (progress !== undefined) {
+          attr(progress, 'aria-valuenow', String(percent))
+          label(progress, 'aria-label', 'plans.progress', { done, total })
+          flag(progress, 'hidden', total === 0)
+        }
+
+        const buildable = view.stories.filter(
+          (story) => story.status === 'todo' && unmet(story, index).length === 0,
+        ).length
+        const readyNote = slots['ready']
+        if (readyNote !== undefined) {
+          phrase(readyNote, 'plans.readyHere', { n: buildable })
+          flag(readyNote, 'hidden', buildable === 0)
+        }
+
+        const stuck = view.stories.filter((story) => story.status === 'blocked').length
+        const blocked = slots['blocked']
+        if (blocked !== undefined) {
+          phrase(blocked, 'plans.blockedHere', { n: stuck })
+          flag(blocked, 'hidden', stuck === 0)
+        }
+
         const open = slots['open']
         if (open !== undefined) {
           open.dataset['plan'] = view.id
@@ -194,21 +375,103 @@ export function mountPlans() {
           phrase(noStories, 'plans.storiesEmpty')
           flag(noStories, 'hidden', view.stories.length > 0)
         }
-
-        const stories = slots['stories']
-        if (stories !== undefined) reconcile(stories, view.stories, storyKey(view.id), () => storyRow(statuses))
       },
     }
   }
 
   /**
-   * @param {Map<string, string>} statuses
+   * @param {Map<string, string>} plansOf
    * @returns {{ root: HTMLElement, update: (story: StoryView) => void }}
    */
-  function storyRow(statuses) {
-    const { root, slots } = clone('tpl-story')
+  function readyRow(plansOf) {
+    const { root, slots } = clone('tpl-ready')
     return {
       root,
+      /** @param {StoryView} story */
+      update(story) {
+        const id = slots['id']
+        if (id !== undefined) verbatim(id, story.id)
+        const title = slots['title']
+        if (title !== undefined) verbatim(title, story.title)
+        const plan = slots['plan']
+        if (plan !== undefined) verbatim(plan, plansOf.get(story.id) ?? '')
+
+        // The first row is what `--next` would pick, so it says so rather than
+        // leaving the reader to infer an order from a list.
+        const next = slots['next']
+        if (next !== undefined) {
+          phrase(next, 'plans.nextTag')
+          flag(next, 'hidden', story.id !== first)
+        }
+
+        const build = slots['build']
+        if (build !== undefined) {
+          build.dataset['story'] = story.id
+          phrase(build, 'plans.buildAction')
+          label(build, 'title', 'story.build')
+        }
+      },
+    }
+  }
+
+  /** @param {PlanDetail | null} view */
+  function drawDetail(view) {
+    flag(detail, 'hidden', opened === null || view === null)
+    if (view === null) return
+
+    verbatim(detailTitle, `${view.id} — ${view.title}`)
+
+    // The whole approval record, where the list shows only the decision. An
+    // approval is auditable or it is a flag.
+    const approval = view.approval
+    if (approval === null) {
+      phrase(record, 'plans.noDecision')
+    } else {
+      phrase(record, 'plans.decidedBy', {
+        // The decision is an engine enum with a translated word for every
+        // member — asserted exhaustive against `ApprovalDecisionSchema` — so it
+        // renders as that word rather than as `changes_requested`.
+        decision: t(`plans.approval.${approval.decision}`),
+        by: approval.by,
+        at: stamp(approval.at),
+        note: approval.note ?? '—',
+      })
+    }
+
+    // The decision already on record is not an action. Offering it as one is how
+    // a user ends up pressing Approve on an approved plan and wondering which
+    // of the two of them is confused.
+    for (const [decision, button] of Object.entries(decisions)) {
+      if (button !== null) flag(button, 'disabled', approval?.decision === decision)
+    }
+
+    verbatim(body, view.body)
+    flag(bodyDetails, 'hidden', view.body.trim().length === 0)
+    verbatim(review, view.review ?? '')
+    // Nothing in `engine/src` reads REVIEW.md at all, so this is the only place
+    // the plan-critic's verdict is ever seen again.
+    flag(reviewDetails, 'hidden', view.review === null)
+
+    const shown = sift(view.stories, text, filter, statuses)
+    phrase(storiesEmpty, view.stories.length === 0 ? 'plans.storiesEmpty' : 'plans.noMatch')
+    flag(storiesEmpty, 'hidden', shown.length > 0)
+    const drawn = reconcile(detailStories, shown, storyKey(view.id), storyDetailRow)
+    flag(storiesMore, 'hidden', drawn.shown >= drawn.total)
+    if (drawn.shown < drawn.total) phrase(storiesMore, 'plans.storiesMore', { shown: drawn.shown, total: drawn.total })
+
+    if (focusPending === view.id) {
+      focusPending = null
+      detailTitle.focus({ preventScroll: true })
+      const reduced = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
+      detail.scrollIntoView?.({ block: 'nearest', behavior: reduced ? 'auto' : 'smooth' })
+    }
+  }
+
+  function storyDetailRow() {
+    const { root, slots } = clone('tpl-story-detail')
+    return {
+      root,
+      /** @param {StoryDetail} story */
       update(story) {
         const dot = slots['dot']
         if (dot !== undefined) cls(dot, 'status', story.status)
@@ -243,6 +506,11 @@ export function mountPlans() {
         if (build !== undefined) {
           build.dataset['story'] = story.id
           const buildable = story.status === 'todo' && waiting.length === 0
+          phrase(build, 'plans.buildAction')
+          // Offered only where building is a thing that could happen. A `done`
+          // story does not need a greyed-out Build beside it — `doing` and
+          // `blocked` get Requeue, which is the action they actually have.
+          flag(build, 'hidden', story.status !== 'todo')
           flag(build, 'disabled', !buildable)
           // The reason travels with the control rather than sitting in a
           // tooltip somewhere else: a disabled button with no stated cause is
@@ -253,83 +521,6 @@ export function mountPlans() {
             waiting.length > 0 ? 'story.blockedBy' : buildable ? 'story.build' : `story.notBuildable.${story.status}`,
             waiting.length > 0 ? { ids: waiting.join(', ') } : undefined,
           )
-        }
-      },
-    }
-  }
-
-  function readyRow() {
-    const { root, slots } = clone('tpl-ready')
-    return {
-      root,
-      /** @param {StoryView} story */
-      update(story) {
-        const id = slots['id']
-        if (id !== undefined) verbatim(id, story.id)
-        const build = slots['build']
-        if (build !== undefined) {
-          build.dataset['story'] = story.id
-          label(build, 'title', 'story.build')
-        }
-      },
-    }
-  }
-
-  /** @param {PlanDetail | null} view */
-  function drawDetail(view) {
-    flag(detail, 'hidden', opened === null || view === null)
-    if (view === null) return
-
-    verbatim(detailTitle, `${view.id} — ${view.title}`)
-
-    // The whole approval record, where the list shows only the decision. An
-    // approval is auditable or it is a flag.
-    const approval = view.approval
-    if (approval === null) {
-      phrase(record, 'plans.noDecision')
-    } else {
-      phrase(record, 'plans.decidedBy', {
-        // The decision is an engine enum with a translated word for every
-        // member — asserted exhaustive against `ApprovalDecisionSchema` — so it
-        // renders as that word rather than as `changes_requested`.
-        decision: t(`plans.approval.${approval.decision}`),
-        by: approval.by,
-        at: stamp(approval.at),
-        note: approval.note ?? '—',
-      })
-    }
-
-    verbatim(body, view.body)
-    flag(bodyDetails, 'hidden', view.body.trim().length === 0)
-    verbatim(review, view.review ?? '')
-    // Nothing in `engine/src` reads REVIEW.md at all, so this is the only place
-    // the plan-critic's verdict is ever seen again.
-    flag(reviewDetails, 'hidden', view.review === null)
-
-    reconcile(detailStories, view.stories, (story) => story.id, storyDetailRow)
-
-    if (focusPending === view.id) {
-      focusPending = null
-      detailTitle.focus({ preventScroll: true })
-      const reduced = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
-      detail.scrollIntoView?.({ block: 'nearest', behavior: reduced ? 'auto' : 'smooth' })
-    }
-  }
-
-  function storyDetailRow() {
-    const { root, slots } = clone('tpl-story-detail')
-    return {
-      root,
-      /** @param {StoryDetail} story */
-      update(story) {
-        const id = slots['id']
-        if (id !== undefined) verbatim(id, story.id)
-        const title = slots['title']
-        if (title !== undefined) verbatim(title, story.title)
-        const status = slots['status']
-        if (status !== undefined) {
-          phrase(status, `story.status.${story.status}`)
-          cls(status, 'status', story.status)
         }
 
         // A story marked done with no evidence directory is an anomaly worth
@@ -356,6 +547,14 @@ export function mountPlans() {
           flag(requeue, 'hidden', story.status !== 'doing' && story.status !== 'blocked')
         }
 
+        // Collapsed by default, and the summary counts them: acceptance criteria
+        // are what you read *before* building one story, not while scanning
+        // twenty-two.
+        const acceptDetails = slots['acceptDetails']
+        if (acceptDetails !== undefined) flag(acceptDetails, 'hidden', story.acceptance.length === 0)
+        const acceptSummary = slots['acceptSummary']
+        if (acceptSummary !== undefined) phrase(acceptSummary, 'plans.acceptance', { n: story.acceptance.length })
+
         const acceptance = slots['acceptance']
         if (acceptance !== undefined) {
           reconcile(acceptance, story.acceptance, (line) => line, () => {
@@ -364,8 +563,8 @@ export function mountPlans() {
               root: row.root,
               /** @param {string} line */
               update(line) {
-                const text = row.slots['text'] ?? row.root
-                verbatim(text, line)
+                const cell = row.slots['text'] ?? row.root
+                verbatim(cell, line)
               },
             }
           })
@@ -391,7 +590,7 @@ export function mountPlans() {
     decide(decision) {
       const current = latest()?.plans.find((view) => view.id === opened)
       if (opened === null || current === undefined) return
-      const text = note.value.trim()
+      const written = note.value.trim()
       submit({
         kind: 'gate',
         plan: opened,
@@ -399,7 +598,7 @@ export function mountPlans() {
         // refused rather than obeyed, which is why this needs no dialog.
         from: /** @type {'approved' | 'rejected' | 'changes_requested' | null} */ (current.approval),
         to: decision,
-        note: text.length === 0 ? null : text,
+        note: written.length === 0 ? null : written,
       })
       // A user action, not a render.
       note.value = ''
