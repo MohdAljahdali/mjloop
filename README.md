@@ -36,6 +36,26 @@ cannot see which model an agent runs on.
 
 See `docs/superpowers/specs/2026-07-28-mjloop-milestone-8-token-economy-design.md`.
 
+Newest — **the project maps itself, and its orchestration policy is a guarded setting.**
+`/mjloop:init` now walks the tree and proposes one component per declared manifest —
+`pubspec.yaml`, `package.json`, `pyproject.toml`, `setup.py`, `setup.cfg` — carrying the
+technology and the verify commands that manifest itself declares, never one inferred from a
+directory name. A proposal activates nothing on its own: the accepted map is an immutable
+numbered revision, and returning to an earlier one means accepting it as a new revision
+rather than rewriting a record a run may have pinned. `mjloop-cli profile show`, `accept`
+and `reject` are where that decision is made — with `--expect` carrying the revision you
+read, so an acceptance built on a screen that has since moved is refused, and
+`accept --from <revision>` reselecting an earlier revision's map without reading the
+proposal at all, which is what makes the rollback reachable rather than merely modelled.
+Never the browser: accepting a map activates routing for every later run, which is the
+class of write the cockpit is permanently denied. Beside it, an `orchestration:` block
+in `.mjloop/config.yaml` carries this project's policy, read and changed through
+`/mjloop:config` and `mjloop-cli config get/set` — a write that compare-and-swaps on the
+file's sha256 revision and re-parses the whole document, neither of which a hand edit does.
+Every key is defaulted and `discovery.mode` defaults to `off`, so an already-provisioned
+project's plan flow is unchanged by any of it. The cockpit's Config tab edits the block and
+shows the accepted component map read-only.
+
 ## Install
 
 ```bash
@@ -56,6 +76,7 @@ Then add this repository as a plugin marketplace or local plugin in Claude Code.
 /mjloop:stop [reason]                      halt the run and write a report
 /mjloop:resume                             continue an interrupted run
 /mjloop:design-sync                        extract the design system the UI agents read
+/mjloop:config [get | set <key> <value>]   read or change this project's orchestration settings
 /mjloop:web                                cockpit: drive and read a run in a browser
 /mjloop:add agent|skill|track <name>       scaffold a new element
 /mjloop:release [major|minor|patch]        bump, tag, and publish a plugin release

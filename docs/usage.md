@@ -190,6 +190,196 @@ A plan lives in `.mjloop/plans/P001-<slug>/`:
 PLAN.md          the plan, authored — its frontmatter carries the approval
 REVIEW.md        plan-critic's output
 manifest.json    generated from the story files — never hand-edited
+### `orchestration` — what the loop settles on its own
+
+`/mjloop:init` writes this block too, and every key in it is defaulted. A `config.yaml`
+written before the block existed keeps parsing and gains the whole tree on the next read,
+and the defaults it gains change nothing about how the project already runs.
+
+```yaml
+orchestration:
+  profile:
+    auto_accept: false
+  discovery:
+    mode: off
+    question_budget: 8
+    completion: review
+  execution:
+    after_plan_approval: manual
+    uncertain_concurrency: sequential
+    repair_attempts: 1
+  quality:
+    independent_plan_review: false
+    independent_verification: false
+  skills:
+    sources: [github]
+    trusted_registries: []
+    update_mode: review
+```
+
+| Key | Default | Accepts |
+|---|---|---|
+| `profile.auto_accept` | `false` | `true` / `false` — may a scan activate a component map with nobody accepting it |
+| `discovery.mode` | `off` | `always` / `ask` / `off` |
+| `discovery.question_budget` | `8` | a whole number, 1–20 — a ceiling on questions, not a target |
+| `discovery.completion` | `review` | `auto-plan` / `review` / `save-only` |
+| `execution.after_plan_approval` | `manual` | `auto` / `manual` — does an approved plan start building on its own |
+| `execution.uncertain_concurrency` | `sequential` | `sequential` / `ask` / `parallel` — what to do with stories whose independence cannot be proven |
+| `execution.repair_attempts` | `1` | a whole number, 0–5; `0` is a real setting and means never repair |
+| `quality.independent_plan_review` | `false` | `true` / `false` |
+| `quality.independent_verification` | `false` | `true` / `false` |
+| `skills.sources` | `[github]` | any subset of `github`, `registry`, `web`; the empty list means nothing may be discovered from outside this project |
+| `skills.trusted_registries` | `[]` | `https://` URLs — plain `http://` is refused at the schema |
+| `skills.update_mode` | `review` | `auto` / `review` / `pinned` |
+
+**`discovery.mode` is `off` on purpose.** It is the setting that keeps `/mjloop:plan`
+behaving exactly as it did before this block existed. Any other default would change what
+the command does in every already-provisioned project the moment the engine is upgraded —
+and that is a decision a project makes for itself, once, in writing.
+
+Two combinations are refused when the document is parsed, each because it is a setting
+that could never take effect and would fail silently:
+
+- `discovery.completion: auto-plan` while `discovery.mode: off`. `auto-plan` names a start
+  driven by discovery's own output, and a project with discovery off never produces one.
+- `registry` in `skills.sources` while `trusted_registries` is empty. A source that names
+  no registry admits nothing, and the project believes it enabled one.
+
+A change that would introduce either is refused outright; written in by hand, it turns up
+as a config that no longer parses.
+
+### Changing a setting: `/mjloop:config`
+
+```
+/mjloop:config get                 every orchestration setting, and the file's revision
+/mjloop:config set <key> <value>   change exactly one of them
+```
+
+It drives the engine's own binary, which you can run yourself:
+
+```bash
+mjloop-cli config get [--dir <path>] [--json]
+mjloop-cli config set <key> <value> [--dir <path>]
+```
+
+`set` changes one setting, named by its full dotted key — `orchestration.discovery.mode`,
+`orchestration.quality.independent_verification`, and so on. The two list settings take a
+comma-separated value, and the empty string is the empty list:
+`mjloop-cli config set orchestration.skills.sources ''` is how a project says no skill may
+be discovered from outside it at all.
+
+**Hand-editing this block is not the path, and that is not a style preference.** The
+guarded write behind `config set` does three things an editor cannot:
+
+1. It compare-and-swaps on the file's sha256 revision, so a change built on bytes that
+   have since moved is refused instead of quietly clobbering whoever wrote in between.
+2. It re-parses the whole document after applying the change. A setting can be perfectly
+   legal on its own and illegal beside another — the two combinations above are exactly
+   that — and only a whole-document parse sees it.
+3. It writes nothing at all when either check fails, so a refusal leaves the file
+   byte-identical rather than half-applied.
+
+A hand edit gets none of the three, and its damage does not surface at the keystroke: the
+config is next loaded when somebody starts a run, so a broken document turns up as a
+failed `/mjloop:build`, in another session, with no obvious cause. The cockpit's Config
+tab writes through the same guarded route. `config set` reaches the `orchestration` block
+and nothing else — change `tracks`, `verify`, `gates`, `specialists` and `limits` in the
+cockpit.
+
+## The component map
+
+`/mjloop:init` also walks the project and writes what it found to
+`.mjloop/profile/proposed.json`: one component per directory that declares a manifest —
+`pubspec.yaml`, `package.json`, `pyproject.toml`, `setup.py`, `setup.cfg` — each with its
+root, its technology, and the verify commands that manifest declares.
+
+Technology is decided by declared content, never by a directory name. A `pubspec.yaml`
+that declares Flutter is a Flutter component; one that does not is still a component, with
+technology `unknown`. A directory called `mobile` with no manifest is not a component at
+all. The commands are read the same way — a `package.json`'s own `scripts`, `pytest` when
+`pyproject.toml` declares `[tool.pytest.ini_options]` — and a slot with nothing behind it
+is left empty rather than guessed.
+
+The walk itself changes nothing in your tree, and **a proposal is never activated on its
+own.** Nothing routes off it, and running `/mjloop:init` again simply overwrites it with
+what the tree says now.
+
+Accepting one produces an **accepted revision**: `.mjloop/profile/accepted/rev-001.json`,
+then `rev-002.json`, and so on. Every revision is immutable, and there is no mutable
+"current" pointer — the accepted map is the highest-numbered revision file, and each one
+records the revision it supersedes. That is the whole rollback model: going back to an
+earlier map means accepting its components as a **new** revision, so nothing a run may
+have pinned is ever rewritten or deleted.
+
+One setting accepts a map: `orchestration.profile.auto_accept: true` lets `/mjloop:init`
+accept its own scan, and only on a project that has no accepted revision yet. A later scan
+never replaces a map that is already routing runs. Left at `false` — the default — a
+project has a proposal, no accepted map, and no run routed by one until somebody accepts.
+
+### Deciding on a map: `mjloop-cli profile`
+
+```bash
+mjloop-cli profile show   [--dir <path>] [--json]
+mjloop-cli profile accept [--dir <path>] [--expect <revision|none>] [--from <revision>]
+mjloop-cli profile reject [--dir <path>]
+```
+
+`show` prints the accepted revision — its number, when it was accepted, by whom, and its
+components with their verify commands — then the current proposal, and says plainly
+whether the two differ. It exits 0 on a project with nothing accepted: that is the state
+every project starts in, not a failure.
+
+`accept` accepts the current proposal as the **next** revision. `--expect` is the
+compare-and-swap made explicit: pass the revision number you read, or the word `none` to
+say you believe nothing is accepted yet, and the acceptance is refused outright if the
+project has moved on since you looked. Omitted, the command reads the current revision for
+you — a convenience, not a bypass, and somebody acting on a screen they read a while ago
+should pass it. Who accepted it is taken from the machine's own username rather than from
+anything you can type: that field is the only account of why a revision exists, and one
+you could type would be forgeable. It refuses when there is no proposal at all, and names
+`mjloop init` as what produces one.
+
+`reject` discards the proposal and leaves the last accepted revision active and untouched.
+It never writes anywhere near `accepted/`.
+
+**Rolling back is `accept --from <revision>`.** It reads that revision's components and
+accepts them as the next revision. It does not read `proposed.json` at all — not as a
+fallback, not to compare against — so a project whose last scan was rejected, or never ran,
+can still return to any map in its history.
+
+It lands as a new revision rather than moving a pointer because there is no pointer, and
+there is not meant to be one: a revision a run has pinned must still say exactly what it
+said when the run read it, so the way back to an earlier map is forwards. For the same
+reason `supersedes` on the new revision names the revision that was **current when the
+acceptance landed**, not the one `--from` named. Revision 3 replaces revision 2 whatever
+map it carries, and a `supersedes` pointing back at 1 would leave nothing on record saying
+revision 2 had ever stopped being current — the chain would no longer read as the sequence
+it is. `generatedAt` is carried over from the revision you reselected, because that is when
+the scan behind those components actually ran, and stamping the present moment on a map
+nobody re-scanned would be a small lie inside an audit record.
+
+`--expect` composes with it and means exactly what it always did: the compare-and-swap is
+on the accepted-revision counter, which `--from` does not touch, because a rollback is
+still an append. `--from` refuses — writing nothing — when the revision was never accepted,
+when the value is not a positive number, or when the revision file no longer parses, and
+the refusal names the revisions that do exist. `--from` naming the revision that is already
+current is allowed and writes a new revision, the same way accepting an unchanged proposal
+does.
+
+`.mjloop/profile/` is engine-owned, the way `state.json` and a plan's `manifest.json` are:
+Claude Code's `Write` and `Edit` are denied inside it. An accepted revision is immutable,
+and an acceptance reads either the proposal or, with `--from`, an accepted revision — never
+anything a hand edit could have reached. That is what the denial buys: a hand-edited
+proposal would put a component map nobody scanned in front of the person accepting it, and
+a hand-edited revision would corrupt the map a rollback reselects.
+
+The cockpit's Config tab shows the accepted map, read-only: its revision number, who
+accepted it and when, and a card per component with its root, technology, skill tags, and
+three verify slots. When a newer scan proposes a different map the page says so and stops
+there. Accepting a map activates routing for every later run, which is exactly the class
+of write the browser is permanently denied — so it reports the difference and never
+resolves it.
+
 stories/         one markdown file per story
 ```
 

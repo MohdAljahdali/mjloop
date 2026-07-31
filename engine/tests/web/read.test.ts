@@ -9,6 +9,7 @@ import { rosterSet } from '../../src/ops/roster.js'
 import { runLog } from '../../src/ops/log.js'
 import { runStart } from '../../src/ops/run.js'
 import { LedgerEntrySchema, type LedgerEntry } from '../../src/schemas/verify.js'
+import type { ProjectComponent } from '../../src/schemas/project-profile.js'
 import {
   CYCLE_HANDOFF_MAX,
   CYCLE_VERIFY_MAX,
@@ -19,6 +20,7 @@ import {
   readMemoryEntry,
   readPlanDetail,
   readPreflightEstimate,
+  readProfileView,
   readRosterProgress,
   readRunDetail,
   readRuns,
@@ -27,6 +29,7 @@ import {
   readTelemetryReport,
 } from '../../src/web/read.js'
 import { configRevision } from '../../src/store/config-mutation.js'
+import { acceptProfile, writeProposedProfile } from '../../src/store/project-profile-store.js'
 import { makeTmpProject, type TmpProject } from '../helpers/tmp-project.js'
 
 /**
@@ -86,6 +89,22 @@ async function writeLedger(runId: string, cycle: number, entries: LedgerEntry[])
   await fs.writeFile(path.join(dir, 'index.json'), `${JSON.stringify(entries, null, 2)}\n`, 'utf8')
 }
 
+/**
+ * A component as the detector produces one. Typed as `ProjectComponent` rather
+ * than as a literal, so a field added to the schema fails here — where a
+ * fixture and the record it stands in for drift apart — rather than in a
+ * browser drawing a slot that is always blank.
+ */
+function component(patch: Partial<ProjectComponent> & { id: string }): ProjectComponent {
+  return {
+    root: patch.id,
+    technology: 'nextjs',
+    verification: { test: 'npm test', lint: null, build: null },
+    skillTags: ['nextjs'],
+    ...patch,
+  }
+}
+
 async function seed(): Promise<void> {
   await initLoop(project.dir, clock)
   await planCreate(project.dir, { slug: 'user-auth', title: 'User authentication' }, clock)
@@ -106,6 +125,20 @@ describe('read', () => {
     const planFile = path.join(project.dir, '.mjloop', 'plans', 'P001-user-auth', 'PLAN.md')
     await fs.writeFile(planFile, '---\nnot: frontmatter\n---\n\nstill a body\n', 'utf8')
 
+    // A component map to read, so the profile reader is exercised rather than
+    // short-circuited by a project that has none.
+    await acceptProfile(
+      project.dir,
+      { components: [component({ id: 'web' })], by: 'Mohd', generatedAt: NOW.toISOString(), expectRevision: null },
+      clock,
+    )
+    await writeProposedProfile(project.dir, {
+      schema: 1,
+      generatedAt: NOW.toISOString(),
+      components: [component({ id: 'web' }), component({ id: 'worker', technology: 'python', skillTags: ['python'] })],
+      basis: ['web/package.json', 'worker/pyproject.toml'],
+    })
+
     const before = await hashTree(project.dir)
     await Promise.all([
       readState(project.dir),
@@ -122,6 +155,10 @@ describe('read', () => {
       // could repair what it opens.
       readTelemetryReport(project.dir),
       readPreflightEstimate(project.dir, 'edit'),
+      // A profile the browser can look at is a profile the browser must not be
+      // able to change: this reader neither accepts a proposal nor rescans, so
+      // it cannot write even when the proposal and the accepted map disagree.
+      readProfileView(project.dir),
     ])
     expect(await hashTree(project.dir)).toEqual(before)
   })
@@ -334,6 +371,23 @@ describe('read', () => {
     expect(view.revision).toBe(configRevision(view.raw ?? ''))
   })
 
+  it('carries the whole orchestration block to the page, defaults and all', async () => {
+    await initLoop(project.dir, clock)
+    // No new view and no new route: `parsed` is the whole document, so the
+    // block arrives the moment `ConfigSchema` grows it. What matters is that it
+    // arrives *complete* — every field defaulted and every sub-block prefaulted
+    // — because the Config tab seeds one control per leaf and a half-populated
+    // tree is a fieldset the first save would fill in by accident.
+    const orchestration = (await readConfigView(project.dir)).parsed?.orchestration
+    expect(orchestration).toEqual({
+      profile: { auto_accept: false },
+      discovery: { mode: 'off', question_budget: 8, completion: 'review' },
+      execution: { after_plan_approval: 'manual', uncertain_concurrency: 'sequential', repair_attempts: 1 },
+      quality: { independent_plan_review: false, independent_verification: false },
+      skills: { sources: ['github'], trusted_registries: [], update_mode: 'review' },
+    })
+  })
+
   it('reports a config that does not parse without pretending it is missing', async () => {
     await initLoop(project.dir, clock)
     await fs.writeFile(path.join(project.dir, '.mjloop', 'config.yaml'), 'version: "not a number"\n', 'utf8')
@@ -348,6 +402,134 @@ describe('read', () => {
     await expect(readStoryDetail(project.dir, 'P001-S99')).rejects.toBeInstanceOf(NotFoundError)
     await expect(readRunDetail(project.dir, 'nope')).rejects.toBeInstanceOf(NotFoundError)
     await expect(readMemoryEntry(project.dir, 'M999')).rejects.toBeInstanceOf(NotFoundError)
+  })
+
+  it('reports the accepted revision and the components every later run routes on', async () => {
+    // No `initLoop`: provisioning writes a proposal of its own, and this case is
+    // about the accepted map alone.
+    await acceptProfile(
+      project.dir,
+      {
+        components: [component({ id: 'apps-mobile', technology: 'flutter', skillTags: ['flutter'] })],
+        by: 'dashboard:mohd',
+        generatedAt: NOW.toISOString(),
+        expectRevision: null,
+      },
+      clock,
+    )
+
+    const view = await readProfileView(project.dir)
+    expect(view).toMatchObject({
+      revision: 1,
+      acceptedBy: 'dashboard:mohd',
+      acceptedAt: NOW.toISOString(),
+      // Nothing has re-scanned, so there is no proposal to disagree with.
+      proposedAt: null,
+      proposalDiffers: false,
+    })
+    expect(view.components.map((entry) => entry.id)).toEqual(['apps-mobile'])
+  })
+
+  it('says a proposal differs from the accepted map, and stays quiet when it does not', async () => {
+    await initLoop(project.dir, clock)
+    const accepted = [component({ id: 'web' })]
+    await acceptProfile(
+      project.dir,
+      { components: accepted, by: 'Mohd', generatedAt: NOW.toISOString(), expectRevision: null },
+      clock,
+    )
+
+    // The ordinary case: a rescan that found the same project. Reporting drift
+    // here would ask a person to look at a change nobody made.
+    await writeProposedProfile(project.dir, {
+      schema: 1,
+      generatedAt: '2026-07-29T09:00:00.000Z',
+      components: accepted,
+      basis: ['web/package.json'],
+    })
+    expect(await readProfileView(project.dir)).toMatchObject({
+      proposedAt: '2026-07-29T09:00:00.000Z',
+      proposalDiffers: false,
+    })
+
+    await writeProposedProfile(project.dir, {
+      schema: 1,
+      generatedAt: '2026-07-30T09:00:00.000Z',
+      components: [...accepted, component({ id: 'worker', technology: 'python', skillTags: ['python'] })],
+      basis: ['web/package.json', 'worker/pyproject.toml'],
+    })
+    expect(await readProfileView(project.dir)).toMatchObject({
+      revision: 1,
+      proposedAt: '2026-07-30T09:00:00.000Z',
+      proposalDiffers: true,
+    })
+  })
+
+  it('notices a component whose verification changed, not just one that appeared', async () => {
+    // The map is what routes a run *and* what verifies it, so a proposal that
+    // renames no component but moves its test command is a different map.
+    await initLoop(project.dir, clock)
+    await acceptProfile(
+      project.dir,
+      {
+        components: [component({ id: 'web' })],
+        by: 'Mohd',
+        generatedAt: NOW.toISOString(),
+        expectRevision: null,
+      },
+      clock,
+    )
+    await writeProposedProfile(project.dir, {
+      schema: 1,
+      generatedAt: NOW.toISOString(),
+      components: [component({ id: 'web', verification: { test: 'npm run test:ci', lint: null, build: null } })],
+      basis: ['web/package.json'],
+    })
+    expect((await readProfileView(project.dir)).proposalDiffers).toBe(true)
+  })
+
+  it('carries a proposal that nothing has accepted yet without inventing a revision', async () => {
+    await initLoop(project.dir, clock)
+    await writeProposedProfile(project.dir, {
+      schema: 1,
+      generatedAt: NOW.toISOString(),
+      components: [component({ id: 'web' })],
+      basis: ['web/package.json'],
+    })
+
+    const view = await readProfileView(project.dir)
+    // No revision, and no components: nothing routes off a proposal, so the
+    // page must not be handed one as though it were the accepted map.
+    expect(view.revision).toBe(null)
+    expect(view.components).toEqual([])
+    expect(view.proposedAt).toBe(NOW.toISOString())
+  })
+
+  it('raises NotFound for a project that has never been mapped', async () => {
+    // Deliberately un-provisioned: `initLoop` scans and writes a proposal, so a
+    // project with neither an acceptance nor a scan is one that was never
+    // provisioned at all. That is the operator asking about something which is
+    // not there, not this server failing to read something it should have read.
+    await expect(readProfileView(project.dir)).rejects.toBeInstanceOf(NotFoundError)
+  })
+
+  it('refuses to pretend an unreadable accepted revision is no revision at all', async () => {
+    await initLoop(project.dir, clock)
+    await acceptProfile(
+      project.dir,
+      { components: [component({ id: 'web' })], by: 'Mohd', generatedAt: NOW.toISOString(), expectRevision: null },
+      clock,
+    )
+    await fs.writeFile(
+      path.join(project.dir, '.mjloop', 'profile', 'accepted', 'rev-001.json'),
+      '{"schema":1}',
+      'utf8',
+    )
+
+    // The read side repairs nothing, and reporting "unmapped" for a project
+    // whose revision is sitting right there would route every later run as
+    // though it had never been mapped — silently.
+    await expect(readProfileView(project.dir)).rejects.not.toBeInstanceOf(NotFoundError)
   })
 
   it('serves memory whole so the page can facet it', async () => {

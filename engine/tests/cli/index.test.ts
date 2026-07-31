@@ -1,10 +1,20 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { evaluateStateGuard, evaluateStopGuard, runCli } from '../../src/cli/index.js'
 import { initLoop } from '../../src/ops/init.js'
 import { cycleAdvance, runStart } from '../../src/ops/run.js'
+import type { ProjectComponent, ProposedProfile } from '../../src/schemas/project-profile.js'
 import { loadConfig, writeConfig } from '../../src/store/config-store.js'
+import { resolveLoopPaths } from '../../src/store/paths.js'
+import {
+  acceptProfile,
+  acceptedRevisionFile,
+  listAcceptedRevisions,
+  readAcceptedProfile,
+  readProposedProfile,
+  writeProposedProfile,
+} from '../../src/store/project-profile-store.js'
 import { makeTmpProject, type TmpProject } from '../helpers/tmp-project.js'
 
 const NOW = new Date('2026-07-26T10:36:00.000Z')
@@ -92,6 +102,93 @@ describe('evaluateStateGuard', () => {
       }).deny
     expect(under('test.log')).toBe(false)
     expect(under('index.json')).toBe(false)
+  })
+
+  it('denies a hand edit to the profile proposal', () => {
+    // A hand-edited proposal is `profile accept`'s entire input: a model that
+    // can rewrite it can put any component map it likes in front of the person
+    // pressing accept, and the acceptance would be genuine.
+    const verdict = evaluateStateGuard({
+      tool_name: 'Write',
+      tool_input: { file_path: '/repo/.mjloop/profile/proposed.json' },
+    })
+    expect(verdict.deny).toBe(true)
+    expect(verdict.reason).toContain('mjloop-cli profile accept')
+    expect(verdict.reason).toContain('profile reject')
+  })
+
+  it('denies a hand edit to an accepted revision, whose whole contract is that it never changes', () => {
+    // `rev-NNN.json` is why this is a protected *directory* and not three more
+    // basenames: the names are a family, and a run may have pinned any of them.
+    const verdict = evaluateStateGuard({
+      tool_name: 'Edit',
+      tool_input: { file_path: '/repo/.mjloop/profile/accepted/rev-001.json' },
+    })
+    expect(verdict.deny).toBe(true)
+    expect(verdict.reason).toContain('profile')
+  })
+
+  it('denies the protected directory through path shapes that name the same file', () => {
+    // `//` from joining a path that already ended in a separator, a `.` from a
+    // relative reference, and an interior `..` that cancels the directory
+    // before it: none of these is an attack, all three come out of ordinary
+    // path building, and each one puts a segment between `.mjloop` and
+    // `profile` that a raw split reads as an ordinary directory. Every one of
+    // them still opens the immutable revision for writing.
+    const denies = (filePath: string): boolean =>
+      evaluateStateGuard({ tool_name: 'Write', tool_input: { file_path: filePath } }).deny
+    expect(denies('/repo/.mjloop//profile/accepted/rev-001.json')).toBe(true)
+    expect(denies('/repo/.mjloop/plans/../profile/accepted/rev-001.json')).toBe(true)
+    expect(denies('/repo/.mjloop/./profile/proposed.json')).toBe(true)
+  })
+
+  it('denies the protected basenames through those same path shapes', () => {
+    // The control that says what the rule above had to be brought up to: the
+    // basename branch was never exposed to any of this, because `path.basename`
+    // discards the dirname where all three shapes live.
+    const denies = (filePath: string): boolean =>
+      evaluateStateGuard({ tool_name: 'Write', tool_input: { file_path: filePath } }).deny
+    expect(denies('/repo/.mjloop//state.json')).toBe(true)
+    expect(denies('/repo/.mjloop/runs/../state.json')).toBe(true)
+  })
+
+  it('allows a profile directory that is not the loop\'s', () => {
+    // The rule is `.mjloop/profile/`, matched on path segments. A project with
+    // its own `profile` directory — or a fixture holding a copy of one — is
+    // nothing to do with the engine.
+    expect(
+      evaluateStateGuard({
+        tool_name: 'Write',
+        tool_input: { file_path: '/repo/src/profile/proposed.json' },
+      }).deny,
+    ).toBe(false)
+    expect(
+      evaluateStateGuard({
+        tool_name: 'Write',
+        tool_input: { file_path: '/repo/.mjloop/plans/P001-auth/PLAN.md' },
+      }).deny,
+    ).toBe(false)
+    // `/repo/.mjloop/../profile/` is `/repo/profile/`, which the engine has
+    // never owned. Reading the path as written rather than as spelled is what
+    // makes the rule above right in both directions.
+    expect(
+      evaluateStateGuard({
+        tool_name: 'Write',
+        tool_input: { file_path: '/repo/.mjloop/../profile/proposed.json' },
+      }).deny,
+    ).toBe(false)
+  })
+
+  it('allows a path whose directory merely contains the protected name', () => {
+    // Segments, not substrings: `.mjloop/profiles/` and `.mjloop/profile-old/`
+    // are directories nothing in the engine owns, and a substring rule would
+    // deny both while claiming to protect one.
+    expect(
+      evaluateStateGuard({
+        tool_name: 'Write',
+        tool_input: { file_path: '/repo/.mjloop/profiles/notes.md' },
+      }).deny,
+    ).toBe(false)
   })
 
   it('allows a write to a story file', () => {
@@ -317,10 +414,791 @@ describe('runCli stop-guard', () => {
   })
 })
 
+describe('runCli config get', () => {
+  it('prints every orchestration setting and the revision the file is at', async () => {
+    await initLoop(project.dir, clock)
+    const { stdout, exitCode } = await runCli(['config', 'get', '--dir', project.dir], '')
+
+    expect(exitCode).toBe(0)
+    expect(stdout).toMatch(/revision [a-f0-9]{64}/)
+    for (const key of [
+      'orchestration.profile.auto_accept',
+      'orchestration.discovery.mode',
+      'orchestration.discovery.question_budget',
+      'orchestration.discovery.completion',
+      'orchestration.execution.after_plan_approval',
+      'orchestration.execution.uncertain_concurrency',
+      'orchestration.execution.repair_attempts',
+      'orchestration.quality.independent_plan_review',
+      'orchestration.quality.independent_verification',
+      'orchestration.skills.sources',
+      'orchestration.skills.trusted_registries',
+      'orchestration.skills.update_mode',
+    ]) {
+      expect(stdout).toContain(key)
+    }
+  })
+
+  it('prints json when asked', async () => {
+    await initLoop(project.dir, clock)
+    const { stdout } = await runCli(['config', 'get', '--dir', project.dir, '--json'], '')
+    const payload = JSON.parse(stdout)
+    expect(payload.revision).toMatch(/^[a-f0-9]{64}$/)
+    expect(payload.orchestration.discovery.mode).toBe('off')
+    expect(payload.orchestration.skills.sources).toEqual(['github'])
+  })
+
+  it('exits non-zero for a project with no loop', async () => {
+    const { stdout, exitCode } = await runCli(['config', 'get', '--dir', project.dir], '')
+    expect(exitCode).toBe(1)
+    expect(stdout).toContain('config.yaml')
+  })
+
+  it('reports a config that no longer parses instead of printing defaults', async () => {
+    // Printing the schema's prefaults for a file nobody can read would tell a
+    // person their project is configured the way they hoped it was.
+    await initLoop(project.dir, clock)
+    await fs.writeFile(resolveLoopPaths(project.dir).config, 'tracks: [unclosed', 'utf8')
+
+    const { stdout, exitCode } = await runCli(['config', 'get', '--dir', project.dir], '')
+    expect(exitCode).toBe(1)
+    expect(stdout).toContain('not valid YAML')
+  })
+})
+
+describe('runCli config set', () => {
+  it('writes one setting and reports the revision it landed at', async () => {
+    await initLoop(project.dir, clock)
+    const { stdout, exitCode } = await runCli(
+      ['config', 'set', 'orchestration.discovery.mode', 'always', '--dir', project.dir],
+      '',
+    )
+
+    expect(exitCode).toBe(0)
+    expect(stdout).toContain('orchestration.discovery.mode = always')
+    expect(stdout).toMatch(/revision [a-f0-9]{64}/)
+    expect((await loadConfig(project.dir)).orchestration.discovery.mode).toBe('always')
+  })
+
+  it('leaves every sibling setting alone', async () => {
+    await initLoop(project.dir, clock)
+    await runCli(['config', 'set', 'orchestration.execution.repair_attempts', '3', '--dir', project.dir], '')
+
+    const raw = await fs.readFile(resolveLoopPaths(project.dir).config, 'utf8')
+    expect(raw).toContain('repair_attempts: 3')
+    const config = await loadConfig(project.dir)
+    expect(config.orchestration.execution.repair_attempts).toBe(3)
+    expect(config.orchestration.discovery.question_budget).toBe(8)
+    expect(config.autonomous).toBe(false)
+  })
+
+  it('sets a list from a comma-separated value, and the empty string is the empty list', async () => {
+    await initLoop(project.dir, clock)
+    await runCli(['config', 'set', 'orchestration.skills.sources', 'github, web', '--dir', project.dir], '')
+    expect((await loadConfig(project.dir)).orchestration.skills.sources).toEqual(['github', 'web'])
+
+    await runCli(['config', 'set', 'orchestration.skills.sources', '', '--dir', project.dir], '')
+    expect((await loadConfig(project.dir)).orchestration.skills.sources).toEqual([])
+  })
+
+  it('sets the one key that carries a section key of its own', async () => {
+    await initLoop(project.dir, clock)
+    const { exitCode } = await runCli(
+      ['config', 'set', 'orchestration.quality.independent_verification', 'true', '--dir', project.dir],
+      '',
+    )
+    expect(exitCode).toBe(0)
+    const quality = (await loadConfig(project.dir)).orchestration.quality
+    expect(quality.independent_verification).toBe(true)
+    expect(quality.independent_plan_review).toBe(false)
+  })
+
+  it('refuses an unknown key, names it, and writes nothing', async () => {
+    await initLoop(project.dir, clock)
+    const before = await fs.readFile(resolveLoopPaths(project.dir).config, 'utf8')
+
+    const { stdout, exitCode } = await runCli(
+      ['config', 'set', 'orchestration.discovery.speed', 'always', '--dir', project.dir],
+      '',
+    )
+    expect(exitCode).toBe(1)
+    expect(stdout).toContain('orchestration.discovery.speed')
+    expect(stdout).toContain('orchestration.discovery.mode')
+    expect(await fs.readFile(resolveLoopPaths(project.dir).config, 'utf8')).toBe(before)
+  })
+
+  it.each(['toString', 'constructor', 'valueOf', '__proto__'])(
+    'refuses %s, which the settings table inherits rather than declares',
+    async (key) => {
+      // `SETTINGS` is an object literal, so a plain `SETTINGS[key]` lookup
+      // answers `toString` with a function and `__proto__` with an object, and
+      // an `=== undefined` guard waves both through into a `.parse` that is not
+      // one — a Node stack trace out of the binary instead of the list of keys.
+      // The same hole `hasKey` in the detector is written to close.
+      await initLoop(project.dir, clock)
+      const before = await fs.readFile(resolveLoopPaths(project.dir).config, 'utf8')
+
+      const { stdout, exitCode } = await runCli(['config', 'set', key, 'true', '--dir', project.dir], '')
+      expect(exitCode).toBe(1)
+      expect(stdout).toContain(`${key} is not a setting`)
+      expect(stdout).toContain('orchestration.discovery.mode')
+      expect(await fs.readFile(resolveLoopPaths(project.dir).config, 'utf8')).toBe(before)
+    },
+  )
+
+  it('refuses a value outside the bounds the schema states, and writes nothing', async () => {
+    await initLoop(project.dir, clock)
+    const before = await fs.readFile(resolveLoopPaths(project.dir).config, 'utf8')
+
+    const { stdout, exitCode } = await runCli(
+      ['config', 'set', 'orchestration.discovery.question_budget', '99', '--dir', project.dir],
+      '',
+    )
+    expect(exitCode).toBe(1)
+    expect(stdout).toContain('orchestration.discovery.question_budget')
+    expect(stdout).toContain('99')
+    expect(stdout).toContain('20')
+    expect(await fs.readFile(resolveLoopPaths(project.dir).config, 'utf8')).toBe(before)
+  })
+
+  it('refuses a value of the wrong shape before it opens the file at all', async () => {
+    await initLoop(project.dir, clock)
+    const { stdout, exitCode } = await runCli(
+      ['config', 'set', 'orchestration.execution.repair_attempts', 'lots', '--dir', project.dir],
+      '',
+    )
+    expect(exitCode).toBe(1)
+    expect(stdout).toContain('whole number')
+  })
+
+  it('refuses a word the setting does not admit and names the ones it does', async () => {
+    await initLoop(project.dir, clock)
+    const { stdout, exitCode } = await runCli(
+      ['config', 'set', 'orchestration.discovery.mode', 'sometimes', '--dir', project.dir],
+      '',
+    )
+    expect(exitCode).toBe(1)
+    expect(stdout).toContain('always')
+  })
+
+  it('refuses a change that would make the whole document contradict itself', async () => {
+    // This is the reason the CLI goes through `mutateConfig` rather than
+    // writing YAML: `auto-plan` is a perfectly good value for `completion` on
+    // its own, and only illegal beside a `discovery.mode` of `off`. Nothing
+    // short of re-parsing the whole document can see that.
+    await initLoop(project.dir, clock)
+    const before = await fs.readFile(resolveLoopPaths(project.dir).config, 'utf8')
+
+    const { stdout, exitCode } = await runCli(
+      ['config', 'set', 'orchestration.discovery.completion', 'auto-plan', '--dir', project.dir],
+      '',
+    )
+    expect(exitCode).toBe(1)
+    expect(stdout).toContain('orchestration.discovery.completion')
+    expect(await fs.readFile(resolveLoopPaths(project.dir).config, 'utf8')).toBe(before)
+  })
+
+  it('refuses to write when the config changed after the revision was read', async () => {
+    await initLoop(project.dir, clock)
+    const configFile = resolveLoopPaths(project.dir).config
+    const readFile = fs.readFile.bind(fs)
+
+    // A second writer lands the instant the CLI has the bytes it will hash.
+    // `mutateConfig` re-reads under the lock, sees a revision that is no longer
+    // the one it was handed, and must refuse rather than write over an edit it
+    // never saw.
+    let intercepted = false
+    const spy = vi.spyOn(fs, 'readFile').mockImplementation(async (file: unknown, encoding: unknown) => {
+      const contents = await (readFile as (...rest: unknown[]) => Promise<string>)(file, encoding)
+      if (!intercepted && String(file) === configFile) {
+        intercepted = true
+        await fs.writeFile(configFile, `# a second writer got here first\n${contents}`, 'utf8')
+      }
+      return contents
+    })
+
+    let result: Awaited<ReturnType<typeof runCli>>
+    try {
+      result = await runCli(['config', 'set', 'orchestration.discovery.mode', 'always', '--dir', project.dir], '')
+    } finally {
+      spy.mockRestore()
+    }
+
+    expect(intercepted).toBe(true)
+    expect(result.exitCode).toBe(1)
+    expect(result.stdout).toContain('changed')
+    const after = await fs.readFile(configFile, 'utf8')
+    expect(after).toContain('# a second writer got here first')
+    expect(after).not.toContain('mode: always')
+  })
+
+  it('exits non-zero for a project with no loop', async () => {
+    const { stdout, exitCode } = await runCli(
+      ['config', 'set', 'orchestration.discovery.mode', 'always', '--dir', project.dir],
+      '',
+    )
+    expect(exitCode).toBe(1)
+    expect(stdout).toContain('config.yaml')
+  })
+
+  it('exits non-zero when the key or the value is missing', async () => {
+    await initLoop(project.dir, clock)
+    expect((await runCli(['config', 'set', '--dir', project.dir], '')).exitCode).toBe(1)
+    expect((await runCli(['config', 'set', 'orchestration.discovery.mode', '--dir', project.dir], '')).exitCode).toBe(1)
+  })
+
+  it('refuses a --dir with nothing after it rather than writing to the current directory', async () => {
+    // `--dir "$PROJECT"` with `PROJECT` unset leaves a bare `--dir` behind, and
+    // a flag read as absent falls back to `process.cwd()` — a different project
+    // than the one that was named, and one this command would then write to.
+    await initLoop(project.dir, clock)
+    const before = await fs.readFile(resolveLoopPaths(project.dir).config, 'utf8')
+
+    const { stdout, exitCode } = await runCli(
+      ['config', 'set', 'orchestration.discovery.mode', 'always', '--dir'],
+      '',
+    )
+    expect(exitCode).toBe(1)
+    expect(stdout).toContain('--dir')
+    expect(await fs.readFile(resolveLoopPaths(project.dir).config, 'utf8')).toBe(before)
+  })
+})
+
+/* ---------------------------------------------------------------- profile */
+
+const MOBILE: ProjectComponent = {
+  id: 'mobile',
+  root: 'mobile',
+  technology: 'flutter',
+  verification: { test: 'cd mobile && flutter test', lint: null, build: null },
+  skillTags: ['flutter'],
+}
+
+const WEB: ProjectComponent = {
+  id: 'web',
+  root: 'web',
+  technology: 'nextjs',
+  verification: { test: 'cd web && npm test', lint: null, build: 'cd web && npm run build' },
+  skillTags: ['nextjs'],
+}
+
+function proposal(components: ProjectComponent[], generatedAt = '2026-07-31T09:00:00.000Z'): ProposedProfile {
+  return { schema: 1, generatedAt, components, basis: components.map((c) => `${c.root}/manifest`) }
+}
+
+describe('runCli profile show', () => {
+  it('reports a project with no accepted map at exit 0, because that is a state and not a failure', async () => {
+    await initLoop(project.dir, clock)
+    const { stdout, exitCode } = await runCli(['profile', 'show', '--dir', project.dir], '')
+    expect(exitCode).toBe(0)
+    expect(stdout).toContain('no component map is accepted')
+  })
+
+  it('prints the accepted revision, when it was accepted, by whom, and its components', async () => {
+    await writeProposedProfile(project.dir, proposal([MOBILE, WEB]))
+    await acceptProfile(
+      project.dir,
+      { components: [MOBILE, WEB], by: 'cli:ada', generatedAt: '2026-07-31T09:00:00.000Z', expectRevision: null },
+      clock,
+    )
+
+    const { stdout, exitCode } = await runCli(['profile', 'show', '--dir', project.dir], '')
+    expect(exitCode).toBe(0)
+    expect(stdout).toContain('revision 1')
+    expect(stdout).toContain('cli:ada')
+    expect(stdout).toContain(NOW.toISOString())
+    expect(stdout).toContain('mobile')
+    expect(stdout).toContain('flutter')
+    expect(stdout).toContain('cd web && npm run build')
+  })
+
+  it('says plainly that the proposal differs from what is accepted', async () => {
+    await acceptProfile(
+      project.dir,
+      { components: [MOBILE], by: 'cli:ada', generatedAt: '2026-07-31T09:00:00.000Z', expectRevision: null },
+      clock,
+    )
+    await writeProposedProfile(project.dir, proposal([MOBILE, WEB]))
+
+    const { stdout } = await runCli(['profile', 'show', '--dir', project.dir], '')
+    expect(stdout).toContain('differs')
+    expect(stdout).toContain('profile accept')
+  })
+
+  it('says plainly that the proposal matches what is accepted', async () => {
+    // Same components, a later scan: the generated timestamp moved and nothing
+    // else did. Reporting that as a difference would ask somebody to accept a
+    // revision that changes nothing about how work is routed.
+    await acceptProfile(
+      project.dir,
+      { components: [MOBILE], by: 'cli:ada', generatedAt: '2026-07-31T09:00:00.000Z', expectRevision: null },
+      clock,
+    )
+    await writeProposedProfile(project.dir, proposal([MOBILE], '2026-08-01T09:00:00.000Z'))
+
+    const { stdout } = await runCli(['profile', 'show', '--dir', project.dir], '')
+    expect(stdout).toContain('matches')
+    expect(stdout).not.toContain('differs')
+  })
+
+  it('reports a component whose verify command moved as a difference, not just a component that appeared', async () => {
+    // The regression a length check cannot see, and the one that actually
+    // happens: the same component, in the same place, verified by a different
+    // command. Reported as a match, the operator is told there is nothing to
+    // accept and a live routing change is never activated.
+    await acceptProfile(
+      project.dir,
+      { components: [MOBILE], by: 'cli:ada', generatedAt: '2026-07-31T09:00:00.000Z', expectRevision: null },
+      clock,
+    )
+    await writeProposedProfile(
+      project.dir,
+      proposal([{ ...MOBILE, verification: { ...MOBILE.verification, test: 'cd mobile && flutter test --coverage' } }]),
+    )
+
+    const { stdout } = await runCli(['profile', 'show', '--dir', project.dir], '')
+    expect(stdout).toContain('differs')
+    expect(stdout).not.toContain('there is nothing to accept')
+  })
+
+  it('reports changed skill tags as a difference, since the tags are what select a skill', async () => {
+    await acceptProfile(
+      project.dir,
+      { components: [MOBILE], by: 'cli:ada', generatedAt: '2026-07-31T09:00:00.000Z', expectRevision: null },
+      clock,
+    )
+    // One tag replaced by another rather than added: same array length, so the
+    // only thing that can tell the two maps apart is the element comparison.
+    await writeProposedProfile(project.dir, proposal([{ ...MOBILE, skillTags: ['dart'] }]))
+
+    const { stdout } = await runCli(['profile', 'show', '--dir', project.dir], '')
+    expect(stdout).toContain('differs')
+    expect(stdout).not.toContain('there is nothing to accept')
+  })
+
+  it('prints json when asked', async () => {
+    await acceptProfile(
+      project.dir,
+      { components: [MOBILE], by: 'cli:ada', generatedAt: '2026-07-31T09:00:00.000Z', expectRevision: null },
+      clock,
+    )
+    await writeProposedProfile(project.dir, proposal([MOBILE, WEB]))
+
+    const { stdout, exitCode } = await runCli(['profile', 'show', '--dir', project.dir, '--json'], '')
+    expect(exitCode).toBe(0)
+    const payload = JSON.parse(stdout)
+    expect(payload.accepted.revision).toBe(1)
+    expect(payload.accepted.acceptedBy).toBe('cli:ada')
+    expect(payload.proposed.components.map((c: ProjectComponent) => c.id)).toEqual(['mobile', 'web'])
+    expect(payload.differs).toBe(true)
+  })
+
+  it('refuses a --dir with nothing after it, because a retargeted read is what the acceptance is decided on', async () => {
+    // `show` is a read, so nothing is lost on disk — but it is the read a
+    // person accepts or rejects on the strength of, and answering it about
+    // whichever directory the shell happened to be in is worse than answering
+    // it not at all.
+    const { stdout, exitCode } = await runCli(['profile', 'show', '--dir'], '')
+    expect(exitCode).toBe(1)
+    expect(stdout).toContain('--dir')
+  })
+
+  it('says both are absent for a project that has never been scanned', async () => {
+    const { stdout, exitCode } = await runCli(['profile', 'show', '--dir', project.dir], '')
+    expect(exitCode).toBe(0)
+    expect(stdout).toContain('no component map is accepted')
+    expect(stdout).toContain('no proposal')
+  })
+})
+
+describe('runCli profile accept', () => {
+  it('accepts the current proposal as revision 1 and names what it activated', async () => {
+    await writeProposedProfile(project.dir, proposal([MOBILE, WEB]))
+
+    const { stdout, exitCode } = await runCli(['profile', 'accept', '--dir', project.dir], '')
+    expect(exitCode).toBe(0)
+    expect(stdout).toContain('revision 1')
+    expect(stdout).toContain('mobile')
+    expect(stdout).toContain('web')
+
+    const accepted = await readAcceptedProfile(project.dir)
+    expect(accepted?.revision).toBe(1)
+    expect(accepted?.components.map((c) => c.id)).toEqual(['mobile', 'web'])
+    expect(accepted?.generatedAt).toBe('2026-07-31T09:00:00.000Z')
+  })
+
+  it('records who accepted it, prefixed cli: so the audit record says how', async () => {
+    // `acceptedBy` is the only record of why a revision exists. The engine
+    // cannot verify a username, but it can refuse to let one be typed in.
+    await writeProposedProfile(project.dir, proposal([MOBILE]))
+    await runCli(['profile', 'accept', '--dir', project.dir], '')
+
+    const accepted = await readAcceptedProfile(project.dir)
+    expect(accepted?.acceptedBy).toMatch(/^cli:.+/)
+  })
+
+  it('refuses when there is no proposal, and names what produces one', async () => {
+    const { stdout, exitCode } = await runCli(['profile', 'accept', '--dir', project.dir], '')
+    expect(exitCode).toBe(1)
+    expect(stdout).toContain('mjloop init')
+    expect(await listAcceptedRevisions(project.dir)).toEqual([])
+  })
+
+  it('refuses an --expect that does not match what is accepted, and writes nothing', async () => {
+    await acceptProfile(
+      project.dir,
+      { components: [MOBILE], by: 'cli:ada', generatedAt: '2026-07-31T09:00:00.000Z', expectRevision: null },
+      clock,
+    )
+    await writeProposedProfile(project.dir, proposal([MOBILE, WEB]))
+
+    const { stdout, exitCode } = await runCli(['profile', 'accept', '--dir', project.dir, '--expect', '5'], '')
+    expect(exitCode).toBe(1)
+    expect(stdout).toContain('profile show')
+    expect(await listAcceptedRevisions(project.dir)).toEqual([1])
+  })
+
+  it('refuses --expect none on a project that already has an accepted map', async () => {
+    // The whole point of the flag: somebody who believes nothing is accepted is
+    // working from a screen that has since moved, and stacking their acceptance
+    // on top of the one they never saw is the lost update this refuses.
+    await acceptProfile(
+      project.dir,
+      { components: [MOBILE], by: 'cli:ada', generatedAt: '2026-07-31T09:00:00.000Z', expectRevision: null },
+      clock,
+    )
+    await writeProposedProfile(project.dir, proposal([MOBILE, WEB]))
+
+    const { stdout, exitCode } = await runCli(['profile', 'accept', '--dir', project.dir, '--expect', 'none'], '')
+    expect(exitCode).toBe(1)
+    expect(stdout).toContain('profile show')
+    expect(await listAcceptedRevisions(project.dir)).toEqual([1])
+  })
+
+  it('accepts --expect none on a project that has none', async () => {
+    await writeProposedProfile(project.dir, proposal([MOBILE]))
+    const { exitCode } = await runCli(['profile', 'accept', '--dir', project.dir, '--expect', 'none'], '')
+    expect(exitCode).toBe(0)
+    expect(await listAcceptedRevisions(project.dir)).toEqual([1])
+  })
+
+  it('refuses an --expect that is not a revision number', async () => {
+    await writeProposedProfile(project.dir, proposal([MOBILE]))
+    const { stdout, exitCode } = await runCli(['profile', 'accept', '--dir', project.dir, '--expect', 'latest'], '')
+    expect(exitCode).toBe(1)
+    expect(stdout).toContain('--expect')
+    expect(await listAcceptedRevisions(project.dir)).toEqual([])
+  })
+
+  it('refuses an --expect with nothing after it rather than accepting without the guard', async () => {
+    // The shape this fails in: `--expect $REV` with `REV` unset leaves the flag
+    // on the line and takes its value away. Reading that as an absent flag is
+    // not a smaller mistake — it is the auto-read path, which cannot notice the
+    // revision that landed before this command ran, so the acceptance the flag
+    // exists to refuse goes through instead, silently and at exit 0.
+    await acceptProfile(
+      project.dir,
+      { components: [MOBILE], by: 'cli:ada', generatedAt: '2026-07-31T09:00:00.000Z', expectRevision: null },
+      clock,
+    )
+    await writeProposedProfile(project.dir, proposal([MOBILE, WEB]))
+
+    const { stdout, exitCode } = await runCli(['profile', 'accept', '--dir', project.dir, '--expect'], '')
+    expect(exitCode).toBe(1)
+    expect(stdout).toContain('--expect')
+    expect(await listAcceptedRevisions(project.dir)).toEqual([1])
+  })
+
+  it('refuses a --dir with nothing after it rather than accepting into another project', async () => {
+    await writeProposedProfile(project.dir, proposal([MOBILE]))
+
+    const { stdout, exitCode } = await runCli(['profile', 'accept', '--dir'], '')
+    expect(exitCode).toBe(1)
+    expect(stdout).toContain('--dir')
+    expect(await listAcceptedRevisions(project.dir)).toEqual([])
+  })
+
+  it('supersedes the revision that is current when --expect is omitted', async () => {
+    await acceptProfile(
+      project.dir,
+      { components: [MOBILE], by: 'cli:ada', generatedAt: '2026-07-31T09:00:00.000Z', expectRevision: null },
+      clock,
+    )
+    await writeProposedProfile(project.dir, proposal([MOBILE, WEB]))
+
+    const { stdout, exitCode } = await runCli(['profile', 'accept', '--dir', project.dir], '')
+    expect(exitCode).toBe(0)
+    expect(stdout).toContain('revision 2')
+    const accepted = await readAcceptedProfile(project.dir)
+    expect(accepted?.supersedes).toBe(1)
+  })
+})
+
+describe('runCli profile reject', () => {
+  it('discards the proposal and leaves the accepted revision exactly as it was', async () => {
+    await acceptProfile(
+      project.dir,
+      { components: [MOBILE], by: 'cli:ada', generatedAt: '2026-07-31T09:00:00.000Z', expectRevision: null },
+      clock,
+    )
+    const before = await fs.readFile(acceptedRevisionFile(project.dir, 1), 'utf8')
+    await writeProposedProfile(project.dir, proposal([MOBILE, WEB]))
+
+    const { exitCode } = await runCli(['profile', 'reject', '--dir', project.dir], '')
+    expect(exitCode).toBe(0)
+    expect(await readProposedProfile(project.dir)).toBeNull()
+    expect(await listAcceptedRevisions(project.dir)).toEqual([1])
+    expect(await fs.readFile(acceptedRevisionFile(project.dir, 1), 'utf8')).toBe(before)
+  })
+
+  it('leaves nothing a later read can resurrect the proposal from', async () => {
+    // `readProposedProfile` falls back to `proposed.json.bak`, which the atomic
+    // write leaves behind on every scan after the first. A reject that removed
+    // only the primary would appear to work and then hand the next reader the
+    // proposal before the one that was just discarded.
+    await writeProposedProfile(project.dir, proposal([MOBILE]))
+    await writeProposedProfile(project.dir, proposal([MOBILE, WEB]))
+
+    expect((await runCli(['profile', 'reject', '--dir', project.dir], '')).exitCode).toBe(0)
+    expect(await readProposedProfile(project.dir)).toBeNull()
+  })
+
+  it('refuses when there is no proposal to discard', async () => {
+    const { stdout, exitCode } = await runCli(['profile', 'reject', '--dir', project.dir], '')
+    expect(exitCode).toBe(1)
+    expect(stdout).toContain('no proposal')
+  })
+
+  it('refuses a --dir with nothing after it rather than discarding another project\'s proposal', async () => {
+    await writeProposedProfile(project.dir, proposal([MOBILE]))
+
+    const { stdout, exitCode } = await runCli(['profile', 'reject', '--dir'], '')
+    expect(exitCode).toBe(1)
+    expect(stdout).toContain('--dir')
+    expect(await readProposedProfile(project.dir)).not.toBeNull()
+  })
+})
+
+describe('runCli profile rollback', () => {
+  /**
+   * Revisions 1 (`[mobile, web]`) and 2 (`[mobile]`), accepted the way a person
+   * accepts them.
+   *
+   * `writeProposedProfile` stages the two scans and nothing else, because that
+   * is the one thing in this story a person does not do — `initLoop` writes the
+   * proposal, and the detector is not what these tests are about. Every step
+   * after the scan goes through `runCli`, which is the whole point: a rollback
+   * the store supports and the command line cannot reach is not a rollback.
+   */
+  async function twoRevisions(): Promise<void> {
+    await writeProposedProfile(project.dir, proposal([MOBILE, WEB]))
+    expect((await runCli(['profile', 'accept', '--dir', project.dir, '--expect', 'none'], '')).exitCode).toBe(0)
+    await writeProposedProfile(project.dir, proposal([MOBILE], '2026-08-01T09:00:00.000Z'))
+    expect((await runCli(['profile', 'accept', '--dir', project.dir, '--expect', '1'], '')).exitCode).toBe(0)
+  }
+
+  it('reselects an earlier component map as a new revision, rewriting no earlier record', async () => {
+    // The entire rollback model. There is no mutable "current" pointer to move
+    // back, so going back to revision 1's components means accepting them again
+    // as revision 3 — and revisions 1 and 2 must still say what they always
+    // said, because a run may have pinned either.
+    await twoRevisions()
+    const revisionOne = await fs.readFile(acceptedRevisionFile(project.dir, 1), 'utf8')
+    const revisionTwo = await fs.readFile(acceptedRevisionFile(project.dir, 2), 'utf8')
+
+    const { stdout, exitCode } = await runCli(
+      ['profile', 'accept', '--from', '1', '--dir', project.dir, '--expect', '2'],
+      '',
+    )
+    expect(exitCode).toBe(0)
+    expect(stdout).toContain('revision 3')
+    expect(stdout).toContain('reselecting revision 1')
+
+    expect(await listAcceptedRevisions(project.dir)).toEqual([1, 2, 3])
+    const three = await readAcceptedProfile(project.dir)
+    expect(three?.revision).toBe(3)
+    // Forwards, at what was current — never back at the revision reselected. A
+    // supersedes pointing backwards would make the chain unreadable.
+    expect(three?.supersedes).toBe(2)
+    // The map came from revision 1, not from the proposal sitting on disk —
+    // which is `[mobile]`, scanned a day later, and is not read at all here.
+    expect(three?.components).toEqual([MOBILE, WEB])
+    expect(three?.generatedAt).toBe('2026-07-31T09:00:00.000Z')
+
+    expect(await fs.readFile(acceptedRevisionFile(project.dir, 1), 'utf8')).toBe(revisionOne)
+    expect(await fs.readFile(acceptedRevisionFile(project.dir, 2), 'utf8')).toBe(revisionTwo)
+  })
+
+  it('rolls back on a project with no proposal at all, because a proposal is not what it reads', async () => {
+    // The case that made the old story impossible to tell honestly: accepting
+    // read `proposed.json` and only `proposed.json`, so a project whose last
+    // scan had been discarded could not reselect anything. Rolling back is a
+    // statement about the history, and the history is on disk either way.
+    await twoRevisions()
+    expect((await runCli(['profile', 'reject', '--dir', project.dir], '')).exitCode).toBe(0)
+    expect(await readProposedProfile(project.dir)).toBeNull()
+
+    const { stdout, exitCode } = await runCli(['profile', 'accept', '--from', '1', '--dir', project.dir], '')
+    expect(exitCode).toBe(0)
+    expect(stdout).toContain('revision 3')
+    expect((await readAcceptedProfile(project.dir))?.components).toEqual([MOBILE, WEB])
+  })
+
+  it('refuses a --from naming a revision that was never accepted, and names the ones that were', async () => {
+    await twoRevisions()
+
+    const { stdout, exitCode } = await runCli(['profile', 'accept', '--from', '9', '--dir', project.dir], '')
+    expect(exitCode).toBe(1)
+    expect(stdout).toContain('no accepted revision 9')
+    expect(stdout).toContain('the revisions on record are 1, 2')
+    expect(await listAcceptedRevisions(project.dir)).toEqual([1, 2])
+  })
+
+  it('refuses a --from on a project where nothing has ever been accepted', async () => {
+    // A proposal is present and would accept perfectly well. It is still not
+    // what was asked for, and quietly accepting it would activate a map nobody
+    // chose under the name of a rollback.
+    await writeProposedProfile(project.dir, proposal([MOBILE]))
+
+    const { stdout, exitCode } = await runCli(['profile', 'accept', '--from', '1', '--dir', project.dir], '')
+    expect(exitCode).toBe(1)
+    expect(stdout).toContain('no component map has ever been accepted')
+    expect(await listAcceptedRevisions(project.dir)).toEqual([])
+  })
+
+  it('refuses a --from that is not a revision number', async () => {
+    // Not coerced, for `--expect`'s reason one step worse: `Number('previous')`
+    // is NaN, and a NaN revision names `rev-NaN.json` — a file nothing has ever
+    // written — so the person would be told a revision is missing when what
+    // went wrong is the word they typed.
+    await twoRevisions()
+
+    const { stdout, exitCode } = await runCli(['profile', 'accept', '--from', 'previous', '--dir', project.dir], '')
+    expect(exitCode).toBe(1)
+    expect(stdout).toContain('--from')
+    expect(stdout).toContain('previous')
+    expect(await listAcceptedRevisions(project.dir)).toEqual([1, 2])
+  })
+
+  it.each(['0', '-1', '1.5', '01'])('names the revisions on record when --from %s is malformed', async (raw) => {
+    // The roster belongs on this refusal more than on the never-accepted one.
+    // `01` is the likeliest of these to be typed, because the files on disk are
+    // named `rev-001.json`, and somebody who already knows they mistyped the
+    // number needs the one thing a bare "that is not a number" withholds: which
+    // numbers they may retype.
+    await twoRevisions()
+
+    const { stdout, exitCode } = await runCli(['profile', 'accept', '--from', raw, '--dir', project.dir], '')
+    expect(exitCode).toBe(1)
+    expect(stdout).toContain(`got "${raw}"`)
+    expect(stdout).toContain('the revisions on record are 1, 2')
+    expect(await listAcceptedRevisions(project.dir)).toEqual([1, 2])
+  })
+
+  it('refuses a --from whose revision file no longer parses, and names the ones that do', async () => {
+    // On record and unreadable. Listing decides membership, so this branch is
+    // only reachable once a hand has been inside `accepted/` — and it is the one
+    // refusal where the roster beside the error is what the reader acts on,
+    // because the next thing they do is choose a different revision.
+    await twoRevisions()
+    const before = await fs.readFile(acceptedRevisionFile(project.dir, 2), 'utf8')
+    await fs.writeFile(acceptedRevisionFile(project.dir, 1), '{ "schema": 1, "revi', 'utf8')
+
+    const { stdout, exitCode } = await runCli(['profile', 'accept', '--from', '1', '--dir', project.dir], '')
+    expect(exitCode).toBe(1)
+    expect(stdout).toContain('is not a valid project profile')
+    expect(stdout).toContain('the revisions on record are 1, 2')
+    expect(await listAcceptedRevisions(project.dir)).toEqual([1, 2])
+    // The refusal wrote nothing: no third revision, and the intact one untouched.
+    expect(await fs.readFile(acceptedRevisionFile(project.dir, 2), 'utf8')).toBe(before)
+  })
+
+  it('refuses a --from with nothing after it rather than accepting the proposal instead', async () => {
+    // `--from $REV` with `REV` unset leaves the flag on the line with its value
+    // gone. Read as an absent flag it is not a smaller mistake — it becomes an
+    // ordinary acceptance of whatever the tree last scanned to, which is the
+    // exact opposite of the rollback that was typed, and it exits 0.
+    await twoRevisions()
+
+    const { stdout, exitCode } = await runCli(['profile', 'accept', '--dir', project.dir, '--from'], '')
+    expect(exitCode).toBe(1)
+    expect(stdout).toContain('--from')
+    expect(await listAcceptedRevisions(project.dir)).toEqual([1, 2])
+  })
+
+  it('refuses a --from composed with a stale --expect, and writes nothing', async () => {
+    // `--from` changes where the components come from and nothing else. The
+    // compare-and-swap is still on the accepted-revision counter, because a
+    // rollback is still an append — and an append built on a revision that has
+    // since moved is still the lost update `--expect` exists to refuse.
+    await twoRevisions()
+
+    const { stdout, exitCode } = await runCli(
+      ['profile', 'accept', '--from', '1', '--expect', '1', '--dir', project.dir],
+      '',
+    )
+    expect(exitCode).toBe(1)
+    expect(stdout).toContain('profile show')
+    expect(await listAcceptedRevisions(project.dir)).toEqual([1, 2])
+  })
+
+  it('accepts a --from naming the revision that is already current, writing a new revision for it', async () => {
+    // Allowed rather than refused. The sibling case already behaves this way —
+    // `accept` with an unchanged proposal writes a revision — and a refusal
+    // here would be a rule about revision *numbers* dressed as a rule about
+    // component maps: `--from 2` when 2 is current and `--from 1` when 1 and 2
+    // hold identical components are the same request, and only the first is
+    // detectable. A scripted rollback would then have to branch on state it did
+    // not read.
+    await twoRevisions()
+    // A newer scan proposing something else entirely, so that "it wrote a
+    // revision" and "it wrote *revision 2's* map" stay two separate claims.
+    await writeProposedProfile(project.dir, proposal([WEB], '2026-08-02T09:00:00.000Z'))
+
+    const { stdout, exitCode } = await runCli(['profile', 'accept', '--from', '2', '--dir', project.dir], '')
+    expect(exitCode).toBe(0)
+    expect(stdout).toContain('revision 3')
+    expect(await listAcceptedRevisions(project.dir)).toEqual([1, 2, 3])
+    const three = await readAcceptedProfile(project.dir)
+    expect(three?.supersedes).toBe(2)
+    expect(three?.components).toEqual([MOBILE])
+  })
+
+  it('names --from in the usage text, since it is the only way to reach a rollback', async () => {
+    const { stdout } = await runCli(['nope'], '')
+    expect(stdout).toContain('--from')
+  })
+})
+
 describe('runCli unknown command', () => {
   it('exits non-zero with usage', async () => {
     const { stdout, exitCode } = await runCli(['nope'], '')
     expect(exitCode).toBe(1)
     expect(stdout).toContain('usage')
+  })
+
+  it('exits non-zero with usage for config without a subcommand', async () => {
+    const { stdout, exitCode } = await runCli(['config'], '')
+    expect(exitCode).toBe(1)
+    expect(stdout).toContain('usage')
+  })
+
+  it('names both config subcommands in the usage text', async () => {
+    const { stdout } = await runCli(['nope'], '')
+    expect(stdout).toContain('config get')
+    expect(stdout).toContain('config set')
+  })
+
+  it('exits non-zero with usage for profile without a subcommand', async () => {
+    const { stdout, exitCode } = await runCli(['profile'], '')
+    expect(exitCode).toBe(1)
+    expect(stdout).toContain('usage')
+  })
+
+  it('names all three profile subcommands in the usage text', async () => {
+    const { stdout } = await runCli(['nope'], '')
+    expect(stdout).toContain('profile show')
+    expect(stdout).toContain('profile accept')
+    expect(stdout).toContain('profile reject')
   })
 })

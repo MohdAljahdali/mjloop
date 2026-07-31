@@ -9,6 +9,7 @@ export interface LoopPaths {
   plans: string
   runs: string
   memory: string
+  profile: string
   lock: string
   verifyLock: string
 }
@@ -24,6 +25,17 @@ export function resolveLoopPaths(projectDir: string): LoopPaths {
     plans: path.join(root, 'plans'),
     runs: path.join(root, 'runs'),
     memory: path.join(root, 'memory'),
+    /**
+     * The project's component map: a mutable `proposed.json` a scan overwrites,
+     * and an `accepted/` directory of immutable numbered revisions.
+     *
+     * Only the directory is named here. What a revision file is called, and the
+     * fact that the accepted profile is simply the highest-numbered one rather
+     * than whatever a mutable pointer says, belong to
+     * `project-profile-store.ts` — this map is the place every path in
+     * `.mjloop/` is *rooted*, not the place any of them are interpreted.
+     */
+    profile: path.join(root, 'profile'),
     lock: path.join(root, '.lock'),
     /**
      * Mutual exclusion for verify *execution*, and never the same directory as
@@ -57,3 +69,22 @@ export function resolveLoopPaths(projectDir: string): LoopPaths {
  * a fallback to the live config.
  */
 export const PROTECTED_BASENAMES = ['state.json', 'manifest.json', 'verify-pinned.json'] as const
+
+/**
+ * Directories under `.mjloop/` only the engine may write into, named here for
+ * the same reason the basenames above are and denied by the same hook.
+ *
+ * `profile` is a *directory* rather than three more basenames because the names
+ * inside it are a family rather than a list: `accepted/rev-001.json`,
+ * `rev-002.json`, and every revision a project has not reached yet. A basename
+ * list cannot express that, and a list that named only the ones written so far
+ * would protect a project's history and leave its next revision open.
+ *
+ * Both records need it, for different reasons. An accepted revision's entire
+ * contract is that it never changes — a run may have pinned it, and the
+ * numbered-revision layout exists precisely so nothing can move under one.
+ * `proposed.json` is disposable, but it is also `profile accept`'s only input:
+ * a model that can rewrite the proposal can put any component map it likes in
+ * front of the person accepting, and the acceptance that follows is genuine.
+ */
+export const PROTECTED_DIRECTORIES = ['profile'] as const

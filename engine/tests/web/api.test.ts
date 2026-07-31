@@ -4,6 +4,7 @@ import { gateSet, planCreate, storyAdd } from '../../src/ops/plan.js'
 import { TELEMETRY_MAX_ROWS } from '../../src/ops/telemetry.js'
 import { etag, handleApi } from '../../src/web/api.js'
 import { WEB_CODES } from '../../src/web/codes.js'
+import { acceptProfile } from '../../src/store/project-profile-store.js'
 import { makeTmpProject, type TmpProject } from '../helpers/tmp-project.js'
 
 /**
@@ -53,6 +54,55 @@ describe('handleApi', () => {
     // all.
     expect((await call('/api/telemetry'))?.status).toBe(200)
     expect((await call('/api/preflight/edit'))?.status).toBe(200)
+    // `initLoop` scans the project, so a provisioned project always has at
+    // least a proposal to report — even one that found nothing.
+    expect((await call('/api/profile'))?.status).toBe(200)
+  })
+
+  it('reports the component map without offering any way to change it', async () => {
+    await acceptProfile(
+      project.dir,
+      {
+        components: [
+          {
+            id: 'web',
+            root: 'web',
+            technology: 'nextjs',
+            verification: { test: 'cd web && npm test', lint: null, build: null },
+            skillTags: ['nextjs'],
+          },
+        ],
+        by: 'Mohd',
+        generatedAt: NOW.toISOString(),
+        expectRevision: null,
+      },
+      clock,
+    )
+
+    const result = await call('/api/profile')
+    expect(result?.status).toBe(200)
+    expect(result?.body).toMatchObject({ revision: 1, acceptedBy: 'Mohd' })
+    // Accepting a component map activates routing for every later run, which is
+    // the class of write the browser is permanently denied. There is a route
+    // that reads it and there is deliberately none that writes it.
+    for (const method of ['POST', 'PUT', 'DELETE', 'PATCH']) {
+      expect((await call('/api/profile', method))?.status).toBe(405)
+    }
+    // No parameter, and none a later story could smuggle in: an accepted
+    // revision is immutable, so there is nothing here to select between.
+    expect((await call('/api/profile/1'))?.status).toBe(404)
+    expect((await call('/api/profile/../../etc'))?.status).toBe(404)
+  })
+
+  it('answers for a project nothing has ever mapped without describing it', async () => {
+    const bare = await makeTmpProject()
+    try {
+      const result = await handleApi(bare.dir, 'GET', '/api/profile')
+      expect(result?.status).toBe(404)
+      expect(result?.body).toEqual({ error: { code: 'error.notFound' } })
+    } finally {
+      await bare.cleanup()
+    }
   })
 
   it('bounds the reports it serves', async () => {
@@ -98,6 +148,8 @@ describe('handleApi', () => {
       '/api/preflight/../../etc',
       '/api/preflight/..%2F..%2Fconfig.yaml',
       '/api/telemetry/../../etc',
+      '/api/profile/../../etc',
+      '/api/profile/..%2F..%2Fconfig.yaml',
       // An un-normalised path, which a browser would never send but a raw
       // socket can: it is still ours to refuse rather than to resolve.
       '/api/../app.js',
@@ -124,6 +176,7 @@ describe('handleApi', () => {
       await call('/api/runs/x/0'),
       await call('/api/preflight/nonsense'),
       await call('/api/preflight/not a track'),
+      await call('/api/profile/1'),
     ]
     for (const failure of failures) {
       const error = (failure?.body as { error?: Record<string, unknown> }).error ?? {}

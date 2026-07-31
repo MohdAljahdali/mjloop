@@ -11,6 +11,7 @@ import {
   readMemoryEntry,
   readPlanDetail,
   readPreflightEstimate,
+  readProfileView,
   readRunDetail,
   readRuns,
   readState,
@@ -131,6 +132,16 @@ async function route(projectDir: string, segments: readonly string[]): Promise<A
       // `[A-Za-z0-9_-]`, so `..` cannot match.
       if (!IdSchema.safeParse(first).success) return fail(400, 'error.badRequest')
       return ok(await readPreflightEstimate(projectDir, first))
+
+    case 'profile':
+      // No parameter, and none a later story should add: the accepted profile
+      // is whichever revision file is highest and every revision is immutable,
+      // so there is nothing here to select between. It is also the one document
+      // on this wire whose *write* the browser is permanently denied —
+      // accepting a component map activates routing for every later run — and a
+      // route that took a revision would be the first half of one that set it.
+      if (segments.length !== 1) break
+      return ok(await readProfileView(projectDir))
 
     case 'memory':
       if (segments.length === 1) return ok(await readMemories(projectDir))
