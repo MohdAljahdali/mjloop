@@ -32,6 +32,7 @@ import { toast } from './toasts.js'
 import { clone, flag, label, phrase, verbatim } from './dom.js'
 import { reconcile } from './list.js'
 import { stamp } from '../lib/fmt.js'
+import { pluralKey } from '../lib/i18n.js'
 import { deriveEvents } from '../lib/notifications.js'
 
 /** @typedef {import('../../protocol.js').Snapshot} Snapshot */
@@ -153,7 +154,11 @@ function drawBadge() {
   const toggleButton = node['toggle']
   if (toggleButton !== undefined) {
     if (unread === 0) toggleButton.removeAttribute('title')
-    else label(toggleButton, 'title', 'notice.unreadCount', { n: unread })
+    // A plural family, not a flat key: Arabic has six categories, and a flat
+    // `notice.unreadCount` would ship only the English singular for all of
+    // them (the defect the review on B12 caught — same idiom as `tabs.readyCount`
+    // and `tabs.highCount` above, fixed together for the same reason).
+    else label(toggleButton, 'title', pluralKey('notice.unreadCount', unread), { count: unread })
   }
 }
 

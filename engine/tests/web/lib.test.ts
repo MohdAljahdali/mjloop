@@ -352,6 +352,13 @@ describe('notifications', () => {
     // nothing here — the decision itself is not a "needs a decision" event.
     const decided = emptySnapshot({ plans: [plan({ id: 'P001', approval: 'approved' })] })
     expect(deriveEvents(arrived, decided)).toEqual([])
+    // A plan arriving for the first time already carrying a decision must
+    // announce nothing. Every other case above shares its plan id between the
+    // two snapshots compared, so `before !== undefined` was doing all the
+    // suppressing and `plan.approval === null` was never the condition under
+    // test — this is the one case that isolates it.
+    const freshlyApproved = emptySnapshot({ plans: [plan({ id: 'P001', approval: 'approved' })] })
+    expect(deriveEvents(before, freshlyApproved)).toEqual([])
   })
 
   it("reports a story-bound job's failure, and leaves a job with no story to the queue's own notice", () => {

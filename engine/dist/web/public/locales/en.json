@@ -24,8 +24,10 @@
   "tabs.memory": "Memory",
   "tabs.config": "Config",
   "tabs.number": "{n}",
-  "tabs.readyCount": "{n} stories ready to build",
-  "tabs.highCount": "{n} high-severity findings on this run",
+  "tabs.readyCount.one": "{count} story ready to build",
+  "tabs.readyCount.other": "{count} stories ready to build",
+  "tabs.highCount.one": "{count} high-severity finding on this run",
+  "tabs.highCount.other": "{count} high-severity findings on this run",
 
   "panel.run.title": "Current run",
   "panel.run.help": "Live state, agents, guards, findings, and cycle history for this project.",
@@ -572,7 +574,8 @@
   "toast.dismiss": "Dismiss",
 
   "notice.toggle": "Notifications",
-  "notice.unreadCount": "{n} unread notifications",
+  "notice.unreadCount.one": "{count} unread notification",
+  "notice.unreadCount.other": "{count} unread notifications",
   "notice.title": "Notifications",
   "notice.hint": "What happened this session — write results, queue notices, and status changes, in the order they were seen. Not saved: this list starts empty every time the page loads.",
   "notice.close": "Close",

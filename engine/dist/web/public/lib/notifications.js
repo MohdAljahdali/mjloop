@@ -87,12 +87,22 @@ export function deriveEvents(previous, next) {
   for (const plan of next.plans) {
     const before = previousPlans.get(plan.id)
     // A plan the page has not seen before, still awaiting a decision. Fires
-    // once, on the snapshot the plan first arrives in — `gateSet` overwrites
-    // `approval` in place and never clears it back to null, so this can never
-    // refire for the same plan once it has been decided on.
+    // when a plan id first appears on `next.plans` relative to `previous.plans`
+    // — not "once, ever": `readPlans` (`snapshot.ts:112-121`) skips a plan
+    // directory it fails to parse and returns the rest, so a still-undecided
+    // plan whose PLAN.md momentarily fails to parse drops out of `snapshot.plans`
+    // for one poll and re-enters the next with `before === undefined`, which
+    // repeats this event. `gateSet` (`ops/plan.ts:137`) only ever overwrites
+    // `approval` with a parsed decision and never nulls it back out, so a plan
+    // already on record never re-announces for *that* reason — only the
+    // transient-parse re-entry above can repeat it.
     if (before === undefined && plan.approval === null) {
       events.push({ code: 'notice.plan.awaitingApproval', params: { id: plan.id } })
     }
+    // The same re-entry repeats this one too: guarded only by `before !==
+    // undefined && isComplete(before)`, so a complete plan that drops out of one
+    // poll (the parse failure above) and re-enters the next with `before ===
+    // undefined` announces `notice.plan.done` a second time.
     if (isComplete(plan) && !(before !== undefined && isComplete(before))) {
       events.push({ code: 'notice.plan.done', params: { id: plan.id } })
     }

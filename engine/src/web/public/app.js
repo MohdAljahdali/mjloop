@@ -6,7 +6,7 @@
  * tab each. This file wires them together once and gets out of the way.
  */
 import { installToken } from './lib/api.js'
-import { direction, installLocales, loadFallback, locale, pickLocale, setLocale } from './lib/i18n.js'
+import { direction, installLocales, loadFallback, locale, pickLocale, pluralKey, setLocale } from './lib/i18n.js'
 import { installStorage, read as prefs, write as remember } from './lib/local.js'
 import { mountPlanDoc } from './lib/plandoc.js'
 import { routeFrom, startRouter } from './lib/router.js'
@@ -347,7 +347,9 @@ function tab(id) {
  *
  * The digits are `aria-hidden` and the sentence goes on the anchor's `title`: a
  * bare number announced after a view's name is a riddle, and the view already
- * has a perfectly good accessible name.
+ * has a perfectly good accessible name. `key` is a plural stem, resolved
+ * through `pluralKey` — Arabic has six plural categories, and a flat key here
+ * would ship only the English singular for all of them.
  *
  * @param {HTMLElement} node
  * @param {HTMLElement} anchor
@@ -360,7 +362,7 @@ function badge(node, anchor, count, key) {
   phrase(node, 'tabs.number', { n: count })
   flag(node, 'hidden', count === 0)
   if (count === 0) attr(anchor, 'title', null)
-  else label(anchor, 'title', key, { n: count })
+  else label(anchor, 'title', pluralKey(key, count), { count })
 }
 
 await loadFallback()
