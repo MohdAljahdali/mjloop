@@ -385,9 +385,11 @@
               </header>
               <!-- The exact command a press of Build sends for this story —
                    character for character what `bus.on('story-run', ...)`
-                   (app.js) composes — shown whether or not the story can build
-                   right now, because it is what Run *would* do the moment it
-                   can. -->
+                   (app.js) composes. Not a control this pane itself offers
+                   (its own header control is Attach, above) — a preview of
+                   what the row's own Build button, further down the page,
+                   would send — shown whether or not the story can build right
+                   now, because it is what Build *would* do the moment it can. -->
               <p class="story-open-command">
                 <span data-i18n="story.command.label"></span>
                 <code id="story-open-command"></code>
@@ -403,6 +405,29 @@
               <p class="story-open-meta" id="story-open-meta"></p>
               <ul class="story-open-waits" id="story-open-waits" hidden></ul>
               <dl class="facts" id="story-open-facts"></dl>
+              <!-- The dependency view: every `depends_on` edge reachable from
+                   this story, indented by depth rather than laid out as boxes
+                   and edges — `ui/dom.js` has no element factory and no SVG
+                   helper, and `innerHTML` is banned, so an indented list is
+                   what "visual" honestly means here. It is a flat, keyed list
+                   (`lib/stories.js`'s `depTree`), so `reconcile` handles it
+                   like every other list on this page and it mirrors under RTL
+                   for free. The nesting itself is not only visual:
+                   `role="tree"`/`"treeitem"` plus an `aria-level` computed
+                   from each row's depth (`panels/stories.js`'s `storyDepRow`)
+                   carry the parent/child shape to a screen reader too. Unlike
+                   the readiness inspector above, it shows every dependency,
+                   not only the unmet ones — the story's whole shape, not just
+                   what is currently blocking it. `reconcile`'s own cap
+                   (`ui/list.js`) applies here like any other list, so
+                   `#story-open-deps-more` says so rather than the reader
+                   losing part of the graph with no tell. -->
+              <section class="story-open-deps">
+                <h3 data-i18n="story.deps.title"></h3>
+                <p class="empty" id="story-open-deps-empty" hidden></p>
+                <ul class="deps" id="story-open-deps-list" role="tree"></ul>
+                <p class="more" id="story-open-deps-more" hidden></p>
+              </section>
               <details id="story-open-accept-details" hidden>
                 <summary id="story-open-accept-summary"></summary>
                 <ul class="acceptance" id="story-open-acceptance"></ul>
@@ -1149,6 +1174,20 @@
          a sentence. -->
     <template id="tpl-story-wait">
       <li class="wait-row">
+        <code class="story-id" data-slot="id"></code>
+        <span class="story-status" data-slot="status"></span>
+      </li>
+    </template>
+
+    <!-- One node of the dependency view, indented by its own depth from the
+         open story via a `depth-<n>` class (`cls()`, panels/stories.js) — the
+         id and current status are the same two slots `tpl-story-wait` renders
+         above, because it is the same fact: an id and its status, never
+         composed into a sentence. `role="treeitem"` (the list itself is
+         `role="tree"`) plus `aria-level`, set by `storyDepRow`, carry the same
+         nesting to a screen reader that the indentation carries visually. -->
+    <template id="tpl-story-dep">
+      <li class="dep-row" role="treeitem">
         <code class="story-id" data-slot="id"></code>
         <span class="story-status" data-slot="status"></span>
       </li>

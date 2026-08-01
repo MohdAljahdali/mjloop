@@ -173,6 +173,81 @@ export function tally(plans) {
 }
 
 /**
+ * How many `depends_on` hops `depTree` descends from the open story before it
+ * stops, independently of whether it has hit a cycle. Exported so the view and
+ * its test share one number rather than two.
+ */
+export const DEP_DEPTH_LIMIT = 5
+
+/**
+ * The dependency graph rooted at `story`, flattened depth-first into rows a
+ * keyed list can reconcile.
+ *
+ * `ui/dom.js` has no element factory and no SVG helper and `innerHTML` is
+ * banned, so a laid-out graph of boxes and edges was never on the table here.
+ * A flat, indented list is `reconcile`'s native shape and mirrors under RTL
+ * for free (indentation is a `padding-inline-start`, not a hardcoded side) —
+ * but the parent/child shape it draws is presentation only, so
+ * `panels/stories.js`'s `storyDepRow` carries the same shape as
+ * `aria-level={depth + 1}` on a `role="treeitem"` row inside a `role="tree"`
+ * list, the non-visual channel a screen reader actually reads the nesting
+ * from.
+ *
+ * Every `depends_on` edge is walked, not only the unmet ones: this is the
+ * story's whole dependency shape, where the readiness inspector (`unmet()`,
+ * above) only cares what is currently blocking a build.
+ *
+ * Two independent guards keep the walk finite. `path` carries every id from
+ * the root to the node currently being expanded; a `depends_on` entry already
+ * in `path` is still pushed as a row — its status is real and worth showing —
+ * but is never recursed into, which is what actually stops a cycle. A cycle
+ * cannot be *written*: `assertDependenciesResolve` (`ops/plan.ts:239-250`)
+ * refuses one with its own DFS at write time. But a hand-edited story file on
+ * disk bypasses that check, same as the typo case `unmet()`'s own doc
+ * describes, and a walk that trusted the engine here would hang the page.
+ * `depth` is capped at `DEP_DEPTH_LIMIT` on top of that, for the case the
+ * cycle guard does not cover: a long but genuinely acyclic chain, which is
+ * not a hang but is still a list past the point an indented view stays
+ * legible.
+ *
+ * A dependency id absent from `byId` is pushed as a row — same as an id the
+ * readiness inspector cannot resolve — and never recursed into, because
+ * `byId` only ever holds this plan's own stories: `assertDependenciesResolve`
+ * refuses a cross-plan edge outright, so an unresolvable id here is a typo
+ * within the plan, not a foreign story this walk merely declined to fetch.
+ *
+ * @param {StoryView | StoryDetail} story
+ * @param {Map<string, StoryView | StoryDetail>} byId
+ * @returns {{ key: string, id: string, depth: number }[]}
+ */
+export function depTree(story, byId) {
+  /** @type {{ key: string, id: string, depth: number }[]} */
+  const rows = []
+
+  /**
+   * @param {string} id
+   * @param {number} depth
+   * @param {readonly string[]} path
+   */
+  function walk(id, depth, path) {
+    if (depth >= DEP_DEPTH_LIMIT) return
+    const current = byId.get(id)
+    if (current === undefined) return
+    for (const depId of current.depends_on) {
+      // The path-joined string, not `depId` alone: two different branches can
+      // both depend on the same id (a diamond shape), and each occurrence is
+      // its own row at its own depth, not a single node `reconcile` would
+      // otherwise deduplicate onto one.
+      rows.push({ key: `${path.join('>')}>${depId}`, id: depId, depth })
+      if (!path.includes(depId)) walk(depId, depth + 1, [...path, depId])
+    }
+  }
+
+  walk(story.id, 0, [story.id])
+  return rows
+}
+
+/**
  * The stories a filter and a search box leave standing.
  *
  * `ready` is not a story status — it is a status *and* a dependency check, and

@@ -16,6 +16,7 @@ import { mountRun } from '../../src/web/public/panels/run.js'
 import { facet } from '../../src/web/public/panels/memory.js'
 import { suggestions } from '../../src/web/public/panels/launcher.js'
 import { mountToasts, toast } from '../../src/web/public/ui/toasts.js'
+import { DEP_DEPTH_LIMIT } from '../../src/web/public/lib/stories.js'
 import { emptySnapshot, loadPage, readLocale } from './helpers/page.js'
 import { ConfigSchema } from '../../src/schemas/config.js'
 import { ConfigChangeSchema } from '../../src/store/config-mutation.js'
@@ -691,6 +692,78 @@ describe('stories', () => {
     const unresolved = [...document.querySelectorAll('#story-open-waits .wait-row')]
     expect(unresolved.map((row) => row.querySelector('.story-id')?.textContent)).toEqual(['P001-S99'])
     expect(unresolved.map((row) => row.querySelector('.story-status')?.textContent)).toEqual(['—'])
+    // The word "—" carries a class too, out of the same bounded family a real
+    // status uses — never left holding whatever class the row wore before, per
+    // the next test.
+    expect(unresolved[0]?.querySelector('.story-status')?.classList.contains('status-unknown')).toBe(true)
+  })
+
+  it('never lets a status colour outlive the word it replaces', async () => {
+    // Reproduces the exact case a review caught before this phase: a
+    // dependency's row is keyed by id, `reconcile` retains it across draws,
+    // and `cls()` (ui/dom.js:139-151) can only swap one class in a family for
+    // another — it has no clear path. A write that only happened when the
+    // status resolved left a stale `status-doing` behind on the very draw the
+    // word flipped to "—".
+    installStorage(memoryStorage(JSON.stringify({ activePlan: 'P001' })))
+    serve({
+      '/api/plans/P001': {
+        id: 'P001',
+        title: 'A plan',
+        approval: null,
+        body: '',
+        review: null,
+        stories: [
+          detailStory({ id: 'P001-S01', title: 'One', status: 'doing' }),
+          detailStory({ id: 'P001-S02', title: 'Two', depends_on: ['P001-S01'] }),
+        ],
+      },
+    })
+    mountDoc()
+    reveal('panel-stories')
+    const stories = mountStories()
+    draw(
+      emptySnapshot({
+        plans: [
+          plan({
+            id: 'P001',
+            stories: [story({ id: 'P001-S01', status: 'doing' }), story({ id: 'P001-S02', depends_on: ['P001-S01'] })],
+          }),
+        ],
+      }),
+    )
+    await vi.waitFor(() => expect(document.querySelectorAll('#stories-list .story')).toHaveLength(2))
+
+    stories.openTab('P001-S02')
+    await vi.waitFor(() => expect(document.getElementById('story-open-title')?.textContent).toBe('P001-S02 — Two'))
+    const status = () => document.querySelector('#story-open-waits .wait-row .story-status') as HTMLElement
+    expect(status().textContent).toBe('doing')
+    expect(status().classList.contains('status-doing')).toBe(true)
+
+    // P001-S01 removed from the plan on disk — a hand edit, not a status
+    // change. `unmet()` still returns it (an id absent from the index is
+    // unmet, `lib/stories.js:58-60`), so the row keeps its key and is
+    // reconciled in place rather than replaced.
+    serve({
+      '/api/plans/P001': {
+        id: 'P001',
+        title: 'A plan',
+        approval: null,
+        body: '',
+        review: null,
+        stories: [detailStory({ id: 'P001-S02', title: 'Two', depends_on: ['P001-S01'] })],
+      },
+    })
+    draw(
+      emptySnapshot({
+        plans: [plan({ id: 'P001', stories: [story({ id: 'P001-S02', depends_on: ['P001-S01'] })] })],
+        revisions: { ...emptySnapshot().revisions, plans: { P001: 'r2' } },
+      }),
+    )
+
+    await vi.waitFor(() => expect(status().textContent).toBe('—'))
+    expect(status().classList.contains('status-doing')).toBe(false)
+    expect(status().classList.contains('status-unknown')).toBe(true)
   })
 
   it('says which non-dependency reason a story is not ready, reusing story.notBuildable rather than a fifth wording', async () => {
@@ -707,6 +780,250 @@ describe('stories', () => {
     await vi.waitFor(() => expect(document.getElementById('story-open-title')?.textContent).toBe('P001-S02 — Two'))
     expect(document.getElementById('story-open-meta')?.textContent).toBe(english['story.notBuildable.blocked'])
     expect((document.getElementById('story-open-waits') as HTMLElement).hidden).toBe(true)
+  })
+
+  /**
+   * A plan built for the dependency view (B9): a two-level chain
+   * (`P001-S03` → `P001-S02` → `P001-S01`), a story with no dependencies of
+   * its own (`P001-S04`), two stories that depend on each other
+   * (`P001-S05` ⇄ `P001-S06`) — a cycle `assertDependenciesResolve`
+   * (`ops/plan.ts:239-250`) refuses to let anyone *write*, but a hand-edited
+   * plan file bypasses that check, same as `openReadinessFixture`'s
+   * `P001-S99` typo does for `unmet()` — and a story with a typo'd dependency
+   * of its own (`P001-S07`), for the identical case in the dependency view.
+   */
+  async function openDepTreeFixture(): Promise<ReturnType<typeof mountStories>> {
+    installStorage(memoryStorage(JSON.stringify({ activePlan: 'P001' })))
+    serve({
+      '/api/plans/P001': {
+        id: 'P001',
+        title: 'A plan',
+        approval: null,
+        body: '',
+        review: null,
+        stories: [
+          detailStory({ id: 'P001-S01', title: 'One', status: 'done' }),
+          detailStory({ id: 'P001-S02', title: 'Two', status: 'doing', depends_on: ['P001-S01'] }),
+          detailStory({ id: 'P001-S03', title: 'Three', depends_on: ['P001-S02'] }),
+          detailStory({ id: 'P001-S04', title: 'Four' }),
+          detailStory({ id: 'P001-S05', title: 'Five', depends_on: ['P001-S06'] }),
+          detailStory({ id: 'P001-S06', title: 'Six', depends_on: ['P001-S05'] }),
+          detailStory({ id: 'P001-S07', title: 'Seven', depends_on: ['P001-S99'] }),
+        ],
+      },
+    })
+    mountDoc()
+    reveal('panel-stories')
+    const stories = mountStories()
+    draw(
+      emptySnapshot({
+        plans: [
+          plan({
+            id: 'P001',
+            stories: [
+              story({ id: 'P001-S01', status: 'done' }),
+              story({ id: 'P001-S02', status: 'doing', depends_on: ['P001-S01'] }),
+              story({ id: 'P001-S03', depends_on: ['P001-S02'] }),
+              story({ id: 'P001-S04' }),
+              story({ id: 'P001-S05', depends_on: ['P001-S06'] }),
+              story({ id: 'P001-S06', depends_on: ['P001-S05'] }),
+              story({ id: 'P001-S07', depends_on: ['P001-S99'] }),
+            ],
+          }),
+        ],
+      }),
+    )
+    await vi.waitFor(() => expect(document.querySelectorAll('#stories-list .story')).toHaveLength(7))
+    return stories
+  }
+
+  const depRows = (): {
+    id: string | null | undefined
+    status: string | null | undefined
+    depth: string | null
+    ariaLevel: string | null
+  }[] =>
+    [...document.querySelectorAll('#story-open-deps-list .dep-row')].map((row) => ({
+      id: row.querySelector('.story-id')?.textContent,
+      status: row.querySelector('.story-status')?.textContent,
+      depth: [...row.classList].find((name) => name.startsWith('depth-')) ?? null,
+      ariaLevel: row.getAttribute('aria-level'),
+    }))
+
+  it('indents a two-level dependency chain, each node with its own status', async () => {
+    const stories = await openDepTreeFixture()
+
+    stories.openTab('P001-S03')
+    await vi.waitFor(() => expect(document.getElementById('story-open-title')?.textContent).toBe('P001-S03 — Three'))
+    expect((document.getElementById('story-open-deps-empty') as HTMLElement).hidden).toBe(true)
+    expect(depRows()).toEqual([
+      { id: 'P001-S02', status: 'doing', depth: 'depth-0', ariaLevel: '1' },
+      { id: 'P001-S01', status: 'done', depth: 'depth-1', ariaLevel: '2' },
+    ])
+    // Colour is never the only signal: the class names the dependency's own
+    // status, at its own depth, not the open story's.
+    const cells = [...document.querySelectorAll('#story-open-deps-list .story-status')]
+    expect(cells[0]?.classList.contains('status-doing')).toBe(true)
+    expect(cells[1]?.classList.contains('status-done')).toBe(true)
+    // The tree shape is not only visual: a screen reader needs `role` and
+    // `aria-level` to tell a direct dependency from a transitive one, which
+    // `padding-inline-start` alone cannot convey.
+    expect(document.getElementById('story-open-deps-list')?.getAttribute('role')).toBe('tree')
+    for (const row of document.querySelectorAll('#story-open-deps-list .dep-row')) {
+      expect(row.getAttribute('role')).toBe('treeitem')
+    }
+  })
+
+  it('shows the empty phrase for a story with no dependencies', async () => {
+    const stories = await openDepTreeFixture()
+
+    stories.openTab('P001-S04')
+    await vi.waitFor(() => expect(document.getElementById('story-open-title')?.textContent).toBe('P001-S04 — Four'))
+    expect((document.getElementById('story-open-deps-empty') as HTMLElement).hidden).toBe(false)
+    expect(document.getElementById('story-open-deps-empty')?.textContent).toBe(english['story.deps.empty'])
+    expect(depRows()).toEqual([])
+  })
+
+  it('walks a hand-edited cycle without hanging, and stops re-entering it', async () => {
+    const stories = await openDepTreeFixture()
+
+    // `assertDependenciesResolve` refuses to *write* P001-S05 ⇄ P001-S06, but
+    // the fixture serves it anyway — the case only a hand-edited file reaches.
+    // A recursive walk that trusted the engine here would hang the test (and
+    // the page); this instead terminates at exactly two rows: P001-S06 at
+    // depth 0, and P001-S05 again at depth 1 — pushed once, as a leaf, because
+    // it is already on the path back to the root and is never re-entered.
+    stories.openTab('P001-S05')
+    await vi.waitFor(() => expect(document.getElementById('story-open-title')?.textContent).toBe('P001-S05 — Five'))
+    expect(depRows()).toEqual([
+      { id: 'P001-S06', status: 'todo', depth: 'depth-0', ariaLevel: '1' },
+      { id: 'P001-S05', status: 'todo', depth: 'depth-1', ariaLevel: '2' },
+    ])
+  })
+
+  it('renders a dependency id the plan cannot resolve as a leaf, no status word to lie about', async () => {
+    // `depTree`'s `byId` is this plan's own stories only — an id it does not
+    // carry is a typo within the plan or the cross-plan edge
+    // `assertDependenciesResolve` refuses to write, same as `unmet()`'s
+    // identical case above. The row still renders (it *is* a real edge on
+    // disk), with the id and no status word, and never walked into.
+    const stories = await openDepTreeFixture()
+
+    stories.openTab('P001-S07')
+    await vi.waitFor(() => expect(document.getElementById('story-open-title')?.textContent).toBe('P001-S07 — Seven'))
+    expect(depRows()).toEqual([{ id: 'P001-S99', status: '—', depth: 'depth-0', ariaLevel: '1' }])
+    const cell = document.querySelector('#story-open-deps-list .story-status') as HTMLElement
+    // The same neutral class the readiness inspector's identical case wears —
+    // never a stray real-status class left over from another row this one's
+    // key happens to reuse.
+    expect(cell.classList.contains('status-unknown')).toBe(true)
+  })
+
+  it('caps a genuinely acyclic chain at DEP_DEPTH_LIMIT hops — the case the cycle guard does not cover', async () => {
+    // A hand-edited plan can chain `depends_on` past any depth without ever
+    // repeating an id, so the cycle guard (`path.includes`) never fires. This
+    // fixture is exactly that: seven stories, each depending on the next, no
+    // repeats anywhere. `DEP_DEPTH_LIMIT` is imported rather than hardcoded —
+    // 5 here — so raising the constant moves this assertion with it instead
+    // of leaving it silently proving nothing, which is what shipped in 1cd3489.
+    installStorage(memoryStorage(JSON.stringify({ activePlan: 'P001' })))
+    serve({
+      '/api/plans/P001': {
+        id: 'P001',
+        title: 'A plan',
+        approval: null,
+        body: '',
+        review: null,
+        stories: [
+          detailStory({ id: 'P001-S10', title: 'Ten', depends_on: ['P001-S11'] }),
+          detailStory({ id: 'P001-S11', title: 'Eleven', depends_on: ['P001-S12'] }),
+          detailStory({ id: 'P001-S12', title: 'Twelve', depends_on: ['P001-S13'] }),
+          detailStory({ id: 'P001-S13', title: 'Thirteen', depends_on: ['P001-S14'] }),
+          detailStory({ id: 'P001-S14', title: 'Fourteen', depends_on: ['P001-S15'] }),
+          detailStory({ id: 'P001-S15', title: 'Fifteen', depends_on: ['P001-S16'] }),
+          detailStory({ id: 'P001-S16', title: 'Sixteen' }),
+        ],
+      },
+    })
+    mountDoc()
+    reveal('panel-stories')
+    const stories = mountStories()
+    draw(
+      emptySnapshot({
+        plans: [
+          plan({
+            id: 'P001',
+            stories: [
+              story({ id: 'P001-S10', depends_on: ['P001-S11'] }),
+              story({ id: 'P001-S11', depends_on: ['P001-S12'] }),
+              story({ id: 'P001-S12', depends_on: ['P001-S13'] }),
+              story({ id: 'P001-S13', depends_on: ['P001-S14'] }),
+              story({ id: 'P001-S14', depends_on: ['P001-S15'] }),
+              story({ id: 'P001-S15', depends_on: ['P001-S16'] }),
+              story({ id: 'P001-S16' }),
+            ],
+          }),
+        ],
+      }),
+    )
+    await vi.waitFor(() => expect(document.querySelectorAll('#stories-list .story')).toHaveLength(7))
+
+    stories.openTab('P001-S10')
+    await vi.waitFor(() => expect(document.getElementById('story-open-title')?.textContent).toBe('P001-S10 — Ten'))
+
+    const rows = depRows()
+    expect(rows).toHaveLength(DEP_DEPTH_LIMIT)
+    expect(rows.map((row) => row.id)).toEqual(['P001-S11', 'P001-S12', 'P001-S13', 'P001-S14', 'P001-S15'])
+    expect(rows.map((row) => row.depth)).toEqual(['depth-0', 'depth-1', 'depth-2', 'depth-3', 'depth-4'])
+    // The sixth id in the chain never appears: past `DEP_DEPTH_LIMIT` hops the
+    // walk stops recursing before it reaches it.
+    expect(rows.some((row) => row.id === 'P001-S16')).toBe(false)
+  })
+
+  it('caps the dependency list like every other list, with an explicit show-more', async () => {
+    // `reconcile`'s own header (`ui/list.js`) states the rule: long lists cap
+    // instead of hanging, with an explicit "show more" — `#stories-more` and
+    // `#stories-ready-more` already follow it. A diamond-shaped dependency
+    // graph re-expands a shared ancestor once per path it is reachable by, so
+    // the row count is exponential in depth, not linear in story count: this
+    // twelve-story plan, where each story depends on its three predecessors,
+    // produces 311 rows from twelve stories — comfortably past the default
+    // 200-row cap, which previously dropped the remaining 111 with no tell.
+    installStorage(memoryStorage(JSON.stringify({ activePlan: 'P001' })))
+    const ids = Array.from({ length: 12 }, (_, i) => `P001-S${String(i + 1).padStart(2, '0')}`)
+    const depsFor = (position: number): string[] =>
+      [position - 3, position - 2, position - 1].filter((j) => j >= 1).map((j) => ids[j - 1] as string)
+    serve({
+      '/api/plans/P001': {
+        id: 'P001',
+        title: 'A plan',
+        approval: null,
+        body: '',
+        review: null,
+        stories: ids.map((id, index) => detailStory({ id, title: id, depends_on: depsFor(index + 1) })),
+      },
+    })
+    mountDoc()
+    reveal('panel-stories')
+    const stories = mountStories()
+    draw(
+      emptySnapshot({
+        plans: [
+          plan({ id: 'P001', stories: ids.map((id, index) => story({ id, depends_on: depsFor(index + 1) })) }),
+        ],
+      }),
+    )
+    await vi.waitFor(() => expect(document.querySelectorAll('#stories-list .story')).toHaveLength(12))
+
+    const last = ids[11] as string
+    stories.openTab(last)
+    await vi.waitFor(() => expect(document.getElementById('story-open-title')?.textContent).toBe(`${last} — ${last}`))
+
+    expect(depRows()).toHaveLength(200)
+    expect((document.getElementById('story-open-deps-more') as HTMLElement).hidden).toBe(false)
+    expect(document.getElementById('story-open-deps-more')?.textContent).toBe(
+      (english['story.deps.more.other'] as string).replace('{count}', '111'),
+    )
   })
 
   it('walks the strip with the arrow keys, and the direction follows the document', async () => {

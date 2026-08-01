@@ -1492,12 +1492,16 @@ details summary {
 }
 
 /* A subsection inside the one `.story-open` card, so it gets its own small
-   heading rather than the card's own `h2` — reserved for the story's title. */
-.story-open-runs {
+   heading rather than the card's own `h2` — reserved for the story's title.
+   Shared by the dependency view below, which is the identical shape: a small
+   uppercase label over its own list. */
+.story-open-runs,
+.story-open-deps {
   margin-block-start: 14px;
 }
 
-.story-open-runs h3 {
+.story-open-runs h3,
+.story-open-deps h3 {
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.1em;
@@ -1506,7 +1510,49 @@ details summary {
   margin: 0 0 8px;
 }
 
-.story-open-runs .empty {
+.story-open-runs .empty,
+.story-open-deps .empty {
   padding: 10px 14px;
   margin: 0;
+}
+
+.deps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dep-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+/* Indentation as a bounded class family (`cls()`), never an inline style —
+   `DEP_DEPTH_LIMIT` (`lib/stories.js`) caps a row's depth at 4, so these five
+   classes (`depth-0` unstyled, at the list's own margin) cover every row this
+   view can ever produce. `padding-inline-start` rather than `margin`: `.deps`
+   is a column flex container with `align-items` at its default `stretch`, so
+   `.dep-row` already spans its full inline width; a `margin-inline-start`
+   would shrink that stretched box by the margin, but `padding-inline-start`
+   keeps the row's own border box at the list's full width, so a future
+   background, border or hover surface on `.dep-row` still spans the list
+   instead of being inset by the indent. */
+.dep-row.depth-1 {
+  padding-inline-start: 16px;
+}
+
+.dep-row.depth-2 {
+  padding-inline-start: 32px;
+}
+
+.dep-row.depth-3 {
+  padding-inline-start: 48px;
+}
+
+.dep-row.depth-4 {
+  padding-inline-start: 64px;
 }

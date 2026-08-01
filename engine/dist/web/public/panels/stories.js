@@ -34,7 +34,7 @@ import {
   setStoryFilter,
   storyFilter,
 } from '../lib/selection.js'
-import { FILTERS, dependents, planIndex, readyIn, sift, statusIndex, unmet } from '../lib/stories.js'
+import { FILTERS, depTree, dependents, planIndex, readyIn, sift, statusIndex, unmet } from '../lib/stories.js'
 import { reconcile } from '../ui/list.js'
 import { mountWorktabs } from '../ui/worktabs.js'
 import { draw, register } from '../ui/render.js'
@@ -114,6 +114,9 @@ export function mountStories() {
   const openMeta = pick('story-open-meta')
   const openWaits = pick('story-open-waits')
   const openFacts = pick('story-open-facts')
+  const openDepsEmpty = pick('story-open-deps-empty')
+  const openDepsList = pick('story-open-deps-list')
+  const openDepsMore = pick('story-open-deps-more')
   const acceptDetails = pick('story-open-accept-details')
   const acceptSummary = pick('story-open-accept-summary')
   const acceptance = pick('story-open-acceptance')
@@ -314,10 +317,13 @@ export function mountStories() {
     flag(openAttach, 'hidden', job === null)
     phrase(openAttach, 'job.view')
 
-    // The command a press of Build actually sends — `bus.on('story-run', ...)`
-    // (app.js:165-167) composes `/mjloop:build ${story}` from the same id, so
-    // this is that exact string, not a guess at it. Shown unconditionally: it
-    // answers "what does Run do" whether or not the story can build yet.
+    // The command a press of Build sends for this story — from the row's own
+    // Build control (`storyDetailRow`'s `build` slot, below, and `readyRow`'s)
+    // rather than anything in this pane, which offers no Build itself, only
+    // Attach (`openAttach`, above). `bus.on('story-run', ...)` (app.js:165-167)
+    // composes `/mjloop:build ${story}` from that control's own id, so this is
+    // that exact string, not a guess at it — shown unconditionally, because it
+    // answers "what does Build do" whether or not this story can build yet.
     verbatim(openCommand, `/mjloop:build ${story.id}`)
 
     // The readiness inspector. `readyIn` (`lib/stories.js`) is the rule this
@@ -371,6 +377,35 @@ export function mountStories() {
         },
       }
     })
+
+    // The dependency view: every `depends_on` edge reachable from this story,
+    // not only the unmet ones the readiness inspector cares about above — see
+    // `depTree`'s own doc (`lib/stories.js`) for the cycle guard and depth
+    // bound a hand-edited plan file needs. `byId` is this plan's own stories,
+    // keyed by id, which is also why an id `depTree` cannot resolve renders as
+    // a leaf rather than being followed: `assertDependenciesResolve`
+    // (`ops/plan.ts:239-250`) refuses a cross-plan `depends_on` edge outright,
+    // so an id missing from this plan's own stories is a typo, not a story
+    // this walk merely declined to fetch.
+    const byId = new Map(stories.map((entry) => [entry.id, entry]))
+    const depRows = depTree(story, byId)
+    phrase(openDepsEmpty, 'story.deps.empty')
+    flag(openDepsEmpty, 'hidden', depRows.length > 0)
+    const depsDrawn = reconcile(openDepsList, depRows, (row) => row.key, storyDepRow)
+    // `reconcile`'s own header (`ui/list.js`) states the rule: long lists cap
+    // instead of hanging, with an explicit "show more" — the same pattern
+    // `#stories-more` (this file, above) already follows for the story list
+    // itself. A diamond-shaped dependency graph re-expands a shared ancestor
+    // once per path, so the row count is exponential in depth, not linear in
+    // story count: a 12-story plan where each depends on its 3 predecessors
+    // produces 311 rows here, which the default 200-row cap would otherwise
+    // drop the last third of with no tell at all.
+    flag(openDepsMore, 'hidden', depsDrawn.shown >= depsDrawn.total)
+    if (depsDrawn.shown < depsDrawn.total) {
+      phrase(openDepsMore, pluralKey('story.deps.more', depsDrawn.total - depsDrawn.shown), {
+        count: depsDrawn.total - depsDrawn.shown,
+      })
+    }
 
     flag(acceptDetails, 'hidden', story.acceptance.length === 0)
     phrase(acceptSummary, 'story.acceptance', { n: story.acceptance.length })
@@ -484,8 +519,62 @@ export function mountStories() {
           // the engine actually refuses to let anyone write) a cross-plan
           // dependency. `story.status.*` has no member for that, so the id is
           // the only honest thing left to show.
+          //
+          // `cls()` is written in *both* branches, not only the resolved one:
+          // `cls` (ui/dom.js:139-151) can only swap one class in a family for
+          // another, never clear one, so a write that only happened when
+          // `value !== undefined` left a stale `status-doing` on a row whose
+          // word had just flipped to "—" — the id's story removed from the
+          // plan between two draws, `unmet()` still returning it, the colour
+          // now arguing with the word beside it. `'unknown'` carries no CSS
+          // override (`60-panels.css`'s `.story-status.status-*` rules cover
+          // only `done`/`doing`/`blocked`), so it reads as the same neutral
+          // dim `.story-status` a `todo` row already uses.
           if (value === undefined) {
             verbatim(statusSlot, '—')
+            cls(statusSlot, 'status', 'unknown')
+          } else {
+            phrase(statusSlot, `story.status.${value}`)
+            cls(statusSlot, 'status', value)
+          }
+        }
+      },
+    }
+  }
+
+  /**
+   * One row of the dependency view: a dependency's id, its own current status
+   * (or the unresolved dash `storyWaitRow` already uses for the identical
+   * case, immediately above), and its depth from the open story as a class out
+   * of a bounded family — indentation through `cls()`, never an inline style,
+   * so this file reaches for no DOM vocabulary it does not already use. The
+   * same depth also sets `aria-level` (`attr()`), which is the non-visual
+   * half of the same fact: indentation alone leaves a screen reader unable to
+   * tell a direct dependency from a two-hop one.
+   *
+   * @returns {{ root: HTMLElement, update: (row: { key: string, id: string, depth: number }) => void }}
+   */
+  function storyDepRow() {
+    const { root, slots } = clone('tpl-story-dep')
+    return {
+      root,
+      /** @param {{ key: string, id: string, depth: number }} row */
+      update(row) {
+        cls(root, 'depth', String(row.depth))
+        // The non-visual carrier for the same nesting the `depth-<n>` class
+        // draws: `role="tree"`/`"treeitem"` (index.html) plus this, one-based
+        // because `aria-level` starts counting at 1, not 0.
+        attr(root, 'aria-level', String(row.depth + 1))
+
+        const idSlot = slots['id']
+        if (idSlot !== undefined) verbatim(idSlot, row.id)
+
+        const statusSlot = slots['status']
+        if (statusSlot !== undefined) {
+          const value = statuses.get(row.id)
+          if (value === undefined) {
+            verbatim(statusSlot, '—')
+            cls(statusSlot, 'status', 'unknown')
           } else {
             phrase(statusSlot, `story.status.${value}`)
             cls(statusSlot, 'status', value)
