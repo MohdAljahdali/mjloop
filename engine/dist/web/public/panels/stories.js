@@ -18,8 +18,9 @@
  * the count on the navigation, so the four cannot disagree.
  */
 import { attr, clone, cls, flag, label, phrase, verbatim } from '../ui/dom.js'
-import { t } from '../lib/i18n.js'
-import { storyKey } from '../lib/keys.js'
+import { pluralKey, t } from '../lib/i18n.js'
+import { feed } from '../lib/api.js'
+import { runKey, storyKey } from '../lib/keys.js'
 import { subscribe, value as planDoc } from '../lib/plandoc.js'
 import {
   activePlan,
@@ -33,7 +34,7 @@ import {
   setStoryFilter,
   storyFilter,
 } from '../lib/selection.js'
-import { FILTERS, planIndex, readyIn, sift, statusIndex, unmet } from '../lib/stories.js'
+import { FILTERS, dependents, planIndex, readyIn, sift, statusIndex, unmet } from '../lib/stories.js'
 import { reconcile } from '../ui/list.js'
 import { mountWorktabs } from '../ui/worktabs.js'
 import { draw, register } from '../ui/render.js'
@@ -44,6 +45,7 @@ import { submit } from '../ui/writes.js'
  * @typedef {import('../../protocol.js').StoryView} StoryView
  * @typedef {import('../../read.js').PlanDetail} PlanDetail
  * @typedef {import('../../read.js').StoryDetail} StoryDetail
+ * @typedef {import('../../read.js').RunSummary} RunSummary
  */
 
 /** How many buildable stories the start block lists before it says "and n more". */
@@ -79,6 +81,8 @@ export function mountStories() {
   const acceptance = pick('story-open-acceptance')
   const bodyDetails = pick('story-open-body-details')
   const body = pick('story-open-body')
+  const runsEmpty = pick('story-open-runs-empty')
+  const runsHost = pick('story-open-runs')
 
   const listEmpty = pick('stories-empty')
   const host = pick('stories-list')
@@ -116,6 +120,24 @@ export function mountStories() {
    */
   let first = /** @type {string | null} */ (null)
 
+  /**
+   * Every run on disk, for the open tab's execution history.
+   *
+   * `RunSummary.story` is parsed out of the run *directory name*
+   * (`<run_id>--<story|adhoc>--<track>`) by `readRuns` — a convention, not a
+   * foreign key, which is why `drawOpen` below filters rather than joins on
+   * anything the engine asserts. Fetched here rather than per open tab: one
+   * feed the whole panel shares, exactly as `evidence.js` shares its own copy
+   * of the same list.
+   *
+   * @type {import('../lib/api.js').Feed<RunSummary[]>}
+   */
+  const runs = feed({
+    dep: (state) => `${state.revisions.runs}:${state.revisions.cycle}`,
+    path: () => '/api/runs',
+    onChange: () => draw(),
+  })
+
   // The document is fetched and ticked elsewhere; this panel only reads it.
   subscribe(() => draw())
 
@@ -133,6 +155,8 @@ export function mountStories() {
     id: 'stories',
     node,
     update(state) {
+      runs.update(state)
+
       const id = activePlan()
       const view = planDoc()
       // A link to "this plan" with no plan is a control that goes nowhere.
@@ -205,11 +229,11 @@ export function mountStories() {
   }
 
   /**
-   * The open tab's story, drawn from the record the page already has.
-   *
-   * Everything here comes off `/api/plans/:id`. Nothing is fetched a second
-   * time for the tab, and nothing is shown that the engine does not already
-   * write — which is why there is no estimate, no owner and no elapsed time.
+   * The open tab's story, drawn from the record the page already has plus one
+   * more, shared fetch: `runs` above, the same run list the Evidence tab
+   * reads, filtered here to this story's own history. Beyond that, nothing is
+   * shown that the engine does not already write — which is why there is
+   * still no estimate, no owner and no elapsed time.
    *
    * @param {readonly StoryDetail[]} stories
    */
@@ -233,6 +257,11 @@ export function mountStories() {
     const facts = [
       { key: 'story.fact.plan', value: story.id.slice(0, 4) },
       { key: 'story.fact.dependsOn', value: story.depends_on.join(', ') || '—' },
+      // The inverse of the fact above, computed rather than stored: nothing on
+      // disk carries it, so it comes from `dependents()` walking this same
+      // plan document rather than from a second field the engine would have
+      // to keep from drifting out of step with `depends_on`.
+      { key: 'story.fact.dependents', value: dependents(story.id, stories).join(', ') || '—' },
       { key: 'story.fact.ui', value: story.ui ? 'yes' : 'no' },
       { key: 'story.fact.evidence', value: story.evidence ?? '—' },
     ]
@@ -267,6 +296,15 @@ export function mountStories() {
     // PLAN.md — same collapsed-by-default shape, same "nothing written" tell.
     verbatim(body, story.body)
     flag(bodyDetails, 'hidden', story.body.trim().length === 0)
+
+    // Filtered client-side against the one shared feed, on the same
+    // convention-not-foreign-key `story` field the comment above `runs`
+    // explains — a run whose directory names a different story, or no story
+    // at all, does not belong to this list.
+    const storyRuns = (runs.value() ?? []).filter((entry) => entry.story === story.id)
+    phrase(runsEmpty, 'story.runs.empty')
+    flag(runsEmpty, 'hidden', storyRuns.length > 0)
+    reconcile(runsHost, storyRuns, (entry) => runKey(entry.id), storyRunRow)
   }
 
   /**
@@ -299,6 +337,31 @@ export function mountStories() {
           build.dataset['story'] = story.id
           phrase(build, 'story.runAction')
           label(build, 'title', 'story.build')
+        }
+      },
+    }
+  }
+
+  /**
+   * @returns {{ root: HTMLElement, update: (entry: RunSummary) => void }}
+   */
+  function storyRunRow() {
+    const { root, slots } = clone('tpl-story-run')
+    return {
+      root,
+      /** @param {RunSummary} entry */
+      update(entry) {
+        const id = slots['id']
+        if (id !== undefined) verbatim(id, entry.id)
+        const track = slots['track']
+        if (track !== undefined) verbatim(track, entry.track ?? '—')
+        const cycles = slots['cycles']
+        if (cycles !== undefined) phrase(cycles, pluralKey('story.run.cycles', entry.cycles), { count: entry.cycles })
+
+        const outcome = slots['outcome']
+        if (outcome !== undefined) {
+          phrase(outcome, entry.halted ? 'story.run.halted' : 'story.run.ended')
+          cls(outcome, 'res', entry.halted ? 'fail' : 'pass')
         }
       },
     }

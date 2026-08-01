@@ -279,6 +279,7 @@
   "story.readBody": "Read the story file",
   "story.fact.plan": "Plan",
   "story.fact.dependsOn": "Depends on",
+  "story.fact.dependents": "Needed by",
   "story.fact.ui": "UI story",
   "story.fact.evidence": "Evidence",
   "story.build": "Build this story",
@@ -290,6 +291,12 @@
 
   "story.requeue": "Requeue",
   "story.noEvidence": "Marked done with no evidence directory.",
+  "story.runs.title": "Execution history",
+  "story.runs.empty": "No runs recorded for this story yet.",
+  "story.run.cycles.one": "{count} cycle",
+  "story.run.cycles.other": "{count} cycles",
+  "story.run.halted": "halted",
+  "story.run.ended": "ended",
 
   "evidence.empty": "No runs yet.",
   "evidence.more": "Showing {shown} of {total} runs.",

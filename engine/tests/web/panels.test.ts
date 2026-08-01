@@ -508,6 +508,95 @@ describe('stories', () => {
     expect(document.getElementById('story-open-body')?.textContent).toBe('Log in with a mailed link.')
   })
 
+  it('names what a story unblocks, the inverse edge nothing on disk stores', async () => {
+    // P001-S03 is the only story that names P001-S02 in its own `depends_on`;
+    // the plan document carries that edge in one direction only, so this is
+    // `dependents()` walking every other story rather than a field the engine
+    // ever writes.
+    const stories = await openThree()
+
+    stories.openTab('P001-S02')
+    await vi.waitFor(() => expect(document.getElementById('story-open-title')?.textContent).toBe('P001-S02 — Two'))
+    expect(cells('#story-open-facts dd')[2]).toBe('P001-S03')
+
+    // P001-S01 unblocks nothing — the same dash `story.fact.dependsOn` already
+    // shows for a story with no dependencies of its own.
+    stories.openTab('P001-S01')
+    await vi.waitFor(() => expect(document.getElementById('story-open-title')?.textContent).toBe('P001-S01 — One'))
+    expect(cells('#story-open-facts dd')[2]).toBe('—')
+  })
+
+  it("narrows the open story's execution history to its own runs, out of the shared list", async () => {
+    installStorage(memoryStorage(JSON.stringify({ activePlan: 'P001' })))
+    serve({
+      '/api/plans/P001': {
+        id: 'P001',
+        title: 'A plan',
+        approval: null,
+        body: '',
+        review: null,
+        stories: [
+          detailStory({ id: 'P001-S01', title: 'One' }),
+          detailStory({ id: 'P001-S02', title: 'Two' }),
+          detailStory({ id: 'P001-S03', title: 'Three' }),
+        ],
+      },
+      // Two runs, naming two different stories — the filter is only actually
+      // exercised when there is another story's run for it to drop.
+      '/api/runs': [
+        { id: '2026-07-28-001--P001-S01--build', story: 'P001-S01', track: 'build', cycles: 2, halted: false },
+        { id: '2026-07-28-002--P001-S02--build', story: 'P001-S02', track: 'build', cycles: 1, halted: true },
+      ],
+    })
+    mountDoc()
+    reveal('panel-stories')
+    const stories = mountStories()
+    draw(
+      emptySnapshot({
+        plans: [
+          plan({
+            id: 'P001',
+            stories: [story({ id: 'P001-S01' }), story({ id: 'P001-S02' }), story({ id: 'P001-S03' })],
+          }),
+        ],
+      }),
+    )
+    await vi.waitFor(() => expect(document.querySelectorAll('#stories-list .story')).toHaveLength(3))
+
+    stories.openTab('P001-S01')
+    await vi.waitFor(() => expect(document.querySelectorAll('#story-open-runs .run')).toHaveLength(1))
+    const first = document.querySelector('#story-open-runs .run') as HTMLElement
+    expect(first.textContent).toContain('2026-07-28-001--P001-S01--build')
+    expect(first.textContent).not.toContain('2026-07-28-002--P001-S02--build')
+    expect(first.textContent).toContain('ended')
+    // The track and cycles cells render data no other assertion here reads —
+    // pinned so a blank chip or a frozen count would fail this test rather
+    // than ship unnoticed (both columns were previously inert).
+    expect(first.querySelector('.chip')?.textContent).toBe('build')
+    expect(first.querySelector('[data-slot="cycles"]')?.textContent).toBe('2 cycles')
+    expect((document.getElementById('story-open-runs-empty') as HTMLElement).hidden).toBe(true)
+
+    stories.openTab('P001-S02')
+    await vi.waitFor(() =>
+      expect(document.querySelector('#story-open-runs .run')?.textContent).toContain('2026-07-28-002--P001-S02--build'),
+    )
+    const second = document.querySelector('#story-open-runs .run') as HTMLElement
+    expect(second.textContent).not.toContain('2026-07-28-001--P001-S01--build')
+    expect(second.textContent).toContain('halted')
+    expect(second.querySelector('.chip')?.textContent).toBe('build')
+    expect(second.querySelector('[data-slot="cycles"]')?.textContent).toBe('1 cycle')
+    expect(document.querySelectorAll('#story-open-runs .run')).toHaveLength(1)
+
+    // A third story the run list never names — the shared feed has entries,
+    // just none for this one.
+    stories.openTab('P001-S03')
+    await vi.waitFor(() =>
+      expect(document.getElementById('story-open-title')?.textContent).toBe('P001-S03 — Three'),
+    )
+    expect(document.querySelectorAll('#story-open-runs .run')).toHaveLength(0)
+    expect((document.getElementById('story-open-runs-empty') as HTMLElement).hidden).toBe(false)
+  })
+
   it('walks the strip with the arrow keys, and the direction follows the document', async () => {
     // The page's first keyboard interaction. ui/tabs.js refused role="tablist"
     // precisely because arrows have to honour text direction; this takes that on

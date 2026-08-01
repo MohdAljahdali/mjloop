@@ -575,6 +575,17 @@ button.primary:disabled {
   border-block-end: 1px solid var(--line);
 }
 
+/* `.run` is shared with `tpl-run`'s grid rows (index.html:1101), where
+   `.grid-head, .grid-body, .grid-row { display: contents }` (60-panels.css
+   below) must win at identical specificity — a `display` given here would
+   pull every Evidence run row out of the grid's column flow depending on
+   source order alone. The story pane's row gets its own layout instead. */
+.story-open-runs .run {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .run-id {
   font-family: var(--mono);
   font-size: 12px;
@@ -1442,4 +1453,24 @@ details summary {
 .story-open-meta {
   color: var(--dim);
   margin: 6px 0 12px;
+}
+
+/* A subsection inside the one `.story-open` card, so it gets its own small
+   heading rather than the card's own `h2` — reserved for the story's title. */
+.story-open-runs {
+  margin-block-start: 14px;
+}
+
+.story-open-runs h3 {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--dim);
+  font-weight: 650;
+  margin: 0 0 8px;
+}
+
+.story-open-runs .empty {
+  padding: 10px 14px;
+  margin: 0;
 }

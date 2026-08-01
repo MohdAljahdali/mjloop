@@ -60,6 +60,25 @@ export function unmet(story, statuses) {
 }
 
 /**
+ * The stories in this plan whose `depends_on` names this one.
+ *
+ * The inverse edge is not stored anywhere on disk — `depends_on` only ever
+ * points forward, from a story to what it needs — so this is a scan over the
+ * plan's own stories rather than a lookup, computed fresh from the same
+ * document `unmet` already reads. It is scoped to one plan for the same
+ * reason `statusIndex` is: `assertDependenciesResolve` (`ops/plan.ts:239-250`)
+ * refuses a cross-plan edge outright, so nothing outside this plan can ever
+ * name `storyId` in its own `depends_on`.
+ *
+ * @param {string} storyId
+ * @param {readonly (StoryView | StoryDetail)[]} stories
+ * @returns {string[]}
+ */
+export function dependents(storyId, stories) {
+  return stories.filter((story) => story.id !== storyId && story.depends_on.includes(storyId)).map((story) => story.id)
+}
+
+/**
  * One plan's stories, by id.
  *
  * Takes stories rather than plans deliberately: a project-wide index is what

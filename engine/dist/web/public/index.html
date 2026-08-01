@@ -387,6 +387,15 @@
                 <summary data-i18n="story.readBody"></summary>
                 <pre class="excerpt" id="story-open-body"></pre>
               </details>
+              <!-- Every run whose directory name carries this story's id — a
+                   convention read out of a path, not a foreign key. See
+                   panels/stories.js's comment above the feed that fills this
+                   list before treating it as one. -->
+              <section class="story-open-runs">
+                <h3 data-i18n="story.runs.title"></h3>
+                <p class="empty" id="story-open-runs-empty" hidden></p>
+                <ul class="runs" id="story-open-runs"></ul>
+              </section>
             </section>
 
             <section class="block">
@@ -1097,6 +1106,18 @@
         <span role="cell"><span class="res" data-slot="outcome"></span></span>
         <span role="cell"><button type="button" data-act="open-run" data-slot="open"></button></span>
       </div>
+    </template>
+
+    <!-- The Story pane's own run list: one story's history, not the whole
+         project's, so it carries no `story` column and no link into the
+         Evidence tab's per-cycle detail. -->
+    <template id="tpl-story-run">
+      <li class="run">
+        <span class="run-id" data-slot="id"></span>
+        <span class="chip" data-slot="track"></span>
+        <span data-slot="cycles"></span>
+        <span class="res" data-slot="outcome"></span>
+      </li>
     </template>
 
     <!-- The verify table's own headings carry `data-slot` rather than
