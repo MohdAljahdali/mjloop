@@ -9,6 +9,7 @@ import { installToken } from './lib/api.js'
 import { direction, installLocales, loadFallback, locale, pickLocale, setLocale } from './lib/i18n.js'
 import { installStorage, read as prefs, write as remember } from './lib/local.js'
 import { routeFrom, startRouter } from './lib/router.js'
+import { ready } from './lib/stories.js'
 import { connect, send } from './net/socket.js'
 import * as bus from './ui/bus.js'
 import { attr, flag, label, phrase, translateStatic, verbatim } from './ui/dom.js'
@@ -25,7 +26,7 @@ import { mountEvidence } from './panels/evidence.js'
 import { mountFeatures } from './panels/features.js'
 import { mountMemory } from './panels/memory.js'
 import { mountLauncher } from './panels/launcher.js'
-import { mountPlans, ready } from './panels/plans.js'
+import { mountPlans } from './panels/plans.js'
 import { mountQueue } from './panels/queue.js'
 import { mountRun } from './panels/run.js'
 import { mountSkills } from './panels/skills.js'
@@ -102,9 +103,12 @@ register({ id: 'rail', node: /** @type {HTMLElement} */ (document.querySelector(
 /**
  * The two numbers on the navigation.
  *
- * Wired here rather than inside `ui/rail.js` because one of them is the plans
- * panel's own readiness rule, and `ui/` reaching into `panels/` to borrow it
- * would invert the layering. `app.js` is the file that already knows both.
+ * Wired here rather than inside `ui/rail.js` because `app.js` is the file that
+ * already knows both — the readiness rule itself lives in `lib/stories.js`, so
+ * borrowing it is no longer the layering problem it was when it belonged to a
+ * panel. It stays registered against `.tabs`, which is on screen whatever tab
+ * is open: a count inside a panel is a count that stops updating when the panel
+ * closes.
  */
 register({
   id: 'nav',

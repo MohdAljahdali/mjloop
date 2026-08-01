@@ -13,28 +13,22 @@
 import { clone, verbatim } from '../ui/dom.js'
 import { reconcile } from '../ui/list.js'
 import { register } from '../ui/render.js'
-import { statusIndex, unmet } from './plans.js'
+import { ready } from '../lib/stories.js'
 
 /** @typedef {import('../../protocol.js').Snapshot} Snapshot */
 
 /**
  * The build commands worth suggesting: the stories that are actually ready.
  *
+ * "Actually ready" is `lib/stories.js`'s rule and not a second copy of it. The
+ * copy that used to live here was the same predicate written twice, which is
+ * one edit away from a datalist that offers a build the Plans panel refuses.
+ *
  * @param {Snapshot} snapshot
  * @returns {string[]}
  */
 export function suggestions(snapshot) {
-  const statuses = statusIndex(snapshot.plans)
-  /** @type {string[]} */
-  const out = []
-  for (const plan of snapshot.plans) {
-    for (const story of plan.stories) {
-      if (story.status === 'todo' && unmet(story, statuses).length === 0) {
-        out.push(`/mjloop:build ${story.id}`)
-      }
-    }
-  }
-  return out
+  return ready(snapshot.plans).map((story) => `/mjloop:build ${story.id}`)
 }
 
 /**

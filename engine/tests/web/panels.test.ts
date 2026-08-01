@@ -8,7 +8,7 @@ import { collectConfigChanges, mountConfig } from '../../src/web/public/panels/c
 import { mountEvidence } from '../../src/web/public/panels/evidence.js'
 import { joinAcceptances, mountSkills, shortDigest } from '../../src/web/public/panels/skills.js'
 import { approvable, mountFeatures } from '../../src/web/public/panels/features.js'
-import { mountPlans, planStatus, ready, statusIndex, unmet } from '../../src/web/public/panels/plans.js'
+import { mountPlans } from '../../src/web/public/panels/plans.js'
 import { mountQueue } from '../../src/web/public/panels/queue.js'
 import { mountRun } from '../../src/web/public/panels/run.js'
 import { facet } from '../../src/web/public/panels/memory.js'
@@ -374,11 +374,6 @@ describe('plans', () => {
     expect(document.getElementById('tally-done')?.textContent).toBe('0')
   })
 
-  it('counts an unknown dependency as unmet', () => {
-    // Treating an id nobody wrote as satisfied would turn a typo into a build.
-    expect(unmet(story({ id: 'P001-S02', depends_on: ['P001-S09'] }), statusIndex([]))).toEqual(['P001-S09'])
-  })
-
   it('suggests only the stories that are actually ready', () => {
     const snapshot = emptySnapshot({
       plans: [
@@ -394,35 +389,6 @@ describe('plans', () => {
       ],
     })
     expect(suggestions(snapshot)).toEqual(['/mjloop:build P001-S02'])
-  })
-})
-
-describe('derived state', () => {
-  it("reads a plan's state off its stories and nothing else", () => {
-    expect(planStatus(plan({ id: 'P001' }))).toBe('empty')
-    expect(planStatus(plan({ id: 'P001', stories: [story({ id: 'P001-S01', status: 'done' })] }))).toBe('done')
-    expect(planStatus(plan({ id: 'P001', stories: [story({ id: 'P001-S01' })] }))).toBe('todo')
-    expect(
-      planStatus(plan({ id: 'P001', stories: [story({ id: 'P001-S01', status: 'doing' })] })),
-    ).toBe('doing')
-    // Blocked outranks doing: one blocked story is the thing worth saying.
-    expect(
-      planStatus(
-        plan({
-          id: 'P001',
-          stories: [story({ id: 'P001-S01', status: 'doing' }), story({ id: 'P001-S02', status: 'blocked' })],
-        }),
-      ),
-    ).toBe('blocked')
-  })
-
-  it('finds what is ready across every plan', () => {
-    const plans = [
-      plan({ id: 'P001', stories: [story({ id: 'P001-S01', status: 'done' }), story({ id: 'P001-S02', depends_on: ['P001-S01'] })] }),
-      plan({ id: 'P002', stories: [story({ id: 'P002-S01', depends_on: ['P001-S02'] })] }),
-    ]
-    // A dependency reaching across plans is still a dependency.
-    expect(ready(plans).map((entry) => entry.id)).toEqual(['P001-S02'])
   })
 })
 

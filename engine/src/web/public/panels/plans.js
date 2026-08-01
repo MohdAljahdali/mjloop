@@ -2,11 +2,9 @@
  * Plans — what can be built now, what each plan is waiting on, and one list of
  * stories per plan rather than two.
  *
- * Readiness is computed **on the page**, by the same rule as
- * `index-render.ts:23-28`: a story is ready when it is `todo` and every id in
- * `depends_on` is `done`. The engine's own `storyNext` composes an English
- * sentence for its reason, and importing that would put server-authored prose
- * on a page whose whole i18n discipline rests on there being none.
+ * Readiness is computed **on the page**, in `lib/stories.js`, by the engine's
+ * own per-plan rule — `ops/plan.ts`'s `storyNext`, which resolves `--next`.
+ * That module carries the reasoning; this one only renders what it returns.
  *
  * The list rides the snapshot. The open plan's body, its review, and its
  * stories' acceptance criteria and evidence are documents, so they are fetched
@@ -30,6 +28,7 @@ import { feed } from '../lib/api.js'
 import { stamp } from '../lib/fmt.js'
 import { t } from '../lib/i18n.js'
 import { planKey, storyKey } from '../lib/keys.js'
+import { FILTERS, planIndex, planStatus, ready, readyIn, sift, statusIndex, tally, unmet } from '../lib/stories.js'
 import { reconcile } from '../ui/list.js'
 import { draw, register, snapshot as latest } from '../ui/render.js'
 import { submit } from '../ui/writes.js'
@@ -44,128 +43,6 @@ import { submit } from '../ui/writes.js'
 
 /** How many buildable stories the start block lists before it says "and n more". */
 const READY_SHOWN = 6
-
-/** The story filters, in the order the picker offers them. */
-export const FILTERS = ['', 'ready', 'doing', 'blocked', 'done']
-
-/**
- * The ids this story is still waiting on: dependencies that are not `done`.
- *
- * A dependency naming a story that does not exist counts as unmet. Silently
- * treating an unknown id as satisfied would turn a typo into a build.
- *
- * @param {StoryView | StoryDetail} story
- * @param {Map<string, string>} statuses
- * @returns {string[]}
- */
-export function unmet(story, statuses) {
-  return story.depends_on.filter((id) => statuses.get(id) !== 'done')
-}
-
-/**
- * @param {readonly PlanView[]} plans
- * @returns {Map<string, string>}
- */
-export function statusIndex(plans) {
-  /** @type {Map<string, string>} */
-  const index = new Map()
-  for (const plan of plans) {
-    for (const story of plan.stories) index.set(story.id, story.status)
-  }
-  return index
-}
-
-/**
- * Which plan each story belongs to, so a buildable story can say where it came
- * from without the reader going to find out.
- *
- * @param {readonly PlanView[]} plans
- * @returns {Map<string, string>}
- */
-export function planIndex(plans) {
-  /** @type {Map<string, string>} */
-  const index = new Map()
-  for (const plan of plans) {
-    for (const story of plan.stories) index.set(story.id, plan.id)
-  }
-  return index
-}
-
-/**
- * A plan's derived state — a pure function over exactly the stories the
- * snapshot holds, so it never needs a field the engine does not already write.
- *
- * @param {PlanView} plan
- * @returns {'empty' | 'done' | 'blocked' | 'doing' | 'todo'}
- */
-export function planStatus(plan) {
-  if (plan.stories.length === 0) return 'empty'
-  if (plan.stories.every((story) => story.status === 'done')) return 'done'
-  if (plan.stories.some((story) => story.status === 'blocked')) return 'blocked'
-  if (plan.stories.some((story) => story.status === 'doing')) return 'doing'
-  return 'todo'
-}
-
-/**
- * Every story that could be built right now, across every plan.
- *
- * @param {readonly PlanView[]} plans
- * @returns {StoryView[]}
- */
-export function ready(plans) {
-  const statuses = statusIndex(plans)
-  return plans.flatMap((plan) =>
-    plan.stories.filter((story) => story.status === 'todo' && unmet(story, statuses).length === 0),
-  )
-}
-
-/**
- * The five numbers the tally shows. Counted over stories rather than plans:
- * "three plans" tells you nothing about how much is left.
- *
- * @param {readonly PlanView[]} plans
- * @returns {{ plans: number, ready: number, doing: number, blocked: number, done: number }}
- */
-export function tally(plans) {
-  const stories = plans.flatMap((plan) => plan.stories)
-  /**
-   * @param {string} status
-   * @returns {number}
-   */
-  const count = (status) => stories.filter((story) => story.status === status).length
-  return {
-    plans: plans.length,
-    ready: ready(plans).length,
-    doing: count('doing'),
-    blocked: count('blocked'),
-    done: count('done'),
-  }
-}
-
-/**
- * The stories a filter and a search box leave standing.
- *
- * `ready` is not a story status — it is a status *and* a dependency check, and
- * it is the filter people actually want. Pure and exported so it is tested
- * without a DOM.
- *
- * @template {StoryView | StoryDetail} T
- * @param {readonly T[]} stories
- * @param {string} query
- * @param {string} filter One of `FILTERS`.
- * @param {Map<string, string>} statuses
- * @returns {T[]}
- */
-export function sift(stories, query, filter, statuses) {
-  const terms = query.toLowerCase().split(/\s+/).filter((term) => term.length > 0)
-  return stories.filter((story) => {
-    if (filter === 'ready' && !(story.status === 'todo' && unmet(story, statuses).length === 0)) return false
-    if (filter !== '' && filter !== 'ready' && story.status !== filter) return false
-    if (terms.length === 0) return true
-    const haystack = `${story.id} ${story.title}`.toLowerCase()
-    return terms.every((term) => haystack.includes(term))
-  })
-}
 
 /** The plan whose detail is open, or null. */
 let opened = /** @type {string | null} */ (null)
@@ -236,7 +113,11 @@ export function mountPlans() {
     draw()
   })
 
-  /** The statuses of the whole project, for the fetched detail's dependency checks. */
+  /**
+   * The open plan's own story statuses, for the fetched detail's dependency
+   * checks. Written from the fetched document rather than from the snapshot, so
+   * a row's answer cannot come from a list the detail beside it has moved past.
+   */
   let statuses = /** @type {Map<string, string>} */ (new Map())
   /**
    * The story `--next` would pick. Held here rather than read off the row's
@@ -266,7 +147,6 @@ export function mountPlans() {
       phrase(empty, 'plans.empty')
       flag(empty, 'hidden', plans.length > 0)
 
-      statuses = statusIndex(plans)
       const plansOf = planIndex(plans)
 
       const counts = tally(plans)
@@ -279,7 +159,7 @@ export function mountPlans() {
       phrase(tallySlots.blocked, 'plans.number', { n: counts.blocked })
       phrase(tallySlots.done, 'plans.number', { n: counts.done })
 
-      const { shown, total } = reconcile(host, plans, planKey, () => planRow(statuses))
+      const { shown, total } = reconcile(host, plans, planKey, () => planRow())
       flag(more, 'hidden', shown >= total)
       if (shown < total) phrase(more, 'plans.more', { shown, total })
 
@@ -302,10 +182,9 @@ export function mountPlans() {
   })
 
   /**
-   * @param {Map<string, string>} index
    * @returns {{ root: HTMLElement, update: (plan: PlanView) => void }}
    */
-  function planRow(index) {
+  function planRow() {
     const { root, slots } = clone('tpl-plan')
     return {
       root,
@@ -346,9 +225,7 @@ export function mountPlans() {
           flag(progress, 'hidden', total === 0)
         }
 
-        const buildable = view.stories.filter(
-          (story) => story.status === 'todo' && unmet(story, index).length === 0,
-        ).length
+        const buildable = readyIn(view).length
         const readyNote = slots['ready']
         if (readyNote !== undefined) {
           phrase(readyNote, 'plans.readyHere', { n: buildable })
@@ -452,6 +329,7 @@ export function mountPlans() {
     // the plan-critic's verdict is ever seen again.
     flag(reviewDetails, 'hidden', view.review === null)
 
+    statuses = statusIndex(view.stories)
     const shown = sift(view.stories, text, filter, statuses)
     phrase(storiesEmpty, view.stories.length === 0 ? 'plans.storiesEmpty' : 'plans.noMatch')
     flag(storiesEmpty, 'hidden', shown.length > 0)

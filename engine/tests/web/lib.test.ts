@@ -3,6 +3,16 @@ import { installForTest, parts, pluralKey, t, tn } from '../../src/web/public/li
 import { duration, time } from '../../src/web/public/lib/fmt.js'
 import { installStorage, read, write } from '../../src/web/public/lib/local.js'
 import { routeFrom } from '../../src/web/public/lib/router.js'
+import {
+  planStatus,
+  ready,
+  readyIn,
+  sift,
+  statusIndex,
+  tally,
+  unmet,
+} from '../../src/web/public/lib/stories.js'
+import type { PlanView, StoryView } from '../../src/web/protocol.js'
 
 /**
  * `lib/` is DOM-free so it is testable here, under the suite's existing
@@ -126,5 +136,89 @@ describe('router', () => {
     expect(routeFrom('#plans', ['run', 'plans'], 'run')).toBe('plans')
     expect(routeFrom('', ['run', 'plans'], 'run')).toBe('run')
     expect(routeFrom('#nope', ['run', 'plans'], 'run')).toBe('run')
+  })
+})
+
+const story = (patch: Partial<StoryView> & { id: string }): StoryView => ({
+  title: 'A story',
+  status: 'todo',
+  ui: false,
+  depends_on: [],
+  ...patch,
+})
+
+const plan = (patch: Partial<PlanView> & { id: string }): PlanView => ({
+  title: 'A plan',
+  approval: null,
+  stories: [],
+  ...patch,
+})
+
+describe('story derivations', () => {
+  it('scopes readiness to one plan, as the engine does', () => {
+    // The fix. `ops/plan.ts`'s `storyNext` computes its done-set inside one
+    // plan, so a dependency naming another plan's story is never satisfied for
+    // it — and the page said the opposite: it indexed every plan's stories at
+    // once, marked this one Ready, tagged it `next` and offered Run, for a
+    // story `/mjloop:build --next` would never pick.
+    const plans = [
+      plan({ id: 'P001', stories: [story({ id: 'P001-S01', status: 'done' })] }),
+      plan({ id: 'P002', stories: [story({ id: 'P002-S01', depends_on: ['P001-S01'] })] }),
+    ]
+    expect(readyIn(plans[1] as PlanView)).toEqual([])
+    expect(ready(plans)).toEqual([])
+    // And the two numbers that render the same claim agree with it.
+    expect(tally(plans).ready).toBe(0)
+  })
+
+  it('still finds what a satisfied dependency inside the plan unblocks', () => {
+    // The other direction, so the fix is not "nothing is ever ready".
+    const one = plan({
+      id: 'P001',
+      stories: [story({ id: 'P001-S01', status: 'done' }), story({ id: 'P001-S02', depends_on: ['P001-S01'] })],
+    })
+    expect(readyIn(one).map((entry) => entry.id)).toEqual(['P001-S02'])
+    expect(ready([one]).map((entry) => entry.id)).toEqual(['P001-S02'])
+  })
+
+  it('counts an id the index does not carry as unmet', () => {
+    // Inside a plan that is a typo, and treating it as satisfied would turn one
+    // into a build. Across plans it is an edge `assertDependenciesResolve`
+    // refuses to write — same answer, different reason.
+    expect(unmet(story({ id: 'P001-S02', depends_on: ['P001-S09'] }), statusIndex([]))).toEqual(['P001-S09'])
+  })
+
+  it("reads a plan's state off its stories and nothing else", () => {
+    expect(planStatus(plan({ id: 'P001' }))).toBe('empty')
+    expect(planStatus(plan({ id: 'P001', stories: [story({ id: 'P001-S01', status: 'done' })] }))).toBe('done')
+    expect(planStatus(plan({ id: 'P001', stories: [story({ id: 'P001-S01' })] }))).toBe('todo')
+    expect(planStatus(plan({ id: 'P001', stories: [story({ id: 'P001-S01', status: 'doing' })] }))).toBe('doing')
+    // Blocked outranks doing: one blocked story is the thing worth saying.
+    expect(
+      planStatus(
+        plan({
+          id: 'P001',
+          stories: [story({ id: 'P001-S01', status: 'doing' }), story({ id: 'P001-S02', status: 'blocked' })],
+        }),
+      ),
+    ).toBe('blocked')
+  })
+
+  it('sifts by a status the story does not carry, and by a query across both fields', () => {
+    // Reachable without a DOM for the first time: `ready` is a status *and* a
+    // dependency check, so it is the one filter a status column cannot express.
+    const stories = [
+      story({ id: 'P001-S01', title: 'Wire the socket', status: 'done' }),
+      story({ id: 'P001-S02', title: 'Draw the rail', depends_on: ['P001-S01'] }),
+      story({ id: 'P001-S03', title: 'Draw the pane', depends_on: ['P001-S02'] }),
+    ]
+    const statuses = statusIndex(stories)
+    expect(sift(stories, '', 'ready', statuses).map((entry) => entry.id)).toEqual(['P001-S02'])
+    expect(sift(stories, '', 'done', statuses).map((entry) => entry.id)).toEqual(['P001-S01'])
+    // Terms are conjunctive and match id or title, so two words narrow rather
+    // than widen.
+    expect(sift(stories, 'draw pane', '', statuses).map((entry) => entry.id)).toEqual(['P001-S03'])
+    expect(sift(stories, 'S03', '', statuses).map((entry) => entry.id)).toEqual(['P001-S03'])
+    expect(sift(stories, '', '', statuses)).toHaveLength(3)
   })
 })
