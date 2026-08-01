@@ -87,6 +87,10 @@ beforeAll(async () => {
       return Promise.resolve(new Response(JSON.stringify(FEATURE_DETAIL), { status: 200 }))
     }
     if (at === '/api/skills') return Promise.resolve(new Response(JSON.stringify(SKILLS_VIEW), { status: 200 }))
+    if (at === '/api/plans/P001') {
+      planFetches += 1
+      return Promise.resolve(new Response(JSON.stringify(PLAN_DETAIL), { status: 200 }))
+    }
     return Promise.resolve(new Response(JSON.stringify({ error: { code: 'error.notFound' } }), { status: 404 }))
   })
 
@@ -103,6 +107,18 @@ function poll(patch: Parameters<typeof emptySnapshot>[0] = {}): void {
 }
 
 const DIGEST = 'a'.repeat(64)
+
+/** How many times the page has asked for P001's document. */
+let planFetches = 0
+
+const PLAN_DETAIL = {
+  id: 'P001',
+  title: 'A plan',
+  approval: null,
+  body: '# A plan',
+  review: null,
+  stories: [],
+}
 
 const FEATURE_SUMMARY = {
   id: 'F001',
@@ -171,6 +187,29 @@ function click(selector: string): void {
 }
 
 describe('boot', () => {
+  it('keeps the open plan current while its own panel is closed', async () => {
+    // `ui/render.js` skips a hidden panel, so a document ticked from a panel's
+    // own `update()` stops the moment that panel closes. After the split the
+    // Plans panel is closed most of the time while another surface reads the
+    // same document, so the tick is registered against `.tabs` — and only a
+    // suite that boots `app.js` can tell whether it actually is.
+    open('plans')
+    const plans = [{ id: 'P001', title: 'A plan', approval: null, stories: [] }]
+    const at = (key: string) => ({ ...emptySnapshot().revisions, plans: { P001: key } })
+
+    poll({ plans, revisions: at('a') })
+    await vi.waitFor(() => expect(document.querySelectorAll('#plans-list > *').length).toBe(1))
+    click('[data-act="open-plan"]')
+    await vi.waitFor(() => expect(planFetches).toBe(1))
+
+    // Away from Plans entirely: `#panel-plans` is hidden and does not draw.
+    open('memory')
+    expect((document.getElementById('panel-plans') as HTMLElement).hidden).toBe(true)
+
+    poll({ plans, revisions: at('b') })
+    await vi.waitFor(() => expect(planFetches).toBe(2))
+  })
+
   it('reaches every panel the navigation offers', () => {
     // A tab whose panel `app.js` forgot to mount is a tab that renders nothing
     // and looks like an empty project.

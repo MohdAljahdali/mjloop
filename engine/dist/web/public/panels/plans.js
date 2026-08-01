@@ -27,7 +27,7 @@ import { attr, clone, cls, flag, label, phrase, verbatim } from '../ui/dom.js'
 import { stamp } from '../lib/fmt.js'
 import { t } from '../lib/i18n.js'
 import { planKey, storyKey } from '../lib/keys.js'
-import { mountPlanDoc, subscribe, value as planDoc } from '../lib/plandoc.js'
+import { subscribe, value as planDoc } from '../lib/plandoc.js'
 import { activePlan, setActivePlan, setStoryFilter, storyFilter } from '../lib/selection.js'
 import { FILTERS, planIndex, planStatus, ready, readyIn, sift, statusIndex, tally, unmet } from '../lib/stories.js'
 import { reconcile } from '../ui/list.js'
@@ -138,18 +138,17 @@ export function mountPlans() {
    */
   let first = /** @type {string | null} */ (null)
 
-  // Only the open plan is fetched, and only while it is open — and the feed
-  // itself is in `lib/plandoc.js`, because the Stories side reads the same
-  // document and two feeds would fetch it twice.
-  const plan = mountPlanDoc()
+  // The document is fetched in `lib/plandoc.js` and ticked from `app.js`,
+  // against a node that is always on screen. This panel only reads it: a feed
+  // driven from `update()` stops the moment the panel is hidden, and after the
+  // split it is hidden most of the time while something else reads the same
+  // document.
   subscribe(() => draw())
 
   register({
     id: 'plans',
     node,
     update(state) {
-      plan.update(state)
-
       const plans = state.plans
       workspace.dataset['detailOpen'] = opened() === null ? 'false' : 'true'
       phrase(empty, 'plans.empty')

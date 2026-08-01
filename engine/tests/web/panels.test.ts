@@ -2,7 +2,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { installForTest } from '../../src/web/public/lib/i18n.js'
 import { installStorage, read as prefs } from '../../src/web/public/lib/local.js'
-import { draw, installScheduler } from '../../src/web/public/ui/render.js'
+import { draw, installScheduler, register } from '../../src/web/public/ui/render.js'
+import { mountPlanDoc } from '../../src/web/public/lib/plandoc.js'
 import { drawRail, mountRail } from '../../src/web/public/ui/rail.js'
 import { collectConfigChanges, mountConfig } from '../../src/web/public/panels/config.js'
 import { mountEvidence } from '../../src/web/public/panels/evidence.js'
@@ -94,7 +95,23 @@ beforeEach(async () => {
   installStorage(memoryStorage())
   installScheduler((fn) => fn())
   sent.length = 0
+  mountDoc()
 })
+
+/**
+ * What `app.js` does: the open plan's document is ticked from `.tabs`, which is
+ * on screen whatever tab is open, because `ui/render.js` skips a hidden panel.
+ * A suite that mounts panels directly has to wire it the same way or it is
+ * testing a page nobody ships.
+ */
+function mountDoc(): void {
+  const planDoc = mountPlanDoc()
+  register({
+    id: 'plandoc',
+    node: document.querySelector('.tabs') as HTMLElement,
+    update: (snapshot) => planDoc.update(snapshot),
+  })
+}
 
 /** Panels register against nodes; drawing a hidden one is a no-op by design. */
 function reveal(id: string): HTMLElement {

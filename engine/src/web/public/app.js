@@ -8,6 +8,7 @@
 import { installToken } from './lib/api.js'
 import { direction, installLocales, loadFallback, locale, pickLocale, setLocale } from './lib/i18n.js'
 import { installStorage, read as prefs, write as remember } from './lib/local.js'
+import { mountPlanDoc } from './lib/plandoc.js'
 import { routeFrom, startRouter } from './lib/router.js'
 import { ready } from './lib/stories.js'
 import { connect, send } from './net/socket.js'
@@ -100,6 +101,20 @@ mountMemory()
 const config = mountConfig()
 mountQueue()
 register({ id: 'rail', node: /** @type {HTMLElement} */ (document.querySelector('.rail')), update: drawRail })
+/**
+ * The open plan's document.
+ *
+ * Ticked here, against `.tabs`, because `ui/render.js` skips a hidden panel:
+ * every surface that reads this document — the plan detail, and after the split
+ * the story list beside it — would otherwise go stale exactly while its own tab
+ * was closed. The same reason the two navigation counts live here.
+ */
+const planDoc = mountPlanDoc()
+register({
+  id: 'plandoc',
+  node: /** @type {HTMLElement} */ (document.querySelector('.tabs')),
+  update: (snapshot) => planDoc.update(snapshot),
+})
 /**
  * The two numbers on the navigation.
  *
