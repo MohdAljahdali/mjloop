@@ -250,9 +250,11 @@ the project has a design system.
 /mjloop:web        a local page that queues runs and shows each one in a terminal
 ```
 
-It prints a url. Open it and you get three things beside each other: the state the loop
-is in, the project's plans and stories, and a queue of commands. Click a story and it is
-queued; type any loop command into the box and it is queued too.
+It prints a url. Open it and you get the state the loop is in, the project's work, and a
+queue of commands. Plans and Stories are two tabs, not one: **Plans** is where a plan is
+read, approved and tracked, and **Stories** is where its stories are filtered and run.
+Whichever plan you have open under Plans is the one Stories shows. Click a story's Run and
+it is queued; type any loop command into the box and it is queued too.
 
 The queue runs **one at a time**, each in its own `claude` session. `.mjloop/state.json`
 holds one run, so two at once would overwrite each other — the server enforces that

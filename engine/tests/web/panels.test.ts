@@ -10,6 +10,7 @@ import { mountEvidence } from '../../src/web/public/panels/evidence.js'
 import { joinAcceptances, mountSkills, shortDigest } from '../../src/web/public/panels/skills.js'
 import { approvable, mountFeatures } from '../../src/web/public/panels/features.js'
 import { mountPlans } from '../../src/web/public/panels/plans.js'
+import { mountStories } from '../../src/web/public/panels/stories.js'
 import { mountQueue } from '../../src/web/public/panels/queue.js'
 import { mountRun } from '../../src/web/public/panels/run.js'
 import { facet } from '../../src/web/public/panels/memory.js'
@@ -229,11 +230,10 @@ describe('plans', () => {
     mounted.toggle('P001')
   })
 
-  it('opens the plan the reader left open, and the filter they chose, with no click', async () => {
+  it('opens the plan the reader left open, with no click', async () => {
     // The whole point of persisting the selection: a reload is not a reset.
-    // Mount reads it, so a plan that was open before the refresh is open after
-    // it, and the filter picker shows the value rather than merely holding it.
-    installStorage(memoryStorage(JSON.stringify({ activePlan: 'P001', storyFilter: 'done' })))
+    // Mount reads it, so a plan that was open before the refresh is open after.
+    installStorage(memoryStorage(JSON.stringify({ activePlan: 'P001' })))
     serve({
       '/api/plans/P001': {
         id: 'P001',
@@ -241,50 +241,15 @@ describe('plans', () => {
         approval: null,
         body: '# Large plan',
         review: null,
-        stories: [
-          { id: 'P001-S01', title: 'Done one', status: 'done', ui: false, depends_on: [], acceptance: [], evidence: null },
-          { id: 'P001-S02', title: 'Todo one', status: 'todo', ui: false, depends_on: [], acceptance: [], evidence: null },
-        ],
+        stories: [],
       },
     })
     reveal('panel-plans')
     mountPlans()
-    draw(emptySnapshot({ plans: [plan({ id: 'P001', stories: [story({ id: 'P001-S01', status: 'done' }), story({ id: 'P001-S02' })] })] }))
+    draw(emptySnapshot({ plans: [plan({ id: 'P001' })] }))
 
     await vi.waitFor(() => expect((document.getElementById('plan-detail') as HTMLElement).hidden).toBe(false))
-    expect((document.getElementById('story-filter') as HTMLSelectElement).value).toBe('done')
-    await vi.waitFor(() =>
-      expect(
-        [...document.querySelectorAll('#plan-detail-stories .story .story-id')].map((node) => node.textContent),
-      ).toEqual(['P001-S01']),
-    )
-  })
-
-  it('follows only the open plan, so another plan moving does not re-fetch it', async () => {
-    // The reason revisions.plans is keyed per plan. With one joined string, a
-    // story edited in P002 moved the key P001's document was subscribed to, and
-    // every open surface refetched a document that had not changed.
-    let fetches = 0
-    const detail = { id: 'P001', title: 'One', approval: null, body: '', review: null, stories: [] }
-    vi.stubGlobal('fetch', (url: string) => {
-      if (url.startsWith('/api/plans/P001')) fetches += 1
-      return Promise.resolve(new Response(JSON.stringify(detail), { status: 200 }))
-    })
-    installStorage(memoryStorage(JSON.stringify({ activePlan: 'P001' })))
-    reveal('panel-plans')
-    mountPlans()
-
-    const plans = [plan({ id: 'P001' }), plan({ id: 'P002' })]
-    draw(emptySnapshot({ plans, revisions: { ...emptySnapshot().revisions, plans: { P001: 'a', P002: 'a' } } }))
-    await vi.waitFor(() => expect(fetches).toBe(1))
-
-    // P002 moved; P001 did not.
-    draw(emptySnapshot({ plans, revisions: { ...emptySnapshot().revisions, plans: { P001: 'a', P002: 'b' } } }))
-    expect(fetches).toBe(1)
-
-    // P001 moved; it refetches.
-    draw(emptySnapshot({ plans, revisions: { ...emptySnapshot().revisions, plans: { P001: 'b', P002: 'b' } } }))
-    await vi.waitFor(() => expect(fetches).toBe(2))
+    expect(document.getElementById('plan-detail-title')?.textContent).toContain('Large plan')
   })
 
   it('keeps a plan the snapshot has stopped listing rather than forgetting it', async () => {
@@ -300,169 +265,9 @@ describe('plans', () => {
     expect((document.getElementById('plan-detail') as HTMLElement).hidden).toBe(true)
   })
 
-  it('draws each story once, in the open plan, with its status as a word', async () => {
-    // Once, and only in the detail. They used to be drawn inline under every
-    // plan row as well, which is what made a plan of twenty-two unreadable.
-    serve({
-      '/api/plans/P001': {
-        id: 'P001',
-        title: 'A plan',
-        approval: null,
-        body: '',
-        review: null,
-        stories: [
-          detailStory({ id: 'P001-S01', status: 'done', evidence: '2026-07-28-001' }),
-          detailStory({ id: 'P001-S02', depends_on: ['P001-S01'] }),
-        ],
-      },
-    })
-    reveal('panel-plans')
-    const mounted = mountPlans()
-    const snapshot = emptySnapshot({
-      plans: [
-        plan({
-          id: 'P001',
-          stories: [story({ id: 'P001-S01', status: 'done' }), story({ id: 'P001-S02', depends_on: ['P001-S01'] })],
-        }),
-      ],
-    })
-    draw(snapshot)
 
-    expect(document.querySelectorAll('#plans-list .story')).toHaveLength(0)
 
-    mounted.toggle('P001')
-    await vi.waitFor(() => expect(document.querySelectorAll('#plan-detail-stories .story')).toHaveLength(2))
 
-    const rows = document.querySelectorAll('#plan-detail-stories .story')
-    expect(rows[0]?.querySelector('.story-status')?.textContent).toBe('done')
-    expect(rows[1]?.querySelector('.story-status')?.textContent).toBe('todo')
-    // Its one dependency is satisfied, so it is buildable and says nothing.
-    expect((rows[1]?.querySelector('.waits') as HTMLElement).hidden).toBe(true)
-    expect((rows[1]?.querySelector('[data-act="story-run"]') as HTMLButtonElement).disabled).toBe(false)
-    // The action is a word, not a `+`.
-    expect(rows[1]?.querySelector('[data-act="story-run"]')?.textContent).toBe(english['story.runAction'])
-
-    mounted.toggle('P001')
-  })
-
-  it('disables the build button and says why when a dependency is unmet', async () => {
-    serve({
-      '/api/plans/P001': {
-        id: 'P001',
-        title: 'A plan',
-        approval: null,
-        body: '',
-        review: null,
-        stories: [detailStory({ id: 'P001-S01' }), detailStory({ id: 'P001-S02', depends_on: ['P001-S01'] })],
-      },
-    })
-    reveal('panel-plans')
-    const mounted = mountPlans()
-    draw(
-      emptySnapshot({
-        plans: [
-          plan({
-            id: 'P001',
-            stories: [story({ id: 'P001-S01' }), story({ id: 'P001-S02', depends_on: ['P001-S01'] })],
-          }),
-        ],
-      }),
-    )
-    mounted.toggle('P001')
-    await vi.waitFor(() => expect(document.querySelectorAll('#plan-detail-stories .story')).toHaveLength(2))
-
-    const second = document.querySelectorAll('#plan-detail-stories .story')[1] as HTMLElement
-    const waits = second.querySelector('.waits') as HTMLElement
-    expect(waits.hidden).toBe(false)
-    expect(waits.textContent).toContain('P001-S01')
-    expect((second.querySelector('[data-act="story-run"]') as HTMLButtonElement).disabled).toBe(true)
-
-    mounted.toggle('P001')
-  })
-
-  it('filters the open plan down to what the reader asked for', async () => {
-    serve({
-      '/api/plans/P001': {
-        id: 'P001',
-        title: 'A plan',
-        approval: null,
-        body: '',
-        review: null,
-        stories: [
-          detailStory({ id: 'P001-S01', status: 'done', title: 'Rebaseline PROGRESS.md', evidence: 'r1' }),
-          detailStory({ id: 'P001-S02', title: 'Amend DECISIONS.md' }),
-        ],
-      },
-    })
-    reveal('panel-plans')
-    const mounted = mountPlans()
-    draw(
-      emptySnapshot({
-        plans: [
-          plan({
-            id: 'P001',
-            stories: [story({ id: 'P001-S01', status: 'done' }), story({ id: 'P001-S02' })],
-          }),
-        ],
-      }),
-    )
-    mounted.toggle('P001')
-    await vi.waitFor(() => expect(document.querySelectorAll('#plan-detail-stories .story')).toHaveLength(2))
-
-    const picker = document.getElementById('story-filter') as HTMLSelectElement
-    picker.value = 'ready'
-    picker.dispatchEvent(new Event('change'))
-    // `ready` is a status *and* a dependency check, which is the filter people
-    // actually want and the one no status column could offer.
-    expect(cells('#plan-detail-stories .story .story-id')).toEqual(['P001-S02'])
-
-    const query = document.getElementById('story-query') as HTMLInputElement
-    picker.value = ''
-    picker.dispatchEvent(new Event('change'))
-    query.value = 'progress'
-    query.dispatchEvent(new Event('input'))
-    expect(cells('#plan-detail-stories .story .story-id')).toEqual(['P001-S01'])
-
-    query.value = 'nothing matches this'
-    query.dispatchEvent(new Event('input'))
-    expect(document.querySelectorAll('#plan-detail-stories .story')).toHaveLength(0)
-    expect((document.getElementById('plan-stories-empty') as HTMLElement).hidden).toBe(false)
-    expect(document.getElementById('plan-stories-empty')?.textContent).toBe(english['story.noMatch'])
-
-    mounted.toggle('P001')
-  })
-
-  it('names the buildable stories and marks the one that is next', () => {
-    reveal('panel-plans')
-    mountPlans()
-    draw(
-      emptySnapshot({
-        plans: [
-          plan({
-            id: 'P001',
-            stories: [
-              story({ id: 'P001-S01', title: 'First up' }),
-              story({ id: 'P001-S02', title: 'Also ready' }),
-              story({ id: 'P001-S03', depends_on: ['P001-S01'] }),
-            ],
-          }),
-        ],
-      }),
-    )
-
-    const rows = document.querySelectorAll('#plans-ready-list .ready-row')
-    expect(rows).toHaveLength(2)
-    // The title travels with the id. A `P001-S02` chip asked the reader to hold
-    // an id in their head and go and look it up.
-    expect(rows[0]?.querySelector('.story-title')?.textContent).toBe('First up')
-    expect(rows[0]?.querySelector('[data-slot="plan"]')?.textContent).toBe('P001')
-    expect((rows[0]?.querySelector('.tag.next') as HTMLElement).hidden).toBe(false)
-    expect((rows[1]?.querySelector('.tag.next') as HTMLElement).hidden).toBe(true)
-
-    // And the tally above it counts the same thing without being read row by row.
-    expect(document.getElementById('tally-ready')?.textContent).toBe('2')
-    expect(document.getElementById('tally-done')?.textContent).toBe('0')
-  })
 
   it('suggests only the stories that are actually ready', () => {
     const snapshot = emptySnapshot({
@@ -479,6 +284,219 @@ describe('plans', () => {
       ],
     })
     expect(suggestions(snapshot)).toEqual(['/mjloop:build P001-S02'])
+  })
+})
+
+describe('stories', () => {
+  /** The Stories panel reads the plan the reader has open; every case here opens one. */
+  function openPlan(id = 'P001'): void {
+    installStorage(memoryStorage(JSON.stringify({ activePlan: id })))
+    mountDoc()
+    reveal('panel-stories')
+    mountStories()
+  }
+
+  it('draws each story once, in the open plan, with its status as a word', async () => {
+    // Once, and in a tab of their own. They used to be drawn inline under every
+    // plan row as well, which is what made a plan of twenty-two unreadable, and
+    // then three clicks inside a plan's detail, which is what this tab fixes.
+    serve({
+      '/api/plans/P001': {
+        id: 'P001',
+        title: 'A plan',
+        approval: null,
+        body: '',
+        review: null,
+        stories: [
+          detailStory({ id: 'P001-S01', status: 'done', evidence: '2026-07-28-001' }),
+          detailStory({ id: 'P001-S02', depends_on: ['P001-S01'] }),
+        ],
+      },
+    })
+    openPlan()
+    const snapshot = emptySnapshot({
+      plans: [
+        plan({
+          id: 'P001',
+          stories: [story({ id: 'P001-S01', status: 'done' }), story({ id: 'P001-S02', depends_on: ['P001-S01'] })],
+        }),
+      ],
+    })
+    draw(snapshot)
+
+        await vi.waitFor(() => expect(document.querySelectorAll('#stories-list .story')).toHaveLength(2))
+
+    const rows = document.querySelectorAll('#stories-list .story')
+    expect(rows[0]?.querySelector('.story-status')?.textContent).toBe('done')
+    expect(rows[1]?.querySelector('.story-status')?.textContent).toBe('todo')
+    // Its one dependency is satisfied, so it is buildable and says nothing.
+    expect((rows[1]?.querySelector('.waits') as HTMLElement).hidden).toBe(true)
+    expect((rows[1]?.querySelector('[data-act="story-run"]') as HTMLButtonElement).disabled).toBe(false)
+    // The action is a word, not a `+`.
+    expect(rows[1]?.querySelector('[data-act="story-run"]')?.textContent).toBe(english['story.runAction'])
+
+  })
+
+  it('disables the build button and says why when a dependency is unmet', async () => {
+    serve({
+      '/api/plans/P001': {
+        id: 'P001',
+        title: 'A plan',
+        approval: null,
+        body: '',
+        review: null,
+        stories: [detailStory({ id: 'P001-S01' }), detailStory({ id: 'P001-S02', depends_on: ['P001-S01'] })],
+      },
+    })
+    openPlan()
+    draw(
+      emptySnapshot({
+        plans: [
+          plan({
+            id: 'P001',
+            stories: [story({ id: 'P001-S01' }), story({ id: 'P001-S02', depends_on: ['P001-S01'] })],
+          }),
+        ],
+      }),
+    )
+    await vi.waitFor(() => expect(document.querySelectorAll('#stories-list .story')).toHaveLength(2))
+
+    const second = document.querySelectorAll('#stories-list .story')[1] as HTMLElement
+    const waits = second.querySelector('.waits') as HTMLElement
+    expect(waits.hidden).toBe(false)
+    expect(waits.textContent).toContain('P001-S01')
+    expect((second.querySelector('[data-act="story-run"]') as HTMLButtonElement).disabled).toBe(true)
+
+  })
+
+  it('filters the open plan down to what the reader asked for', async () => {
+    serve({
+      '/api/plans/P001': {
+        id: 'P001',
+        title: 'A plan',
+        approval: null,
+        body: '',
+        review: null,
+        stories: [
+          detailStory({ id: 'P001-S01', status: 'done', title: 'Rebaseline PROGRESS.md', evidence: 'r1' }),
+          detailStory({ id: 'P001-S02', title: 'Amend DECISIONS.md' }),
+        ],
+      },
+    })
+    openPlan()
+    draw(
+      emptySnapshot({
+        plans: [
+          plan({
+            id: 'P001',
+            stories: [story({ id: 'P001-S01', status: 'done' }), story({ id: 'P001-S02' })],
+          }),
+        ],
+      }),
+    )
+    await vi.waitFor(() => expect(document.querySelectorAll('#stories-list .story')).toHaveLength(2))
+
+    const picker = document.getElementById('story-filter') as HTMLSelectElement
+    picker.value = 'ready'
+    picker.dispatchEvent(new Event('change'))
+    // `ready` is a status *and* a dependency check, which is the filter people
+    // actually want and the one no status column could offer.
+    expect(cells('#stories-list .story .story-id')).toEqual(['P001-S02'])
+
+    const query = document.getElementById('story-query') as HTMLInputElement
+    picker.value = ''
+    picker.dispatchEvent(new Event('change'))
+    query.value = 'progress'
+    query.dispatchEvent(new Event('input'))
+    expect(cells('#stories-list .story .story-id')).toEqual(['P001-S01'])
+
+    query.value = 'nothing matches this'
+    query.dispatchEvent(new Event('input'))
+    expect(document.querySelectorAll('#stories-list .story')).toHaveLength(0)
+    expect((document.getElementById('stories-empty') as HTMLElement).hidden).toBe(false)
+    expect(document.getElementById('stories-empty')?.textContent).toBe(english['story.noMatch'])
+
+  })
+
+  it('restores the filter the reader chose, with no click', async () => {
+    // The picker shows the remembered value rather than merely holding it: a
+    // list filtered to `done` under a picker reading `All stories` is a page
+    // arguing with itself.
+    installStorage(memoryStorage(JSON.stringify({ activePlan: 'P001', storyFilter: 'done' })))
+    serve({
+      '/api/plans/P001': {
+        id: 'P001',
+        title: 'Large plan',
+        approval: null,
+        body: '',
+        review: null,
+        stories: [
+          detailStory({ id: 'P001-S01', title: 'Done one', status: 'done' }),
+          detailStory({ id: 'P001-S02', title: 'Todo one' }),
+        ],
+      },
+    })
+    mountDoc()
+    reveal('panel-stories')
+    mountStories()
+    draw(emptySnapshot({ plans: [plan({ id: 'P001', stories: [story({ id: 'P001-S01', status: 'done' }), story({ id: 'P001-S02' })] })] }))
+
+    expect((document.getElementById('story-filter') as HTMLSelectElement).value).toBe('done')
+    await vi.waitFor(() => expect(cells('#stories-list .story .story-id')).toEqual(['P001-S01']))
+  })
+
+  it('names the buildable stories and marks the one that is next', () => {
+    openPlan()
+    draw(
+      emptySnapshot({
+        plans: [
+          plan({
+            id: 'P001',
+            stories: [
+              story({ id: 'P001-S01', title: 'First up' }),
+              story({ id: 'P001-S02', title: 'Also ready' }),
+              story({ id: 'P001-S03', depends_on: ['P001-S01'] }),
+            ],
+          }),
+        ],
+      }),
+    )
+
+    const rows = document.querySelectorAll('#stories-ready-list .ready-row')
+    expect(rows).toHaveLength(2)
+    // The title travels with the id. A `P001-S02` chip asked the reader to hold
+    // an id in their head and go and look it up.
+    expect(rows[0]?.querySelector('.story-title')?.textContent).toBe('First up')
+    expect(rows[0]?.querySelector('[data-slot="plan"]')?.textContent).toBe('P001')
+    expect((rows[0]?.querySelector('.tag.next') as HTMLElement).hidden).toBe(false)
+    expect((rows[1]?.querySelector('.tag.next') as HTMLElement).hidden).toBe(true)
+
+  })
+
+  it('counts the same stories the Plans tally does', () => {
+    // The two live in different tabs now, which is exactly why this is asserted:
+    // both go through lib/stories.js, and a second readiness rule appearing in
+    // either one would show up here as two numbers that disagree.
+    openPlan()
+    reveal('panel-plans')
+    mountPlans()
+    const snapshot = emptySnapshot({
+      plans: [
+        plan({
+          id: 'P001',
+          stories: [
+            story({ id: 'P001-S01', title: 'First up' }),
+            story({ id: 'P001-S02', title: 'Also ready' }),
+            story({ id: 'P001-S03', depends_on: ['P001-S01'] }),
+          ],
+        }),
+      ],
+    })
+    draw(snapshot)
+
+    expect(document.querySelectorAll('#stories-ready-list .ready-row')).toHaveLength(2)
+    expect(document.getElementById('tally-ready')?.textContent).toBe('2')
+    expect(document.getElementById('tally-done')?.textContent).toBe('0')
   })
 })
 

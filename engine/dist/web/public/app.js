@@ -30,6 +30,7 @@ import { mountLauncher } from './panels/launcher.js'
 import { mountPlans } from './panels/plans.js'
 import { mountQueue } from './panels/queue.js'
 import { mountRun } from './panels/run.js'
+import { mountStories } from './panels/stories.js'
 import { mountSkills } from './panels/skills.js'
 
 /**
@@ -48,7 +49,7 @@ const LOCALES = {
 }
 const FALLBACK = 'en'
 
-const TABS = ['run', 'plans', 'features', 'skills', 'evidence', 'memory', 'config']
+const TABS = ['run', 'plans', 'stories', 'features', 'skills', 'evidence', 'memory', 'config']
 const token = new URLSearchParams(location.search).get('t') ?? ''
 
 /** The running job, as of the last snapshot. */
@@ -89,11 +90,26 @@ mountTerminal({
   onResize: (cols, rows) => send({ type: 'resize', cols, rows }),
 })
 
+/**
+ * The open plan's document, installed before the panels that read it.
+ *
+ * Order matters: installing clears the subscriber list, so a panel that
+ * subscribed first would be silently unsubscribed and its list would sit at
+ * whatever the first frame drew.
+ *
+ * Ticked against `.tabs` rather than from a panel because `ui/render.js` skips
+ * a hidden one: the plan detail and the story list beside it each read this
+ * document while the other's tab is closed. The same reason the two navigation
+ * counts live here.
+ */
+const planDoc = mountPlanDoc()
+
 const pane = mountPane()
 const haltDialog = mountHaltDialog()
 const launcher = mountLauncher()
 mountRun()
 const plans = mountPlans()
+const stories = mountStories()
 const features = mountFeatures()
 mountSkills()
 const evidence = mountEvidence()
@@ -101,15 +117,6 @@ mountMemory()
 const config = mountConfig()
 mountQueue()
 register({ id: 'rail', node: /** @type {HTMLElement} */ (document.querySelector('.rail')), update: drawRail })
-/**
- * The open plan's document.
- *
- * Ticked here, against `.tabs`, because `ui/render.js` skips a hidden panel:
- * every surface that reads this document — the plan detail, and after the split
- * the story list beside it — would otherwise go stale exactly while its own tab
- * was closed. The same reason the two navigation counts live here.
- */
-const planDoc = mountPlanDoc()
 register({
   id: 'plandoc',
   node: /** @type {HTMLElement} */ (document.querySelector('.tabs')),
@@ -129,7 +136,7 @@ register({
   id: 'nav',
   node: /** @type {HTMLElement} */ (document.querySelector('.tabs')),
   update: (snapshot) => {
-    badge(rail('navReady'), tab('tab-plans'), ready(snapshot.plans).length, 'tabs.readyCount')
+    badge(rail('navReady'), tab('tab-stories'), ready(snapshot.plans).length, 'tabs.readyCount')
     badge(rail('navGuard'), tab('tab-run'), snapshot.state.findings.high, 'tabs.highCount')
   },
 })
@@ -170,7 +177,7 @@ bus.on('feature-confirm', () => features.confirm())
 bus.on('approve', () => plans.decide('approved'))
 bus.on('request-changes', () => plans.decide('changes_requested'))
 bus.on('reject', () => plans.decide('rejected'))
-bus.on('story-requeue', (element) => plans.requeue(element.dataset['story'] ?? '', element.dataset['from'] ?? 'doing'))
+bus.on('story-requeue', (element) => stories.requeue(element.dataset['story'] ?? '', element.dataset['from'] ?? 'doing'))
 bus.on('config-save', () => config.save())
 bus.on('config-reset', () => config.reset())
 // The structured `specialists:` and `tracks:` editors. Every one of these

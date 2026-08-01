@@ -43,7 +43,10 @@
 }
 
 @media (min-width: 1200px) {
-  .panel-grid {
+  /* The second track is the aside's. `:has` rather than a per-panel id, so a
+     grid with nothing to put beside it does not reserve 300px of nothing —
+     which is what the Stories tab did on its first wide render. */
+  .panel-grid:has(.panel-side) {
     grid-template-columns: minmax(0, 1fr) 300px;
   }
 }
@@ -261,13 +264,45 @@ button.primary:disabled {
   align-items: start;
 }
 
-/* The open plan gets the larger share. The detail is titles, acceptance criteria
-   and prose; the list beside it is an id, a bar and a word — and squeezing the
-   detail into the narrow column is what made every story title arrive as
-   `…g a status vocabulary`. */
+/* The two cross-links between the workspaces. There is no base `a` rule on this
+   page — the only anchor selectors live under `.tabs` — so without these the
+   links arrive as browser-default blue-and-underlined on a themed page. */
+.plan-stories a,
+.stories-plan a {
+  color: var(--accent);
+  text-decoration: none;
+  border-block-end: 1px solid transparent;
+}
+
+.plan-stories a:hover,
+.stories-plan a:hover {
+  border-block-end-color: currentcolor;
+}
+
+/* Which plan these stories belong to, in the panel head where the reader looks
+   for it — beside the title, not buried in the list. */
+.stories-plan {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0;
+  font-size: 13px;
+}
+
+.stories-plan #stories-plan-id {
+  font-family: var(--mono);
+  color: var(--dim);
+}
+
+/* An even split once a plan is open. The detail used to take 1.6fr against the
+   list's 0.75fr, because it held every story title and its acceptance criteria
+   and squeezing those into the narrow column arrived as `…g a status
+   vocabulary`. The stories are a tab of their own now: what is left here is a
+   decision record, two collapsed documents and a link, and the plan list beside
+   it is what this tab is for. */
 @media (min-width: 1100px) {
   .plans-workspace[data-detail-open="true"] {
-    grid-template-columns: minmax(0, 0.75fr) minmax(400px, 1.6fr);
+    grid-template-columns: minmax(0, 1fr) minmax(360px, 1fr);
   }
 }
 

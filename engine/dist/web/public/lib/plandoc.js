@@ -51,8 +51,11 @@ function announce() {
  */
 export function mountPlanDoc() {
   // Install, so it clears: a second mount is a second page, and a listener from
-  // the first one would keep drawing into DOM nobody is looking at. Tests mount
-  // panels once per case, which is the only place this actually happens.
+  // the first one would keep drawing into DOM nobody is looking at.
+  //
+  // Which is why this must run BEFORE the panels that subscribe. Mounting it
+  // after them unsubscribes every one, and nothing says so — the first frame
+  // still draws, and the list simply stops moving.
   listeners.length = 0
   held = feed({
     dep: (state) => {

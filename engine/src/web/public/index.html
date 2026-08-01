@@ -79,6 +79,13 @@
       </a>
       <a id="tab-plans" href="#plans" aria-controls="panel-plans">
         <span data-i18n="tabs.plans"></span>
+      </a>
+      <!-- The ready count moved here with the stories it counts. It is still
+           drawn from `.tabs`, which is on screen whatever tab is open: a count
+           registered inside a panel is a count that stops updating the moment
+           that panel closes. -->
+      <a id="tab-stories" href="#stories" aria-controls="panel-stories">
+        <span data-i18n="tabs.stories"></span>
         <span class="nav-count" data-rail="navReady" aria-hidden="true" hidden></span>
       </a>
       <!-- No count beside these two, unlike Run and Plans. A count has to come
@@ -238,15 +245,6 @@
              tally stretched across 1300px and the create form below the fold. -->
         <div class="panel-grid">
           <div class="panel-main">
-            <!-- The one thing this tab exists to answer: what can I start right
-                 now. A row with the story's own title on it, not an id chip whose
-                 meaning is somewhere else on the page. -->
-            <section class="block start" id="plans-ready" hidden>
-              <h2 data-i18n="story.next"></h2>
-              <ul class="ready" id="plans-ready-list"></ul>
-              <p class="more" id="plans-ready-more" hidden></p>
-            </section>
-
             <div class="plans-workspace" id="plans-workspace" data-detail-open="false">
               <div class="plans-master">
                 <div class="plans" id="plans-list"></div>
@@ -287,27 +285,9 @@
                   <pre class="excerpt" id="plan-review"></pre>
                 </details>
 
-                <!-- The stories live here and nowhere else. They used to be
-                     drawn twice — inline under every plan row and again in this
-                     panel — which is why a plan with twenty-two of them read as
-                     a wall with no way in. One list, and a filter over it. -->
-                <section class="stories-block">
-                  <h3 data-i18n="story.listTitle"></h3>
-                  <div class="facets">
-                    <input
-                      id="story-query"
-                      name="story-q"
-                      dir="auto"
-                      autocomplete="off"
-                      data-i18n-placeholder="story.searchHint"
-                      data-i18n-label="story.searchLabel"
-                    />
-                    <select id="story-filter" name="story-filter" data-i18n-label="story.filterLabel"></select>
-                  </div>
-                  <p class="empty" id="plan-stories-empty" hidden></p>
-                  <ul class="stories detail" id="plan-detail-stories"></ul>
-                  <p class="more" id="plan-stories-more" hidden></p>
-                </section>
+                <!-- The stories themselves are a workspace of their own. This
+                     is the way in, not a second copy of the list. -->
+                <p class="plan-stories"><a href="#stories" data-i18n="plans.seeStories"></a></p>
               </section>
             </div>
           </div>
@@ -344,6 +324,58 @@
               </form>
             </section>
           </aside>
+        </div>
+      </section>
+
+      <!-- Stories. What can start now, what is left, and what is finished — for
+           the plan the reader has open. The plan itself is managed one tab over;
+           nothing here edits a plan, and nothing there runs a story. -->
+      <section class="panel" id="panel-stories" aria-labelledby="panel-stories-title" hidden>
+        <header class="panel-head">
+          <!-- Heading and hint in one wrapper, as every other panel does: the
+               head is `justify-content: space-between`, so an unwrapped pair
+               lands at opposite ends of the row. -->
+          <div>
+            <h1 id="panel-stories-title" data-i18n="panel.stories.title"></h1>
+            <p class="hint" data-i18n="panel.stories.help"></p>
+          </div>
+          <p class="stories-plan">
+            <span id="stories-plan-id"></span>
+            <a href="#plans" data-i18n="story.toPlans"></a>
+          </p>
+        </header>
+
+        <p class="empty" id="stories-none"></p>
+
+        <div class="panel-grid">
+          <div class="panel-main">
+            <!-- The one thing this tab exists to answer: what can I start right
+                 now. A row with the story's own title on it, not an id chip whose
+                 meaning is somewhere else on the page. -->
+            <section class="block start" id="stories-ready" hidden>
+              <h2 data-i18n="story.next"></h2>
+              <ul class="ready" id="stories-ready-list"></ul>
+              <p class="more" id="stories-ready-more" hidden></p>
+            </section>
+
+            <section class="block">
+              <h2 data-i18n="story.listTitle"></h2>
+              <div class="facets">
+                <input
+                  id="story-query"
+                  name="story-q"
+                  dir="auto"
+                  autocomplete="off"
+                  data-i18n-placeholder="story.searchHint"
+                  data-i18n-label="story.searchLabel"
+                />
+                <select id="story-filter" name="story-filter" data-i18n-label="story.filterLabel"></select>
+              </div>
+              <p class="empty" id="stories-empty" hidden></p>
+              <ul class="stories detail" id="stories-list"></ul>
+              <p class="more" id="stories-more" hidden></p>
+            </section>
+          </div>
         </div>
       </section>
 

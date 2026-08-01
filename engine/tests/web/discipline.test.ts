@@ -156,7 +156,7 @@ describe('templates and actions', () => {
 
 describe('accessibility', () => {
   it('gives every top-level view a visible heading and an unmistakable selected route', () => {
-    for (const route of ['run', 'plans', 'features', 'skills', 'evidence', 'memory', 'config']) {
+    for (const route of ['run', 'plans', 'stories', 'features', 'skills', 'evidence', 'memory', 'config']) {
       expect(html).toMatch(new RegExp(`id="tab-${route}"[^>]+aria-controls="panel-${route}"`))
       expect(html).toMatch(
         new RegExp(`id="panel-${route}"[^>]+aria-labelledby="panel-${route}-title"`),
@@ -257,15 +257,16 @@ describe('the page never assigns to a control', () => {
     // Rule 3: every control the user types into is uncontrolled and written
     // once at mount, so an 800ms tick cannot eat a half-typed note by
     // construction rather than by a focus check somebody forgets.
-    // Six files may, and each for something a *person* did or for a control
-    // written once at mount: `app.js` fills the language picker at boot and
-    // clears the new-plan field on submit, `config.js` seeds its editor only
-    // when the config revision changes (and never while dirty), `dialog.js`
-    // clears the halt reason
-    // when the dialog is opened, `launcher.js` clears the command box because
-    // Run was pressed, `plans.js` clears the approval note once the decision is
-    // recorded, and `memory.js` restores the remembered query at mount. No
-    // `update()` appears in this list, and that is the property under test.
+    // Each of these is for something a *person* did, or for a control written
+    // once at mount: `app.js` fills the language picker at boot and clears the
+    // new-plan field on submit, `config.js` seeds its editor only when the
+    // config revision changes (and never while dirty), `dialog.js` clears the
+    // halt reason when the dialog is opened, `launcher.js` clears the command
+    // box because Run was pressed, `plans.js` clears the approval note once the
+    // decision is recorded, `memory.js` restores the remembered query at mount,
+    // and `stories.js` restores the remembered filter at mount — a value the
+    // reader chose earlier, written once, never from `update()`. No `update()`
+    // appears in this list, and that is the property under test.
     const writers = scripts.filter((name) => /\.value\s*=[^=]/.test(code(name)))
     expect(writers).toEqual([
       'app.js',
@@ -274,6 +275,7 @@ describe('the page never assigns to a control', () => {
       'panels/launcher.js',
       'panels/memory.js',
       'panels/plans.js',
+      'panels/stories.js',
       'ui/dialog.js',
     ])
   })

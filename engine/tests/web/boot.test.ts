@@ -91,6 +91,9 @@ beforeAll(async () => {
       planFetches += 1
       return Promise.resolve(new Response(JSON.stringify(PLAN_DETAIL), { status: 200 }))
     }
+    if (at === '/api/plans/P002') {
+      return Promise.resolve(new Response(JSON.stringify(PLAN_WITH_STORIES), { status: 200 }))
+    }
     return Promise.resolve(new Response(JSON.stringify({ error: { code: 'error.notFound' } }), { status: 404 }))
   })
 
@@ -110,6 +113,17 @@ const DIGEST = 'a'.repeat(64)
 
 /** How many times the page has asked for P001's document. */
 let planFetches = 0
+
+const PLAN_WITH_STORIES = {
+  id: 'P002',
+  title: 'Has stories',
+  approval: null,
+  body: '',
+  review: null,
+  stories: [
+    { id: 'P002-S01', title: 'Ready to go', status: 'todo', ui: false, depends_on: [], acceptance: [], evidence: null },
+  ],
+}
 
 const PLAN_DETAIL = {
   id: 'P001',
@@ -210,10 +224,45 @@ describe('boot', () => {
     await vi.waitFor(() => expect(planFetches).toBe(2))
   })
 
+  it('carries a real click on a story through to a real enqueue frame', async () => {
+    // The Stories tab is new markup, a new panel module and two renamed
+    // actions. Every one of those can be present and unwired: `bus.on` throws
+    // on a duplicate but says nothing about a name nobody registered, and
+    // discipline.test.ts greps for the registration rather than what it does.
+    sent.length = 0
+    open('plans')
+    const plans = [{ id: 'P002', title: 'Has stories', approval: null, stories: [
+      { id: 'P002-S01', title: 'Ready to go', status: 'todo', ui: false, depends_on: [] },
+    ] }]
+    poll({ plans, revisions: { ...emptySnapshot().revisions, plans: { P002: 'a' } } })
+    await vi.waitFor(() => expect(document.querySelectorAll('#plans-list > *').length).toBe(1))
+    click('[data-act="open-plan"]')
+
+    // Across to the stories, the way the page offers it.
+    open('stories')
+    await vi.waitFor(() => expect(document.querySelectorAll('#stories-list .story').length).toBe(1))
+    expect(document.getElementById('stories-plan-id')?.textContent).toBe('P002')
+
+    // Filtered to the command frames: starting work opens the terminal pane,
+    // which reports its geometry, and that resize is behaviour rather than
+    // noise to assert around.
+    const commands = (): unknown[] => sent.filter((frame) => (frame as { type: string }).type === 'enqueue')
+
+    sent.length = 0
+    click('#stories-list [data-act="story-run"]')
+    expect(commands()).toEqual([{ type: 'enqueue', command: '/mjloop:build P002-S01' }])
+
+    // The same story is offered twice on this tab — once in the start block and
+    // once in its own row — and both must reach the same frame.
+    sent.length = 0
+    click('#stories-ready-list [data-act="story-run"]')
+    expect(commands()).toEqual([{ type: 'enqueue', command: '/mjloop:build P002-S01' }])
+  })
+
   it('reaches every panel the navigation offers', () => {
     // A tab whose panel `app.js` forgot to mount is a tab that renders nothing
     // and looks like an empty project.
-    for (const route of ['run', 'plans', 'features', 'skills', 'evidence', 'memory', 'config']) {
+    for (const route of ['run', 'plans', 'stories', 'features', 'skills', 'evidence', 'memory', 'config']) {
       expect(document.getElementById(`panel-${route}`), route).not.toBeNull()
       expect(document.getElementById(`tab-${route}`), route).not.toBeNull()
     }
