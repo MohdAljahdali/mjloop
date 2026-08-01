@@ -338,9 +338,9 @@ describe('plans', () => {
     expect(rows[1]?.querySelector('.story-status')?.textContent).toBe('todo')
     // Its one dependency is satisfied, so it is buildable and says nothing.
     expect((rows[1]?.querySelector('.waits') as HTMLElement).hidden).toBe(true)
-    expect((rows[1]?.querySelector('[data-act="build"]') as HTMLButtonElement).disabled).toBe(false)
+    expect((rows[1]?.querySelector('[data-act="story-run"]') as HTMLButtonElement).disabled).toBe(false)
     // The action is a word, not a `+`.
-    expect(rows[1]?.querySelector('[data-act="build"]')?.textContent).toBe(english['plans.buildAction'])
+    expect(rows[1]?.querySelector('[data-act="story-run"]')?.textContent).toBe(english['story.runAction'])
 
     mounted.toggle('P001')
   })
@@ -375,7 +375,7 @@ describe('plans', () => {
     const waits = second.querySelector('.waits') as HTMLElement
     expect(waits.hidden).toBe(false)
     expect(waits.textContent).toContain('P001-S01')
-    expect((second.querySelector('[data-act="build"]') as HTMLButtonElement).disabled).toBe(true)
+    expect((second.querySelector('[data-act="story-run"]') as HTMLButtonElement).disabled).toBe(true)
 
     mounted.toggle('P001')
   })
@@ -427,7 +427,7 @@ describe('plans', () => {
     query.dispatchEvent(new Event('input'))
     expect(document.querySelectorAll('#plan-detail-stories .story')).toHaveLength(0)
     expect((document.getElementById('plan-stories-empty') as HTMLElement).hidden).toBe(false)
-    expect(document.getElementById('plan-stories-empty')?.textContent).toBe(english['plans.noMatch'])
+    expect(document.getElementById('plan-stories-empty')?.textContent).toBe(english['story.noMatch'])
 
     mounted.toggle('P001')
   })

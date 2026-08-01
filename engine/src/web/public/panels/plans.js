@@ -176,12 +176,12 @@ export function mountPlans() {
       reconcile(readyList, buildable.slice(0, READY_SHOWN), (story) => story.id, () => readyRow(plansOf))
       flag(readyMore, 'hidden', buildable.length <= READY_SHOWN)
       if (buildable.length > READY_SHOWN) {
-        phrase(readyMore, 'plans.readyMore', { n: buildable.length - READY_SHOWN })
+        phrase(readyMore, 'story.readyMore', { n: buildable.length - READY_SHOWN })
       }
 
       // Translated here rather than at mount, so a locale switch repaints them.
       for (const option of [...filterPicker.options]) {
-        phrase(option, `plans.filter.${option.value === '' ? 'all' : option.value}`)
+        phrase(option, `story.filter.${option.value === '' ? 'all' : option.value}`)
       }
 
       drawDetail(planDoc())
@@ -256,7 +256,7 @@ export function mountPlans() {
 
         const noStories = slots['empty']
         if (noStories !== undefined) {
-          phrase(noStories, 'plans.storiesEmpty')
+          phrase(noStories, 'story.listEmpty')
           flag(noStories, 'hidden', view.stories.length > 0)
         }
       },
@@ -284,14 +284,14 @@ export function mountPlans() {
         // leaving the reader to infer an order from a list.
         const next = slots['next']
         if (next !== undefined) {
-          phrase(next, 'plans.nextTag')
+          phrase(next, 'story.nextTag')
           flag(next, 'hidden', story.id !== first)
         }
 
         const build = slots['build']
         if (build !== undefined) {
           build.dataset['story'] = story.id
-          phrase(build, 'plans.buildAction')
+          phrase(build, 'story.runAction')
           label(build, 'title', 'story.build')
         }
       },
@@ -338,11 +338,11 @@ export function mountPlans() {
 
     statuses = statusIndex(view.stories)
     const shown = sift(view.stories, text, filter, statuses)
-    phrase(storiesEmpty, view.stories.length === 0 ? 'plans.storiesEmpty' : 'plans.noMatch')
+    phrase(storiesEmpty, view.stories.length === 0 ? 'story.listEmpty' : 'story.noMatch')
     flag(storiesEmpty, 'hidden', shown.length > 0)
     const drawn = reconcile(detailStories, shown, storyKey(view.id), storyDetailRow)
     flag(storiesMore, 'hidden', drawn.shown >= drawn.total)
-    if (drawn.shown < drawn.total) phrase(storiesMore, 'plans.storiesMore', { shown: drawn.shown, total: drawn.total })
+    if (drawn.shown < drawn.total) phrase(storiesMore, 'story.listMore', { shown: drawn.shown, total: drawn.total })
 
     if (focusPending === view.id) {
       focusPending = null
@@ -391,7 +391,7 @@ export function mountPlans() {
         if (build !== undefined) {
           build.dataset['story'] = story.id
           const buildable = story.status === 'todo' && waiting.length === 0
-          phrase(build, 'plans.buildAction')
+          phrase(build, 'story.runAction')
           // Offered only where building is a thing that could happen. A `done`
           // story does not need a greyed-out Build beside it — `doing` and
           // `blocked` get Requeue, which is the action they actually have.
@@ -438,7 +438,7 @@ export function mountPlans() {
         const acceptDetails = slots['acceptDetails']
         if (acceptDetails !== undefined) flag(acceptDetails, 'hidden', story.acceptance.length === 0)
         const acceptSummary = slots['acceptSummary']
-        if (acceptSummary !== undefined) phrase(acceptSummary, 'plans.acceptance', { n: story.acceptance.length })
+        if (acceptSummary !== undefined) phrase(acceptSummary, 'story.acceptance', { n: story.acceptance.length })
 
         const acceptance = slots['acceptance']
         if (acceptance !== undefined) {

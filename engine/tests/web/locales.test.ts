@@ -10,6 +10,7 @@ import { SkillPackageSchema } from '../../src/schemas/skill-library.js'
 import { ProjectSkillAcceptanceSchema } from '../../src/schemas/skill-acceptance.js'
 import { ConcurrencyDecisionSchema } from '../../src/schemas/skill-selection.js'
 import { WEB_CODES } from '../../src/web/codes.js'
+import { FILTERS } from '../../src/web/public/lib/stories.js'
 
 /**
  * The guard that keeps fifteen languages maintainable.
@@ -247,6 +248,13 @@ describe('locales', () => {
     expect(family('stage.')).toEqual([...StageSchema.options].sort())
     expect(family('cycle.result.')).toEqual([...ResultSchema.options].sort())
     expect(family('story.status.')).toEqual([...StoryStatusSchema.options].sort())
+    // Not from an engine schema — from the page's own vocabulary, which is why
+    // this family had no guard at all. Deleting a filter's key from BOTH locale
+    // files left all 1781 tests green: `plans.js` composed the key as a template
+    // literal, and the two sweeps below harvest `story.filter.` as a *prefix*,
+    // so a missing member is invisible in one direction and a stale one in the
+    // other. The option shipped labelled with its own raw key.
+    expect(family('story.filter.')).toEqual(FILTERS.map((value) => (value === '' ? 'all' : value)).sort())
     expect(family('plans.approval.')).toEqual([...ApprovalDecisionSchema.options, 'none'].sort())
 
     // The four the orchestration views render. Every one of these was written

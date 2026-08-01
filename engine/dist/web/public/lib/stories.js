@@ -28,8 +28,19 @@
  * @typedef {import('../../read.js').StoryDetail} StoryDetail
  */
 
-/** The story filters, in the order the picker offers them. */
-export const FILTERS = ['', 'ready', 'doing', 'blocked', 'done']
+/**
+ * The story filters, in the order the picker offers them.
+ *
+ * The first four are the vocabulary the reader actually works in — everything,
+ * what can start now, what is left, what is finished. `doing` and `blocked` stay
+ * behind them as the two status cuts worth having: neither is derivable from the
+ * other four, and both name a state somebody is about to ask about.
+ *
+ * Exported and asserted exhaustive against the locale family, because until now
+ * nothing did: deleting a filter's key from both locale files left every test
+ * green and shipped an option labelled with its own raw key.
+ */
+export const FILTERS = ['', 'ready', 'remaining', 'doing', 'blocked', 'done']
 
 /**
  * The ids this story is still waiting on: dependencies the index does not
@@ -160,7 +171,10 @@ export function sift(stories, query, filter, statuses) {
   const terms = query.toLowerCase().split(/\s+/).filter((term) => term.length > 0)
   return stories.filter((story) => {
     if (filter === 'ready' && !(story.status === 'todo' && unmet(story, statuses).length === 0)) return false
-    if (filter !== '' && filter !== 'ready' && story.status !== filter) return false
+    // Remaining is "not done", once, here — so the filter, the tally and the
+    // launcher's suggestions cannot each mean something slightly different by it.
+    if (filter === 'remaining' && story.status === 'done') return false
+    if (filter !== '' && filter !== 'ready' && filter !== 'remaining' && story.status !== filter) return false
     if (terms.length === 0) return true
     const haystack = `${story.id} ${story.title}`.toLowerCase()
     return terms.every((term) => haystack.includes(term))
