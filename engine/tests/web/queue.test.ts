@@ -33,6 +33,37 @@ beforeEach(() => {
   })
 })
 
+describe('job identity', () => {
+  it('names a job uniquely across restarts, not merely within one', () => {
+    // The counter resets to zero every boot, so `j1` used to name a different
+    // job after every restart. Harmless while nothing outlived the process;
+    // not harmless the moment a transcript is filed under it.
+    const first = queue.enqueue('/mjloop:build P001-S01')
+    expect(first.id).toBe('19700101T001640-1')
+
+    const later = new JobQueue({
+      cwd: '/project',
+      spawn: fakeSessions().factory,
+      clock: makeClock(2_000_000).clock,
+      onOutput: () => {},
+      onChange: () => {},
+      onNotice: () => {},
+    })
+    expect(later.enqueue('/mjloop:build P001-S01').id).not.toBe(first.id)
+    // Sortable, and filename-safe: it reaches a path in the transcript store.
+    expect(first.id).toMatch(/^[0-9T]+-\d+$/)
+  })
+
+  it('carries the story a command is building, and null when there is none', () => {
+    // Named rather than parsed back out of the command: a hand-typed line that
+    // reads the same would match, and a `/mjloop:fix` on the same story would
+    // not.
+    expect(queue.enqueue('/mjloop:build P001-S01', 'P001-S01').story).toBe('P001-S01')
+    expect(queue.enqueue('/mjloop:plan an idea').story).toBeNull()
+    expect(queue.jobs().map((entry) => entry.story)).toEqual(['P001-S01', null])
+  })
+})
+
 /** Drive a job all the way from enqueue to a closed session. */
 function finishJob(): void {
   queue.observe(running())

@@ -195,7 +195,7 @@ export async function startServer(options: ServerOptions): Promise<RunningServer
           queue.resize(message.data.cols, message.data.rows)
           break
         case 'enqueue':
-          queue.enqueue(message.data.command)
+          queue.enqueue(message.data.command, message.data.story)
           break
         case 'cancel':
           queue.cancel(message.data.jobId)

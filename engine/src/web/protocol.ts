@@ -21,9 +21,29 @@ export interface Message {
 export type JobStatus = 'queued' | 'running' | 'done' | 'failed' | 'cancelled'
 
 export interface Job {
+  /**
+   * Unique across restarts, not merely within one.
+   *
+   * It used to be `j<n>` from a counter that resets to zero every boot, so
+   * `j1` named a different job after every restart. That was harmless while
+   * nothing outlived the process; it stops being harmless the moment anything
+   * is filed under it, and a transcript on disk is exactly that. The shape is
+   * `<server start, compact ISO>-<n>`: sortable, filename-safe, and it says
+   * which run of the server a job belongs to.
+   */
   id: string
   /** The loop command, exactly as it will be handed to `claude`. */
   command: string
+  /**
+   * The story this job is building, when it is building one.
+   *
+   * Null for a command somebody typed, for `/mjloop:plan`, and for anything
+   * else with no story to name. Carried rather than parsed back out of
+   * `command`: a story tab looking for its own job by string-matching
+   * `/mjloop:build P001-S02` also matches a hand-typed line that happens to
+   * read the same, and misses a `/mjloop:fix` that is working on it.
+   */
+  story: string | null
   status: JobStatus
   /** Why it ended, for the statuses that have a reason. Null while it runs. */
   reason: Message | null
@@ -160,7 +180,18 @@ export const ClientMessageSchema = z.discriminatedUnion('type', [
     cols: z.number().int().min(1).max(1000),
     rows: z.number().int().min(1).max(1000),
   }),
-  z.strictObject({ type: z.literal('enqueue'), command: z.string().min(1).max(2000) }),
+  z.strictObject({
+    type: z.literal('enqueue'),
+    command: z.string().min(1).max(2000),
+    // Optional and defaulted, so a page that predates it still enqueues — and
+    // bounded to the id shape because it reaches a filename through the
+    // transcript store, the same reason `StoryIdSchema` is a regex.
+    story: z
+      .string()
+      .regex(/^P\d{3}-S\d{2}$/)
+      .nullable()
+      .default(null),
+  }),
   z.strictObject({ type: z.literal('cancel'), jobId: z.string().min(1) }),
   z.strictObject({ type: z.literal('stop') }),
   z.strictObject({ type: z.literal('resume') }),

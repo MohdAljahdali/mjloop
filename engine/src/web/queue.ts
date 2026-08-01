@@ -91,13 +91,23 @@ export class JobQueue {
   constructor(options: QueueOptions) {
     this.options = options
     this.clock = options.clock ?? (() => new Date())
+    this.epoch = this.clock().toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, '')
   }
 
-  enqueue(command: string): Job {
+  /**
+   * The server-start stamp every job id carries.
+   *
+   * Computed once, from the same clock the queue is given, so a test can pin
+   * it. `2026-08-01T13:45:00.000Z` becomes `20260801T134500`.
+   */
+  private readonly epoch: string
+
+  enqueue(command: string, story: string | null = null): Job {
     this.counter += 1
     const job: Job = {
-      id: `j${this.counter}`,
+      id: `${this.epoch}-${this.counter}`,
       command,
+      story,
       status: 'queued',
       reason: null,
       startedAt: null,

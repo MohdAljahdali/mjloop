@@ -162,7 +162,10 @@ bus.on('stop', () => send({ type: 'stop' }))
 bus.on('resume', () => send({ type: 'resume' }))
 bus.on('clear', () => send({ type: 'clear' }))
 bus.on('nudge', () => send({ type: 'nudge' }))
-bus.on('story-run', (element) => enqueue(`/mjloop:build ${element.dataset['story'] ?? ''}`))
+bus.on('story-run', (element) => {
+  const story = element.dataset['story'] ?? ''
+  enqueue(`/mjloop:build ${story}`, story === '' ? null : story)
+})
 bus.on('open-plan', (element) => plans.toggle(element.dataset['plan'] ?? ''))
 bus.on('close-plan', () => plans.close())
 bus.on('open-run', (element) => evidence.toggle(element.dataset['run'] ?? ''))
@@ -251,9 +254,15 @@ connect({
   },
 })
 
-/** @param {string} command */
-function enqueue(command) {
-  send({ type: 'enqueue', command })
+/**
+ * @param {string} command
+ * @param {string | null} [story] The story this command is building, if it is.
+ */
+function enqueue(command, story = null) {
+  // Named rather than inferred. A story tab finds its own job by this field;
+  // string-matching the command back out would also match a hand-typed line and
+  // would miss a `/mjloop:fix` working on the same story.
+  send({ type: 'enqueue', command, story })
   // Show what just happened to it. A command that vanishes into an unseen queue
   // is the single most common way this page used to look broken.
   pane.setView('queue')

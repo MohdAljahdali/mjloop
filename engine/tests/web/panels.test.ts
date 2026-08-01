@@ -1116,6 +1116,7 @@ function baselineConfig(): ReturnType<typeof ConfigSchema.parse> {
 describe('queue', () => {
   const job = (patch: Partial<Job> & { id: string }): Job => ({
     command: '/mjloop:build P001-S02',
+    story: 'P001-S02',
     status: 'queued',
     reason: null,
     startedAt: null,

@@ -19275,12 +19275,21 @@ var JobQueue = class {
   constructor(options) {
     this.options = options;
     this.clock = options.clock ?? (() => /* @__PURE__ */ new Date());
+    this.epoch = this.clock().toISOString().replace(/[-:]/g, "").replace(/\.\d+Z$/, "");
   }
-  enqueue(command) {
+  /**
+   * The server-start stamp every job id carries.
+   *
+   * Computed once, from the same clock the queue is given, so a test can pin
+   * it. `2026-08-01T13:45:00.000Z` becomes `20260801T134500`.
+   */
+  epoch;
+  enqueue(command, story = null) {
     this.counter += 1;
     const job = {
-      id: `j${this.counter}`,
+      id: `${this.epoch}-${this.counter}`,
       command,
+      story,
       status: "queued",
       reason: null,
       startedAt: null,
@@ -19770,7 +19779,14 @@ var ClientMessageSchema = discriminatedUnion("type", [
     cols: number2().int().min(1).max(1e3),
     rows: number2().int().min(1).max(1e3)
   }),
-  strictObject({ type: literal("enqueue"), command: string2().min(1).max(2e3) }),
+  strictObject({
+    type: literal("enqueue"),
+    command: string2().min(1).max(2e3),
+    // Optional and defaulted, so a page that predates it still enqueues — and
+    // bounded to the id shape because it reaches a filename through the
+    // transcript store, the same reason `StoryIdSchema` is a regex.
+    story: string2().regex(/^P\d{3}-S\d{2}$/).nullable().default(null)
+  }),
   strictObject({ type: literal("cancel"), jobId: string2().min(1) }),
   strictObject({ type: literal("stop") }),
   strictObject({ type: literal("resume") }),
@@ -20258,7 +20274,7 @@ async function startServer(options) {
           queue.resize(message.data.cols, message.data.rows);
           break;
         case "enqueue":
-          queue.enqueue(message.data.command);
+          queue.enqueue(message.data.command, message.data.story);
           break;
         case "cancel":
           queue.cancel(message.data.jobId);

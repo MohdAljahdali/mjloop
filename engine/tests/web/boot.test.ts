@@ -250,13 +250,13 @@ describe('boot', () => {
 
     sent.length = 0
     click('#stories-list [data-act="story-run"]')
-    expect(commands()).toEqual([{ type: 'enqueue', command: '/mjloop:build P002-S01' }])
+    expect(commands()).toEqual([{ type: 'enqueue', command: '/mjloop:build P002-S01', story: 'P002-S01' }])
 
     // The same story is offered twice on this tab — once in the start block and
     // once in its own row — and both must reach the same frame.
     sent.length = 0
     click('#stories-ready-list [data-act="story-run"]')
-    expect(commands()).toEqual([{ type: 'enqueue', command: '/mjloop:build P002-S01' }])
+    expect(commands()).toEqual([{ type: 'enqueue', command: '/mjloop:build P002-S01', story: 'P002-S01' }])
   })
 
   it('reaches every panel the navigation offers', () => {

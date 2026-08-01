@@ -153,10 +153,25 @@ describe('websocket', () => {
 
   it('enqueues a command and spawns a session for it', async () => {
     const { socket } = await open(`ws://127.0.0.1:${server.port}/?t=${server.token}`)
+    // No `story` field: the shape a page built before that field existed sends,
+    // and the reason it is defaulted rather than required on the wire.
     socket.send(JSON.stringify({ type: 'enqueue', command: '/mjloop:build P001-S01' }))
 
     await expect.poll(() => sessions.sessions.length).toBe(1)
     expect(sessions.last().options.command).toBe('/mjloop:build P001-S01')
+    socket.close()
+  })
+
+  it('refuses a story id that is not one', async () => {
+    // It reaches a filename through the transcript store, which is why the
+    // schema is a regex rather than a non-empty string — the same reasoning
+    // `StoryIdSchema` carries on the engine side.
+    const { socket } = await open(`ws://127.0.0.1:${server.port}/?t=${server.token}`)
+    socket.send(JSON.stringify({ type: 'enqueue', command: '/mjloop:build x', story: '../../etc/passwd' }))
+    socket.send(JSON.stringify({ type: 'enqueue', command: '/mjloop:status' }))
+
+    await expect.poll(() => sessions.sessions.length).toBe(1)
+    expect(sessions.last().options.command).toBe('/mjloop:status')
     socket.close()
   })
 
