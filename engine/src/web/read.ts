@@ -189,7 +189,7 @@ function componentFingerprint(components: readonly ProjectComponent[]): string {
         component.verification.lint ?? '',
         component.verification.build ?? '',
         component.skillTags.join(' '),
-      ].join(' '),
+      ].join('\u0000'),
     )
     .join('\n')
 }
