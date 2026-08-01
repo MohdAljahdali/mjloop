@@ -154,6 +154,29 @@ describe('templates and actions', () => {
   })
 })
 
+describe('keyboard before pointer', () => {
+  it('never starts a drag/pointer reorder gesture without a keydown handler in the same file', () => {
+    // C5's rule, made permanent. `ui/worktabs.js` is this page's one reordering-adjacent
+    // control today — roving tabindex, arrow keys read from `document.documentElement.dir`
+    // on every keystroke — and it exists precisely because the alternative, a pointer-only
+    // drag handle, leaves a keyboard user with nothing to press. `panels/config.js`'s edge
+    // editor (C4) reached the same place without this rule: a set of "after" relations has
+    // no position to drag, only membership to add or remove, so it shipped chips and a
+    // combobox — native `<input>`/`<button>` elements, keyboard-operable with no bespoke
+    // handler at all — and never a `dragstart`/`pointerdown` listener. This test is the
+    // guard for the next file that reaches for one anyway: whichever file starts listening
+    // for a pointer-initiated reorder gesture must, in that same file, listen for `keydown`
+    // too, so the keyboard path ships with the pointer path rather than after it, or not at
+    // all. Checked at file granularity because that is what one control's module already is
+    // here — `mountWorktabs` binds both its `keydown` handler and (were one ever added) a
+    // drag handler on `spec.strip` in the same closure.
+    const reorderStart = /\.addEventListener\(\s*['"](?:dragstart|pointerdown)['"]/
+    const keydown = /\.addEventListener\(\s*['"]keydown['"]/
+    const offenders = scripts.filter((name) => reorderStart.test(code(name)) && !keydown.test(code(name)))
+    expect(offenders).toEqual([])
+  })
+})
+
 describe('accessibility', () => {
   it('gives every top-level view a visible heading and an unmistakable selected route', () => {
     for (const route of ['run', 'plans', 'stories', 'features', 'skills', 'evidence', 'memory', 'config']) {
