@@ -599,6 +599,22 @@
 
   "toast.dismiss": "إخفاء",
 
+  "notice.toggle": "الإشعارات",
+  "notice.unreadCount": "{n} إشعار غير مقروء",
+  "notice.title": "الإشعارات",
+  "notice.hint": "ما حدث في هذه الجلسة — نتائج الكتابة وإشعارات الطابور وتغيّرات الحالة، بترتيب ظهورها. لا تُحفظ: تبدأ هذه القائمة فارغة في كل مرة تُحمَّل فيها الصفحة.",
+  "notice.close": "إغلاق",
+  "notice.empty": "لا شيء بعد.",
+  "notice.more": "تعرض {shown} من {total} إشعار.",
+  "notice.story.done": "اكتملت {id}.",
+  "notice.story.blocked": "تعطّلت {id}.",
+  "notice.job.storyFailed": "فشل بناء {id}.",
+  "notice.plan.done": "اكتملت {id} — تمّت كل قصصها.",
+  "notice.plan.awaitingApproval": "{id} جاهزة لقرارك.",
+  "notice.config.missing": "تعذّرت قراءة إعدادات المشروع. راجع الشريط أعلاه.",
+  "notice.cycle.failed": "انتهت الدورة دون أن تنجح: {agents}.",
+  "notice.verify.failed": "فشل فحص: {signature}.",
+
   "command.placeholder": "‏/mjloop:fix حلقة إعادة توجيه الدخول",
   "command.label": "أمر لوب يُضاف إلى الطابور",
   "command.run": "شغّل",

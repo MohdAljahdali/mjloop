@@ -230,6 +230,18 @@ function click(selector: string): void {
   node.dispatchEvent(new Event('click', { bubbles: true }))
 }
 
+/**
+ * The most recently shown toast's own text — `ui/toasts.js` appends, so the
+ * last child is the newest. This file does not fake timers, so a toast an
+ * earlier test in it showed is still sitting in `#toasts` eight real seconds
+ * later; asserting merely that *a* toast exists would pass whether or not the
+ * one this test cares about was ever shown.
+ */
+function lastToastText(): string | null {
+  const toasts = document.querySelectorAll('#toasts .toast')
+  return toasts.item(toasts.length - 1)?.textContent ?? null
+}
+
 describe('boot', () => {
   it('keeps the open plan current while its own panel is closed', async () => {
     // `ui/render.js` skips a hidden panel, so a document ticked from a panel's
@@ -514,5 +526,69 @@ describe('boot', () => {
     // nobody can return to.
     click('[data-act="close-feature"]')
     await vi.waitFor(() => expect((document.getElementById('feature-detail') as HTMLElement).hidden).toBe(true))
+  })
+
+  it('opens the notification panel to a real snapshot transition, closes it, and keeps the badge honest', async () => {
+    // `drawNoticeFeed` diffs against whatever `poll()` last delivered in an
+    // earlier test in this file — `mountNotifications` only resets at import
+    // time, once, the same as every other module-level mount here. A first,
+    // otherwise-empty poll pins a known baseline before the transition this
+    // test is actually about, so the assertions below hold regardless of what
+    // an earlier test in this file left behind.
+    poll()
+    poll({ state: { ...emptySnapshot().state, config_error: 'bad indentation' } })
+
+    await vi.waitFor(() => expect(lastToastText()).toContain('unreadable'))
+    const badge = document.getElementById('notice-count') as HTMLElement
+    expect(badge.hidden).toBe(false)
+
+    click('[data-act="notice-toggle"]')
+    expect((document.getElementById('notice-panel') as HTMLElement).hidden).toBe(false)
+    expect(document.getElementById('notice-toggle')?.getAttribute('aria-expanded')).toBe('true')
+    // Opening reads the badge, and the entry the toast just showed is the same
+    // one logged in the panel — one door, `ui/notifications.js`'s `notify()`,
+    // for both.
+    expect(badge.hidden).toBe(true)
+    expect(document.querySelector('#notice-list .notice-row')?.textContent).toContain('unreadable')
+
+    click('[data-act="notice-close"]')
+    expect((document.getElementById('notice-panel') as HTMLElement).hidden).toBe(true)
+    expect(document.getElementById('notice-toggle')?.getAttribute('aria-expanded')).toBe('false')
+  })
+
+  it("logs a write's own receipt into the notification panel, not only the toast", async () => {
+    // `ui/writes.js`'s `settle()` used to call `ui/toasts.js`'s `toast()`
+    // directly; it now calls `ui/notifications.js`'s `notify()` instead, which
+    // does both. A real `{type:'receipt'}` frame delivered the way the server
+    // actually sends one, rather than calling `settle()` in isolation, is what
+    // proves the wire is still connected to the change.
+    click('[data-act="notice-close"]')
+    deliver({ type: 'receipt', id: 'w-does-not-matter', ok: true, code: 'write.ok.story' })
+    await vi.waitFor(() => expect(lastToastText()).toContain('Story requeued'))
+
+    click('[data-act="notice-toggle"]')
+    expect(document.querySelector('#notice-list .notice-row')?.textContent).toContain('Story requeued')
+  })
+
+  it('logs a refused write too, not only an accepted one', async () => {
+    click('[data-act="notice-close"]')
+    deliver({ type: 'receipt', id: 'w-refused', ok: false, code: 'write.stale.story' })
+    await vi.waitFor(() => expect(lastToastText()).toContain('moved on in the meantime'))
+
+    click('[data-act="notice-toggle"]')
+    expect(document.querySelector('#notice-list .notice-row')?.textContent).toContain('moved on in the meantime')
+  })
+
+  it("logs the queue's own {type:'notice'} frames the same way", async () => {
+    // `job.abandoned` and `queue.blocked`/`queue.failed` are the two notices
+    // `queue.ts` already sends over the wire, unrelated to a write receipt —
+    // this is the other of the two existing sources `ui/notifications.js`'s
+    // header names, delivered exactly as the server sends it.
+    click('[data-act="notice-close"]')
+    deliver({ type: 'notice', message: { code: 'job.abandoned', params: { job: '/mjloop:build P009-S01' } } })
+    await vi.waitFor(() => expect(lastToastText()).toContain('P009-S01'))
+
+    click('[data-act="notice-toggle"]')
+    expect(document.querySelector('#notice-list .notice-row')?.textContent).toContain('P009-S01')
   })
 })

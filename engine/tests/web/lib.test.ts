@@ -13,7 +13,9 @@ import {
   tally,
   unmet,
 } from '../../src/web/public/lib/stories.js'
-import type { PlanView, StoryView } from '../../src/web/protocol.js'
+import { deriveEvents } from '../../src/web/public/lib/notifications.js'
+import { emptySnapshot } from './helpers/page.js'
+import type { Job, PlanView, StoryView } from '../../src/web/protocol.js'
 
 /**
  * `lib/` is DOM-free so it is testable here, under the suite's existing
@@ -274,5 +276,139 @@ describe('story derivations', () => {
     expect(sift(stories, 'draw pane', '', statuses).map((entry) => entry.id)).toEqual(['P001-S03'])
     expect(sift(stories, 'S03', '', statuses).map((entry) => entry.id)).toEqual(['P001-S03'])
     expect(sift(stories, '', '', statuses)).toHaveLength(3)
+  })
+})
+
+const job = (patch: Partial<Job> & { id: string }): Job => ({
+  command: '/mjloop:build P001-S01',
+  story: null,
+  status: 'queued',
+  reason: null,
+  startedAt: null,
+  endedAt: null,
+  ...patch,
+})
+
+describe('notifications', () => {
+  it('reports nothing on the first snapshot a session ever sees', () => {
+    // Every story, plan and job on it is already however old the project is;
+    // reporting all of it as "just happened" the moment a tab opens is the one
+    // thing this function must never do.
+    const first = emptySnapshot({ plans: [plan({ id: 'P001', stories: [story({ id: 'P001-S01', status: 'done' })] })] })
+    expect(deriveEvents(null, first)).toEqual([])
+  })
+
+  it('reports a story turning done or blocked, and nothing for an unrelated field moving', () => {
+    const before = emptySnapshot({
+      plans: [plan({ id: 'P001', stories: [story({ id: 'P001-S01', status: 'doing' }), story({ id: 'P001-S02' })] })],
+    })
+    const after = emptySnapshot({
+      plans: [
+        plan({
+          id: 'P001',
+          stories: [story({ id: 'P001-S01', status: 'done' }), story({ id: 'P001-S02', status: 'blocked' })],
+        }),
+      ],
+    })
+    expect(deriveEvents(before, after)).toEqual([
+      { code: 'notice.story.done', params: { id: 'P001-S01' } },
+      { code: 'notice.story.blocked', params: { id: 'P001-S02' } },
+    ])
+    // Nothing changed a second time: the same two snapshots compared again
+    // must not refire.
+    expect(deriveEvents(after, after)).toEqual([])
+  })
+
+  it('reports a plan completing once, not on every snapshot after', () => {
+    const empty = emptySnapshot({ plans: [plan({ id: 'P001', stories: [story({ id: 'P001-S01' })] })] })
+    const done = emptySnapshot({ plans: [plan({ id: 'P001', stories: [story({ id: 'P001-S01', status: 'done' })] })] })
+    expect(deriveEvents(empty, done)).toContainEqual({ code: 'notice.plan.done', params: { id: 'P001' } })
+    expect(deriveEvents(done, done)).toEqual([])
+  })
+
+  it('never calls an empty plan complete', () => {
+    // `plan.stories.every(...)` is vacuously true over an empty array — the
+    // guard this test protects is `plan.stories.length > 0`, and removing it
+    // turns a plan with zero stories into "done" the instant one exists on a
+    // snapshot the page has already seen the plan on (so the earlier awaiting-
+    // approval event, which only fires for a genuinely new plan id, cannot
+    // mask the regression the way comparing two identical snapshots would).
+    const before = emptySnapshot({ plans: [plan({ id: 'P001', stories: [story({ id: 'P001-S01' })] })] })
+    const stillEmptyOfDoneWork = emptySnapshot({ plans: [plan({ id: 'P001', stories: [] })] })
+    expect(deriveEvents(before, stillEmptyOfDoneWork)).toEqual([])
+
+    const empty = emptySnapshot({ plans: [plan({ id: 'P001', stories: [] })] })
+    expect(deriveEvents(empty, empty)).toEqual([])
+  })
+
+  it('reports a new plan awaiting a decision, once, and never for one already on record', () => {
+    const before = emptySnapshot({ plans: [] })
+    const arrived = emptySnapshot({ plans: [plan({ id: 'P001', approval: null })] })
+    expect(deriveEvents(before, arrived)).toEqual([{ code: 'notice.plan.awaitingApproval', params: { id: 'P001' } }])
+    // Already on record on both snapshots: no event, even though `approval` is
+    // still null on both.
+    expect(deriveEvents(arrived, arrived)).toEqual([])
+    // A plan the page already knew about that later gets approved reports
+    // nothing here — the decision itself is not a "needs a decision" event.
+    const decided = emptySnapshot({ plans: [plan({ id: 'P001', approval: 'approved' })] })
+    expect(deriveEvents(arrived, decided)).toEqual([])
+  })
+
+  it("reports a story-bound job's failure, and leaves a job with no story to the queue's own notice", () => {
+    const before = emptySnapshot({ queue: [job({ id: 'j1', story: 'P001-S01', status: 'running' })] })
+    const after = emptySnapshot({ queue: [job({ id: 'j1', story: 'P001-S01', status: 'failed' })] })
+    expect(deriveEvents(before, after)).toEqual([{ code: 'notice.job.storyFailed', params: { id: 'P001-S01' } }])
+    // Still failed on the next poll: reported once, not on every tick a
+    // finished job sits in `snapshot.queue`.
+    expect(deriveEvents(after, after)).toEqual([])
+
+    const untied = emptySnapshot({ queue: [job({ id: 'j2', story: null, status: 'running' })] })
+    const untiedFailed = emptySnapshot({ queue: [job({ id: 'j2', story: null, status: 'failed' })] })
+    expect(deriveEvents(untied, untiedFailed)).toEqual([])
+  })
+
+  it('reports config becoming unreadable, once', () => {
+    const readable = emptySnapshot()
+    const broken = emptySnapshot({ state: { ...emptySnapshot().state, config_error: 'bad indentation' } })
+    expect(deriveEvents(readable, broken)).toEqual([{ code: 'notice.config.missing' }])
+    expect(deriveEvents(broken, broken)).toEqual([])
+  })
+
+  it('reports a cycle ending without passing, and does not repeat while the same cycle sits open', () => {
+    const idle = emptySnapshot()
+    const failed = emptySnapshot({ state: { ...emptySnapshot().state, last_cycle: { result: 'fail', agents: ['builder'] } } })
+    expect(deriveEvents(idle, failed)).toEqual([{ code: 'notice.cycle.failed', params: { agents: 'builder' } }])
+    // Same reading polled again: no repeat.
+    expect(deriveEvents(failed, failed)).toEqual([])
+    // A `pass` never fires this event at all.
+    const passed = emptySnapshot({ state: { ...emptySnapshot().state, last_cycle: { result: 'pass', agents: ['builder'] } } })
+    expect(deriveEvents(idle, passed)).toEqual([])
+    // A second, distinct cycle failing behind the first fires again.
+    const failedAgain = emptySnapshot({
+      state: { ...emptySnapshot().state, last_cycle: { result: 'fail', agents: ['verifier'] } },
+    })
+    expect(deriveEvents(failed, failedAgain)).toEqual([{ code: 'notice.cycle.failed', params: { agents: 'verifier' } }])
+  })
+
+  it('reports each new verification-failure signature once', () => {
+    const clean = emptySnapshot({ guards: { strikes: 0, strikesAllowed: 3, cycleErrors: [], errorArmed: null } })
+    const oneError = emptySnapshot({
+      guards: { strikes: 1, strikesAllowed: 3, cycleErrors: ['npm test :: N failing'], errorArmed: 'x' },
+    })
+    expect(deriveEvents(clean, oneError)).toEqual([
+      { code: 'notice.verify.failed', params: { signature: 'npm test :: N failing' } },
+    ])
+    const twoErrors = emptySnapshot({
+      guards: {
+        strikes: 1,
+        strikesAllowed: 3,
+        cycleErrors: ['npm test :: N failing', 'npm run build :: exit N'],
+        errorArmed: 'x',
+      },
+    })
+    // Only the new signature is reported — the one already seen is not repeated.
+    expect(deriveEvents(oneError, twoErrors)).toEqual([
+      { code: 'notice.verify.failed', params: { signature: 'npm run build :: exit N' } },
+    ])
   })
 })

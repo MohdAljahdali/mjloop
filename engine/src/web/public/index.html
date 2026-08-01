@@ -59,12 +59,43 @@
           ></span>
           <span class="bit" data-rail="gate"></span>
         </span>
+        <!-- What happened this session, retained past a toast's eight seconds
+             but not past a reload — `notice.hint` says so. `aria-expanded` is
+             the only state this button carries; the panel it opens has no
+             `aria-live` region of its own, because `discipline.test.ts` fixes
+             the page at exactly two (the banners, and the toasts that keep
+             doing the announcing this list only logs). -->
+        <button
+          type="button"
+          class="notice-toggle"
+          id="notice-toggle"
+          data-act="notice-toggle"
+          aria-haspopup="true"
+          aria-expanded="false"
+          aria-controls="notice-panel"
+        >
+          <span data-i18n="notice.toggle"></span>
+          <span class="nav-count" id="notice-count" aria-hidden="true" hidden></span>
+        </button>
         <!-- Halt and Stop, side by side and labelled distinctly. Conflating
              them is the obvious mistake: Stop kills the pty and leaves
              `state.json` saying `running` with no HALT.md, which is not a halt. -->
         <button type="button" class="danger" data-act="halt" data-rail="halt" hidden data-i18n="controls.halt"></button>
         <button type="button" data-act="stop" data-rail="stop" hidden data-i18n="controls.stop"></button>
       </div>
+
+      <section class="notice-panel" id="notice-panel" hidden aria-labelledby="notice-panel-title">
+        <header class="panel-head">
+          <div>
+            <h2 id="notice-panel-title" data-i18n="notice.title"></h2>
+            <p class="hint" data-i18n="notice.hint"></p>
+          </div>
+          <button type="button" data-act="notice-close" data-i18n="notice.close"></button>
+        </header>
+        <p class="empty" id="notice-empty" data-i18n="notice.empty"></p>
+        <ul id="notice-list"></ul>
+        <p class="hint" id="notice-more" hidden></p>
+      </section>
     </header>
 
     <!-- Navigation that carries the two numbers worth switching a view for: how
@@ -1142,6 +1173,13 @@
 
     <template id="tpl-chip">
       <li class="chip"><span data-slot="text"></span></li>
+    </template>
+
+    <template id="tpl-notice">
+      <li class="notice-row">
+        <time data-slot="time"></time>
+        <span data-slot="text"></span>
+      </li>
     </template>
 
     <!-- A plan reads as one line of prose and one bar. Its stories are not here:

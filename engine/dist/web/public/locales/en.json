@@ -571,6 +571,22 @@
 
   "toast.dismiss": "Dismiss",
 
+  "notice.toggle": "Notifications",
+  "notice.unreadCount": "{n} unread notifications",
+  "notice.title": "Notifications",
+  "notice.hint": "What happened this session — write results, queue notices, and status changes, in the order they were seen. Not saved: this list starts empty every time the page loads.",
+  "notice.close": "Close",
+  "notice.empty": "Nothing yet.",
+  "notice.more": "Showing {shown} of {total} notifications.",
+  "notice.story.done": "{id} is done.",
+  "notice.story.blocked": "{id} is blocked.",
+  "notice.job.storyFailed": "The build for {id} failed.",
+  "notice.plan.done": "{id} is complete — every story is done.",
+  "notice.plan.awaitingApproval": "{id} is ready for your decision.",
+  "notice.config.missing": "Project settings became unreadable. See the banner above.",
+  "notice.cycle.failed": "The cycle ended without passing: {agents}.",
+  "notice.verify.failed": "A check failed: {signature}.",
+
   "command.placeholder": "/mjloop:fix the login redirect loop",
   "command.label": "Loop command to queue",
   "command.run": "Run",

@@ -56,6 +56,7 @@ const NAMESPACES = [
   'lang',
   'manifest',
   'memory',
+  'notice',
   'panel',
   'pane',
   'plans',

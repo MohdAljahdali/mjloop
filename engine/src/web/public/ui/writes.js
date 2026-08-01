@@ -14,7 +14,7 @@
  *    refused too, precisely because it is conditional as well.
  */
 import { send } from '../net/socket.js'
-import { toast } from './toasts.js'
+import { notify } from './notifications.js'
 
 /** @typedef {import('../../writes.js').Write} Write */
 
@@ -46,14 +46,14 @@ export function settle(receipt) {
   if (!receipt.ok) {
     // A refusal is worth saying out loud: the user pressed something and it did
     // not happen, and the reason is that the world moved underneath them.
-    toast({ code: receipt.code })
+    notify({ code: receipt.code })
     return
   }
 
   const undo = held?.undo
   if (undo === undefined) {
-    toast({ code: receipt.code })
+    notify({ code: receipt.code })
     return
   }
-  toast({ code: receipt.code }, { code: 'write.undo', run: () => submit(undo) })
+  notify({ code: receipt.code }, { code: 'write.undo', run: () => submit(undo) })
 }

@@ -20,7 +20,8 @@ import { drawRail, mountRail } from './ui/rail.js'
 import { mountTabs, showTab } from './ui/tabs.js'
 import { mountTerminal, refit, replace, write } from './ui/terminal.js'
 import { mountHaltDialog } from './ui/dialog.js'
-import { dismiss, mountToasts, runAction, toast } from './ui/toasts.js'
+import { dismiss, mountToasts, runAction } from './ui/toasts.js'
+import { close as closeNotifications, drawNoticeFeed, mountNotifications, notify, toggle as toggleNotifications } from './ui/notifications.js'
 import { settle, submit } from './ui/writes.js'
 import { mountConfig } from './panels/config.js'
 import { mountEvidence } from './panels/evidence.js'
@@ -80,6 +81,14 @@ for (const [code, meta] of Object.entries(LOCALES)) {
 }
 
 mountToasts(/** @type {HTMLElement} */ (document.getElementById('toasts')))
+mountNotifications({
+  toggle: /** @type {HTMLElement} */ (document.getElementById('notice-toggle')),
+  count: /** @type {HTMLElement} */ (document.getElementById('notice-count')),
+  panel: /** @type {HTMLElement} */ (document.getElementById('notice-panel')),
+  empty: /** @type {HTMLElement} */ (document.getElementById('notice-empty')),
+  list: /** @type {HTMLElement} */ (document.getElementById('notice-list')),
+  more: /** @type {HTMLElement} */ (document.getElementById('notice-more')),
+})
 mountRail(railSlots())
 mountTerminal({
   host: /** @type {HTMLElement} */ (document.getElementById('terminal')),
@@ -117,6 +126,16 @@ mountMemory()
 const config = mountConfig()
 mountQueue()
 register({ id: 'rail', node: /** @type {HTMLElement} */ (document.querySelector('.rail')), update: drawRail })
+// Ticked against `.top`, the whole header, rather than the panel this feed
+// opens: the panel starts `hidden`, and `ui/render.js` skips a hidden node —
+// a feed registered against the thing it has to be able to unhide would never
+// get the chance to. `.top` holds the banners and the rail too, both already
+// on screen in every tab, so this costs nothing extra to stay visible.
+register({
+  id: 'notifications',
+  node: /** @type {HTMLElement} */ (document.querySelector('.top')),
+  update: drawNoticeFeed,
+})
 register({
   id: 'plandoc',
   node: /** @type {HTMLElement} */ (document.querySelector('.tabs')),
@@ -227,6 +246,8 @@ bus.on('pane-cycle', () => pane.cycle())
 bus.on('pane-full', () => pane.toggleFull())
 bus.on('toast-dismiss', (element) => dismiss(element))
 bus.on('toast-action', (element) => runAction(element))
+bus.on('notice-toggle', () => toggleNotifications())
+bus.on('notice-close', () => closeNotifications())
 // Halt and Stop are not the same thing and never share a control: Stop kills
 // the pty, halt writes HALT.md and only then closes the session.
 bus.on('halt', () => haltDialog.open(currentRun))
@@ -264,7 +285,7 @@ connect({
       replace(message.data)
       draw()
     } else if (message.type === 'notice') {
-      toast(message.message)
+      notify(message.message)
     } else if (message.type === 'receipt') {
       settle(message)
     }
