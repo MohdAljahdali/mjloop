@@ -298,8 +298,9 @@ button.primary:disabled {
    list's 0.75fr, because it held every story title and its acceptance criteria
    and squeezing those into the narrow column arrived as `…g a status
    vocabulary`. The stories are a tab of their own now: what is left here is a
-   decision record, two collapsed documents and a link, and the plan list beside
-   it is what this tab is for. */
+   decision record, two collapsed documents, this plan's own derived progress,
+   evidence and memory (B10), and a link — the plan list beside it is what this
+   tab is for. */
 @media (min-width: 1100px) {
   .plans-workspace[data-detail-open="true"] {
     grid-template-columns: minmax(0, 1fr) minmax(360px, 1fr);
@@ -332,6 +333,47 @@ button.primary:disabled {
 
 .plan-back {
   display: none;
+}
+
+/* Plan Progress, Decision, Evidence and Memory — four subsections inside the
+   one `.plan-detail` card. Each gets `.story-open-runs`/`.story-open-deps`'s
+   own small-heading shape (60-panels.css, below) rather than becoming a
+   second nested `.block`: a card inside a card is the wrong depth for a
+   subsection, and `.plan-detail` is already one. */
+.plan-detail-sub {
+  margin-block-start: 14px;
+}
+
+.plan-detail-sub h3 {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--dim);
+  font-weight: 650;
+  margin: 0 0 8px;
+}
+
+.plan-detail-sub .hint {
+  margin: 0 0 8px;
+}
+
+/* The full-panel `.empty` (10-layout.css) is sized and bordered for standing
+   alone as a whole tab's content; inside one of four subsections sharing a
+   single card it is the same compact override `.story-open-runs .empty` and
+   `.story-open-deps .empty` already use, below. */
+.plan-detail-sub .empty {
+  padding: 10px 14px;
+  margin: 0;
+}
+
+/* `.run` is shared with `tpl-run`'s grid rows in Evidence and
+   `tpl-story-run`'s in the story pane — scoped here exactly as
+   `.story-open-runs .run` already is (below), so this list's flex layout
+   cannot end up depending on selector source order against the grid rule. */
+.plan-evidence .run {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .plan {

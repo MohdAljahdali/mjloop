@@ -109,47 +109,58 @@ export function mountMemory() {
       if (drawn.shown < drawn.total) phrase(more, 'memory.more', { shown: drawn.shown, total: drawn.total })
     },
   })
+}
 
-  function memoryRow() {
-    const { root, slots } = clone('tpl-memory')
-    return {
-      root,
-      /** @param {MemoryView} memory */
-      update(memory) {
-        const id = slots['id']
-        if (id !== undefined) verbatim(id, memory.id)
-        // A kind comes from the engine's own enum, and the page has a word for
-        // the ones it knows. The schema is still the engine's to grow, so a
-        // kind this dictionary has never heard of renders as it arrived rather
-        // than as a dotted key. A row is keyed by memory id and a memory's kind
-        // does not change, so a node never has to cross between the two forms.
-        const kindSlot = slots['kind']
-        const kindWord = kindKey(memory.kind)
-        if (kindSlot !== undefined && kindWord !== null) phrase(kindSlot, kindWord)
-        else if (kindSlot !== undefined) verbatim(kindSlot, memory.kind)
-        const title = slots['title']
-        if (title !== undefined) verbatim(title, memory.title)
-        const at = slots['at']
-        if (at !== undefined) verbatim(at, stamp(memory.at))
-        const body = slots['body']
-        if (body !== undefined) verbatim(body, memory.body)
+/**
+ * One memory as `tpl-memory` draws it — module-scoped and exported rather
+ * than a closure inside `mountMemory`, so `panels/plans.js`'s Plan Memory list
+ * clones the identical row instead of a second copy of this same rendering.
+ * It closes over nothing but its own arguments and the module's imports, so
+ * lifting it out changes nothing about what `reconcile` does with it: the
+ * per-row state `reconcile` keeps is keyed on the *host* element, never on
+ * which closure produced the factory.
+ *
+ * @returns {{ root: HTMLElement, update: (memory: MemoryView) => void }}
+ */
+export function memoryRow() {
+  const { root, slots } = clone('tpl-memory')
+  return {
+    root,
+    /** @param {MemoryView} memory */
+    update(memory) {
+      const id = slots['id']
+      if (id !== undefined) verbatim(id, memory.id)
+      // A kind comes from the engine's own enum, and the page has a word for
+      // the ones it knows. The schema is still the engine's to grow, so a
+      // kind this dictionary has never heard of renders as it arrived rather
+      // than as a dotted key. A row is keyed by memory id and a memory's kind
+      // does not change, so a node never has to cross between the two forms.
+      const kindSlot = slots['kind']
+      const kindWord = kindKey(memory.kind)
+      if (kindSlot !== undefined && kindWord !== null) phrase(kindSlot, kindWord)
+      else if (kindSlot !== undefined) verbatim(kindSlot, memory.kind)
+      const title = slots['title']
+      if (title !== undefined) verbatim(title, memory.title)
+      const at = slots['at']
+      if (at !== undefined) verbatim(at, stamp(memory.at))
+      const body = slots['body']
+      if (body !== undefined) verbatim(body, memory.body)
 
-        const tags = slots['tags']
-        if (tags !== undefined) {
-          reconcile(tags, memory.tags, (tag) => tag, () => {
-            const row = clone('tpl-chip')
-            return {
-              root: row.root,
-              /** @param {string} tag */
-              update(tag) {
-                const text = row.slots['text']
-                if (text !== undefined) verbatim(text, tag)
-              },
-            }
-          })
-        }
-      },
-    }
+      const tags = slots['tags']
+      if (tags !== undefined) {
+        reconcile(tags, memory.tags, (tag) => tag, () => {
+          const row = clone('tpl-chip')
+          return {
+            root: row.root,
+            /** @param {string} tag */
+            update(tag) {
+              const text = row.slots['text']
+              if (text !== undefined) verbatim(text, tag)
+            },
+          }
+        })
+      }
+    },
   }
 }
 

@@ -173,6 +173,34 @@ export function tally(plans) {
 }
 
 /**
+ * One plan's own story-status breakdown — completed, in progress, ready to
+ * start, blocked, and what remains (not done).
+ *
+ * `tally([plan])` rather than a second sum over `plan.stories`: `tally()` is
+ * what the project-wide tally and, through `ready()`, the navigation badge
+ * already call, so a one-plan breakdown built any other way could report a
+ * number either of those disagrees with. `remaining` is the one figure
+ * `tally()` does not already carry — "not done", the same definition `sift`'s
+ * `remaining` filter uses, computed here as `total - completed` rather than a
+ * second `.filter()` so it cannot drift from what `completed` above it means.
+ *
+ * @param {PlanView} plan
+ * @returns {{ total: number, completed: number, doing: number, ready: number, blocked: number, remaining: number }}
+ */
+export function planProgress(plan) {
+  const counts = tally([plan])
+  const total = plan.stories.length
+  return {
+    total,
+    completed: counts.done,
+    doing: counts.doing,
+    ready: counts.ready,
+    blocked: counts.blocked,
+    remaining: total - counts.done,
+  }
+}
+
+/**
  * How many `depends_on` hops `depTree` descends from the open story before it
  * stops, independently of whether it has hit a cycle. Exported so the view and
  * its test share one number rather than two.

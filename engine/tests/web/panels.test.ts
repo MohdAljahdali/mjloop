@@ -9,7 +9,7 @@ import { collectConfigChanges, mountConfig } from '../../src/web/public/panels/c
 import { mountEvidence } from '../../src/web/public/panels/evidence.js'
 import { joinAcceptances, mountSkills, shortDigest } from '../../src/web/public/panels/skills.js'
 import { approvable, mountFeatures } from '../../src/web/public/panels/features.js'
-import { mountPlans } from '../../src/web/public/panels/plans.js'
+import { mountPlans, planMemories, planRuns } from '../../src/web/public/panels/plans.js'
 import { mountStories } from '../../src/web/public/panels/stories.js'
 import { mountQueue } from '../../src/web/public/panels/queue.js'
 import { mountRun } from '../../src/web/public/panels/run.js'
@@ -26,7 +26,7 @@ import type { FeatureBrief } from '../../src/schemas/feature.js'
 import type { SkillPackage } from '../../src/schemas/skill-library.js'
 import type { ProjectSkillAcceptance } from '../../src/schemas/skill-acceptance.js'
 import type { Job, PlanView, StoryView } from '../../src/web/protocol.js'
-import type { StoryDetail } from '../../src/web/read.js'
+import type { MemoryView, RunSummary, StoryDetail } from '../../src/web/read.js'
 
 /**
  * The milestone's own claim, asserted: everything the server already sends
@@ -267,8 +267,276 @@ describe('plans', () => {
     expect((document.getElementById('plan-detail') as HTMLElement).hidden).toBe(true)
   })
 
+  it("hides Plan Progress rather than inventing numbers when the snapshot has stopped listing the open plan", async () => {
+    // The cached document can still say the plan exists — `plan-detail` itself
+    // stays open, per the test above — but Plan Progress reads `state.plans`,
+    // not the document, and there is no row there to agree with any more.
+    installStorage(memoryStorage(JSON.stringify({ activePlan: 'P001' })))
+    serve({
+      '/api/plans/P001': { id: 'P001', title: 'A plan', approval: null, body: '', review: null, stories: [] },
+    })
+    reveal('panel-plans')
+    mountPlans()
+    draw(emptySnapshot({ plans: [plan({ id: 'P001', stories: [story({ id: 'P001-S01' })] })] }))
+    await vi.waitFor(() => expect((document.getElementById('plan-progress') as HTMLElement).hidden).toBe(false))
 
+    draw(emptySnapshot({ plans: [] }))
+    expect((document.getElementById('plan-progress') as HTMLElement).hidden).toBe(true)
+  })
 
+  it("breaks down the open plan's own stories, agreeing with the row above it and the tally beside it", async () => {
+    serve({
+      '/api/plans/P001': { id: 'P001', title: 'A plan', approval: null, body: '', review: null, stories: [] },
+    })
+    reveal('panel-plans')
+    const mounted = mountPlans()
+    const stories = [
+      story({ id: 'P001-S01', status: 'done' }),
+      story({ id: 'P001-S02', status: 'doing' }),
+      story({ id: 'P001-S03', status: 'blocked' }),
+      // Ready: `todo` with its one dependency already `done`.
+      story({ id: 'P001-S04', depends_on: ['P001-S01'] }),
+      // Not ready: `todo`, but its dependency is not done — this is the case
+      // that would make `remaining` and `ready` disagree if `remaining` were
+      // computed as anything other than "not done".
+      story({ id: 'P001-S05', depends_on: ['P001-S02'] }),
+    ]
+    // A second plan with a deliberately different breakdown, both done, so
+    // the five counts below can only pass if `drawDetail` picked P001's own
+    // row out of `state.plans` rather than the first one in the array — the
+    // exact wrong-plan-numbers bug the block's own comment (`plans.js:225-228`)
+    // argues it is avoiding.
+    const p002Stories = [story({ id: 'P002-S01', status: 'done' }), story({ id: 'P002-S02', status: 'done' })]
+    draw(emptySnapshot({ plans: [plan({ id: 'P001', stories }), plan({ id: 'P002', stories: p002Stories })] }))
+    mounted.toggle('P001')
+    await vi.waitFor(() => expect((document.getElementById('plan-progress') as HTMLElement).hidden).toBe(false))
+
+    // completed 1, doing 1, ready 1 (S04 only — S05 is blocked on a
+    // non-done dependency), blocked 1, remaining 4 (everything but S01).
+    expect(document.getElementById('plan-progress-completed')?.textContent).toBe('1')
+    expect(document.getElementById('plan-progress-doing')?.textContent).toBe('1')
+    expect(document.getElementById('plan-progress-ready')?.textContent).toBe('1')
+    expect(document.getElementById('plan-progress-blocked')?.textContent).toBe('1')
+    expect(document.getElementById('plan-progress-remaining')?.textContent).toBe('4')
+
+    // The row above it, in the plan list, reads the identical `planProgress`
+    // call — proof the two cannot disagree is that they are the same call,
+    // not two arithmetic expressions that happen to match today.
+    const row = document.querySelector('#plans-list .plan') as HTMLElement
+    expect(row.querySelector('[data-slot="count"]')?.textContent).toBe('1/5')
+    // `plans.readyHere`/`plans.blockedHere` are both `"{n} …"` with no other
+    // hole, so substituting the one count by hand is exact rather than
+    // approximate.
+    expect(row.querySelector('[data-slot="ready"]')?.textContent).toBe(english['plans.readyHere']?.replace('{n}', '1'))
+    expect(row.querySelector('[data-slot="blocked"]')?.textContent).toBe(
+      english['plans.blockedHere']?.replace('{n}', '1'),
+    )
+  })
+
+  it("collects only this plan's own runs into Plan Evidence, by the run directory's story convention", async () => {
+    const run = (patch: Partial<RunSummary> & { id: string }): RunSummary => ({
+      story: null,
+      track: 'build',
+      cycles: 1,
+      halted: false,
+      ...patch,
+    })
+    serve({
+      '/api/plans/P001': {
+        id: 'P001',
+        title: 'A plan',
+        approval: null,
+        body: '',
+        review: null,
+        stories: [detailStory({ id: 'P001-S01' })],
+      },
+      '/api/runs': [
+        run({ id: '2026-07-28-001--P001-S01--build', story: 'P001-S01', cycles: 2 }),
+        // A second run against this plan's own story, halted, so both
+        // branches of the outcome ternary in `planRunRow` actually render —
+        // the sibling `tpl-story-run` row pins both (`toContain('ended')` and
+        // `toContain('halted')` at tests/web/panels.test.ts:781/795); this row
+        // previously had no fixture that reached the halted branch at all.
+        run({ id: '2026-07-28-004--P001-S01--build', story: 'P001-S01', halted: true }),
+        // Another plan's own story: present in the shared feed, and the case
+        // that actually exercises the filter rather than a fixture it would
+        // pass vacuously.
+        run({ id: '2026-07-28-002--P002-S01--build', story: 'P002-S01' }),
+        // An ad-hoc run: no story in its directory name at all, so `readRuns`
+        // gives it `story: null` — never attributable to any plan, which is
+        // a fact about the directory name and not a gap in this filter.
+        run({ id: '2026-07-28-003--adhoc--edit', story: null, halted: true }),
+      ],
+    })
+    reveal('panel-plans')
+    const mounted = mountPlans()
+    draw(emptySnapshot({ plans: [plan({ id: 'P001', stories: [story({ id: 'P001-S01' })] })] }))
+    mounted.toggle('P001')
+
+    await vi.waitFor(() => expect(document.querySelectorAll('#plan-evidence-list .run')).toHaveLength(2))
+    const rows = document.querySelectorAll('#plan-evidence-list .run')
+    const row = rows[0] as HTMLElement
+    expect(row.textContent).toContain('2026-07-28-001--P001-S01--build')
+    expect(row.textContent).not.toContain('2026-07-28-002--P002-S01--build')
+    expect(row.textContent).not.toContain('2026-07-28-003--adhoc--edit')
+    expect(row.querySelector('.story-id')?.textContent).toBe('P001-S01')
+    expect(row.querySelector('[data-slot="cycles"]')?.textContent).toBe('2 cycles')
+    // The track chip and the outcome word/class render data no other
+    // assertion here reads — pinned so a blank chip or a silent, colourless
+    // outcome cell would fail this test rather than ship unnoticed, the same
+    // shape as `tpl-story-run`'s own pin at tests/web/panels.test.ts:785.
+    expect(row.querySelector('.chip')?.textContent).toBe('build')
+    expect(row.textContent).toContain('ended')
+    expect(row.querySelector('.res')?.classList.contains('res-pass')).toBe(true)
+
+    const halted = rows[1] as HTMLElement
+    expect(halted.textContent).toContain('2026-07-28-004--P001-S01--build')
+    expect(halted.textContent).toContain('halted')
+    expect(halted.querySelector('.res')?.classList.contains('res-fail')).toBe(true)
+    expect((document.getElementById('plan-evidence-empty') as HTMLElement).hidden).toBe(true)
+
+    // The pure filter, unit-tested directly: `planRuns` is what the DOM test
+    // above is wiring, and this is the case that proves the filter itself
+    // (not the DOM plumbing around it) does the excluding.
+    const runs = [
+      run({ id: 'a', story: 'P001-S01' }),
+      run({ id: 'b', story: 'P002-S01' }),
+      run({ id: 'c', story: null }),
+    ]
+    expect(planRuns(runs, { stories: [{ id: 'P001-S01' }] }).map((entry) => entry.id)).toEqual(['a'])
+  })
+
+  it('caps Plan Evidence and says how many runs are not shown', async () => {
+    const many = Array.from({ length: 240 }, (_, index) => ({
+      id: `2026-07-28-${String(index).padStart(3, '0')}--P001-S01--build`,
+      story: 'P001-S01',
+      track: 'build',
+      cycles: 1,
+      halted: false,
+    }))
+    serve({
+      '/api/plans/P001': {
+        id: 'P001',
+        title: 'A plan',
+        approval: null,
+        body: '',
+        review: null,
+        stories: [detailStory({ id: 'P001-S01' })],
+      },
+      '/api/runs': many,
+    })
+    reveal('panel-plans')
+    const mounted = mountPlans()
+    draw(emptySnapshot({ plans: [plan({ id: 'P001', stories: [story({ id: 'P001-S01' })] })] }))
+    mounted.toggle('P001')
+
+    await vi.waitFor(() => expect(document.querySelectorAll('#plan-evidence-list .run')).toHaveLength(200))
+    expect((document.getElementById('plan-evidence-more') as HTMLElement).hidden).toBe(false)
+    expect(document.getElementById('plan-evidence-more')?.textContent).toBe('Showing 200 of 240 runs.')
+  })
+
+  it('caps Plan Memory and says how many entries are not shown', async () => {
+    // The same shape as "caps Plan Evidence" above: no fixture anywhere else
+    // in this file pushes Plan Memory past `reconcile`'s 200-row cap, so
+    // `#plan-memory-more` was rendered by no test at all.
+    const many = Array.from({ length: 240 }, (_, index) => ({
+      id: `M${String(index).padStart(3, '0')}`,
+      kind: 'decision',
+      title: 'Something',
+      tags: [],
+      at: NOW,
+      run: null,
+      body: `A note that mentions P001, entry ${index}.`,
+    }))
+    serve({
+      '/api/plans/P001': {
+        id: 'P001',
+        title: 'A plan',
+        approval: null,
+        body: '',
+        review: null,
+        stories: [detailStory({ id: 'P001-S01' })],
+      },
+      '/api/memory': many,
+    })
+    reveal('panel-plans')
+    const mounted = mountPlans()
+    draw(emptySnapshot({ plans: [plan({ id: 'P001', stories: [story({ id: 'P001-S01' })] })] }))
+    mounted.toggle('P001')
+
+    await vi.waitFor(() => expect(document.querySelectorAll('#plan-memory-list .memory')).toHaveLength(200))
+    expect((document.getElementById('plan-memory-more') as HTMLElement).hidden).toBe(false)
+    expect(document.getElementById('plan-memory-more')?.textContent).toBe('Showing 200 of 240 entries.')
+  })
+
+  it("matches Plan Memory by a text mention of this plan or its stories, never by the memory's own `run` field", async () => {
+    const memory = (patch: Partial<MemoryView> & { id: string }): MemoryView => ({
+      kind: 'decision',
+      title: 'Something else entirely',
+      tags: [],
+      at: NOW,
+      run: null,
+      body: '',
+      ...patch,
+    })
+    serve({
+      '/api/plans/P001': {
+        id: 'P001',
+        title: 'A plan',
+        approval: null,
+        body: '',
+        review: null,
+        stories: [detailStory({ id: 'P001-S01' })],
+      },
+      '/api/memory': [
+        memory({ id: 'M001', title: 'Why P001 shipped without an SVG graph' }),
+        memory({ id: 'M002', body: 'A lesson that came out of P001-S01.' }),
+        // Mentions neither the plan nor its story anywhere in its own text —
+        // but its `run` field happens to name a run that *did* belong to this
+        // plan. If this showed up, the filter would be joining on `run`
+        // rather than doing the text match its own doc says it is.
+        memory({ id: 'M003', title: 'Unrelated', run: '2026-07-28-001--P001-S01--build' }),
+        memory({ id: 'M004', title: 'A different project entirely' }),
+      ],
+    })
+    reveal('panel-plans')
+    const mounted = mountPlans()
+    draw(emptySnapshot({ plans: [plan({ id: 'P001', stories: [story({ id: 'P001-S01' })] })] }))
+    mounted.toggle('P001')
+
+    await vi.waitFor(() => expect(document.querySelectorAll('#plan-memory-list .memory')).toHaveLength(2))
+    expect(cells('#plan-memory-list .memory-id')).toEqual(['M001', 'M002'])
+    expect((document.getElementById('plan-memory-empty') as HTMLElement).hidden).toBe(true)
+
+    // The pure match, unit-tested directly for the `run`-is-not-a-join case
+    // the DOM fixture above only demonstrates indirectly.
+    const plainPlan = { id: 'P001', stories: [{ id: 'P001-S01' }] }
+    expect(planMemories([memory({ id: 'M003', run: '2026-07-28-001--P001-S01--build' })], plainPlan)).toEqual([])
+  })
+
+  it('shows the empty tells when nothing matches, and hides them when something does', async () => {
+    serve({
+      '/api/plans/P001': {
+        id: 'P001',
+        title: 'A plan',
+        approval: null,
+        body: '',
+        review: null,
+        stories: [detailStory({ id: 'P001-S01' })],
+      },
+      '/api/runs': [],
+      '/api/memory': [],
+    })
+    reveal('panel-plans')
+    const mounted = mountPlans()
+    draw(emptySnapshot({ plans: [plan({ id: 'P001', stories: [story({ id: 'P001-S01' })] })] }))
+    mounted.toggle('P001')
+
+    await vi.waitFor(() => expect((document.getElementById('plan-evidence-empty') as HTMLElement).hidden).toBe(false))
+    expect(document.getElementById('plan-evidence-empty')?.textContent).toBe(english['plans.evidence.empty'])
+    expect((document.getElementById('plan-memory-empty') as HTMLElement).hidden).toBe(false)
+    expect(document.getElementById('plan-memory-empty')?.textContent).toBe(english['plans.memory.empty'])
+  })
 
 
   it('suggests only the stories that are actually ready', () => {

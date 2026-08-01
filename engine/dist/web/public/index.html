@@ -256,25 +256,54 @@
                   <button type="button" class="plan-back" data-act="close-plan" data-i18n="plans.back"></button>
                   <h2 id="plan-detail-title" tabindex="-1"></h2>
                 </header>
-                <p class="record" id="plan-approval-record"></p>
 
-                <!-- The note is uncontrolled and written once at mount. A
-                     renderer that assigned to it would eat what is being typed
-                     on the next 800ms tick. -->
-                <div class="approve">
-                  <input
-                    id="approve-note"
-                    name="note"
-                    maxlength="2000"
-                    dir="auto"
-                    autocomplete="off"
-                    data-i18n-placeholder="plans.notePlaceholder"
-                    data-i18n-label="plans.noteLabel"
-                  />
-                  <button type="button" data-act="approve" data-i18n="plans.approve"></button>
-                  <button type="button" data-act="request-changes" data-i18n="plans.requestChanges"></button>
-                  <button type="button" class="danger" data-act="reject" data-i18n="plans.reject"></button>
-                </div>
+                <!-- Four derived surfaces below, none of them a sixth write
+                     kind or a new schema field — see
+                     docs/superpowers/specs/2026-08-01-plans-stories-split-design.md,
+                     Decision 3. Each names what kind of derivation it is in
+                     its own hint: a shared rule (Progress), the one record on
+                     file (Decision), a filename convention (Evidence), or a
+                     plain text match (Memory) — so none of them reads as a
+                     fact the engine stores when it is not one. -->
+                <section class="plan-detail-sub" id="plan-progress" hidden>
+                  <h3 data-i18n="plans.progressTitle"></h3>
+                  <p class="hint" data-i18n="plans.progressHint"></p>
+                  <ul class="tally">
+                    <li><span class="k" data-i18n="plans.count.done"></span><span class="v" id="plan-progress-completed"></span></li>
+                    <li><span class="k" data-i18n="plans.count.doing"></span><span class="v" id="plan-progress-doing"></span></li>
+                    <li><span class="k" data-i18n="plans.count.ready"></span><span class="v tally-ready" id="plan-progress-ready"></span></li>
+                    <li><span class="k" data-i18n="plans.count.blocked"></span><span class="v tally-blocked" id="plan-progress-blocked"></span></li>
+                    <li><span class="k" data-i18n="plans.count.remaining"></span><span class="v" id="plan-progress-remaining"></span></li>
+                  </ul>
+                </section>
+
+                <section class="plan-detail-sub">
+                  <h3 data-i18n="plans.decisionTitle"></h3>
+                  <!-- `ApprovalSchema` holds exactly one decision and
+                       `gateSet` overwrites it in place — there is no log to
+                       show, so the hint says what this is rather than
+                       implying a history the record below cannot back up. -->
+                  <p class="hint" data-i18n="plans.decisionHint"></p>
+                  <p class="record" id="plan-approval-record"></p>
+
+                  <!-- The note is uncontrolled and written once at mount. A
+                       renderer that assigned to it would eat what is being typed
+                       on the next 800ms tick. -->
+                  <div class="approve">
+                    <input
+                      id="approve-note"
+                      name="note"
+                      maxlength="2000"
+                      dir="auto"
+                      autocomplete="off"
+                      data-i18n-placeholder="plans.notePlaceholder"
+                      data-i18n-label="plans.noteLabel"
+                    />
+                    <button type="button" data-act="approve" data-i18n="plans.approve"></button>
+                    <button type="button" data-act="request-changes" data-i18n="plans.requestChanges"></button>
+                    <button type="button" class="danger" data-act="reject" data-i18n="plans.reject"></button>
+                  </div>
+                </section>
 
                 <details id="plan-body-details">
                   <summary data-i18n="plans.readPlan"></summary>
@@ -284,6 +313,28 @@
                   <summary data-i18n="plans.readReview"></summary>
                   <pre class="excerpt" id="plan-review"></pre>
                 </details>
+
+                <!-- Runs matched to this plan by the run directory's own
+                     naming convention — see panels/plans.js's comment above
+                     `planRuns` for why that is a convention and not a stored
+                     link, and what an ad-hoc run means for this list. -->
+                <section class="plan-detail-sub plan-evidence">
+                  <h3 data-i18n="plans.evidence.title"></h3>
+                  <p class="hint" data-i18n="plans.evidence.hint"></p>
+                  <p class="empty" id="plan-evidence-empty" hidden></p>
+                  <ul class="runs" id="plan-evidence-list"></ul>
+                  <p class="more" id="plan-evidence-more" hidden></p>
+                </section>
+
+                <!-- A text match over the whole memory corpus, not a join —
+                     see panels/plans.js's comment above `planMemories`. -->
+                <section class="plan-detail-sub">
+                  <h3 data-i18n="plans.memory.title"></h3>
+                  <p class="hint" data-i18n="plans.memory.hint"></p>
+                  <p class="empty" id="plan-memory-empty" hidden></p>
+                  <ul class="memories" id="plan-memory-list"></ul>
+                  <p class="more" id="plan-memory-more" hidden></p>
+                </section>
 
                 <!-- The stories themselves are a workspace of their own. This
                      is the way in, not a second copy of the list. -->
@@ -1163,6 +1214,21 @@
     <template id="tpl-story-run">
       <li class="run">
         <span class="run-id" data-slot="id"></span>
+        <span class="chip" data-slot="track"></span>
+        <span data-slot="cycles"></span>
+        <span class="res" data-slot="outcome"></span>
+      </li>
+    </template>
+
+    <!-- Plan Evidence's own run list: the same shape as `tpl-story-run`
+         above, plus the story id — a plan spans more than one story, so
+         unlike that list this one has to say which. No `open-run` control:
+         that action opens the Evidence tab's own detail state
+         (`evidence.toggle`, panels/evidence.js), which this tab cannot show. -->
+    <template id="tpl-plan-run">
+      <li class="run">
+        <span class="run-id" data-slot="id"></span>
+        <code class="story-id" data-slot="story"></code>
         <span class="chip" data-slot="track"></span>
         <span data-slot="cycles"></span>
         <span class="res" data-slot="outcome"></span>
