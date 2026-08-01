@@ -19979,6 +19979,24 @@ async function entries(dir) {
   }
 }
 var PLAN_DOCUMENTS = ["PLAN.md", "REVIEW.md", "manifest.json"];
+async function stampListing(dir) {
+  return (await entries(dir)).join(",") + await stamp(dir);
+}
+async function stampTree(dir) {
+  const parts = [await stamp(dir)];
+  for (const name of await entries(dir)) {
+    const child = path19.join(dir, name);
+    parts.push(`${name}=${await stamp(child)}=${await stampListing(child)}`);
+  }
+  return parts.join("|");
+}
+async function stampLibrary(projectDir) {
+  try {
+    return await stampListing(packagesDir(projectDir));
+  } catch {
+    return "-";
+  }
+}
 async function readRevisions(projectDir, tick, running) {
   const paths = resolveLoopPaths(projectDir);
   const planIds = await entries(paths.plans);
@@ -19987,11 +20005,20 @@ async function readRevisions(projectDir, tick, running) {
     plans.push(`${id}=${await stampDir(path19.join(paths.plans, id), PLAN_DOCUMENTS)}`);
     plans.push(await stamp(path19.join(paths.plans, id, "stories")));
   }
-  const [state, config2, memory, runs] = await Promise.all([
+  const [state, config2, memory, runs, profile, features, acceptances, library] = await Promise.all([
     stamp(paths.state),
     stamp(paths.config),
-    (async () => (await entries(paths.memory)).join(",") + await stamp(paths.memory))(),
-    (async () => (await entries(paths.runs)).join(",") + await stamp(paths.runs))()
+    stampListing(paths.memory),
+    stampListing(paths.runs),
+    // `proposed.json` by name for the reason `PLAN_DOCUMENTS` names its three:
+    // init overwrites the proposal in place, and a fingerprint built from the
+    // directory's mtime alone would sit there showing the previous scan. The
+    // accepted revisions themselves live in `profile/accepted/`, which is why
+    // this is a tree walk and not a listing.
+    (async () => `${await stampDir(paths.profile, ["proposed.json"])}:${await stampTree(paths.profile)}`)(),
+    stampTree(paths.features),
+    stampTree(paths.skills),
+    stampLibrary(projectDir)
   ]);
   return {
     state,
@@ -19999,7 +20026,10 @@ async function readRevisions(projectDir, tick, running) {
     plans: plans.join("|"),
     runs,
     cycle: running ? String(tick) : "idle",
-    memory
+    memory,
+    profile,
+    features,
+    skills: `${acceptances}|${library}`
   };
 }
 

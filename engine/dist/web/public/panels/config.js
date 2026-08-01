@@ -40,7 +40,6 @@ import { submit } from '../ui/writes.js'
 /**
  * @typedef {import('../../read.js').ConfigView} ConfigView
  * @typedef {NonNullable<ConfigView['parsed']>} Config
- * @typedef {import('../../read.js').ProfileView} ProfileView
  */
 
 /**
@@ -124,10 +123,6 @@ export function mountConfig() {
   const agentNames = /** @type {HTMLDataListElement} */ (
     /** @type {unknown} */ (document.getElementById('config-agent-names'))
   )
-  const profileRecord = pick('config-profile-record')
-  const profileDrift = pick('config-profile-drift')
-  const profileEmpty = pick('config-profile-empty')
-  const profileHost = pick('config-profile-list')
   const telemetryEmpty = pick('telemetry-empty')
   const telemetryFlagged = pick('telemetry-flagged')
   const telemetryTable = pick('telemetry-table')
@@ -197,37 +192,12 @@ export function mountConfig() {
     onChange: () => draw(),
   })
 
-  /**
-   * The accepted component map, and whether a rescan disagrees with it.
-   *
-   * `Revisions` carries no fingerprint of `.mjloop/profile/`, and this panel
-   * does not get to add one: that type is the poller's contract in
-   * `protocol.ts`, and widening it is a change to what every tab subscribes to.
-   * So this rides the two revisions that already move whenever the profile
-   * could have: `config` because `orchestration.profile.auto_accept` is the
-   * setting that decides whether a scan may accept one at all, and `state`
-   * because the only things that write this directory — `mjloop init` and the
-   * commands this very page enqueues — write `state.json` on the way past.
-   *
-   * The staleness that leaves is a read of a record this page is permanently
-   * forbidden from changing, so nobody is looking at a control whose effect has
-   * moved. Reopening the tab refetches.
-   *
-   * @type {import('../lib/api.js').Feed<ProfileView>}
-   */
-  const profile = feed({
-    dep: (state) => `${state.revisions.config}|${state.revisions.state}`,
-    path: () => '/api/profile',
-    onChange: () => draw(),
-  })
-
   register({
     id: 'config',
     node,
     update(state) {
       config.update(state)
       telemetry.update(state)
-      profile.update(state)
 
       phrase(design, state.state.design_system ? 'config.design.present' : 'config.design.missing')
       // An absolute path: an identifier, and one that must not be mirrored.
@@ -241,7 +211,6 @@ export function mountConfig() {
       flag(rawDetails, 'hidden', view?.raw === null || view?.raw === undefined)
 
       drawTelemetry(telemetry.value())
-      drawProfile(profile.value(), profile.value() !== null || profile.error() !== null)
 
       if (parsed === null) {
         reconcile(verifyHost, [], (entry) => entry, () => ({ root: document.createElement('div'), update: () => {} }))
@@ -640,46 +609,6 @@ export function mountConfig() {
     draw()
   }
 
-  /**
-   * The component map, read-only and permanently so.
-   *
-   * There is no control here and there deliberately never will be: accepting a
-   * map activates routing for every later run, which is the class of write
-   * `web/writes.ts` denies the browser — the same list `runStart` and
-   * `cycleAdvance` are on. A proposal that disagrees is *said*, and resolving it
-   * is a command like every other thing this page cannot do itself.
-   *
-   * @param {ProfileView | null} view
-   * @param {boolean} answered Whether the fetch has settled, one way or another.
-   */
-  function drawProfile(view, answered) {
-    const revision = view === null ? null : view.revision
-    flag(profileRecord, 'hidden', revision === null)
-    if (view !== null && revision !== null) {
-      phrase(profileRecord, 'config.profileRecord', {
-        revision,
-        by: view.acceptedBy ?? '',
-        at: view.acceptedAt ?? '',
-      })
-    }
-
-    // Only once an accepted map is on screen for it to disagree with. Before
-    // that the empty line already says nothing is accepted, and two sentences
-    // about one absence is one too many.
-    const drift = view !== null && revision !== null && view.proposalDiffers
-    flag(profileDrift, 'hidden', !drift)
-    if (view !== null && drift) phrase(profileDrift, 'config.profileDrift', { at: view.proposedAt ?? '' })
-
-    // "Nothing is accepted" is claimed only once the answer is in, the same
-    // rule the telemetry table follows. A 404 *is* an answer here — it is what
-    // a project nothing has ever mapped returns — and it arrives as a failure
-    // rather than as a body, so the settled check has to consider both.
-    flag(profileEmpty, 'hidden', revision !== null || !answered)
-    if (revision === null) phrase(profileEmpty, 'config.profileNone')
-
-    reconcile(profileHost, view?.components ?? [], (component) => component.id, componentCard)
-  }
-
   /** @param {Telemetry | null} view */
   function drawTelemetry(view) {
     const rows = view?.specialists ?? []
@@ -706,51 +635,6 @@ export function mountConfig() {
   }
 
   /* ── row factories ───────────────────────────────────────────────────── */
-
-  /**
-   * One accepted component.
-   *
-   * Every value on it is an identifier — a directory, a technology the manifest
-   * declared, a command the engine would spawn — so all of them go through
-   * `verbatim()`, which is also what keeps a Latin path from dragging the
-   * punctuation around it to the wrong end of an Arabic row.
-   */
-  function componentCard() {
-    const { root, slots } = clone('tpl-component')
-    return {
-      root,
-      /** @param {ProfileView['components'][number]} component */
-      update(component) {
-        const id = slots['id']
-        if (id !== undefined) verbatim(id, component.id)
-        const componentRoot = slots['root']
-        if (componentRoot !== undefined) verbatim(componentRoot, component.root)
-        const technology = slots['technology']
-        if (technology !== undefined) verbatim(technology, component.technology)
-
-        for (const slot of VERIFY_COMMANDS) {
-          const cell = slots[slot]
-          if (cell === undefined) continue
-          // Unset is the case worth saying out loud rather than a blank cell,
-          // for the same reason an unset `verify.build` is: it names the check
-          // that will not run for this component.
-          const command = component.verification[slot]
-          if (command === null) phrase(cell, 'config.verifyUnset')
-          else verbatim(cell, command)
-        }
-
-        const tags = slots['tags']
-        // The join later stories select skills on. One cell, because the tags
-        // are read as a set and a chip list would imply each one is actionable.
-        if (tags !== undefined) verbatim(tags, component.skillTags.join(' '))
-
-        // `translateStatic` does not descend into `<template>` content, so this
-        // card's own labels are still keys until it translates itself. Every
-        // update, because the memo is per node and carries the locale epoch.
-        translateStatic(root)
-      },
-    }
-  }
 
   /** One `specialists:` rule. */
   function specialistRule() {

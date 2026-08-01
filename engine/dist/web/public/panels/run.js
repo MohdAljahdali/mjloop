@@ -11,9 +11,10 @@
  * are keys and ride the snapshot; findings, history, gate excerpts and the halt
  * report are bodies and are fetched.
  */
-import { clone, cls, flag, phrase, verbatim } from '../ui/dom.js'
+import { clone, cls, flag, phrase, translateStatic, verbatim } from '../ui/dom.js'
 import { feed } from '../lib/api.js'
 import { pluralKey } from '../lib/i18n.js'
+import { stamp } from '../lib/fmt.js'
 import { reconcile } from '../ui/list.js'
 import { draw, register } from '../ui/render.js'
 
@@ -22,6 +23,8 @@ import { draw, register } from '../ui/render.js'
  * @typedef {import('../../read.js').StateView} StateView
  * @typedef {import('../../read.js').RunDetail} RunDetail
  * @typedef {import('../../read.js').ConfigView} ConfigView
+ * @typedef {import('../../../schemas/skill-selection.js').SkillManifest} SkillManifest
+ * @typedef {import('../../../schemas/skill-selection.js').SkillSelection} SkillSelection
  */
 
 /**
@@ -46,6 +49,15 @@ export function mountRun() {
   const node = pick('panel-run')
   const empty = pick('run-empty')
   const body = pick('run-body')
+
+  const manifestBlock = pick('run-manifest')
+  const manifestBrief = pick('manifest-brief')
+  const manifestProfile = pick('manifest-profile')
+  const manifestConcurrency = pick('manifest-concurrency')
+  const manifestReason = pick('manifest-reason')
+  const manifestGenerated = pick('manifest-generated')
+  const manifestEmpty = pick('manifest-empty')
+  const manifestHost = pick('manifest-selections')
 
   const goal = pick('run-goal')
   const storyFact = pick('run-story-fact')
@@ -133,6 +145,27 @@ export function mountRun() {
   })
 
   /**
+   * The routing decision this run was pinned to, before dispatch.
+   *
+   * `null` from the route means the run pinned no manifest, and the block is
+   * hidden outright — "no manifest" and "a manifest that selected nothing" are
+   * two different facts and an empty table would state the wrong one.
+   *
+   * It rides `revisions.runs` and not `revisions.cycle`: a manifest is written
+   * once, before the first dispatch, and is never rewritten by a profile or a
+   * brief that moved afterwards. Following the tick counter would re-fetch an
+   * immutable document once a second for the length of the run.
+   *
+   * @type {import('../lib/api.js').Feed<SkillManifest | null>}
+   */
+  const manifest = feed({
+    dep: (snapshot) =>
+      snapshot.state.run_id === null ? null : `${snapshot.state.run_id}:${snapshot.revisions.runs}`,
+    path: (snapshot) => `/api/runs/${encodeURIComponent(runDirName(snapshot))}/skills`,
+    onChange: () => draw(),
+  })
+
+  /**
    * The track names to offer, which only `config.yaml` knows. Fetched solely
    * while the estimate is on screen — a running project never asks for it.
    *
@@ -165,6 +198,7 @@ export function mountRun() {
       state.update(snapshot)
       run.update(snapshot)
       config.update(snapshot)
+      manifest.update(snapshot)
 
       const summary = snapshot.state
       const idle = !summary.initialised || summary.status === 'idle'
@@ -212,6 +246,7 @@ export function mountRun() {
       // summary can tell those two apart.
       drawState(state.value(), summary.reproduction !== null)
       drawHalt(run.value())
+      drawManifest(manifest.value())
     },
   })
 
@@ -481,6 +516,105 @@ export function mountRun() {
     const report = detail?.halt ?? null
     flag(haltBlock, 'hidden', report === null)
     verbatim(haltReport, report ?? '')
+  }
+
+  /**
+   * What this run was actually routed by.
+   *
+   * The concurrency mode is drawn with its reason and never without it: a bare
+   * `sequential` answers "what happened" and leaves "why did this serialise"
+   * — the question anybody actually asks — unanswered, which is exactly why
+   * `ConcurrencyDecisionSchema` carries the reason alongside the mode rather
+   * than making it optional.
+   *
+   * @param {SkillManifest | null} view
+   */
+  function drawManifest(view) {
+    flag(manifestBlock, 'hidden', view === null)
+    if (view === null) return
+
+    verbatim(manifestBrief, `${view.sourceBrief.id}@${view.sourceBrief.revision}`)
+    verbatim(manifestProfile, view.profileRevision)
+    // The mode is the engine's enum and the reason is engine-authored prose the
+    // page does not own, so one is translated and the other is passed through.
+    phrase(manifestConcurrency, `manifest.mode.${view.concurrency.mode}`)
+    verbatim(manifestReason, view.concurrency.reason)
+    verbatim(manifestGenerated, stamp(view.generatedAt))
+
+    // A manifest that selected nothing for every row is a real and ordinary
+    // state — no project has accepted a skill yet on most machines — and it is
+    // said rather than drawn as an empty area.
+    const selections = view.selections
+    flag(manifestEmpty, 'hidden', selections.length > 0)
+    phrase(manifestEmpty, 'manifest.empty')
+    reconcile(
+      manifestHost,
+      selections,
+      (selection) => `${selection.component}/${selection.agent}`,
+      () => selectionCard(view),
+    )
+  }
+
+  /**
+   * One (component, agent) row.
+   *
+   * `skillIds` and `reasons` are index-aligned by a schema refinement, so this
+   * pairs them by position without checking — the check is `SkillSelectionSchema`'s
+   * and duplicating it here would be a second place it could be relaxed.
+   *
+   * @param {SkillManifest} view
+   */
+  function selectionCard(view) {
+    const { root, slots } = clone('tpl-selection')
+    return {
+      root,
+      /** @param {SkillSelection} selection */
+      update(selection) {
+        const component = slots['component']
+        if (component !== undefined) verbatim(component, selection.component)
+        const agent = slots['agent']
+        if (agent !== undefined) verbatim(agent, selection.agent)
+
+        const none = slots['none']
+        if (none !== undefined) {
+          flag(none, 'hidden', selection.skillIds.length > 0)
+          phrase(none, 'manifest.noneSelected')
+        }
+
+        const host = slots['skills']
+        if (host === undefined) return
+        const rows = selection.skillIds.map((skillId, index) => ({
+          skillId,
+          reason: selection.reasons[index] ?? '',
+          guidance: view.guidance[skillId] ?? '',
+        }))
+        reconcile(host, rows, (row) => row.skillId, selectedSkillRow)
+      },
+    }
+  }
+
+  function selectedSkillRow() {
+    const { root, slots } = clone('tpl-selected-skill')
+    return {
+      root,
+      /** @param {{ skillId: string, reason: string, guidance: string }} row */
+      update(row) {
+        const skillId = slots['skillId']
+        if (skillId !== undefined) verbatim(skillId, row.skillId)
+        const reason = slots['reason']
+        if (reason !== undefined) verbatim(reason, row.reason)
+
+        const guidance = slots['guidance']
+        if (guidance !== undefined) verbatim(guidance, row.guidance)
+        // The schema guarantees every selected skill carries guidance, so an
+        // empty one means a manifest written before that refinement existed.
+        // Hidden rather than shown as an empty disclosure.
+        const details = slots['guidanceDetails']
+        if (details !== undefined) flag(details, 'hidden', row.guidance === '')
+
+        translateStatic(root)
+      },
+    }
   }
 }
 

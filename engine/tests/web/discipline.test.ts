@@ -156,7 +156,7 @@ describe('templates and actions', () => {
 
 describe('accessibility', () => {
   it('gives every top-level view a visible heading and an unmistakable selected route', () => {
-    for (const route of ['run', 'plans', 'evidence', 'memory', 'config']) {
+    for (const route of ['run', 'plans', 'features', 'skills', 'evidence', 'memory', 'config']) {
       expect(html).toMatch(new RegExp(`id="tab-${route}"[^>]+aria-controls="panel-${route}"`))
       expect(html).toMatch(
         new RegExp(`id="panel-${route}"[^>]+aria-labelledby="panel-${route}-title"`),
@@ -174,7 +174,14 @@ describe('accessibility', () => {
     // only a placeholder until this test existed.
     const controls = [...html.matchAll(/<(input|select|textarea)\b[^>]*>/g)].map((match) => match[0])
     const unnamed = controls.filter(
-      (tag) => !/aria-label|data-i18n-label/.test(tag) && !/id="lang"|id="halt-reason"/.test(tag),
+      // The three exemptions are named by something other than an attribute
+      // on the tag itself: `lang` by the visible label beside it, and the two
+      // dialog fields by the `<label>` wrapping them. A `<label>` *is* an
+      // accessible name; what this test forbids is a placeholder standing in
+      // for one.
+      (tag) =>
+        !/aria-label|data-i18n-label/.test(tag) &&
+        !/id="lang"|id="halt-reason"|id="feature-note"/.test(tag),
     )
     expect(unnamed).toEqual([])
   })
@@ -263,6 +270,7 @@ describe('the page never assigns to a control', () => {
     expect(writers).toEqual([
       'app.js',
       'panels/config.js',
+      'panels/features.js',
       'panels/launcher.js',
       'panels/memory.js',
       'panels/plans.js',

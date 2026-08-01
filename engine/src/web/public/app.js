@@ -22,11 +22,13 @@ import { dismiss, mountToasts, runAction, toast } from './ui/toasts.js'
 import { settle, submit } from './ui/writes.js'
 import { mountConfig } from './panels/config.js'
 import { mountEvidence } from './panels/evidence.js'
+import { mountFeatures } from './panels/features.js'
 import { mountMemory } from './panels/memory.js'
 import { mountLauncher } from './panels/launcher.js'
 import { mountPlans, ready } from './panels/plans.js'
 import { mountQueue } from './panels/queue.js'
 import { mountRun } from './panels/run.js'
+import { mountSkills } from './panels/skills.js'
 
 /**
  * Adding a language: drop `locales/<code>.json` beside the others, add a line.
@@ -44,7 +46,7 @@ const LOCALES = {
 }
 const FALLBACK = 'en'
 
-const TABS = ['run', 'plans', 'evidence', 'memory', 'config']
+const TABS = ['run', 'plans', 'features', 'skills', 'evidence', 'memory', 'config']
 const token = new URLSearchParams(location.search).get('t') ?? ''
 
 /** The running job, as of the last snapshot. */
@@ -90,6 +92,8 @@ const haltDialog = mountHaltDialog()
 const launcher = mountLauncher()
 mountRun()
 const plans = mountPlans()
+const features = mountFeatures()
+mountSkills()
 const evidence = mountEvidence()
 mountMemory()
 const config = mountConfig()
@@ -136,6 +140,14 @@ bus.on('build', (element) => enqueue(`/mjloop:build ${element.dataset['story'] ?
 bus.on('open-plan', (element) => plans.toggle(element.dataset['plan'] ?? ''))
 bus.on('close-plan', () => plans.close())
 bus.on('open-run', (element) => evidence.toggle(element.dataset['run'] ?? ''))
+bus.on('open-feature', (element) => features.toggle(element.dataset['feature'] ?? ''))
+bus.on('close-feature', () => features.close())
+// Approving a brief is the one write on this page with no inverse: the store
+// refuses to touch an approved revision ever again. Hence a dialog, unlike the
+// plan gate two lines above, which can be re-decided.
+bus.on('feature-approve', () => features.ask())
+bus.on('feature-cancel', () => features.dismiss())
+bus.on('feature-confirm', () => features.confirm())
 bus.on('approve', () => plans.decide('approved'))
 bus.on('request-changes', () => plans.decide('changes_requested'))
 bus.on('reject', () => plans.decide('rejected'))

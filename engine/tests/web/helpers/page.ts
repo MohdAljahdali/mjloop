@@ -67,7 +67,17 @@ export function emptySnapshot(patch: Partial<Snapshot> = {}): Snapshot {
     session: { jobId: null, blocked: false, pausedBy: null, closing: false, stalledSince: null },
     guards: null,
     roster: null,
-    revisions: { state: '-', config: '-', plans: '', runs: '', cycle: 'idle', memory: '' },
+    revisions: {
+      state: '-',
+      config: '-',
+      plans: '',
+      runs: '',
+      cycle: 'idle',
+      memory: '',
+      profile: '-',
+      features: '',
+      skills: '',
+    },
     ...patch,
   }
 }

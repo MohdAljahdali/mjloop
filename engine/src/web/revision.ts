@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import { packagesDir } from '../store/library-paths.js'
 import { resolveLoopPaths } from '../store/paths.js'
 
 /**
@@ -33,6 +34,39 @@ export interface Revisions {
    */
   cycle: string
   memory: string
+  /**
+   * `.mjloop/profile/` — the accepted component map, and the proposal beside it.
+   *
+   * A key of its own rather than a rider on `config`. The Skills tab draws the
+   * accepted map, and until this existed the only way to notice one had landed
+   * was to watch `config` and `state` and hope: `orchestration.profile.auto_accept`
+   * lives in one and init moves the other, so the two together *happened* to
+   * move whenever a map could have. That is a coincidence, not a subscription,
+   * and `mjloop-cli profile accept` run against a project nobody is initialising
+   * moves neither.
+   */
+  profile: string
+  /**
+   * `.mjloop/features/` — every brief and every revision of one.
+   *
+   * Load-bearing for the one write the browser is allowed. `applyWrite`
+   * broadcasts a snapshot *before* the receipt, so a page whose feed depends on
+   * nothing that moved receives its own confirmation and goes on drawing the
+   * draft it just approved. Approval writes a new revision file into this
+   * directory, so this is the key that makes the confirmation true.
+   */
+  features: string
+  /**
+   * This project's acceptances, and the machine-wide library they name.
+   *
+   * Two halves because the record is in two places by design: an acceptance
+   * lives in `.mjloop/skills/` and travels with the repository, while the
+   * package it names by digest lives once per *machine* under the library root.
+   * A key covering only the project half would sit still through the
+   * `mjloop-cli skills import` that finally supplies a package this project
+   * accepted months ago on another machine.
+   */
+  skills: string
 }
 
 /**
@@ -75,6 +109,67 @@ async function entries(dir: string): Promise<string[]> {
 const PLAN_DOCUMENTS = ['PLAN.md', 'REVIEW.md', 'manifest.json'] as const
 
 /**
+ * A directory's entries and its own mtime, in one string.
+ *
+ * The shape `memory` and `runs` were already computing inline. Named here
+ * because three more keys want it and a fourth copy of a fingerprint is a
+ * fourth place it can drift.
+ */
+async function stampListing(dir: string): Promise<string> {
+  return (await entries(dir)).join(',') + (await stamp(dir))
+}
+
+/**
+ * The same, but reaching one level into every entry.
+ *
+ * `stampListing` alone is blind to the two writes these three directories
+ * actually make, and both are the write that matters most:
+ *
+ *  - **A new revision inside an existing record.** Approving `F001` writes
+ *    `features/F001-sign-in/rev-002.json`. The `features/` directory gains no
+ *    entry and its own mtime does not move, because the file landed in a
+ *    subdirectory that already existed. The identical case is `profile/accepted/`.
+ *  - **A record overwritten in place.** `skills accept` on a skill this project
+ *    already holds rewrites `skills/<id>.json`. Same entry list, same directory
+ *    mtime.
+ *
+ * Both are exactly the "the page shows the state it had before your write"
+ * failure these keys exist to prevent, so the walk descends: each entry
+ * contributes its own stamp, and a directory entry contributes its listing.
+ * One level is enough — none of these layouts nests deeper — and the bound
+ * matters, because this runs on every poller tick.
+ */
+async function stampTree(dir: string): Promise<string> {
+  const parts = [await stamp(dir)]
+  for (const name of await entries(dir)) {
+    const child = path.join(dir, name)
+    // A file contributes its own stamp; a directory contributes the listing of
+    // what is inside it. `stampListing` answers `-` for a path it cannot read,
+    // which covers the file case without a `stat` to tell them apart first.
+    parts.push(`${name}=${await stamp(child)}=${await stampListing(child)}`)
+  }
+  return parts.join('|')
+}
+
+/**
+ * The library's `packages/` listing, or `-` when there is no library to read.
+ *
+ * `resolveLibraryRoot` **throws** — `LibraryRootCollisionError` when the
+ * resolved root would land inside the project or inside any `.mjloop`
+ * directory. Every other fingerprint in this file answers `-` for a path it
+ * cannot read, and this one has to as well: `readRevisions` runs on every
+ * poller tick, and an exception here does not blank the Skills tab, it takes
+ * out the whole snapshot for every tab at once.
+ */
+async function stampLibrary(projectDir: string): Promise<string> {
+  try {
+    return await stampListing(packagesDir(projectDir))
+  } catch {
+    return '-'
+  }
+}
+
+/**
  * @param tick The poller's tick counter, folded into `cycle`. See above.
  * @param running Whether a run is open. A finished run's cycle directory is
  *   inert, so outside a run `cycle` settles and the conditional GETs stop.
@@ -91,11 +186,20 @@ export async function readRevisions(projectDir: string, tick: number, running: b
     plans.push(await stamp(path.join(paths.plans, id, 'stories')))
   }
 
-  const [state, config, memory, runs] = await Promise.all([
+  const [state, config, memory, runs, profile, features, acceptances, library] = await Promise.all([
     stamp(paths.state),
     stamp(paths.config),
-    (async () => (await entries(paths.memory)).join(',') + (await stamp(paths.memory)))(),
-    (async () => (await entries(paths.runs)).join(',') + (await stamp(paths.runs)))(),
+    stampListing(paths.memory),
+    stampListing(paths.runs),
+    // `proposed.json` by name for the reason `PLAN_DOCUMENTS` names its three:
+    // init overwrites the proposal in place, and a fingerprint built from the
+    // directory's mtime alone would sit there showing the previous scan. The
+    // accepted revisions themselves live in `profile/accepted/`, which is why
+    // this is a tree walk and not a listing.
+    (async () => `${await stampDir(paths.profile, ['proposed.json'])}:${await stampTree(paths.profile)}`)(),
+    stampTree(paths.features),
+    stampTree(paths.skills),
+    stampLibrary(projectDir),
   ])
 
   return {
@@ -105,5 +209,8 @@ export async function readRevisions(projectDir: string, tick: number, running: b
     runs,
     cycle: running ? String(tick) : 'idle',
     memory,
+    profile,
+    features,
+    skills: `${acceptances}|${library}`,
   }
 }

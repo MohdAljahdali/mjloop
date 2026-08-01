@@ -4,6 +4,11 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { ResultSchema, StageSchema, StatusSchema } from '../../src/schemas/state.js'
 import { ApprovalDecisionSchema, StoryStatusSchema } from '../../src/schemas/plan.js'
+import { FeatureBriefStatusSchema } from '../../src/schemas/feature.js'
+import { FeatureDiscoveryModeSchema, SkillUpdateModeSchema } from '../../src/schemas/config.js'
+import { SkillPackageSchema } from '../../src/schemas/skill-library.js'
+import { ProjectSkillAcceptanceSchema } from '../../src/schemas/skill-acceptance.js'
+import { ConcurrencyDecisionSchema } from '../../src/schemas/skill-selection.js'
 import { WEB_CODES } from '../../src/web/codes.js'
 
 /**
@@ -43,10 +48,12 @@ const NAMESPACES = [
   'cycle',
   'error',
   'evidence',
+  'features',
   'findings',
   'halt',
   'job',
   'lang',
+  'manifest',
   'memory',
   'panel',
   'pane',
@@ -56,6 +63,7 @@ const NAMESPACES = [
   'rail',
   'run',
   'session',
+  'skills',
   'stage',
   'status',
   'story',
@@ -240,6 +248,18 @@ describe('locales', () => {
     expect(family('cycle.result.')).toEqual([...ResultSchema.options].sort())
     expect(family('story.status.')).toEqual([...StoryStatusSchema.options].sort())
     expect(family('plans.approval.')).toEqual([...ApprovalDecisionSchema.options, 'none'].sort())
+
+    // The four the orchestration views render. Every one of these was written
+    // by hand against a schema that was not open at the time, and the update
+    // policy family was wrong — `manual` and `auto`, against an enum that says
+    // `auto`, `review`, `pinned` — until the page was run against a real
+    // project. This is the assertion that would have said so first.
+    expect(family('features.status.')).toEqual([...FeatureBriefStatusSchema.options].sort())
+    expect(family('features.discovery.')).toEqual([...FeatureDiscoveryModeSchema.options].sort())
+    expect(family('skills.update.')).toEqual([...SkillUpdateModeSchema.options].sort())
+    expect(family('skills.state.')).toEqual([...ProjectSkillAcceptanceSchema.shape.status.options].sort())
+    expect(family('skills.audit.')).toEqual([...SkillPackageSchema.shape.audit.shape.state.options].sort())
+    expect(family('manifest.mode.')).toEqual([...ConcurrencyDecisionSchema.shape.mode.options].sort())
   })
 
   it('has a key for everything the page asks for', () => {

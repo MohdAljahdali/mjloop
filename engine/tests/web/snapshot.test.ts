@@ -151,6 +151,77 @@ describe('revisions', () => {
     expect(before.revisions.cycle).not.toBe(after.revisions.cycle)
   })
 
+  it('move when a feature brief does, which is what makes an approval visible', async () => {
+    await initLoop(project.dir, clock)
+
+    // The directory has to exist *first*, which is the whole point. Creating it
+    // moves `features/`'s own mtime and would make a shallow fingerprint look
+    // like it worked; approving F001 writes `rev-002.json` **into a directory
+    // that is already there**, and moves nothing a listing of `features/` can
+    // see. That is the case this key exists for.
+    const dir = path.join(project.dir, '.mjloop', 'features', 'F001-sign-in')
+    await fs.mkdir(dir, { recursive: true })
+    await fs.writeFile(path.join(dir, 'rev-001.json'), '{}')
+
+    const before = (await buildSnapshot(project.dir)).revisions.features
+    await fs.writeFile(path.join(dir, 'rev-002.json'), '{}')
+
+    // The snapshot broadcast goes out *before* the receipt, so without this an
+    // approving page receives its own confirmation, re-fetches nothing, and
+    // goes on drawing the draft it just approved.
+    expect((await buildSnapshot(project.dir)).revisions.features).not.toBe(before)
+  })
+
+  it('move when a component map is accepted, without watching config and state for it', async () => {
+    await initLoop(project.dir, clock)
+
+    // `profile/accepted/`, not `profile/` — a second acceptance lands beside the
+    // first inside a directory that already exists.
+    const accepted = path.join(project.dir, '.mjloop', 'profile', 'accepted')
+    await fs.mkdir(accepted, { recursive: true })
+    await fs.writeFile(path.join(accepted, 'rev-001.json'), '{}')
+
+    const before = (await buildSnapshot(project.dir)).revisions.profile
+    await fs.writeFile(path.join(accepted, 'rev-002.json'), '{}')
+
+    expect((await buildSnapshot(project.dir)).revisions.profile).not.toBe(before)
+  })
+
+  it('move when this project accepts a skill', async () => {
+    await initLoop(project.dir, clock)
+
+    const file = path.join(project.dir, '.mjloop', 'skills', 'flutter-forms.json')
+    await fs.mkdir(path.dirname(file), { recursive: true })
+    await fs.writeFile(file, '{"status":"active"}')
+
+    const before = (await buildSnapshot(project.dir)).revisions.skills
+    // `skills disable` rewrites the record in place. Same entry list, same
+    // directory mtime, different answer from `/api/skills`.
+    await fs.writeFile(file, '{"status":"disabled"}')
+
+    expect((await buildSnapshot(project.dir)).revisions.skills).not.toBe(before)
+  })
+
+  it('survive a library root that cannot be resolved at all', async () => {
+    await initLoop(project.dir, clock)
+
+    // `resolveLibraryRoot` *throws* when the resolved root would land inside the
+    // project — `LibraryRootCollisionError`, which exists to stop a machine-wide
+    // library ending up committed inside one checkout. This runs on every poller
+    // tick, and a throw here does not blank the Skills tab: it takes out the
+    // whole snapshot, for every tab at once.
+    const held = process.env['MJLOOP_DATA_HOME']
+    process.env['MJLOOP_DATA_HOME'] = path.join(project.dir, 'library')
+    try {
+      const snapshot = await buildSnapshot(project.dir)
+      expect(snapshot.revisions.skills).toContain('-')
+      expect(snapshot.state.status).toBe('idle')
+    } finally {
+      if (held === undefined) delete process.env['MJLOOP_DATA_HOME']
+      else process.env['MJLOOP_DATA_HOME'] = held
+    }
+  })
+
   it('report which drafted agents have landed while a run is open', async () => {
     await initLoop(project.dir, clock)
     await runStart(project.dir, { track: 'edit', goal: 'Rename the submit label' }, clock)

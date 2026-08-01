@@ -6,6 +6,8 @@ import { draw, installScheduler } from '../../src/web/public/ui/render.js'
 import { drawRail, mountRail } from '../../src/web/public/ui/rail.js'
 import { collectConfigChanges, mountConfig } from '../../src/web/public/panels/config.js'
 import { mountEvidence } from '../../src/web/public/panels/evidence.js'
+import { joinAcceptances, mountSkills, shortDigest } from '../../src/web/public/panels/skills.js'
+import { approvable, mountFeatures } from '../../src/web/public/panels/features.js'
 import { mountPlans, planStatus, ready, statusIndex, unmet } from '../../src/web/public/panels/plans.js'
 import { mountQueue } from '../../src/web/public/panels/queue.js'
 import { mountRun } from '../../src/web/public/panels/run.js'
@@ -15,7 +17,11 @@ import { mountToasts, toast } from '../../src/web/public/ui/toasts.js'
 import { emptySnapshot, loadPage, readLocale } from './helpers/page.js'
 import { ConfigSchema } from '../../src/schemas/config.js'
 import { ConfigChangeSchema } from '../../src/store/config-mutation.js'
-import type { ProfileView } from '../../src/web/read.js'
+import type { FeatureDetail, ProfileView } from '../../src/web/read.js'
+import type { FeatureSummary } from '../../src/store/feature-store.js'
+import type { FeatureBrief } from '../../src/schemas/feature.js'
+import type { SkillPackage } from '../../src/schemas/skill-library.js'
+import type { ProjectSkillAcceptance } from '../../src/schemas/skill-acceptance.js'
 import type { Job, PlanView, StoryView } from '../../src/web/protocol.js'
 import type { StoryDetail } from '../../src/web/read.js'
 
@@ -26,6 +32,22 @@ import type { StoryDetail } from '../../src/web/read.js'
  * every 800ms and landed nowhere; `{type:'notice'}` frames were parsed and
  * dropped because there was no branch for them.
  */
+
+/**
+ * The socket, captured rather than opened.
+ *
+ * `send` no-ops when nothing is connected, so a write would leave no trace and
+ * a test asserting a button exists would pass for a control that sends an empty
+ * frame. The frame *is* the behaviour under test.
+ */
+const sent: unknown[] = []
+vi.mock('../../src/web/public/net/socket.js', () => ({
+  connect: () => {},
+  send: (message: unknown) => void sent.push(message),
+}))
+
+/** One timestamp for every fixture, so a diff of two records shows the field that moved. */
+const NOW = '2026-07-28T09:00:00.000Z'
 
 const english = await readLocale('en')
 
@@ -69,6 +91,7 @@ beforeEach(async () => {
   installForTest({ code: 'en', strings: english })
   installStorage(memoryStorage())
   installScheduler((fn) => fn())
+  sent.length = 0
 })
 
 /** Panels register against nodes; drawing a hidden one is a no-op by design. */
@@ -931,19 +954,29 @@ describe('config', () => {
     expect((document.getElementById('config-reset') as HTMLButtonElement).disabled).toBe(false)
   })
 
+})
+
+/**
+ * The component map moved here from Config, and it moved with its tests.
+ *
+ * It is a record rather than a setting, and it is the thing the acceptances
+ * below it are routed by: a component's `skillTags` and an acceptance's
+ * `components` are two halves of one join that used to be two tabs apart.
+ */
+describe('skills', () => {
   it('shows the accepted component map and offers no way to accept one', async () => {
-    serve({ '/api/config': configView(), '/api/profile': profileView() })
+    serve({ '/api/profile': profileView() })
 
-    reveal('panel-config')
-    mountConfig()
+    reveal('panel-skills')
+    mountSkills()
     draw(emptySnapshot())
-    await vi.waitFor(() => expect(document.querySelectorAll('#config-profile-list .component')).toHaveLength(2))
+    await vi.waitFor(() => expect(document.querySelectorAll('#skills-profile-list .component')).toHaveLength(2))
 
-    const record = document.getElementById('config-profile-record') as HTMLElement
+    const record = document.getElementById('skills-profile-record') as HTMLElement
     expect(record.textContent).toContain('2')
     expect(record.textContent).toContain('dashboard:mohd')
 
-    const first = document.querySelector('#config-profile-list .component') as HTMLElement
+    const first = document.querySelector('#skills-profile-list .component') as HTMLElement
     expect(first.querySelector('[data-slot="id"]')?.textContent).toBe('apps-mobile')
     expect(first.querySelector('[data-slot="root"]')?.textContent).toBe('apps/mobile')
     expect(first.querySelector('[data-slot="technology"]')?.textContent).toBe('flutter')
@@ -953,48 +986,48 @@ describe('config', () => {
     expect(first.querySelector('[data-slot="build"]')?.textContent).toBe(english['config.verifyUnset'])
     expect(first.querySelector('[data-slot="tags"]')?.textContent).toBe('flutter')
 
-    expect((document.getElementById('config-profile-drift') as HTMLElement).hidden).toBe(true)
-    expect((document.getElementById('config-profile-empty') as HTMLElement).hidden).toBe(true)
+    expect((document.getElementById('skills-profile-drift') as HTMLElement).hidden).toBe(true)
+    expect((document.getElementById('skills-profile-empty') as HTMLElement).hidden).toBe(true)
 
     // The whole point of the block. Accepting a component map activates routing
     // for every later run, which `web/writes.ts` denies the browser outright —
     // so there is nothing here to press.
-    expect(document.querySelectorAll('#config-profile-block button')).toHaveLength(0)
-    expect(document.querySelectorAll('#config-profile-block [data-act]')).toHaveLength(0)
-    expect(document.querySelectorAll('#config-profile-block input, #config-profile-block select')).toHaveLength(0)
+    expect(document.querySelectorAll('#skills-profile-block button')).toHaveLength(0)
+    expect(document.querySelectorAll('#skills-profile-block [data-act]')).toHaveLength(0)
+    expect(document.querySelectorAll('#skills-profile-block input, #skills-profile-block select')).toHaveLength(0)
   })
 
   it('says a newer scan disagrees, and never resolves the disagreement', async () => {
-    serve({
-      '/api/config': configView(),
-      '/api/profile': profileView({ proposedAt: '2026-07-30T09:00:00.000Z', proposalDiffers: true }),
-    })
+    serve({ '/api/profile': profileView({ proposedAt: '2026-07-30T09:00:00.000Z', proposalDiffers: true }) })
 
-    reveal('panel-config')
-    mountConfig()
+    reveal('panel-skills')
+    mountSkills()
     draw(emptySnapshot())
-    await vi.waitFor(() => expect((document.getElementById('config-profile-drift') as HTMLElement).hidden).toBe(false))
+    await vi.waitFor(() => expect((document.getElementById('skills-profile-drift') as HTMLElement).hidden).toBe(false))
 
-    expect(document.getElementById('config-profile-drift')?.textContent).toContain('2026-07-30T09:00:00.000Z')
+    // Formatted, not the raw ISO string it carried while this block lived in
+    // Config: it now sits beside dates the Features tab formats.
+    expect(document.getElementById('skills-profile-drift')?.textContent).not.toContain('2026-07-30T09:00:00.000Z')
+    expect(document.getElementById('skills-profile-drift')?.textContent).toContain('2026')
     // Still the accepted map on screen: the proposal is what a rescan found,
     // and nothing routes off it until somebody accepts it with a command.
-    expect(document.querySelectorAll('#config-profile-list .component')).toHaveLength(2)
-    expect(document.querySelectorAll('#config-profile-block button')).toHaveLength(0)
+    expect(document.querySelectorAll('#skills-profile-list .component')).toHaveLength(2)
+    expect(document.querySelectorAll('#skills-profile-block button')).toHaveLength(0)
   })
 
   it('says a project has no accepted map rather than drawing an empty table', async () => {
     // `/api/profile` 404s for a project nothing has ever mapped, and a 404 is
     // an answer here — not a fetch this panel should keep waiting on.
-    serve({ '/api/config': configView() })
+    serve({})
 
-    reveal('panel-config')
-    mountConfig()
+    reveal('panel-skills')
+    mountSkills()
     draw(emptySnapshot())
-    await vi.waitFor(() => expect((document.getElementById('config-profile-empty') as HTMLElement).hidden).toBe(false))
+    await vi.waitFor(() => expect((document.getElementById('skills-profile-empty') as HTMLElement).hidden).toBe(false))
 
-    expect(document.getElementById('config-profile-empty')?.textContent).toBe(english['config.profileNone'])
-    expect(document.querySelectorAll('#config-profile-list .component')).toHaveLength(0)
-    expect((document.getElementById('config-profile-record') as HTMLElement).hidden).toBe(true)
+    expect(document.getElementById('skills-profile-empty')?.textContent).toBe(english['config.profileNone'])
+    expect(document.querySelectorAll('#skills-profile-list .component')).toHaveLength(0)
+    expect((document.getElementById('skills-profile-record') as HTMLElement).hidden).toBe(true)
   })
 })
 
@@ -1146,3 +1179,268 @@ function railSlots(): Record<string, HTMLElement> {
   }
   return slots
 }
+
+/**
+ * Feature briefs, and the one write the browser is permitted.
+ *
+ * The assertions that matter are the two the execution report records as having
+ * shipped wrong once already: the approval carries the *content digest* rather
+ * than the revision number alone, and a capability nothing exposes is not a
+ * capability. So the frame is inspected rather than the button's existence.
+ */
+describe('features', () => {
+  const brief = (patch: Partial<FeatureBrief> = {}): FeatureBrief => ({
+    schema: 1,
+    id: 'F001',
+    revision: 1,
+    title: 'Sign-in that survives a token refresh',
+    status: 'draft',
+    problem: 'The session drops mid-refresh.',
+    decisions: [
+      { question: 'Which store holds the refresh token?', recommendation: 'keychain', answer: 'keychain', at: NOW },
+      { question: 'Does logout revoke server-side?', recommendation: null, answer: null, at: NOW },
+    ],
+    acceptance: ['A refresh mid-request does not sign the user out.'],
+    affectedComponents: ['web'],
+    tags: ['auth'],
+    discovery: { mode: 'ask', questionBudget: 8, completedAt: NOW },
+    approval: null,
+    supersedes: null,
+    createdAt: NOW,
+    ...patch,
+  })
+
+  const detail = (patch: Partial<FeatureDetail> = {}): FeatureDetail => ({
+    brief: brief(),
+    status: 'draft',
+    revisions: [{ revision: 1, status: 'draft' }],
+    digest: 'a'.repeat(64),
+    ...patch,
+  })
+
+  const summary = (patch: Partial<FeatureSummary> = {}): FeatureSummary => ({
+    id: 'F001',
+    title: 'Sign-in that survives a token refresh',
+    status: 'draft',
+    latestRevision: 1,
+    approvedRevision: null,
+    revisions: [1],
+    createdAt: NOW,
+    ...patch,
+  })
+
+  it('refuses to approve a draft with no acceptance criteria, before sending anything', () => {
+    // The server's refusal for this case has no code of its own — it falls to
+    // `write.failed` with the diagnosis on the server's terminal — so the page
+    // cannot explain it afterwards and must not let it happen.
+    expect(approvable(detail({ brief: brief({ acceptance: [] }) })).why).toBe('features.needsAcceptance')
+    expect(approvable(detail({ brief: brief({ acceptance: [] }) })).can).toBe(false)
+  })
+
+  it('offers no approval on a revision that already has one', () => {
+    expect(approvable(detail({ status: 'approved' })).can).toBe(false)
+    expect(approvable(detail({ status: 'superseded' })).can).toBe(false)
+    expect(approvable(null).can).toBe(false)
+    expect(approvable(detail()).can).toBe(true)
+  })
+
+  it('draws a brief, and says which questions the interview never answered', async () => {
+    serve({ '/api/features': [summary()], '/api/features/F001': detail() })
+
+    reveal('panel-features')
+    const features = mountFeatures()
+    // `opened` is module state, as it is in `plans.js`, so it outlives a test.
+    // Reset explicitly: `toggle` on an already-open feature *closes* it, and a
+    // test that inherited one would be asserting against a shut panel.
+    features.close()
+    draw(emptySnapshot())
+    await vi.waitFor(() => expect(document.querySelectorAll('#features-list .plan')).toHaveLength(1))
+
+    features.toggle('F001')
+    await vi.waitFor(() => expect((document.getElementById('feature-detail') as HTMLElement).hidden).toBe(false))
+
+    expect(document.getElementById('feature-problem')?.textContent).toContain('drops mid-refresh')
+    const answers = [...document.querySelectorAll('#feature-decisions [data-slot="answer"]')]
+    expect(answers[0]?.textContent).toBe('keychain')
+    // An unanswered question is an ordinary state of a draft — the interview
+    // stops at one — so it is a sentence rather than a blank line.
+    expect(answers[1]?.textContent).toBe(english['features.unanswered'])
+
+    // The first decision took the recommendation, so the recommendation is not
+    // repeated under it — that renders as the answer stated twice with nothing
+    // saying which line is which.
+    const recommendations = [...document.querySelectorAll('#feature-decisions [data-slot="recommendation"]')]
+    expect((recommendations[0] as HTMLElement).hidden).toBe(true)
+  })
+
+  it('shows a recommendation the answer did not take, and labels it as one', async () => {
+    const declined = brief({
+      decisions: [
+        { question: 'Where does the refresh token live?', recommendation: 'the keychain', answer: 'a cookie', at: NOW },
+      ],
+    })
+    serve({ '/api/features': [summary()], '/api/features/F001': detail({ brief: declined }) })
+
+    reveal('panel-features')
+    const features = mountFeatures()
+    features.close()
+    draw(emptySnapshot())
+    features.toggle('F001')
+    await vi.waitFor(() => expect((document.getElementById('feature-detail') as HTMLElement).hidden).toBe(false))
+
+    const shown = document.querySelector('#feature-decisions [data-slot="recommendation"]') as HTMLElement
+    expect(shown.hidden).toBe(false)
+    expect(shown.textContent).toContain('the keychain')
+    // Labelled, because an unlabelled sentence under an answer reads as more
+    // of the answer.
+    expect(shown.textContent).toContain('Recommended')
+  })
+
+  it('approves what the screen showed, by content digest and not by revision alone', async () => {
+    serve({ '/api/features': [summary()], '/api/features/F001': detail() })
+
+    reveal('panel-features')
+    const features = mountFeatures()
+    // `opened` is module state, as it is in `plans.js`, so it outlives a test.
+    // Reset explicitly: `toggle` on an already-open feature *closes* it, and a
+    // test that inherited one would be asserting against a shut panel.
+    features.close()
+    draw(emptySnapshot())
+    features.toggle('F001')
+    await vi.waitFor(() => expect((document.getElementById('feature-detail') as HTMLElement).hidden).toBe(false))
+
+    features.ask()
+    ;(document.getElementById('feature-note') as HTMLInputElement).value = 'agreed on the call'
+    features.confirm()
+
+    // A draft holds one revision number for the whole of its editable life, so
+    // the digest is the only field on this frame that moves when the words do.
+    // Without it the compare-and-swap is vacuous — which is exactly how it
+    // shipped the first time.
+    expect(sent).toEqual([
+      {
+        type: 'write',
+        id: expect.any(String),
+        write: {
+          kind: 'feature.approve',
+          feature: 'F001',
+          revision: 1,
+          digest: 'a'.repeat(64),
+          note: 'agreed on the call',
+        },
+      },
+    ])
+  })
+
+  it('sends nothing when the brief stopped being approvable while the dialog was open', async () => {
+    serve({ '/api/features': [summary()], '/api/features/F001': detail() })
+
+    reveal('panel-features')
+    const features = mountFeatures()
+    // `opened` is module state, as it is in `plans.js`, so it outlives a test.
+    // Reset explicitly: `toggle` on an already-open feature *closes* it, and a
+    // test that inherited one would be asserting against a shut panel.
+    features.close()
+    draw(emptySnapshot())
+    features.toggle('F001')
+    await vi.waitFor(() => expect((document.getElementById('feature-detail') as HTMLElement).hidden).toBe(false))
+
+    features.ask()
+    // The feed keeps running behind the modal. Somebody else approved it.
+    serve({ '/api/features': [summary()], '/api/features/F001': detail({ status: 'approved' }) })
+    draw(emptySnapshot({ revisions: { ...emptySnapshot().revisions, features: 'moved' } }))
+    await vi.waitFor(() =>
+      expect((document.getElementById('feature-approve') as HTMLButtonElement).hidden).toBe(true),
+    )
+
+    features.confirm()
+    expect(sent).toEqual([])
+  })
+})
+
+/**
+ * The library, the acceptances, and the join between them.
+ *
+ * The join's *failure* is the case worth a test: an acceptance stores a digest
+ * and never a path, precisely so a project's record survives being cloned onto
+ * another machine — and the cost of that is a repository naming a package the
+ * library here has never imported. Neither list read alone shows it.
+ */
+describe('skills library', () => {
+  const pkg = (patch: Partial<SkillPackage> = {}): SkillPackage => ({
+    schema: 1,
+    packageId: 'flutter-forms',
+    digest: 'b'.repeat(64),
+    source: { kind: 'github', url: 'https://github.com/example/flutter-forms', revision: 'v1.2.0' },
+    license: { spdx: 'MIT', file: 'LICENSE' },
+    skillName: 'Flutter forms',
+    description: 'Form patterns for Flutter.',
+    tags: ['flutter'],
+    dependencies: { executables: [], packages: [] },
+    audit: { state: 'passed', findings: ['sandbox: no network access attempted'], at: NOW },
+    guidance: 'Prefer FormField over manual controllers.',
+    importedAt: NOW,
+    ...patch,
+  })
+
+  const acceptance = (patch: Partial<ProjectSkillAcceptance> = {}): ProjectSkillAcceptance => ({
+    schema: 1,
+    skillId: 'flutter-forms',
+    packageId: 'flutter-forms',
+    digest: 'b'.repeat(64),
+    components: ['apps-mobile'],
+    agents: ['builder'],
+    tags: ['flutter'],
+    updatePolicy: 'pinned',
+    status: 'active',
+    compatible: true,
+    acceptedBy: 'mohd',
+    acceptedAt: NOW,
+    ...patch,
+  })
+
+  it('pairs each acceptance with the package it names, and reports the one it cannot find', () => {
+    const joined = joinAcceptances({
+      packages: [pkg()],
+      unreadable: [],
+      acceptances: [acceptance(), acceptance({ skillId: 'gone', digest: 'c'.repeat(64) })],
+    })
+
+    expect(joined[0]?.pkg?.skillName).toBe('Flutter forms')
+    expect(joined[1]?.pkg).toBeNull()
+  })
+
+  it('draws the audit verdict and names a package this machine does not hold', async () => {
+    serve({
+      '/api/skills': {
+        packages: [pkg()],
+        unreadable: [{ digest: 'd'.repeat(64), reason: 'record does not parse' }],
+        acceptances: [acceptance({ skillId: 'gone', digest: 'c'.repeat(64) })],
+      },
+    })
+
+    reveal('panel-skills')
+    mountSkills()
+    draw(emptySnapshot())
+    await vi.waitFor(() => expect(document.querySelectorAll('#skills-library .component')).toHaveLength(1))
+
+    expect(document.querySelector('#skills-library [data-slot="audit"]')?.textContent).toBe(
+      english['skills.audit.passed'],
+    )
+    // The findings list carries the sandbox line: `writePackage` is only ever
+    // reached from a passed audit, so there is no separate import report.
+    expect(document.querySelector('#skills-library [data-slot="findings"]')?.textContent).toContain('sandbox')
+
+    const missing = document.querySelector('#skills-acceptances [data-slot="missing"]') as HTMLElement
+    expect(missing.hidden).toBe(false)
+    expect(missing.textContent).toContain(shortDigest('c'.repeat(64)))
+
+    // A damaged library entry is surfaced, not dropped: on a machine where
+    // `skills import` can write, it is as likely to be an interrupted import.
+    expect(document.querySelectorAll('#skills-unreadable .grid-row')).toHaveLength(1)
+
+    // Activation is a command. There is nothing on this panel to press.
+    expect(document.querySelectorAll('#panel-skills [data-act]')).toHaveLength(0)
+    expect(document.querySelectorAll('#panel-skills button, #panel-skills input')).toHaveLength(0)
+  })
+})

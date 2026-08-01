@@ -81,6 +81,14 @@
         <span data-i18n="tabs.plans"></span>
         <span class="nav-count" data-rail="navReady" aria-hidden="true" hidden></span>
       </a>
+      <!-- No count beside these two, unlike Run and Plans. A count has to come
+           off the snapshot, and briefs and skills are *fetched* rather than
+           pushed — deliberately, so that a record the browser may not write has
+           one surface rather than two (`web/protocol.ts:178`). A panel cannot
+           supply its own count either: `render` skips a hidden panel, so the
+           number would only ever be right on the tab you are already looking at. -->
+      <a id="tab-features" href="#features" aria-controls="panel-features" data-i18n="tabs.features"></a>
+      <a id="tab-skills" href="#skills" aria-controls="panel-skills" data-i18n="tabs.skills"></a>
       <a id="tab-evidence" href="#evidence" aria-controls="panel-evidence" data-i18n="tabs.evidence"></a>
       <a id="tab-memory" href="#memory" aria-controls="panel-memory" data-i18n="tabs.memory"></a>
       <a id="tab-config" href="#config" aria-controls="panel-config" data-i18n="tabs.config"></a>
@@ -168,6 +176,29 @@
             <section class="block" id="run-haltreport" hidden>
               <h2 data-i18n="run.haltReport"></h2>
               <pre class="excerpt" id="run-halt-report"></pre>
+            </section>
+
+            <!-- What this run was actually routed by, pinned before dispatch
+                 and never rewritten by a profile or a brief that moved
+                 afterwards. Hidden entirely when the run pinned nothing: an
+                 empty table is a claim, and "no manifest" is not the same fact
+                 as "a manifest that selected nothing". -->
+            <section class="block" id="run-manifest" hidden>
+              <h2 data-i18n="manifest.title"></h2>
+              <dl class="facts">
+                <div class="fact"><dt data-i18n="manifest.brief"></dt><dd><code id="manifest-brief"></code></dd></div>
+                <div class="fact"><dt data-i18n="manifest.profile"></dt><dd><code id="manifest-profile"></code></dd></div>
+                <!-- The mode and the reason together. The reason is engine
+                     prose this page does not own, so it is passed through
+                     rather than translated. -->
+                <div class="fact">
+                  <dt data-i18n="manifest.concurrency"></dt>
+                  <dd><span id="manifest-concurrency"></span> <span class="hint" id="manifest-reason"></span></dd>
+                </div>
+                <div class="fact"><dt data-i18n="manifest.generated"></dt><dd id="manifest-generated"></dd></div>
+              </dl>
+              <p class="empty" id="manifest-empty" hidden></p>
+              <div id="manifest-selections"></div>
             </section>
           </div>
 
@@ -316,6 +347,121 @@
         </div>
       </section>
 
+      <!-- Feature briefs. The one record on this page a browser may change, and
+           it may change it exactly once: `approveFeatureBrief` refuses to touch
+           an approved revision ever again. Everything else here is the brief as
+           it sits on disk. -->
+      <section class="panel" id="panel-features" aria-labelledby="panel-features-title" hidden>
+        <header class="panel-head">
+          <div>
+            <h1 id="panel-features-title" data-i18n="panel.features.title"></h1>
+            <p class="hint" data-i18n="panel.features.help"></p>
+          </div>
+        </header>
+        <p class="empty" id="features-empty" hidden></p>
+
+        <div class="plans-workspace" id="features-workspace" data-detail-open="false">
+          <div class="plans-master">
+            <div class="plans" id="features-list"></div>
+            <p class="more" id="features-more" hidden></p>
+          </div>
+
+          <section class="plan-detail block" id="feature-detail" hidden>
+            <header class="plan-detail-head">
+              <button type="button" class="plan-back" data-act="close-feature" data-i18n="features.back"></button>
+              <h2 id="feature-detail-title" tabindex="-1"></h2>
+            </header>
+            <p class="record" id="feature-record"></p>
+            <p class="banner warn" id="feature-blocked" hidden></p>
+
+            <div class="approve">
+              <button type="button" class="primary" data-act="feature-approve" id="feature-approve" data-i18n="features.approve"></button>
+            </div>
+
+            <section class="block">
+              <h3 data-i18n="features.problem"></h3>
+              <p class="excerpt" id="feature-problem" dir="auto"></p>
+            </section>
+
+            <section class="block" id="feature-acceptance-block">
+              <h3 data-i18n="features.acceptance"></h3>
+              <p class="empty" id="feature-acceptance-empty" hidden></p>
+              <ul class="stories detail" id="feature-acceptance"></ul>
+            </section>
+
+            <section class="block" id="feature-decisions-block" hidden>
+              <h3 data-i18n="features.decisions"></h3>
+              <div id="feature-decisions"></div>
+            </section>
+
+            <dl class="facts">
+              <div class="fact"><dt data-i18n="features.components"></dt><dd id="feature-components"></dd></div>
+              <div class="fact"><dt data-i18n="features.tags"></dt><dd id="feature-tags"></dd></div>
+              <div class="fact"><dt data-i18n="features.discovery"></dt><dd id="feature-discovery"></dd></div>
+              <div class="fact"><dt data-i18n="features.created"></dt><dd id="feature-created"></dd></div>
+            </dl>
+
+            <!-- Who signed it, when, and in their own words. `by` is derived
+                 from the account the server runs as and is never typed, which is
+                 the only reason it is worth showing at all. -->
+            <section class="block" id="feature-approval-block" hidden>
+              <h3 data-i18n="features.approval"></h3>
+              <dl class="facts">
+                <div class="fact"><dt data-i18n="features.approvedBy"></dt><dd id="feature-approved-by"></dd></div>
+                <div class="fact"><dt data-i18n="features.approvedAt"></dt><dd id="feature-approved-at"></dd></div>
+                <div class="fact"><dt data-i18n="features.approvalNote"></dt><dd id="feature-approval-note"></dd></div>
+              </dl>
+            </section>
+
+            <!-- The history *is* the audit trail: a revision is immutable, so
+                 every earlier one is still exactly what it was when it was
+                 written. `superseded` is derived here, never stored. -->
+            <section class="block">
+              <h3 data-i18n="features.history"></h3>
+              <div id="feature-revisions"></div>
+            </section>
+          </section>
+        </div>
+      </section>
+
+      <!-- The component map, the machine's skill library, and what this project
+           has accepted of it. Read-only in the strongest sense: activating a
+           skill or accepting a map changes what every later run is told, which
+           is the class of write `web/writes.ts` denies the browser permanently.
+           Both decisions are commands, and commands go through the queue. -->
+      <section class="panel" id="panel-skills" aria-labelledby="panel-skills-title" hidden>
+        <header class="panel-head">
+          <div>
+            <h1 id="panel-skills-title" data-i18n="panel.skills.title"></h1>
+            <p class="hint" data-i18n="panel.skills.help"></p>
+          </div>
+        </header>
+
+        <section class="block" id="skills-profile-block">
+          <h2 data-i18n="config.profile"></h2>
+          <p class="hint" data-i18n="config.profileWhy"></p>
+          <p class="record" id="skills-profile-record" hidden></p>
+          <p class="banner warn" id="skills-profile-drift" hidden></p>
+          <p class="empty" id="skills-profile-empty" hidden></p>
+          <div id="skills-profile-list"></div>
+        </section>
+
+        <section class="block">
+          <h2 data-i18n="skills.acceptances"></h2>
+          <p class="hint" data-i18n="skills.acceptancesWhy"></p>
+          <p class="empty" id="skills-acceptances-empty" hidden></p>
+          <div id="skills-acceptances"></div>
+        </section>
+
+        <section class="block">
+          <h2 data-i18n="skills.library"></h2>
+          <p class="hint" data-i18n="skills.libraryWhy"></p>
+          <p class="empty" id="skills-library-empty" hidden></p>
+          <div id="skills-library"></div>
+          <div id="skills-unreadable"></div>
+        </section>
+      </section>
+
       <section class="panel" id="panel-evidence" aria-labelledby="panel-evidence-title" hidden>
         <header class="panel-head">
           <div>
@@ -387,21 +533,11 @@
           <div class="fact"><dt data-i18n="config.project"></dt><dd id="config-project"></dd></div>
         </dl>
 
-        <!-- The component map this project is routed by, and a read in the
-             strongest sense: accepting a map activates routing for every later
-             run, which is the class of write `web/writes.ts` denies the browser
-             permanently — the same reason `runStart` and `cycleAdvance` are
-             denied. So this block reports what was accepted, says out loud when
-             a newer scan disagrees, and offers nothing to press. Resolving the
-             disagreement is a command, and commands go through the queue. -->
-        <section class="block" id="config-profile-block">
-          <h2 data-i18n="config.profile"></h2>
-          <p class="hint" data-i18n="config.profileWhy"></p>
-          <p class="record" id="config-profile-record" hidden></p>
-          <p class="banner warn" id="config-profile-drift" hidden></p>
-          <p class="empty" id="config-profile-empty" hidden></p>
-          <div id="config-profile-list"></div>
-        </section>
+        <!-- The accepted component map used to sit here. It is a *record*, not
+             a setting, and it now sits with the skills it routes — in Skills,
+             riding `revisions.profile` rather than the `config`+`state` pair
+             this panel had to watch for want of a key of its own. What stays
+             here is `orchestration.profile.auto_accept`, which is a setting. -->
 
         <form class="config-editor" id="config-editor" data-act="config-save">
           <div class="config-editor-head">
@@ -792,6 +928,27 @@
       </form>
     </dialog>
 
+    <!-- The second dialog on this page, and the second thing whose inverse is
+         not another permitted write. `ui/dialog.js` argues an approval needs no
+         confirmation because a stale click is refused and an undo is one press
+         away — true of a plan gate, which can be re-decided. It is not true
+         here: the store refuses to touch an approved revision ever again. -->
+    <dialog id="feature-dialog">
+      <form method="dialog" data-act="feature-confirm" id="feature-form">
+        <h2 data-i18n="features.confirmTitle"></h2>
+        <p class="hint" data-i18n="features.confirmExplain"></p>
+        <p class="record" id="feature-dialog-subject"></p>
+        <label>
+          <span data-i18n="features.note"></span>
+          <input id="feature-note" name="note" maxlength="2000" dir="auto" autocomplete="off" />
+        </label>
+        <div class="dialog-actions">
+          <button type="button" data-act="feature-cancel" data-i18n="features.cancel"></button>
+          <button type="submit" class="primary" data-i18n="features.confirm"></button>
+        </div>
+      </form>
+    </dialog>
+
     <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
 
     <!-- ── templates ───────────────────────────────────────────────────────
@@ -972,6 +1129,117 @@
           <div class="fact"><dt>verification.build</dt><dd data-slot="build"></dd></div>
           <div class="fact"><dt data-i18n="config.componentTags"></dt><dd data-slot="tags"></dd></div>
         </dl>
+      </div>
+    </template>
+
+    <!-- One feature in the master list. Keyed by id, and the id is the one
+         thing on the row that never changes shape between a draft and an
+         approved revision. -->
+    <template id="tpl-feature">
+      <div class="plan">
+        <div class="plan-head">
+          <code data-slot="id"></code>
+          <span data-slot="title"></span>
+          <span class="pill" data-slot="status"></span>
+        </div>
+        <button type="button" class="plan-open" data-act="open-feature" data-slot="open"></button>
+      </div>
+    </template>
+
+    <!-- One decision the interview recorded. A question with a null answer is a
+         question still open, and it renders as that rather than as a blank line
+         — an interview stops at a draft, so an unanswered question is an
+         ordinary state of the record rather than a fault in it. -->
+    <template id="tpl-decision">
+      <div class="component">
+        <h4 data-slot="question"></h4>
+        <p data-slot="answer"></p>
+        <p class="hint" data-slot="recommendation"></p>
+      </div>
+    </template>
+
+    <template id="tpl-feature-revision">
+      <div class="grid-row" role="row">
+        <span role="cell"><code data-slot="revision"></code></span>
+        <span role="cell" data-slot="status"></span>
+      </div>
+    </template>
+
+    <!-- One package in this machine's library. `audit.findings` includes the
+         sandbox line: `writePackage` is only ever reached from a passed audit,
+         so there is no separate import report to draw beside this. -->
+    <template id="tpl-package">
+      <div class="component">
+        <h3 data-slot="name"></h3>
+        <p data-slot="description" dir="auto"></p>
+        <dl class="facts">
+          <div class="fact"><dt data-i18n="skills.packageId"></dt><dd><code data-slot="packageId"></code></dd></div>
+          <div class="fact"><dt data-i18n="skills.digest"></dt><dd><code data-slot="digest"></code></dd></div>
+          <div class="fact"><dt data-i18n="skills.source"></dt><dd data-slot="source"></dd></div>
+          <div class="fact"><dt data-i18n="skills.pinned"></dt><dd><code data-slot="revision"></code></dd></div>
+          <div class="fact"><dt data-i18n="skills.license"></dt><dd data-slot="license"></dd></div>
+          <div class="fact"><dt data-i18n="skills.audit"></dt><dd data-slot="audit"></dd></div>
+          <div class="fact"><dt data-i18n="skills.executables"></dt><dd data-slot="executables"></dd></div>
+          <div class="fact"><dt data-i18n="skills.packages"></dt><dd data-slot="packages"></dd></div>
+          <div class="fact"><dt data-i18n="skills.tags"></dt><dd data-slot="tags"></dd></div>
+          <div class="fact"><dt data-i18n="skills.imported"></dt><dd data-slot="imported"></dd></div>
+        </dl>
+        <ul class="stories detail" data-slot="findings"></ul>
+      </div>
+    </template>
+
+    <!-- A digest directory the walk could not turn into a record. Shown rather
+         than dropped: on a machine where `skills import` can write, an entry
+         here is as likely to be an interrupted import as another project's
+         problem. -->
+    <template id="tpl-unreadable">
+      <div class="grid-row" role="row">
+        <span role="cell"><code data-slot="digest"></code></span>
+        <span role="cell" data-slot="reason"></span>
+      </div>
+    </template>
+
+    <!-- One acceptance, joined to the library by digest. The join's failure is
+         the interesting case and has a slot of its own: a repository cloned onto
+         a machine whose library never imported the package it names. -->
+    <template id="tpl-acceptance-record">
+      <div class="component">
+        <h3 data-slot="skillId"></h3>
+        <p class="banner warn" data-slot="missing" hidden></p>
+        <dl class="facts">
+          <div class="fact"><dt data-i18n="skills.packageId"></dt><dd><code data-slot="packageId"></code></dd></div>
+          <div class="fact"><dt data-i18n="skills.digest"></dt><dd><code data-slot="digest"></code></dd></div>
+          <div class="fact"><dt data-i18n="skills.status"></dt><dd data-slot="status"></dd></div>
+          <div class="fact"><dt data-i18n="skills.compatible"></dt><dd data-slot="compatible"></dd></div>
+          <div class="fact"><dt data-i18n="skills.components"></dt><dd data-slot="components"></dd></div>
+          <div class="fact"><dt data-i18n="skills.agents"></dt><dd data-slot="agents"></dd></div>
+          <div class="fact"><dt data-i18n="skills.tags"></dt><dd data-slot="tags"></dd></div>
+          <div class="fact"><dt data-i18n="skills.updatePolicy"></dt><dd data-slot="updatePolicy"></dd></div>
+          <div class="fact"><dt data-i18n="skills.acceptedBy"></dt><dd data-slot="acceptedBy"></dd></div>
+        </dl>
+      </div>
+    </template>
+
+    <!-- One row of a pinned manifest: which skills a (component, agent) pair
+         received, each beside the reason that chose it. `skillIds` and `reasons`
+         are index-aligned by a schema refinement, so a row can pair them without
+         checking. -->
+    <template id="tpl-selection">
+      <div class="component">
+        <h4><code data-slot="component"></code> · <code data-slot="agent"></code></h4>
+        <p class="empty" data-slot="none" hidden></p>
+        <div data-slot="skills"></div>
+      </div>
+    </template>
+
+    <template id="tpl-selected-skill">
+      <div class="rule">
+        <code class="rule-name" data-slot="skillId"></code>
+        <span class="rule-why" data-slot="reason" dir="auto"></span>
+        <details data-slot="guidanceDetails">
+          <summary data-i18n="manifest.guidance"></summary>
+          <pre class="excerpt" data-slot="guidance"></pre>
+        </details>
       </div>
     </template>
 
