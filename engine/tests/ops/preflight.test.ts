@@ -71,15 +71,44 @@ describe('preflightEstimate', () => {
   it('reports the dispatch layers the widest build cycle would need', async () => {
     const preflight = await preflightEstimate(project.dir, { track: 'build' })
 
-    // The build track's two real orderings — `builder after ui-designer`,
-    // `ui-critic after verifier` — both land inside the widest possible
-    // cycle, so it takes two rounds to clear rather than one.
+    // The build track's three real orderings — `builder after ui-designer`,
+    // `verifier after builder`, `ui-critic after verifier` — chain into one
+    // path through the widest possible cycle, so it takes four rounds to
+    // clear: [scout, critic, ui-designer, security, perf], [builder],
+    // [verifier], [ui-critic].
+    expect(preflight.dispatch_waves).toBe(4)
+  })
+
+  it('reports the dispatch layers the widest edit cycle would need', async () => {
+    const preflight = await preflightEstimate(project.dir, { track: 'edit' })
+    // `edit`'s one real ordering — `verifier after editor`, the same
+    // "nothing to verify until the code exists" rule `build` and `fix` both
+    // state too — puts its two required agents in two waves.
     expect(preflight.dispatch_waves).toBe(2)
   })
 
-  it('reports one wave for a track with no order edges', async () => {
-    const preflight = await preflightEstimate(project.dir, { track: 'edit' })
+  it('reports one wave for a track with neither order edges nor a gate', async () => {
+    // No shipped default track is this bare any more — `edit`, `build` and
+    // `fix` all carry an `order` edge and `plan` carries a gate — so the
+    // base case dispatchWaves still has to handle is built by hand here.
+    const config = await loadConfig(project.dir)
+    config.tracks.bare = { required: ['solo'], available: [], max_cycles: 1 }
+    await writeConfig(project.dir, config)
+
+    const preflight = await preflightEstimate(project.dir, { track: 'bare' })
     expect(preflight.dispatch_waves).toBe(1)
+  })
+
+  it('folds a gate into the dispatch layers even with no order edges', async () => {
+    // `plan` declares no `order` edges at all — its only ordering is the
+    // gate, `story-writer after fit-checker` — so a `dispatch_waves` of 1
+    // here would mean `dispatchWaves` still only reads `track.order`, which
+    // is the defect this test exists to keep fixed: a wave holding both a
+    // gate's prover and the agent it blocks is a wave `mjloop_run_log`
+    // cannot honour, because `GateClosedError` refuses the blocked agent's
+    // result until the prover's is on file.
+    const preflight = await preflightEstimate(project.dir, { track: 'plan' })
+    expect(preflight.dispatch_waves).toBe(2)
   })
 
   it('excludes a specialist set to never from the dispatch count', async () => {

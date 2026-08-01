@@ -540,6 +540,30 @@ describe('the leader skill', () => {
     // dropping one of them.
     expect(neverDo().filter((rule) => /brief/i.test(rule) && /approv/i.test(rule))).not.toEqual([])
   })
+
+  it('dispatches the waves mjloop_roster_set returns', () => {
+    // C2's whole leader-facing half is prose nothing asserted: a revert of the
+    // dispatch step back to a hardcoded ordering left the full suite green
+    // (the reviewer that found this proved it by reverting the file wholesale
+    // and re-running the suite). This is the emission-side guard the finding
+    // asked for — it fails the moment step 4 stops presenting `waves` as the
+    // dispatch order, the same way the section below fails the moment ordering
+    // prose about a specific agent creeps back in.
+    expect(section(leader, '### 4. Dispatch')).toMatch(/\bwaves\b/)
+  })
+
+  it('names no agent-to-agent ordering in prose — that lives in `config.yaml` now', () => {
+    // The other half of the same guard: C2's point was that a project renames
+    // or drops `ui-designer`/`ui-critic`/`verifier` by editing
+    // `DEFAULT_TRACKS`, not by editing English the engine cannot check. A
+    // sentence of the shape "X runs before/after Y" naming one of the three
+    // agents `order` now encodes is exactly the prose C2 deleted from these
+    // two sections — its return is undetectable by every other test in this
+    // file, which only check that tools and headings still exist.
+    const orderingProse = /\b(ui-designer|ui-critic|verifier)\b[^.\n]*\bruns\s+(before|after)\b/i
+    expect(section(leader, '### 4. Dispatch')).not.toMatch(orderingProse)
+    expect(section(leader, '### Drafting the specialists')).not.toMatch(orderingProse)
+  })
 })
 
 describe('the usage documentation', () => {

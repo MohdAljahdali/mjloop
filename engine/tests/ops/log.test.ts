@@ -628,6 +628,21 @@ describe('runLog against order edges', () => {
     expect(path.basename(file)).toBe('b.json')
   })
 
+  it("accepts the result once the predecessor has logged under an instance, not its bare name", async () => {
+    // `runLog` itself writes an instanced result as `<agent>--<instance>.json`
+    // (this file's `basename` construction, above), and `ops/run.ts`'s
+    // `readAgentReports` resolves the agent from a basename by splitting on
+    // the first `--` for exactly that reason (ops/run.ts:915-917). An order
+    // edge whose predecessor only ever logs under an instance — the shipped
+    // `fix` track's `hypothesis-tester`, fanned out N-wide by
+    // skills/mjloop-leader/SKILL.md:193-196 — must not deadlock permanently
+    // because no file is ever named exactly `<predecessor>.json`.
+    await rosterSet(project.dir, { cycle: 1, selected: ['a', 'b', 'c'], skipped: {} })
+    await runLog(project.dir, { agent: 'c', instance: 'stale-cache', result: RESULT }, clock)
+    const { path: file } = await runLog(project.dir, { agent: 'b', result: RESULT }, clock)
+    expect(path.basename(file)).toBe('b.json')
+  })
+
   it('does not block when the predecessor was not drafted this cycle', async () => {
     // The vacuous-edge rule TrackSchema.order's comment states: `c` is not in
     // `selected`, so `b`'s edge is satisfied by the omission, not violated —

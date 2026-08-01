@@ -74,11 +74,28 @@ const VERIFIER_PASS = {
   next_hint: null,
 }
 
+/**
+ * `verifier` is ordered after `builder` on the default build track — nothing
+ * to check until the code exists — so every cycle here logs this first. The
+ * result itself is not this suite's subject, which is why it is one constant
+ * reused across cycles rather than a claim per cycle the way `verifierFail`'s
+ * callers vary theirs.
+ */
+const BUILDER_PASS = {
+  status: 'pass' as const,
+  summary: 'Added the Send button.',
+  evidence: [{ kind: 'file' as const, ref: 'src/button.js', excerpt: 'export function sendButton' }],
+  findings: [],
+  files_touched: ['src/button.js'],
+  next_hint: null,
+}
+
 describe('a multi-cycle build run', () => {
   it('carries findings forward and lands on done', async () => {
     await runStart(project.dir, { track: 'build', goal: 'Add a Send button' }, clock)
 
     await rosterSet(project.dir, { cycle: 1, selected: ['builder', 'verifier'], skipped: { ...SPECIALISTS_SKIPPED, scout: 'goal names the file', critic: 'single-file change' } })
+    await runLog(project.dir, { agent: 'builder', result: BUILDER_PASS }, clock)
     await runLog(project.dir, { agent: 'verifier', result: verifierFail(['label is wrong', 'no test covers it']) }, clock)
     const first = await cycleAdvance(project.dir, { agents: ['builder', 'verifier'], result: 'fail' }, clock)
 
@@ -89,6 +106,7 @@ describe('a multi-cycle build run', () => {
 
     // Cycle 2 works the carried list and closes one of the two findings.
     await rosterSet(project.dir, { cycle: 2, selected: ['builder', 'verifier'], skipped: { ...SPECIALISTS_SKIPPED, scout: 'area already mapped', critic: 'no new interface' } })
+    await runLog(project.dir, { agent: 'builder', result: BUILDER_PASS }, clock)
     await runLog(project.dir, { agent: 'verifier', result: verifierFail(['no test covers it']) }, clock)
     const second = await cycleAdvance(project.dir, { agents: ['builder', 'verifier'], result: 'fail' }, clock)
 
@@ -97,6 +115,7 @@ describe('a multi-cycle build run', () => {
     expect(second.state.cycle).toBe(3)
 
     await rosterSet(project.dir, { cycle: 3, selected: ['builder', 'verifier'], skipped: { ...SPECIALISTS_SKIPPED, scout: 'area already mapped', critic: 'no new interface' } })
+    await runLog(project.dir, { agent: 'builder', result: BUILDER_PASS }, clock)
     await runLog(project.dir, { agent: 'verifier', result: VERIFIER_PASS }, clock)
     const third = await cycleAdvance(project.dir, { agents: ['builder', 'verifier'], result: 'pass' }, clock)
 
@@ -128,6 +147,7 @@ describe('a multi-cycle build run', () => {
       // The same defect every cycle, reported by a differently worded failure:
       // this run is stuck on its findings, which is what stagnation names.
       const excerpt = `1 failing at step ${String.fromCharCode(96 + cycle)}`
+      await runLog(project.dir, { agent: 'builder', result: BUILDER_PASS }, clock)
       await runLog(project.dir, { agent: 'verifier', result: verifierFail(['label is wrong'], excerpt) }, clock)
       return cycleAdvance(project.dir, { agents: ['builder', 'verifier'], result: 'fail' }, clock)
     }

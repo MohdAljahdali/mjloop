@@ -147,6 +147,40 @@ describe('the dispatch waves rosterSet returns', () => {
   })
 })
 
+describe("the dispatch waves fold in a track's gate", () => {
+  it("groups the fix track's roster with fixer waiting on reproducer, not sharing its wave", async () => {
+    // The default `fix` track states no `order` edge between `reproducer` and
+    // `fixer` — the only thing ordering them is `gate: { proven_by:
+    // reproducer, blocks: [fixer] }` — so a `dispatchWaves` that read only
+    // `track.order` would put both in the roster's first wave, which is
+    // exactly the wave `mjloop_run_log` refuses to accept `fixer`'s result
+    // from before `reproducer`'s is on file (`GateClosedError`). `verifier
+    // after fixer` is the track's one real `order` edge, layered on top.
+    await runStart(project.dir, { track: 'fix', goal: 'reproduce and fix the crash' }, clock)
+    const { waves } = await rosterSet(project.dir, {
+      cycle: 1,
+      selected: ['reproducer', 'fixer', 'verifier'],
+      skipped: { investigator: 'cause already known', 'hypothesis-tester': 'no ranked hypotheses', critic: 'small fix', security: 'no auth or input path touched' },
+    })
+    expect(waves).toEqual([['reproducer'], ['fixer'], ['verifier']])
+  })
+
+  it("never places a gate's prover and a blocked agent in the same wave — the general invariant", async () => {
+    // Not fix-track-specific: whatever the selection, a wave `dispatchWaves`
+    // emits must be one every result in it can actually be logged from,
+    // which for a gated agent means its prover's result is already on file.
+    await runStart(project.dir, { track: 'fix', goal: 'reproduce and fix the crash' }, clock)
+    const { waves } = await rosterSet(project.dir, {
+      cycle: 1,
+      selected: ['reproducer', 'fixer', 'verifier', 'investigator', 'critic'],
+      skipped: { 'hypothesis-tester': 'no ranked hypotheses', security: 'no auth or input path touched' },
+    })
+    for (const wave of waves) {
+      expect(wave.includes('reproducer') && wave.includes('fixer'), JSON.stringify(wave)).toBe(false)
+    }
+  })
+})
+
 describe('an agent both drafted and skipped', () => {
   it('is rejected, so the roster cannot claim it ran and was safely omitted', async () => {
     await expect(

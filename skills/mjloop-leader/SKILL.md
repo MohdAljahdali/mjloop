@@ -106,9 +106,11 @@ Read `.mjloop/config.yaml` for the track's `required`, `available` and `closing`
 
 Call `mjloop_roster_set`. **If it rejects your roster, fix the roster.** Do not work around
 it — the rejection is the invariant doing its job. On success it returns `waves` — the
-agents you just drafted, grouped into the layers the track's `order` edges require and
-already put in the order you must dispatch them. Step 4 dispatches exactly this; you do not
-re-derive it from `config.yaml` yourself.
+agents you just drafted, grouped into the layers the track's `order` edges **and its gate**
+require and already put in the order you must dispatch them. A gated blocked agent never
+lands in an earlier wave than its `proven_by`, so following `waves` already satisfies step
+3b — you do not additionally hold a blocked agent back yourself. Step 4 dispatches exactly
+this; you do not re-derive it from `config.yaml` yourself.
 
 ### Drafting the specialists
 

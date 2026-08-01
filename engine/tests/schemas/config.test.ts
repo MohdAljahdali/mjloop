@@ -53,7 +53,9 @@ describe('DEFAULT_TRACKS', () => {
       required: ['editor', 'verifier'],
       available: [],
       closing: [],
-      order: [],
+      // `verifier` runs after `editor` — nothing to check until the code
+      // exists — the two-agent case of the same rule `build` and `fix` state.
+      order: [{ agent: 'verifier', after: ['editor'] }],
       max_cycles: 1,
     })
   })
@@ -63,12 +65,14 @@ describe('DEFAULT_TRACKS', () => {
       required: ['builder', 'verifier'],
       available: ['scout', 'critic', 'ui-designer', 'ui-critic', 'security', 'perf'],
       closing: ['docs'],
-      // The leader's two real orderings, as edges rather than as prose in
+      // The leader's three real orderings, as edges rather than as prose in
       // skills/mjloop-leader/SKILL.md: a contract nobody checks and a check
       // with no contract are both worthless, so the pair is ordered on both
-      // sides of the code it concerns.
+      // sides of the code it concerns, and `verifier` — like every track's
+      // verifying agent — runs only after the agent whose work it checks.
       order: [
         { agent: 'builder', after: ['ui-designer'] },
+        { agent: 'verifier', after: ['builder'] },
         { agent: 'ui-critic', after: ['verifier'] },
       ],
       max_cycles: 5,
@@ -81,7 +85,9 @@ describe('DEFAULT_TRACKS', () => {
       required: ['reproducer', 'fixer', 'verifier'],
       available: ['investigator', 'hypothesis-tester', 'critic', 'security'],
       closing: [],
-      order: [],
+      // `reproducer before fixer` is the gate below, not an edge here —
+      // `verifier` after `fixer` is the track's one real `order` edge.
+      order: [{ agent: 'verifier', after: ['fixer'] }],
       max_cycles: 5,
       gate: { proven_by: 'reproducer', blocks: ['fixer'] },
     })
@@ -98,20 +104,44 @@ describe('DEFAULT_TRACKS', () => {
     })
   })
 
-  it('ships every default track but build with no ordering edges', () => {
-    // C2 is where build's two real orderings became these edges; the other
-    // three tracks have never had an ordering to express.
-    for (const [name, track] of Object.entries(DEFAULT_TRACKS)) {
-      if (name === 'build') continue
-      expect(track.order, name).toEqual([])
-    }
+  it("gives every track's verifying agent an order edge onto the agent it verifies", () => {
+    // C2 gave `build` its `ui-designer`/`ui-critic` pair; the follow-up that
+    // fixed C2's review closed the gap it left open — `verifier` itself was
+    // ordered nowhere, so a leader following `waves` literally could dispatch
+    // and log it before the agent whose work it checks had written a line.
+    // `plan` has no verifying agent (step 3d gives its rule instead), so it
+    // alone keeps no `order` edge.
+    expect(DEFAULT_TRACKS.edit?.order).toContainEqual({ agent: 'verifier', after: ['editor'] })
+    expect(DEFAULT_TRACKS.build?.order).toContainEqual({ agent: 'verifier', after: ['builder'] })
+    expect(DEFAULT_TRACKS.fix?.order).toContainEqual({ agent: 'verifier', after: ['fixer'] })
+    expect(DEFAULT_TRACKS.plan?.order).toEqual([])
   })
 
-  it('orders the build track exactly on its two real dependencies', () => {
+  it('orders the build track exactly on its three real dependencies', () => {
     expect(DEFAULT_TRACKS.build?.order).toEqual([
       { agent: 'builder', after: ['ui-designer'] },
+      { agent: 'verifier', after: ['builder'] },
       { agent: 'ui-critic', after: ['verifier'] },
     ])
+  })
+
+  it("places builder strictly before verifier in the build track's UI-cycle waves", () => {
+    // The defect this test exists to keep fixed: `mjloop_roster_set` used to
+    // return waves that put `verifier` and `ui-designer` together and
+    // `ui-critic` alongside `builder`, which contradicted SKILL.md step 4's
+    // own instruction to dispatch a wave's agents in parallel — a compliant
+    // leader could log `verifier` before `builder` had written a line.
+    const track = DEFAULT_TRACKS.build!
+    // `docs` closes the track rather than joining a cycle, so it is not in
+    // `available` and needs no exclusion here.
+    const selected = [...track.required, ...track.available]
+    const waves = dispatchWaves(track, selected)
+
+    const waveOf = (agent: string): number => waves.findIndex((wave) => wave.includes(agent))
+    expect(waveOf('ui-designer')).toBeGreaterThanOrEqual(0)
+    expect(waveOf('builder')).toBeGreaterThan(waveOf('ui-designer'))
+    expect(waveOf('verifier')).toBeGreaterThan(waveOf('builder'))
+    expect(waveOf('ui-critic')).toBeGreaterThan(waveOf('verifier'))
   })
 
   it('spells closing out on every track, not only the one that uses it', () => {

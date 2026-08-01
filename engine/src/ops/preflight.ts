@@ -55,12 +55,13 @@ export interface Preflight {
   dispatches_per_cycle: number
   /**
    * How many sequential layers `dispatchWaves` groups the widest cycle into,
-   * over `track.order` — 1 when the track has no edges, or when every
-   * predecessor an edge names sits outside the widest cycle already computed
-   * above. The shape of a run, not only its size: two tracks with the same
-   * `dispatches_per_cycle` can still take a different number of rounds to
-   * clear, and a person deciding whether to start one should see that before
-   * the first dispatch, not discover it cycle by cycle.
+   * over `track.order` and `track.gate` — 1 only when the track has neither,
+   * or when every predecessor an edge or the gate names sits outside the
+   * widest cycle already computed above. The shape of a run, not only its
+   * size: two tracks with the same `dispatches_per_cycle` can still take a
+   * different number of rounds to clear, and a person deciding whether to
+   * start one should see that before the first dispatch, not discover it
+   * cycle by cycle.
    */
   dispatch_waves: number
   ceiling: { cycles: number; dispatches: number }

@@ -29497,9 +29497,9 @@ var TrackSchema = strictObject({
    * uncomposable (a non-UI cycle on `build` could never satisfy `builder
    * after ui-designer` once `ui-designer` is skipped). The omission itself
    * is on the record either way, just not always in the same place:
-   * `cycleRosterSet` (ops/roster.ts:170-183) demands a reason in `skipped`
+   * `cycleRosterSet` (ops/roster.ts:190-203) demands a reason in `skipped`
    * for an omitted `available` agent *unless* `specialists.<agent>: never`
-   * already forbade drafting it at all (ops/roster.ts:174 exempts exactly
+   * already forbade drafting it at all (ops/roster.ts:194 exempts exactly
    * that case) — and a `never` is itself recorded, in `config.yaml`, not in
    * `roster.json`. Either way the omission is explained somewhere, which is
    * what makes the vacuous reading safe. `dispatchWaves` below applies this
@@ -29857,9 +29857,10 @@ function permittedAgents(config2, track) {
 function dispatchWaves(track, selected) {
   const chosen = [...new Set(selected)];
   const isChosen = new Set(chosen);
+  const gateEdges = track.gate === void 0 ? [] : track.gate.blocks.map((agent) => ({ agent, after: [track.gate.proven_by] }));
   const remaining = /* @__PURE__ */ new Map();
   for (const agent of chosen) remaining.set(agent, /* @__PURE__ */ new Set());
-  for (const edge of track.order) {
+  for (const edge of [...track.order, ...gateEdges]) {
     if (!isChosen.has(edge.agent)) continue;
     for (const pred of edge.after) {
       if (!isChosen.has(pred)) continue;
@@ -29887,7 +29888,17 @@ var DEFAULT_TRACKS = {
   // declare no edges. `Track` is the output type, in which a `.default()`ed
   // field is required — the same reason `available: []` has always been
   // written here.
-  edit: { required: ["editor", "verifier"], available: [], closing: [], order: [], max_cycles: 1 },
+  // `verifier` runs after every agent that touches code — on `edit` that is
+  // `editor`, its only codemate — so this edge is the two-agent case of the
+  // same rule `build` and `fix` both state below: nothing checks work that
+  // has not been written yet.
+  edit: {
+    required: ["editor", "verifier"],
+    available: [],
+    closing: [],
+    order: [{ agent: "verifier", after: ["editor"] }],
+    max_cycles: 1
+  },
   // max_cycles is a ceiling, not a target: with the stagnation guard in place
   // a stuck run halts well before reaching it.
   build: {
@@ -29899,15 +29910,23 @@ var DEFAULT_TRACKS = {
     // in cycle 2 describes code cycle 4 replaces, and the alternative under the
     // old rule was four cycles of boilerplate skip reasons.
     closing: ["docs"],
-    // The build track's two real orderings, as data rather than as prose in
+    // The build track's three real orderings, as data rather than as prose in
     // `skills/mjloop-leader/SKILL.md`: `ui-designer` writes the contract
-    // `builder` codes against, and `ui-critic` judges the change `verifier`
-    // has already passed — a check with nothing to check until the code
-    // exists. Both are vacuous when their predecessor is skipped (the
-    // `order` field's own comment above states why), so a non-UI cycle that
-    // drafts neither `ui-designer` nor `ui-critic` is unaffected.
+    // `builder` codes against; `verifier` runs after `builder` because it is a
+    // check with nothing to check until the code exists (the same reason
+    // `fix` orders it after `fixer` and `edit` orders it after `editor`); and
+    // `ui-critic` judges the change `verifier` has already passed. The second
+    // edge also makes the first transitive — `ui-critic` wants to see
+    // `builder`'s code too, and `builder after ui-designer` plus `ui-critic
+    // after verifier` plus `verifier after builder` already chains
+    // `ui-designer -> builder -> verifier -> ui-critic` without a fourth
+    // edge naming `ui-designer` and `ui-critic` directly. All three are
+    // vacuous when their predecessor is skipped (the `order` field's own
+    // comment above states why), so a non-UI cycle that drafts neither
+    // `ui-designer` nor `ui-critic` is unaffected.
     order: [
       { agent: "builder", after: ["ui-designer"] },
+      { agent: "verifier", after: ["builder"] },
       { agent: "ui-critic", after: ["verifier"] }
     ],
     max_cycles: 5,
@@ -29919,7 +29938,12 @@ var DEFAULT_TRACKS = {
     required: ["reproducer", "fixer", "verifier"],
     available: ["investigator", "hypothesis-tester", "critic", "security"],
     closing: [],
-    order: [],
+    // `verifier` runs after `fixer` for the reason every track's `order`
+    // states once: nothing to verify until the fix is written. `reproducer`
+    // before `fixer` needs no edge here — the track's own `gate` below
+    // already enforces it, and `dispatchWaves` folds a gate into the same
+    // dependency graph `order`'s edges build (see its own comment).
+    order: [{ agent: "verifier", after: ["fixer"] }],
     max_cycles: 5,
     gate: { proven_by: "reproducer", blocks: ["fixer"] }
   },
@@ -33695,11 +33719,18 @@ async function findOrderViolation(cycleDir, track, agent) {
   for (const edge of edges) {
     for (const predecessor of edge.after) {
       if (!selected.has(predecessor)) continue;
-      const exists4 = await fs15.access(path16.join(cycleDir, `${predecessor}.json`)).then(() => true).catch(() => false);
-      if (!exists4) return predecessor;
+      if (!await predecessorLogged(cycleDir, predecessor)) return predecessor;
     }
   }
   return null;
+}
+async function predecessorLogged(cycleDir, predecessor) {
+  const entries = await fs15.readdir(cycleDir).catch(() => []);
+  return entries.some((name) => {
+    if (!name.endsWith(".json")) return false;
+    const basename = name.slice(0, -".json".length);
+    return basename === predecessor || basename.startsWith(`${predecessor}--`);
+  });
 }
 function refuseContradicted(projectDir, workDir, agent, result, ledger, provenBy) {
   if (result.status !== "pass" || provenBy === agent) return;

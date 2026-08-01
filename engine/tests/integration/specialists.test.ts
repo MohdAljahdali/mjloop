@@ -59,9 +59,40 @@ describe('a UI cycle', () => {
       selected: ['builder', 'verifier', 'ui-designer', 'ui-critic'],
       skipped: ALL_SKIPPED,
     })
-    // `ui-critic` is ordered after `verifier` on the build track — there is
-    // nothing to judge until the change exists and passes — so `runLog`
-    // refuses `ui-critic`'s result until `verifier`'s is on disk.
+    // `builder` is ordered after `ui-designer`, `verifier` after `builder`,
+    // and `ui-critic` after `verifier` — there is no contract for `builder`
+    // to code against, nothing to check, and nothing to judge until each
+    // predecessor's result is on disk, so `runLog` refuses out of this order.
+    await runLog(
+      project.dir,
+      {
+        agent: 'ui-designer',
+        result: {
+          status: 'pass',
+          summary: 'Drafted the Send button contract.',
+          evidence: [{ kind: 'file', ref: '.mjloop/design-system.md', excerpt: 'Send button: primary, --color-accent' }],
+          findings: [],
+          files_touched: [],
+          next_hint: null,
+        },
+      },
+      clock,
+    )
+    await runLog(
+      project.dir,
+      {
+        agent: 'builder',
+        result: {
+          status: 'pass',
+          summary: 'Added the Send button.',
+          evidence: [{ kind: 'file', ref: 'src/SendButton.tsx', excerpt: 'export function SendButton' }],
+          findings: [],
+          files_touched: ['src/SendButton.tsx'],
+          next_hint: null,
+        },
+      },
+      clock,
+    )
     await runLog(
       project.dir,
       {

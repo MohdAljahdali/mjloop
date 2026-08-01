@@ -606,14 +606,34 @@ async function findOrderViolation(cycleDir: string, track: Track, agent: string)
   for (const edge of edges) {
     for (const predecessor of edge.after) {
       if (!selected.has(predecessor)) continue // vacuous: predecessor was not drafted this cycle
-      const exists = await fs
-        .access(path.join(cycleDir, `${predecessor}.json`))
-        .then(() => true)
-        .catch(() => false)
-      if (!exists) return predecessor
+      if (!(await predecessorLogged(cycleDir, predecessor))) return predecessor
     }
   }
   return null
+}
+
+/**
+ * Whether `predecessor` has a logged result anywhere in `cycleDir`, honouring
+ * an instanced result the same way the rest of the engine already reads a
+ * cycle directory. `runLog`'s own writer (above, the `basename` built from
+ * `agent.data` and an optional `instance`) files an instanced result as
+ * `<agent>--<instance>.json`, and `ops/run.ts`'s `readAgentReports` resolves
+ * the agent from a basename by splitting on the first `--` for exactly that
+ * reason (`ops/run.ts:915-917`: "an agent name may not contain `--`, so the
+ * first split is the agent"). An exact `${predecessor}.json` match alone
+ * would deadlock any order edge whose predecessor only ever logs under an
+ * instance — reachable today on the shipped `fix` track, whose leader skill
+ * (`skills/mjloop-leader/SKILL.md:193-196`) fans `hypothesis-tester` out
+ * N-wide, each with a distinct `instance`, and never logs it under its bare
+ * name.
+ */
+async function predecessorLogged(cycleDir: string, predecessor: string): Promise<boolean> {
+  const entries = await fs.readdir(cycleDir).catch(() => [] as string[])
+  return entries.some((name) => {
+    if (!name.endsWith('.json')) return false
+    const basename = name.slice(0, -'.json'.length)
+    return basename === predecessor || basename.startsWith(`${predecessor}--`)
+  })
 }
 
 /* ── the ledger, read rather than written ─────────────────────────────────── */

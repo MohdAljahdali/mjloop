@@ -56,6 +56,23 @@ describe('a story-driven build', () => {
         critic: 'single-file change',
       },
     })
+    // `verifier` is ordered after `builder` on the build track — nothing to
+    // check until the code exists.
+    await runLog(
+      project.dir,
+      {
+        agent: 'builder',
+        result: {
+          status: 'pass',
+          summary: 'Login form now shows an error on bad input.',
+          evidence: [{ kind: 'file', ref: 'src/LoginForm.tsx', excerpt: 'setError(...)' }],
+          findings: [],
+          files_touched: ['src/LoginForm.tsx'],
+          next_hint: null,
+        },
+      },
+      clock,
+    )
     await runLog(
       project.dir,
       {

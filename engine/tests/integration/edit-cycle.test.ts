@@ -99,6 +99,23 @@ describe('a full edit cycle', () => {
     await initLoop(project.dir, clock)
     await runStart(project.dir, { track: 'edit', goal: 'Rename the submit label to Send' }, clock)
     await rosterSet(project.dir, { cycle: 1, selected: ['editor', 'verifier'], skipped: {} })
+    // `verifier` is ordered after `editor` on the edit track — nothing to
+    // check until the rename exists.
+    await runLog(
+      project.dir,
+      {
+        agent: 'editor',
+        result: {
+          status: 'pass',
+          summary: 'Renamed the label.',
+          evidence: [{ kind: 'file', ref: 'src/button.js', excerpt: "return 'Send'" }],
+          findings: [],
+          files_touched: ['src/button.js'],
+          next_hint: null,
+        },
+      },
+      clock,
+    )
     await runLog(
       project.dir,
       {

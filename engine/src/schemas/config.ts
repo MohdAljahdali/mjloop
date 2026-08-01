@@ -37,7 +37,7 @@ export const MapSchema = z.strictObject({
  * dispatched — and `runLog` will refuse its result — until every name in
  * `after` has a logged result for that same cycle. The agent stays in the
  * roster; ordering constrains when it runs, not whether it is composed
- * (`ops/roster.ts:116-120` forbids dropping a required agent from the roster
+ * (`ops/roster.ts:136-140` forbids dropping a required agent from the roster
  * at all, and this field does not change that).
  *
  * A set of edges rather than a position in an array, because the two
@@ -103,9 +103,9 @@ export const TrackSchema = z
      * uncomposable (a non-UI cycle on `build` could never satisfy `builder
      * after ui-designer` once `ui-designer` is skipped). The omission itself
      * is on the record either way, just not always in the same place:
-     * `cycleRosterSet` (ops/roster.ts:170-183) demands a reason in `skipped`
+     * `cycleRosterSet` (ops/roster.ts:190-203) demands a reason in `skipped`
      * for an omitted `available` agent *unless* `specialists.<agent>: never`
-     * already forbade drafting it at all (ops/roster.ts:174 exempts exactly
+     * already forbade drafting it at all (ops/roster.ts:194 exempts exactly
      * that case) — and a `never` is itself recorded, in `config.yaml`, not in
      * `roster.json`. Either way the omission is explained somewhere, which is
      * what makes the vacuous reading safe. `dispatchWaves` below applies this
@@ -717,33 +717,54 @@ export function permittedAgents(config: Config, track: Track): Set<string> {
  * The topological layers a selection implies: which of `selected`'s agents
  * may dispatch together, in the order those groups must follow one another.
  *
- * Pure and stateless — it reads only `track.order` and `selected` — so
- * `ops/roster.ts` can call it from `cycleRosterSet` once a roster is already
- * validated, without this module knowing anything about rosters, cycles or
- * the filesystem.
+ * Pure and stateless — it reads only `track.order`, `track.gate` and
+ * `selected` — so `ops/roster.ts` can call it from `cycleRosterSet` once a
+ * roster is already validated, without this module knowing anything about
+ * rosters, cycles or the filesystem.
+ *
+ * A gate is folded in as an edge, `blocks after proven_by` for every name in
+ * `blocks`, the same way `TrackSchema.superRefine`'s cycle check above folds
+ * it in beside `track.order` (`gateEdges`, near `findOrderCycle`'s call site)
+ * — it is the same ordering constraint the engine already enforces, just
+ * through `GateClosedError` instead of `OrderViolationError`, and a wave that
+ * put a gate's prover and one of its blocked agents together would be a wave
+ * `mjloop_run_log` refuses to accept both results from in the order emitted:
+ * on the `fix` track, `dispatchWaves` was returning
+ * `[[reproducer, fixer, verifier]]` for a roster whose gate blocks `fixer`
+ * until `reproducer`'s result is logged, one wave the engine cannot honour.
  *
  * Applies the vacuous-edge rule `TrackSchema.order`'s comment states: an edge
  * whose predecessor is not in `selected` is dropped before layering, because
  * `cycleRosterSet` already demands a stated reason for that omission
  * elsewhere in the same roster. An edge whose *successor* is not in
  * `selected` needs no separate drop — that agent never appears in `chosen`
- * for the layering loop below to place.
+ * for the layering loop below to place. The same reading applies to a folded
+ * gate edge: a gate whose `proven_by` was not drafted this cycle cannot be
+ * waited on either, though `cycleRosterSet` cannot actually produce that
+ * roster today — `pinnedAgents` puts a gate's `proven_by` in every roster's
+ * required set.
  *
  * A selection drawn from a track `TrackSchema.superRefine` accepted can never
  * cycle here: that check already refuses a cycle over the track's full,
- * known agent set, and restricting to a subset of edges (dropping vacuous
- * ones) can only remove constraints, never add one. The `RangeError` below is
- * reachable only from a `Track` built by hand rather than parsed — a test
- * fixture, most likely — and exists so such a mistake fails loudly here
- * instead of silently dropping agents from every wave.
+ * known agent set *with the same gate folded in*, and restricting to a subset
+ * of edges (dropping vacuous ones) can only remove constraints, never add
+ * one. The `RangeError` below is reachable only from a `Track` built by hand
+ * rather than parsed — a test fixture, most likely — and exists so such a
+ * mistake fails loudly here instead of silently dropping agents from every
+ * wave.
  */
 export function dispatchWaves(track: Track, selected: readonly string[]): string[][] {
   const chosen = [...new Set(selected)]
   const isChosen = new Set(chosen)
 
+  const gateEdges =
+    track.gate === undefined
+      ? []
+      : track.gate.blocks.map((agent) => ({ agent, after: [track.gate!.proven_by] }))
+
   const remaining = new Map<string, Set<string>>()
   for (const agent of chosen) remaining.set(agent, new Set())
-  for (const edge of track.order) {
+  for (const edge of [...track.order, ...gateEdges]) {
     if (!isChosen.has(edge.agent)) continue
     for (const pred of edge.after) {
       if (!isChosen.has(pred)) continue // vacuous: predecessor was not drafted
@@ -778,7 +799,17 @@ export const DEFAULT_TRACKS: Record<string, Track> = {
   // declare no edges. `Track` is the output type, in which a `.default()`ed
   // field is required — the same reason `available: []` has always been
   // written here.
-  edit: { required: ['editor', 'verifier'], available: [], closing: [], order: [], max_cycles: 1 },
+  // `verifier` runs after every agent that touches code — on `edit` that is
+  // `editor`, its only codemate — so this edge is the two-agent case of the
+  // same rule `build` and `fix` both state below: nothing checks work that
+  // has not been written yet.
+  edit: {
+    required: ['editor', 'verifier'],
+    available: [],
+    closing: [],
+    order: [{ agent: 'verifier', after: ['editor'] }],
+    max_cycles: 1,
+  },
   // max_cycles is a ceiling, not a target: with the stagnation guard in place
   // a stuck run halts well before reaching it.
   build: {
@@ -790,15 +821,23 @@ export const DEFAULT_TRACKS: Record<string, Track> = {
     // in cycle 2 describes code cycle 4 replaces, and the alternative under the
     // old rule was four cycles of boilerplate skip reasons.
     closing: ['docs'],
-    // The build track's two real orderings, as data rather than as prose in
+    // The build track's three real orderings, as data rather than as prose in
     // `skills/mjloop-leader/SKILL.md`: `ui-designer` writes the contract
-    // `builder` codes against, and `ui-critic` judges the change `verifier`
-    // has already passed — a check with nothing to check until the code
-    // exists. Both are vacuous when their predecessor is skipped (the
-    // `order` field's own comment above states why), so a non-UI cycle that
-    // drafts neither `ui-designer` nor `ui-critic` is unaffected.
+    // `builder` codes against; `verifier` runs after `builder` because it is a
+    // check with nothing to check until the code exists (the same reason
+    // `fix` orders it after `fixer` and `edit` orders it after `editor`); and
+    // `ui-critic` judges the change `verifier` has already passed. The second
+    // edge also makes the first transitive — `ui-critic` wants to see
+    // `builder`'s code too, and `builder after ui-designer` plus `ui-critic
+    // after verifier` plus `verifier after builder` already chains
+    // `ui-designer -> builder -> verifier -> ui-critic` without a fourth
+    // edge naming `ui-designer` and `ui-critic` directly. All three are
+    // vacuous when their predecessor is skipped (the `order` field's own
+    // comment above states why), so a non-UI cycle that drafts neither
+    // `ui-designer` nor `ui-critic` is unaffected.
     order: [
       { agent: 'builder', after: ['ui-designer'] },
+      { agent: 'verifier', after: ['builder'] },
       { agent: 'ui-critic', after: ['verifier'] },
     ],
     max_cycles: 5,
@@ -810,7 +849,12 @@ export const DEFAULT_TRACKS: Record<string, Track> = {
     required: ['reproducer', 'fixer', 'verifier'],
     available: ['investigator', 'hypothesis-tester', 'critic', 'security'],
     closing: [],
-    order: [],
+    // `verifier` runs after `fixer` for the reason every track's `order`
+    // states once: nothing to verify until the fix is written. `reproducer`
+    // before `fixer` needs no edge here — the track's own `gate` below
+    // already enforces it, and `dispatchWaves` folds a gate into the same
+    // dependency graph `order`'s edges build (see its own comment).
+    order: [{ agent: 'verifier', after: ['fixer'] }],
     max_cycles: 5,
     gate: { proven_by: 'reproducer', blocks: ['fixer'] },
   },
