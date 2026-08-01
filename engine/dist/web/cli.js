@@ -16411,6 +16411,10 @@ var MapSchema = strictObject({
   /** Whose passing result becomes the run's map. */
   drafted_by: string2().min(1)
 });
+var OrderEdgeSchema = strictObject({
+  agent: string2().min(1),
+  after: array(string2().min(1)).min(1)
+});
 var TrackSchema = strictObject({
   /** Agents the leader may never drop from a cycle. */
   required: array(string2().min(1)).min(1),
@@ -16430,7 +16434,34 @@ var TrackSchema = strictObject({
   /** Optional precondition. A track without one behaves as it always has. */
   gate: GateSchema.optional(),
   /** Optional. A track that hands a map forward names who drafts it. */
-  map: MapSchema.optional()
+  map: MapSchema.optional(),
+  /**
+   * The track's ordering graph. Defaulted `[]` for the same reason
+   * `closing`'s comment gives: an existing `config.yaml` gains `order: []`
+   * on read and behaves exactly as it did before this field existed, and
+   * every literal in `DEFAULT_TRACKS` must spell the key out because `Track`
+   * is the output type.
+   *
+   * This travels through the door `ConfigChangeSchema`'s `track` variant
+   * already opens — `value: TrackSchema.nullable()` in
+   * `store/config-mutation.ts` — so a config that sets `order` writes and
+   * reads through the existing `kind: 'track'` change, with no new write
+   * kind and no wire change.
+   *
+   * **The vacuous-edge rule.** An edge is vacuous — satisfied, not
+   * violated — when its predecessor was never drafted into `selected` for
+   * that cycle. The alternative, hard-failing whenever a predecessor is
+   * skipped, would make every cycle that omits an optional predecessor
+   * uncomposable (a non-UI cycle on `build` could never satisfy `builder
+   * after ui-designer` once `ui-designer` is skipped). The omission itself
+   * is already the record `roster` demands: `cycleRosterSet` (ops/roster.ts)
+   * refuses a roster that omits an `available` agent with no reason in
+   * `skipped`, so a predecessor missing from `selected` always carries a
+   * stated reason somewhere in the same file. `dispatchWaves` below applies
+   * this rule; do not "fix" it into an unconditional edge, or every track
+   * that orders around an optional agent becomes unusable without it.
+   */
+  order: array(OrderEdgeSchema).default([])
 }).superRefine((track, ctx) => {
   const known = /* @__PURE__ */ new Set([...track.required, ...track.available, ...track.closing]);
   const remedy = `add it to required, available or closing first (this track has: ${[...known].join(", ")})`;
@@ -16444,31 +16475,121 @@ var TrackSchema = strictObject({
       });
     }
   }
-  if (track.gate === void 0) return;
-  if (!known.has(track.gate.proven_by)) {
-    ctx.addIssue({
-      code: "custom",
-      path: ["gate", "proven_by"],
-      message: `"${track.gate.proven_by}" is not in this track \u2014 a gate proven by an agent the leader can never draft would shut the track permanently, and silently. Check the spelling, or ${remedy}`
-    });
-  }
-  for (const [index, agent] of track.gate.blocks.entries()) {
-    if (!known.has(agent)) {
+  if (track.gate !== void 0) {
+    if (!known.has(track.gate.proven_by)) {
       ctx.addIssue({
         code: "custom",
-        path: ["gate", "blocks", index],
-        message: `"${agent}" is not in this track \u2014 blocking an agent it never runs has no effect. Check the spelling, or ${remedy}`
+        path: ["gate", "proven_by"],
+        message: `"${track.gate.proven_by}" is not in this track \u2014 a gate proven by an agent the leader can never draft would shut the track permanently, and silently. Check the spelling, or ${remedy}`
+      });
+    }
+    for (const [index, agent] of track.gate.blocks.entries()) {
+      if (!known.has(agent)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["gate", "blocks", index],
+          message: `"${agent}" is not in this track \u2014 blocking an agent it never runs has no effect. Check the spelling, or ${remedy}`
+        });
+      }
+    }
+    if (track.gate.blocks.includes(track.gate.proven_by)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["gate", "blocks"],
+        message: `"${track.gate.proven_by}" proves this gate and cannot also be blocked by it \u2014 the result that would open the gate could never be logged. Drop it from blocks`
       });
     }
   }
-  if (track.gate.blocks.includes(track.gate.proven_by)) {
+  for (const [index, edge] of track.order.entries()) {
+    if (!known.has(edge.agent)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["order", index, "agent"],
+        message: `"${edge.agent}" is not in this track \u2014 an order edge can only name an agent this track runs. Check the spelling, or ${remedy}`
+      });
+    } else if (track.closing.includes(edge.agent)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["order", index, "agent"],
+        message: `"${edge.agent}" closes this track \u2014 it runs once, after the run passes, never inside a cycle \u2014 so an order edge naming it could never be met`
+      });
+    }
+    for (const [afterIndex, pred] of edge.after.entries()) {
+      if (!known.has(pred)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["order", index, "after", afterIndex],
+          message: `"${pred}" is not in this track \u2014 an order edge can only wait on an agent this track runs. Check the spelling, or ${remedy}`
+        });
+      } else if (track.closing.includes(pred)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["order", index, "after", afterIndex],
+          message: `"${pred}" closes this track \u2014 it runs once, after the run passes, never inside a cycle \u2014 so an order edge waiting on it could never be met`
+        });
+      }
+    }
+    if (track.gate !== void 0 && edge.agent === track.gate.proven_by && edge.after.some((pred) => track.gate?.blocks.includes(pred))) {
+      const inverted = edge.after.filter((pred) => track.gate?.blocks.includes(pred));
+      ctx.addIssue({
+        code: "custom",
+        path: ["order", index],
+        message: `"${edge.agent}" cannot be ordered after ${inverted.join(", ")} \u2014 this track's gate already makes "${edge.agent}"'s pass the precondition ${inverted.join(", ")} wait on, so this edge demands the opposite order and would deadlock the track permanently and silently. Drop this edge, or change the gate`
+      });
+    }
+  }
+  const cycle = findOrderCycle(track.order);
+  if (cycle !== null) {
     ctx.addIssue({
       code: "custom",
-      path: ["gate", "blocks"],
-      message: `"${track.gate.proven_by}" proves this gate and cannot also be blocked by it \u2014 the result that would open the gate could never be logged. Drop it from blocks`
+      path: ["order"],
+      message: `order has a cycle: ${cycle.join(" -> ")} \u2014 every agent on it would wait on the others forever`
     });
   }
 });
+function findOrderCycle(order) {
+  const successors = /* @__PURE__ */ new Map();
+  const nodes = /* @__PURE__ */ new Set();
+  for (const edge of order) {
+    nodes.add(edge.agent);
+    for (const pred of edge.after) {
+      nodes.add(pred);
+      const list = successors.get(pred) ?? [];
+      list.push(edge.agent);
+      successors.set(pred, list);
+    }
+  }
+  const WHITE = 0;
+  const GRAY = 1;
+  const BLACK = 2;
+  const color = /* @__PURE__ */ new Map();
+  const path24 = [];
+  function visit(node) {
+    color.set(node, GRAY);
+    path24.push(node);
+    for (const next of successors.get(node) ?? []) {
+      const state = color.get(next) ?? WHITE;
+      if (state === GRAY) {
+        const start = path24.indexOf(next);
+        return [...path24.slice(start), next];
+      }
+      if (state === WHITE) {
+        const found = visit(next);
+        if (found !== null) return found;
+      }
+    }
+    color.set(node, BLACK);
+    path24.pop();
+    return null;
+  }
+  for (const node of nodes) {
+    if ((color.get(node) ?? WHITE) === WHITE) {
+      const found = visit(node);
+      if (found !== null) return found;
+    }
+  }
+  return null;
+}
 var VerifySchema = strictObject({
   test: string2().min(1).nullable().default(null),
   lint: string2().min(1).nullable().default(null),

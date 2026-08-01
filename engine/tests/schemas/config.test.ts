@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import * as z from 'zod'
-import { ConfigSchema, DEFAULT_TRACKS, defaultConfig, permittedAgents, pinnedAgents } from '../../src/schemas/config.js'
+import {
+  ConfigSchema,
+  DEFAULT_TRACKS,
+  defaultConfig,
+  dispatchWaves,
+  permittedAgents,
+  pinnedAgents,
+} from '../../src/schemas/config.js'
 
 const VERIFY = { test: 'npm test', lint: 'npm run lint', build: null }
 
@@ -42,7 +49,13 @@ describe('defaultConfig', () => {
 
 describe('DEFAULT_TRACKS', () => {
   it('makes editor and verifier required for edit, capped at one cycle', () => {
-    expect(DEFAULT_TRACKS.edit).toEqual({ required: ['editor', 'verifier'], available: [], closing: [], max_cycles: 1 })
+    expect(DEFAULT_TRACKS.edit).toEqual({
+      required: ['editor', 'verifier'],
+      available: [],
+      closing: [],
+      order: [],
+      max_cycles: 1,
+    })
   })
 
   it('makes builder and verifier required for build, with scout and critic available', () => {
@@ -50,6 +63,7 @@ describe('DEFAULT_TRACKS', () => {
       required: ['builder', 'verifier'],
       available: ['scout', 'critic', 'ui-designer', 'ui-critic', 'security', 'perf'],
       closing: ['docs'],
+      order: [],
       max_cycles: 5,
       map: { drafted_by: 'scout' },
     })
@@ -60,6 +74,7 @@ describe('DEFAULT_TRACKS', () => {
       required: ['reproducer', 'fixer', 'verifier'],
       available: ['investigator', 'hypothesis-tester', 'critic', 'security'],
       closing: [],
+      order: [],
       max_cycles: 5,
       gate: { proven_by: 'reproducer', blocks: ['fixer'] },
     })
@@ -70,9 +85,16 @@ describe('DEFAULT_TRACKS', () => {
       required: ['planner', 'fit-checker', 'story-writer'],
       available: ['plan-critic', 'story-critic'],
       closing: [],
+      order: [],
       max_cycles: 6,
       gate: { proven_by: 'fit-checker', blocks: ['story-writer'] },
     })
+  })
+
+  it('ships every default track with no ordering edges — C2 is where the leader prose becomes data', () => {
+    for (const [name, track] of Object.entries(DEFAULT_TRACKS)) {
+      expect(track.order, name).toEqual([])
+    }
   })
 
   it('spells closing out on every track, not only the one that uses it', () => {
@@ -157,6 +179,7 @@ describe('ConfigSchema', () => {
     expect((parsed as unknown as Record<string, unknown>).custom_dirs).toBeUndefined()
     expect(parsed.tracks.edit?.available).toEqual([])
     expect(parsed.tracks.edit?.closing).toEqual([])
+    expect(parsed.tracks.edit?.order).toEqual([])
   })
 
   it('gives a document that names no verify block the whole default policy', () => {
@@ -515,6 +538,245 @@ describe('ConfigSchema', () => {
   })
 })
 
+describe('order', () => {
+  it('defaults to no edges', () => {
+    const parsed = ConfigSchema.parse({
+      version: 1,
+      tracks: { edit: { required: ['editor'], max_cycles: 1 } },
+    })
+    expect(parsed.tracks.edit?.order).toEqual([])
+  })
+
+  it('accepts the leader\'s two real orderings, both cross-set', () => {
+    // skills/mjloop-leader/SKILL.md ~124-126: "ui-designer runs before
+    // builder" (available before required) and "ui-critic runs after
+    // verifier" (required before available). Neither is a position in one
+    // array — this is the shape C2 will move that prose into.
+    const good = {
+      version: 1,
+      tracks: {
+        build: {
+          required: ['builder', 'verifier'],
+          available: ['ui-designer', 'ui-critic'],
+          max_cycles: 5,
+          order: [
+            { agent: 'builder', after: ['ui-designer'] },
+            { agent: 'ui-critic', after: ['verifier'] },
+          ],
+        },
+      },
+    }
+    const parsed = ConfigSchema.safeParse(good)
+    expect(parsed.success).toBe(true)
+    if (parsed.success) {
+      expect(parsed.data.tracks.build?.order).toEqual([
+        { agent: 'builder', after: ['ui-designer'] },
+        { agent: 'ui-critic', after: ['verifier'] },
+      ])
+    }
+  })
+
+  it('rejects an edge naming an unknown agent', () => {
+    const bad = {
+      version: 1,
+      tracks: {
+        mine: { required: ['builder'], max_cycles: 3, order: [{ agent: 'ghost', after: ['builder'] }] },
+      },
+    }
+    const parsed = ConfigSchema.safeParse(bad)
+    expect(parsed.success).toBe(false)
+    if (!parsed.success) {
+      expect(parsed.error.issues[0]?.path).toEqual(['tracks', 'mine', 'order', 0, 'agent'])
+      expect(z.prettifyError(parsed.error)).toContain('ghost')
+    }
+  })
+
+  it('rejects an edge waiting on an unknown agent', () => {
+    const bad = {
+      version: 1,
+      tracks: {
+        mine: { required: ['builder'], max_cycles: 3, order: [{ agent: 'builder', after: ['ghost'] }] },
+      },
+    }
+    const parsed = ConfigSchema.safeParse(bad)
+    expect(parsed.success).toBe(false)
+    if (!parsed.success) {
+      expect(parsed.error.issues[0]?.path).toEqual(['tracks', 'mine', 'order', 0, 'after', 0])
+      expect(z.prettifyError(parsed.error)).toContain('ghost')
+    }
+  })
+
+  it('rejects an edge naming a closing agent as the ordered agent', () => {
+    // A closing agent runs once, outside every cycle — an edge naming it
+    // could never be met inside a cycle roster.
+    const bad = {
+      version: 1,
+      tracks: {
+        mine: {
+          required: ['builder'],
+          closing: ['docs'],
+          max_cycles: 3,
+          order: [{ agent: 'docs', after: ['builder'] }],
+        },
+      },
+    }
+    const parsed = ConfigSchema.safeParse(bad)
+    expect(parsed.success).toBe(false)
+    if (!parsed.success) {
+      const message = z.prettifyError(parsed.error)
+      expect(message).toContain('docs')
+      expect(message).toContain('closes this track')
+    }
+  })
+
+  it('rejects an edge waiting on a closing agent', () => {
+    const bad = {
+      version: 1,
+      tracks: {
+        mine: {
+          required: ['builder'],
+          closing: ['docs'],
+          max_cycles: 3,
+          order: [{ agent: 'builder', after: ['docs'] }],
+        },
+      },
+    }
+    const parsed = ConfigSchema.safeParse(bad)
+    expect(parsed.success).toBe(false)
+    if (!parsed.success) {
+      const message = z.prettifyError(parsed.error)
+      expect(message).toContain('docs')
+      expect(message).toContain('closes this track')
+    }
+  })
+
+  it('rejects a two-node cycle', () => {
+    const bad = {
+      version: 1,
+      tracks: {
+        mine: {
+          required: ['a', 'b'],
+          max_cycles: 3,
+          order: [
+            { agent: 'a', after: ['b'] },
+            { agent: 'b', after: ['a'] },
+          ],
+        },
+      },
+    }
+    const parsed = ConfigSchema.safeParse(bad)
+    expect(parsed.success).toBe(false)
+    if (!parsed.success) expect(z.prettifyError(parsed.error)).toContain('cycle')
+  })
+
+  it('rejects a longer cycle', () => {
+    const bad = {
+      version: 1,
+      tracks: {
+        mine: {
+          required: ['a', 'b', 'c'],
+          max_cycles: 3,
+          order: [
+            { agent: 'a', after: ['b'] },
+            { agent: 'b', after: ['c'] },
+            { agent: 'c', after: ['a'] },
+          ],
+        },
+      },
+    }
+    const parsed = ConfigSchema.safeParse(bad)
+    expect(parsed.success).toBe(false)
+    if (!parsed.success) expect(z.prettifyError(parsed.error)).toContain('cycle')
+  })
+
+  it('rejects a self-loop', () => {
+    const bad = {
+      version: 1,
+      tracks: { mine: { required: ['a'], max_cycles: 3, order: [{ agent: 'a', after: ['a'] }] } },
+    }
+    const parsed = ConfigSchema.safeParse(bad)
+    expect(parsed.success).toBe(false)
+    if (!parsed.success) expect(z.prettifyError(parsed.error)).toContain('cycle')
+  })
+
+  it('rejects an edge that inverts the track\'s own gate', () => {
+    // gate: reproducer proves, fixer is blocked until it does — so reproducer
+    // must run before fixer. An edge saying the opposite is a permanent,
+    // silent deadlock of exactly the family the gate exists to guard.
+    const bad = {
+      version: 1,
+      tracks: {
+        fix: {
+          required: ['reproducer', 'fixer'],
+          max_cycles: 3,
+          gate: { proven_by: 'reproducer', blocks: ['fixer'] },
+          order: [{ agent: 'reproducer', after: ['fixer'] }],
+        },
+      },
+    }
+    const parsed = ConfigSchema.safeParse(bad)
+    expect(parsed.success).toBe(false)
+    if (!parsed.success) {
+      const message = z.prettifyError(parsed.error)
+      expect(message).toContain('reproducer')
+      expect(message).toContain('deadlock')
+    }
+  })
+
+  it('accepts an edge that only restates the gate\'s own order', () => {
+    // fixer after reproducer is redundant with the gate, not opposed to it —
+    // this must stay legal so a project can state its ordering explicitly
+    // even where a gate already implies it.
+    const good = {
+      version: 1,
+      tracks: {
+        fix: {
+          required: ['reproducer', 'fixer'],
+          max_cycles: 3,
+          gate: { proven_by: 'reproducer', blocks: ['fixer'] },
+          order: [{ agent: 'fixer', after: ['reproducer'] }],
+        },
+      },
+    }
+    expect(ConfigSchema.safeParse(good).success).toBe(true)
+  })
+
+  it('rejects an edge with no after entries', () => {
+    const bad = {
+      version: 1,
+      tracks: { mine: { required: ['a', 'b'], max_cycles: 3, order: [{ agent: 'a', after: [] }] } },
+    }
+    expect(ConfigSchema.safeParse(bad).success).toBe(false)
+  })
+
+  it('rejects an unknown key on an edge', () => {
+    const bad = {
+      version: 1,
+      tracks: {
+        mine: { required: ['a', 'b'], max_cycles: 3, order: [{ agent: 'a', after: ['b'], before: ['c'] }] },
+      },
+    }
+    expect(ConfigSchema.safeParse(bad).success).toBe(false)
+  })
+
+  it('travels through the existing track write kind with no wire change', async () => {
+    // The claim C1 ships under: ConfigChangeSchema's `track` variant is
+    // already `TrackSchema.nullable()` (store/config-mutation.ts), so `order`
+    // needs no new ConfigChange variant. Proven by constructing one and
+    // parsing it through the schema that already exists.
+    const { ConfigChangeSchema } = await import('../../src/store/config-mutation.js')
+    const { TrackSchema } = await import('../../src/schemas/config.js')
+    const value = TrackSchema.parse({
+      required: ['builder', 'verifier'],
+      max_cycles: 3,
+      order: [{ agent: 'builder', after: ['verifier'] }],
+    })
+    const change = ConfigChangeSchema.parse({ kind: 'track', track: 'mine', value })
+    expect(change.kind).toBe('track')
+    if (change.kind === 'track') expect(change.value?.order).toEqual([{ agent: 'builder', after: ['verifier'] }])
+  })
+})
+
 describe('orchestration', () => {
   it('gives a document that names no orchestration block the whole defaulted tree', () => {
     // The compatibility rule this feature ships under: an already-provisioned
@@ -734,5 +996,103 @@ describe('permittedAgents', () => {
     // and `runLog` throws UnknownAgentError for it — the run's documentation
     // step failing at the very last step of the run.
     expect([...permittedAgents(config, config.tracks.mine!)].sort()).toEqual(['builder', 'critic', 'scribe', 'security'])
+  })
+})
+
+describe('dispatchWaves', () => {
+  it('puts every selected agent in one wave when the track has no edges', () => {
+    const track = ConfigSchema.parse({
+      version: 1,
+      tracks: { mine: { required: ['builder', 'verifier'], max_cycles: 3 } },
+    }).tracks.mine!
+    expect(dispatchWaves(track, ['builder', 'verifier'])).toEqual([['builder', 'verifier']])
+  })
+
+  it('splits a cross-set edge into two waves, predecessor first', () => {
+    // The leader's own example: ui-designer (available) before builder
+    // (required).
+    const track = ConfigSchema.parse({
+      version: 1,
+      tracks: {
+        build: {
+          required: ['builder', 'verifier'],
+          available: ['ui-designer'],
+          max_cycles: 5,
+          order: [{ agent: 'builder', after: ['ui-designer'] }],
+        },
+      },
+    }).tracks.build!
+    expect(dispatchWaves(track, ['builder', 'verifier', 'ui-designer'])).toEqual([
+      ['verifier', 'ui-designer'],
+      ['builder'],
+    ])
+  })
+
+  it('treats an edge as vacuous when its predecessor was not selected', () => {
+    // The subtlety the schema comment states: ui-critic after verifier must
+    // not brick a cycle that skipped verifier — verifier is `required` on
+    // `build` so this is hypothetical, but the rule is track-agnostic.
+    const track = ConfigSchema.parse({
+      version: 1,
+      tracks: {
+        mine: {
+          required: ['builder'],
+          available: ['ui-critic', 'verifier'],
+          max_cycles: 5,
+          order: [{ agent: 'ui-critic', after: ['verifier'] }],
+        },
+      },
+    }).tracks.mine!
+    // verifier is not in `selected` — the edge is satisfied by the omission,
+    // not violated by it, so ui-critic dispatches in the first wave.
+    expect(dispatchWaves(track, ['builder', 'ui-critic'])).toEqual([['builder', 'ui-critic']])
+  })
+
+  it('waits for every predecessor, not just one', () => {
+    const track = ConfigSchema.parse({
+      version: 1,
+      tracks: {
+        mine: {
+          required: ['a', 'b', 'c'],
+          max_cycles: 3,
+          order: [{ agent: 'c', after: ['a', 'b'] }],
+        },
+      },
+    }).tracks.mine!
+    expect(dispatchWaves(track, ['a', 'b', 'c'])).toEqual([['a', 'b'], ['c']])
+  })
+
+  it('layers a chain into as many waves as it has links', () => {
+    const track = ConfigSchema.parse({
+      version: 1,
+      tracks: {
+        mine: {
+          required: ['a', 'b', 'c'],
+          max_cycles: 3,
+          order: [
+            { agent: 'b', after: ['a'] },
+            { agent: 'c', after: ['b'] },
+          ],
+        },
+      },
+    }).tracks.mine!
+    expect(dispatchWaves(track, ['a', 'b', 'c'])).toEqual([['a'], ['b'], ['c']])
+  })
+
+  it('throws rather than silently dropping agents from a cycle among a hand-built track', () => {
+    // Unreachable through ConfigSchema.parse — TrackSchema.superRefine already
+    // refuses this graph — so this constructs the shape directly to prove the
+    // defensive throw is not dead code.
+    const track = {
+      required: ['a', 'b'],
+      available: [],
+      closing: [],
+      max_cycles: 3,
+      order: [
+        { agent: 'a', after: ['b'] },
+        { agent: 'b', after: ['a'] },
+      ],
+    }
+    expect(() => dispatchWaves(track, ['a', 'b'])).toThrow(RangeError)
   })
 })

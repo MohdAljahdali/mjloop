@@ -1738,6 +1738,12 @@ describe('config', () => {
           required: ['builder'],
           available: [],
           closing: [],
+          // C1 (engine/src/schemas/config.ts): TrackSchema's new `order` field
+          // defaults to `[]` and, since `Track` is the output type, appears on
+          // every parsed track — including this test's `baseline`, which the
+          // form is seeded from and diffed against. Nothing in the browser
+          // changed to produce this key; the schema it parses through did.
+          order: [],
           max_cycles: 7,
         },
       },

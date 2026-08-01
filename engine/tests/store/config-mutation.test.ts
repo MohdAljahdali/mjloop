@@ -77,6 +77,57 @@ describe('mutateConfig', () => {
     expect(await raw()).toBe(before)
   })
 
+  it('writes a track\'s order edges through the existing track kind — no new write kind', async () => {
+    // C1's claim: ConfigChangeSchema's `track` variant is already
+    // `TrackSchema.nullable()`, so `order` needed no schema change here at
+    // all. Proven against the real CAS write path, not just a parse.
+    const before = await raw()
+    const config = defaultConfig({ test: 'npm test', lint: 'npm run lint', build: null })
+    const build = config.tracks.build as Config['tracks'][string]
+
+    const { revision } = await mutateConfig(project.dir, {
+      revision: configRevision(before),
+      changes: [
+        {
+          kind: 'track',
+          track: 'build',
+          value: { ...build, order: [{ agent: 'builder', after: ['scout'] }] },
+        },
+      ],
+    })
+
+    const written = await raw()
+    expect(written).toContain('order:')
+    expect(written).toContain('agent: builder')
+    expect(written).toContain('scout')
+    expect(revision).toBe(configRevision(written))
+  })
+
+  it('rejects a track order edge that inverts its own gate, through the write path', async () => {
+    // ConfigChangeSchema's `track` variant is `TrackSchema.nullable()`, so
+    // this is refused by `mutateConfig`'s own `ConfigPatchSchema.parse` before
+    // the file is even opened — a step earlier than a rule enforced only by
+    // the post-apply `ConfigSchema.safeParse` (the `'invalid'`
+    // ConfigMutationError the test above exercises).
+    const before = await raw()
+    const config = defaultConfig({ test: 'npm test', lint: 'npm run lint', build: null })
+    const fix = config.tracks.fix as Config['tracks'][string]
+
+    await expect(
+      mutateConfig(project.dir, {
+        revision: configRevision(before),
+        changes: [
+          {
+            kind: 'track',
+            track: 'fix',
+            value: { ...fix, order: [{ agent: 'reproducer', after: ['fixer'] }] },
+          },
+        ],
+      }),
+    ).rejects.toThrow(/deadlock/)
+    expect(await raw()).toBe(before)
+  })
+
   it('serialises two writers so only one use of a revision can land', async () => {
     const before = await raw()
     const revision = configRevision(before)

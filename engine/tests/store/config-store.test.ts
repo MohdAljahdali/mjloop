@@ -63,6 +63,27 @@ describe('writeConfig / loadConfig', () => {
     await fs.writeFile(paths.config, 'version: 1\ntracks: {}\nmystery: true\n', 'utf8')
     await expect(loadConfig(project.dir)).rejects.toThrow(/mystery/)
   })
+
+  it('loads a config.yaml written before the order field existed', async () => {
+    // initLoop never rewrites a config it finds, and this is the YAML shape
+    // writeConfig produced before TrackSchema gained `order`: no `order:` key
+    // anywhere. The compatibility rule C1 ships under is that this document
+    // keeps parsing and behaves exactly as it did before the field existed.
+    const paths = resolveLoopPaths(project.dir)
+    await fs.mkdir(paths.root, { recursive: true })
+    await fs.writeFile(
+      paths.config,
+      'version: 1\ntracks:\n  edit:\n    required: [editor, verifier]\n    max_cycles: 1\n' +
+        '  build:\n    required: [builder, verifier]\n    available: [scout]\n    max_cycles: 5\n',
+      'utf8',
+    )
+
+    const loaded = await loadConfig(project.dir)
+    expect(loaded.tracks.edit?.order).toEqual([])
+    expect(loaded.tracks.edit?.required).toEqual(['editor', 'verifier'])
+    expect(loaded.tracks.build?.order).toEqual([])
+    expect(loaded.tracks.build?.available).toEqual(['scout'])
+  })
 })
 
 describe('legacy keys', () => {

@@ -32,6 +32,23 @@ export const MapSchema = z.strictObject({
   drafted_by: z.string().min(1),
 })
 
+/**
+ * One directed edge in a track's ordering graph: `agent` may not be composed
+ * into a cycle's roster until every name in `after` has a logged result for
+ * that same cycle.
+ *
+ * A set of edges rather than a position in an array, because the two
+ * orderings this schema exists to express are both cross-set —
+ * `ui-designer` (available) before `builder` (required), and `verifier`
+ * (required) before `ui-critic` (available), today stated only in prose at
+ * `skills/mjloop-leader/SKILL.md` around lines 124-126 — and neither is
+ * expressible as a position in `required` or `available` alone.
+ */
+export const OrderEdgeSchema = z.strictObject({
+  agent: z.string().min(1),
+  after: z.array(z.string().min(1)).min(1),
+})
+
 export const TrackSchema = z
   .strictObject({
     /** Agents the leader may never drop from a cycle. */
@@ -53,6 +70,33 @@ export const TrackSchema = z
     gate: GateSchema.optional(),
     /** Optional. A track that hands a map forward names who drafts it. */
     map: MapSchema.optional(),
+    /**
+     * The track's ordering graph. Defaulted `[]` for the same reason
+     * `closing`'s comment gives: an existing `config.yaml` gains `order: []`
+     * on read and behaves exactly as it did before this field existed, and
+     * every literal in `DEFAULT_TRACKS` must spell the key out because `Track`
+     * is the output type.
+     *
+     * This travels through the door `ConfigChangeSchema`'s `track` variant
+     * already opens — `value: TrackSchema.nullable()` in
+     * `store/config-mutation.ts` — so a config that sets `order` writes and
+     * reads through the existing `kind: 'track'` change, with no new write
+     * kind and no wire change.
+     *
+     * **The vacuous-edge rule.** An edge is vacuous — satisfied, not
+     * violated — when its predecessor was never drafted into `selected` for
+     * that cycle. The alternative, hard-failing whenever a predecessor is
+     * skipped, would make every cycle that omits an optional predecessor
+     * uncomposable (a non-UI cycle on `build` could never satisfy `builder
+     * after ui-designer` once `ui-designer` is skipped). The omission itself
+     * is already the record `roster` demands: `cycleRosterSet` (ops/roster.ts)
+     * refuses a roster that omits an `available` agent with no reason in
+     * `skipped`, so a predecessor missing from `selected` always carries a
+     * stated reason somewhere in the same file. `dispatchWaves` below applies
+     * this rule; do not "fix" it into an unconditional edge, or every track
+     * that orders around an optional agent becomes unusable without it.
+     */
+    order: z.array(OrderEdgeSchema).default([]),
   })
   .superRefine((track, ctx) => {
     // `closing` counts as known. A gate naming a closing agent is naming an
@@ -83,35 +127,158 @@ export const TrackSchema = z
       }
     }
 
-    if (track.gate === undefined) return
-
-    if (!known.has(track.gate.proven_by)) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['gate', 'proven_by'],
-        message: `"${track.gate.proven_by}" is not in this track — a gate proven by an agent the leader can never draft would shut the track permanently, and silently. Check the spelling, or ${remedy}`,
-      })
-    }
-    for (const [index, agent] of track.gate.blocks.entries()) {
-      if (!known.has(agent)) {
+    // Order validation runs whether or not this track has a gate — it needs
+    // `known` and (for the last check) `track.gate`, but must not be skipped
+    // by the early exit a gate-less track used to take here, so the gate
+    // checks below are now a guarded block rather than a `return`.
+    if (track.gate !== undefined) {
+      if (!known.has(track.gate.proven_by)) {
         ctx.addIssue({
           code: 'custom',
-          path: ['gate', 'blocks', index],
-          message: `"${agent}" is not in this track — blocking an agent it never runs has no effect. Check the spelling, or ${remedy}`,
+          path: ['gate', 'proven_by'],
+          message: `"${track.gate.proven_by}" is not in this track — a gate proven by an agent the leader can never draft would shut the track permanently, and silently. Check the spelling, or ${remedy}`,
+        })
+      }
+      for (const [index, agent] of track.gate.blocks.entries()) {
+        if (!known.has(agent)) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['gate', 'blocks', index],
+            message: `"${agent}" is not in this track — blocking an agent it never runs has no effect. Check the spelling, or ${remedy}`,
+          })
+        }
+      }
+      // A gate that blocks its own prover is the same permanent, silent
+      // shutdown the checks above exist to prevent: the one result that
+      // would open it is the one it refuses.
+      if (track.gate.blocks.includes(track.gate.proven_by)) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['gate', 'blocks'],
+          message: `"${track.gate.proven_by}" proves this gate and cannot also be blocked by it — the result that would open the gate could never be logged. Drop it from blocks`,
         })
       }
     }
-    // A gate that blocks its own prover is the same permanent, silent shutdown
-    // the checks above exist to prevent: the one result that would open it is
-    // the one it refuses.
-    if (track.gate.blocks.includes(track.gate.proven_by)) {
+
+    // `order` refuses only graphs nothing could ever satisfy, whatever gets
+    // selected later — unknown agents, an edge a closing agent's one-shot
+    // timing could never meet, a cycle, or an edge that inverts the track's
+    // own gate. The vacuous-edge rule (an edge is satisfied when its
+    // predecessor is not drafted) is deliberately not enforced here: it is a
+    // per-selection rule `dispatchWaves` applies, not a property of the graph
+    // itself.
+    for (const [index, edge] of track.order.entries()) {
+      if (!known.has(edge.agent)) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['order', index, 'agent'],
+          message: `"${edge.agent}" is not in this track — an order edge can only name an agent this track runs. Check the spelling, or ${remedy}`,
+        })
+      } else if (track.closing.includes(edge.agent)) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['order', index, 'agent'],
+          message: `"${edge.agent}" closes this track — it runs once, after the run passes, never inside a cycle — so an order edge naming it could never be met`,
+        })
+      }
+      for (const [afterIndex, pred] of edge.after.entries()) {
+        if (!known.has(pred)) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['order', index, 'after', afterIndex],
+            message: `"${pred}" is not in this track — an order edge can only wait on an agent this track runs. Check the spelling, or ${remedy}`,
+          })
+        } else if (track.closing.includes(pred)) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['order', index, 'after', afterIndex],
+            message: `"${pred}" closes this track — it runs once, after the run passes, never inside a cycle — so an order edge waiting on it could never be met`,
+          })
+        }
+      }
+      // The family the gate checks above exist to prevent, arriving through a
+      // second field: a gate already makes `proven_by`'s pass the
+      // precondition every name in `blocks` waits on, so an edge that makes
+      // `proven_by` itself wait on one of them demands the opposite order —
+      // a permanent, silent deadlock, not merely a redundant edge.
+      if (
+        track.gate !== undefined &&
+        edge.agent === track.gate.proven_by &&
+        edge.after.some((pred) => track.gate?.blocks.includes(pred))
+      ) {
+        const inverted = edge.after.filter((pred) => track.gate?.blocks.includes(pred))
+        ctx.addIssue({
+          code: 'custom',
+          path: ['order', index],
+          message: `"${edge.agent}" cannot be ordered after ${inverted.join(', ')} — this track's gate already makes "${edge.agent}"'s pass the precondition ${inverted.join(', ')} wait on, so this edge demands the opposite order and would deadlock the track permanently and silently. Drop this edge, or change the gate`,
+        })
+      }
+    }
+
+    const cycle = findOrderCycle(track.order)
+    if (cycle !== null) {
       ctx.addIssue({
         code: 'custom',
-        path: ['gate', 'blocks'],
-        message: `"${track.gate.proven_by}" proves this gate and cannot also be blocked by it — the result that would open the gate could never be logged. Drop it from blocks`,
+        path: ['order'],
+        message: `order has a cycle: ${cycle.join(' -> ')} — every agent on it would wait on the others forever`,
       })
     }
   })
+
+/**
+ * The first cycle `order`'s edges describe, as the path that closes it, or
+ * `null` if the graph is acyclic.
+ *
+ * Classic three-colour DFS: a `after`-edge from `pred` to `edge.agent` means
+ * "`edge.agent` depends on `pred`", so the adjacency walked here runs
+ * predecessor -> successor, the same direction `dispatchWaves` below walks it.
+ */
+function findOrderCycle(order: readonly z.infer<typeof OrderEdgeSchema>[]): string[] | null {
+  const successors = new Map<string, string[]>()
+  const nodes = new Set<string>()
+  for (const edge of order) {
+    nodes.add(edge.agent)
+    for (const pred of edge.after) {
+      nodes.add(pred)
+      const list = successors.get(pred) ?? []
+      list.push(edge.agent)
+      successors.set(pred, list)
+    }
+  }
+
+  const WHITE = 0
+  const GRAY = 1
+  const BLACK = 2
+  const color = new Map<string, number>()
+  const path: string[] = []
+
+  function visit(node: string): string[] | null {
+    color.set(node, GRAY)
+    path.push(node)
+    for (const next of successors.get(node) ?? []) {
+      const state = color.get(next) ?? WHITE
+      if (state === GRAY) {
+        const start = path.indexOf(next)
+        return [...path.slice(start), next]
+      }
+      if (state === WHITE) {
+        const found = visit(next)
+        if (found !== null) return found
+      }
+    }
+    color.set(node, BLACK)
+    path.pop()
+    return null
+  }
+
+  for (const node of nodes) {
+    if ((color.get(node) ?? WHITE) === WHITE) {
+      const found = visit(node)
+      if (found !== null) return found
+    }
+  }
+  return null
+}
 
 /**
  * What the engine executes to verify a project, and the policy around it.
@@ -440,6 +607,7 @@ export type Orchestration = z.infer<typeof OrchestrationSchema>
 export type Gate = z.infer<typeof GateSchema>
 /** Not `Map`: that name is the global the engine uses everywhere else. */
 export type TrackMap = z.infer<typeof MapSchema>
+export type OrderEdge = z.infer<typeof OrderEdgeSchema>
 export type Track = z.infer<typeof TrackSchema>
 /**
  * The verify block as a *caller supplies* it, not as the engine reads it.
@@ -516,14 +684,71 @@ export function permittedAgents(config: Config, track: Track): Set<string> {
 }
 
 /**
+ * The topological layers a selection implies: which of `selected`'s agents
+ * may dispatch together, in the order those groups must follow one another.
+ *
+ * Pure and stateless — it reads only `track.order` and `selected` — so
+ * `ops/roster.ts` can call it from `cycleRosterSet` once a roster is already
+ * validated, without this module knowing anything about rosters, cycles or
+ * the filesystem.
+ *
+ * Applies the vacuous-edge rule `TrackSchema.order`'s comment states: an edge
+ * whose predecessor is not in `selected` is dropped before layering, because
+ * `cycleRosterSet` already demands a stated reason for that omission
+ * elsewhere in the same roster. An edge whose *successor* is not in
+ * `selected` needs no separate drop — that agent never appears in `chosen`
+ * for the layering loop below to place.
+ *
+ * A selection drawn from a track `TrackSchema.superRefine` accepted can never
+ * cycle here: that check already refuses a cycle over the track's full,
+ * known agent set, and restricting to a subset of edges (dropping vacuous
+ * ones) can only remove constraints, never add one. The `RangeError` below is
+ * reachable only from a `Track` built by hand rather than parsed — a test
+ * fixture, most likely — and exists so such a mistake fails loudly here
+ * instead of silently dropping agents from every wave.
+ */
+export function dispatchWaves(track: Track, selected: readonly string[]): string[][] {
+  const chosen = [...new Set(selected)]
+  const isChosen = new Set(chosen)
+
+  const remaining = new Map<string, Set<string>>()
+  for (const agent of chosen) remaining.set(agent, new Set())
+  for (const edge of track.order) {
+    if (!isChosen.has(edge.agent)) continue
+    for (const pred of edge.after) {
+      if (!isChosen.has(pred)) continue // vacuous: predecessor was not drafted
+      remaining.get(edge.agent)?.add(pred)
+    }
+  }
+
+  const waves: string[][] = []
+  const done = new Set<string>()
+  let pending = chosen
+  while (pending.length > 0) {
+    const wave = pending.filter((agent) => [...(remaining.get(agent) ?? [])].every((dep) => done.has(dep)))
+    if (wave.length === 0) {
+      throw new RangeError(
+        `dispatchWaves: no agent among [${pending.join(', ')}] has every dependency satisfied — ` +
+          'this track has a cycle among the selected agents, which TrackSchema.superRefine should have refused at parse',
+      )
+    }
+    for (const agent of wave) done.add(agent)
+    waves.push(wave)
+    pending = pending.filter((agent) => !done.has(agent))
+  }
+  return waves
+}
+
+/**
  * Tracks shipped in milestone 1. Further tracks are appended by their own
  * milestones; a track is data, so adding one touches no code.
  */
 export const DEFAULT_TRACKS: Record<string, Track> = {
-  // Every literal spells `closing` out, including the three that declare none.
-  // `Track` is the output type, in which a `.default()`ed field is required —
-  // the same reason `available: []` has always been written here.
-  edit: { required: ['editor', 'verifier'], available: [], closing: [], max_cycles: 1 },
+  // Every literal spells `closing` and `order` out, including the four that
+  // declare no edges. `Track` is the output type, in which a `.default()`ed
+  // field is required — the same reason `available: []` has always been
+  // written here.
+  edit: { required: ['editor', 'verifier'], available: [], closing: [], order: [], max_cycles: 1 },
   // max_cycles is a ceiling, not a target: with the stagnation guard in place
   // a stuck run halts well before reaching it.
   build: {
@@ -535,6 +760,14 @@ export const DEFAULT_TRACKS: Record<string, Track> = {
     // in cycle 2 describes code cycle 4 replaces, and the alternative under the
     // old rule was four cycles of boilerplate skip reasons.
     closing: ['docs'],
+    // The build track's two real orderings — `ui-designer` before `builder`,
+    // `verifier` before `ui-critic` — stay prose in `skills/mjloop-leader/
+    // SKILL.md` until C2, which is where this milestone table (Milestone C,
+    // `docs/superpowers/specs/2026-08-01-plans-stories-split-design.md`)
+    // assigns moving them into edges and deleting the prose. Landing them
+    // here a phase early would leave `SKILL.md` and `config.yaml` disagreeing
+    // about which one is authoritative for a phase's length.
+    order: [],
     max_cycles: 5,
     // The only track with ground worth handing forward: `edit` is one cycle,
     // `fix` has a reproduction, and `plan` produces a document.
@@ -544,6 +777,7 @@ export const DEFAULT_TRACKS: Record<string, Track> = {
     required: ['reproducer', 'fixer', 'verifier'],
     available: ['investigator', 'hypothesis-tester', 'critic', 'security'],
     closing: [],
+    order: [],
     max_cycles: 5,
     gate: { proven_by: 'reproducer', blocks: ['fixer'] },
   },
@@ -551,6 +785,7 @@ export const DEFAULT_TRACKS: Record<string, Track> = {
     required: ['planner', 'fit-checker', 'story-writer'],
     available: ['plan-critic', 'story-critic'],
     closing: [],
+    order: [],
     max_cycles: 6,
     // An evidence gate: whether a plan fits the project that exists is a fact,
     // and fit-checker demonstrates it. The approval gate is a different kind
