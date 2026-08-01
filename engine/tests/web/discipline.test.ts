@@ -220,10 +220,24 @@ describe('the invariants a stylesheet edit could undo', () => {
     // `.panel-grid` without this is an `auto` track, and an `auto` track's
     // automatic minimum is its content's min-content size — a non-wrapping row
     // inside it (`.worktabs`, `flex: 0 0 auto` tabs) then sets the *track*
-    // wide enough to hold every tab unclipped, which widens `.panel-main`,
-    // `.panel-stories` and `main` right along with it. Measured in Chrome at
-    // 720px wide: the track sized itself to 733px inside a 673px panel.
+    // wide enough to hold every tab unclipped, which widens `.panel-main` (the
+    // grid item in the track) to match. `main` itself does not widen — it only
+    // sets `overflow-y: auto` (10-layout.css:85), so it overflows and scrolls
+    // sideways instead, inside `#panel-stories` and every other panel. Measured
+    // in Chrome at 720px wide: the track sized itself to 733px inside a 673px
+    // panel.
     expect(read('css/60-panels.css')).toMatch(/\.panel-grid\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/)
+    // `.top`'s `auto` brand track has the identical failure mode: its automatic
+    // *minimum* is `.project`'s full untruncated path (`white-space: nowrap`
+    // makes its min-content size equal its max-content size), and even once
+    // that minimum is clamped to 0 the track is still *maximized* to that same
+    // unbounded max-content size before `.rail`'s `1fr` track gets anything —
+    // confirmed live in Chrome: an 82-char path at 900px starved `.rail` to
+    // 2.625px and overflowed the page by 33px with only the minmax(0, ...)
+    // clamps in place. Only capping `.project`'s own max-width stops the
+    // `auto` track from growing unbounded in the first place.
+    expect(read('css/20-rail.css')).toMatch(/\.top\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*auto\)\s*minmax\(0,\s*1fr\)/)
+    expect(read('css/20-rail.css')).toMatch(/\.project\s*\{[^}]*max-width:\s*40ch/)
   })
 
   it('never lets a pane mode un-clip the terminal', () => {

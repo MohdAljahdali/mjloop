@@ -90,7 +90,12 @@
 @media (min-width: 900px) {
   .top {
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
+    /* `minmax(0, auto)`, not a bare `auto`: an `auto` track's automatic
+       *minimum* is content-based (same class of bug `css/60-panels.css`'s
+       `.panel-grid` comment documents), so this alone stops the track from
+       refusing to shrink. It is not sufficient by itself, though — see the
+       `.project` rule below for the other half. */
+    grid-template-columns: minmax(0, auto) minmax(0, 1fr);
     grid-template-areas:
       "brand rail"
       "banners banners";
@@ -99,6 +104,11 @@
 
   .brand {
     grid-area: brand;
+    /* `.brand` is itself a flex container, and a grid item's own automatic
+       minimum size defaults to its content's min-content contribution when
+       its overflow is visible (it is, here) — independently of the track
+       minimum above. */
+    min-width: 0;
   }
 
   .rail {
@@ -116,6 +126,27 @@
      stretching across whatever is left of the bar. */
   .rail-detail {
     flex: 0 1 auto;
+  }
+
+  /* The clamps above stop the `auto` track from refusing to shrink, but they
+     do not stop it from *growing*: per the grid sizing algorithm, a track
+     whose max sizing function is `auto` is maximized to its content's
+     max-content size before an `fr` sibling gets anything left over, so an
+     unbounded `.project` still starves `.rail`. Confirmed directly in Chrome
+     on the built page — with only the two rules above (no cap here), an
+     82-char path at 900px still resolved
+     `getComputedStyle('.top').gridTemplateColumns` to `897.375px 2.625px`,
+     unchanged from the unfixed page. `.project`'s `white-space: nowrap`
+     (10-layout.css:61) makes its min-content size equal its max-content
+     size, so there is no wrap point to bound that contribution — only an
+     explicit cap does. `.facts`'s `86ch` (60-panels.css) is too wide for
+     this narrower track: measured live, the rail is squeezed to its own
+     36px (`padding: 6px 18px`, 20-rail.css:71) inline-padding floor by
+     84ch and the page overflows again by 86ch. `40ch`
+     leaves `.rail` a working ~330px at the 900px breakpoint's own floor with
+     an 82-char path (measured), growing with the viewport above that. */
+  .project {
+    max-width: 40ch;
   }
 }
 
