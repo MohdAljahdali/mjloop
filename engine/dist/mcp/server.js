@@ -29497,9 +29497,9 @@ var TrackSchema = strictObject({
    * uncomposable (a non-UI cycle on `build` could never satisfy `builder
    * after ui-designer` once `ui-designer` is skipped). The omission itself
    * is on the record either way, just not always in the same place:
-   * `cycleRosterSet` (ops/roster.ts:190-203) demands a reason in `skipped`
+   * `rosterViolations` (ops/roster.ts:260-276) demands a reason in `skipped`
    * for an omitted `available` agent *unless* `specialists.<agent>: never`
-   * already forbade drafting it at all (ops/roster.ts:194 exempts exactly
+   * already forbade drafting it at all (ops/roster.ts:266 exempts exactly
    * that case) — and a `never` is itself recorded, in `config.yaml`, not in
    * `roster.json`. Either way the omission is explained somewhere, which is
    * what makes the vacuous reading safe. `dispatchWaves` below applies this

@@ -37,7 +37,7 @@ export const MapSchema = z.strictObject({
  * dispatched — and `runLog` will refuse its result — until every name in
  * `after` has a logged result for that same cycle. The agent stays in the
  * roster; ordering constrains when it runs, not whether it is composed
- * (`ops/roster.ts:136-140` forbids dropping a required agent from the roster
+ * (`ops/roster.ts:207-211` forbids dropping a required agent from the roster
  * at all, and this field does not change that).
  *
  * A set of edges rather than a position in an array, because the two
@@ -103,9 +103,9 @@ export const TrackSchema = z
      * uncomposable (a non-UI cycle on `build` could never satisfy `builder
      * after ui-designer` once `ui-designer` is skipped). The omission itself
      * is on the record either way, just not always in the same place:
-     * `cycleRosterSet` (ops/roster.ts:190-203) demands a reason in `skipped`
+     * `rosterViolations` (ops/roster.ts:260-276) demands a reason in `skipped`
      * for an omitted `available` agent *unless* `specialists.<agent>: never`
-     * already forbade drafting it at all (ops/roster.ts:194 exempts exactly
+     * already forbade drafting it at all (ops/roster.ts:266 exempts exactly
      * that case) — and a `never` is itself recorded, in `config.yaml`, not in
      * `roster.json`. Either way the omission is explained somewhere, which is
      * what makes the vacuous reading safe. `dispatchWaves` below applies this

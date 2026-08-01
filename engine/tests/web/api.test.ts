@@ -442,6 +442,25 @@ describe('handleApi', () => {
       expect(result?.body).toEqual({ error: { code: 'error.notFound' } })
     })
 
+    it('answers 400 for a track id that is not shaped like one, same as the sibling preflight route', async () => {
+      expect((await call('/api/roster/not a track/valid'))?.status).toBe(400)
+    })
+
+    it('answers 404 rather than 500 for a project with no config at all', async () => {
+      const bare = await makeTmpProject()
+      try {
+        const result = await handleApi(
+          bare.dir,
+          'GET',
+          `/api/roster/edit/valid?roster=${encodeURIComponent(JSON.stringify({ selected: [], skipped: {} }))}`,
+        )
+        expect(result?.status).toBe(404)
+        expect(result?.body).toEqual({ error: { code: 'error.notFound' } })
+      } finally {
+        await bare.cleanup()
+      }
+    })
+
     it('answers 400 for malformed JSON in the query, rather than 500ing', async () => {
       expect((await call('/api/roster/edit/valid?roster=%7Bnot-json'))?.status).toBe(400)
     })

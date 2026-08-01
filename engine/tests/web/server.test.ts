@@ -73,6 +73,19 @@ describe('http', () => {
     expect(await second.text()).toBe('')
   })
 
+  it('carries the roster query through to the api route', async () => {
+    // The one route whose answer needs more than its path
+    // (`handleRequest`'s own comment on `url.pathname + url.search` explains
+    // why): `api.test.ts` calls `handleApi` directly and can synthesise the
+    // query itself, which cannot catch `server.ts` dropping `url.search`
+    // before it gets there. This is that seam, over a real socket.
+    const candidate = { selected: ['editor', 'verifier'], skipped: {} }
+    const url = `${base()}/api/roster/edit/valid?t=${server.token}&roster=${encodeURIComponent(JSON.stringify(candidate))}`
+    const response = await fetch(url)
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ valid: true, violations: [] })
+  })
+
   it('serves the locale dictionaries', async () => {
     const response = await fetch(`${base()}/locales/ar.json?t=${server.token}`)
     expect(response.status).toBe(200)
