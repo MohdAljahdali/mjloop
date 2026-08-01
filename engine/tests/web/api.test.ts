@@ -391,6 +391,74 @@ describe('handleApi', () => {
     expect((await call('/api/preflight/edit', 'DELETE'))?.status).toBe(405)
   })
 
+  describe('the roster dry-run door', () => {
+    const roster = (candidate: unknown, method = 'GET') =>
+      call(`/api/roster/edit/valid?roster=${encodeURIComponent(JSON.stringify(candidate))}`, method)
+
+    it('reports a composition cycleRosterSet would accept, and no violations', async () => {
+      // `edit`'s default track (`DEFAULT_TRACKS.edit`) is `required: ['editor',
+      // 'verifier'], available: []`, so both required names and nothing to
+      // explain is the whole story.
+      const result = await roster({ selected: ['editor', 'verifier'], skipped: {} })
+      expect(result?.status).toBe(200)
+      expect(result?.body).toEqual({ valid: true, violations: [] })
+    })
+
+    it('reports a composition it would refuse, with the code and no prose', async () => {
+      const result = await roster({ selected: ['editor'], skipped: {} })
+      expect(result?.status).toBe(200)
+      const body = result?.body as { valid: boolean; violations: { code: string; params?: object }[] }
+      expect(body.valid).toBe(false)
+      expect(body.violations).toContainEqual({ code: 'roster.required', params: { agent: 'verifier', track: 'edit' } })
+      // No sentence anywhere in the payload — every value on the wire is a
+      // code or one of that code's named params, never a rendered word.
+      expect(JSON.stringify(body)).not.toMatch(/required by track|cannot be dropped/)
+    })
+
+    it('defaults to an empty composition when the query is omitted, rather than 400ing', async () => {
+      const result = await call('/api/roster/edit/valid')
+      expect(result?.status).toBe(200)
+      const body = result?.body as { valid: boolean; violations: unknown[] }
+      expect(body.valid).toBe(false)
+      expect(body.violations.length).toBeGreaterThan(0)
+    })
+
+    it('performs no write for a composition it refuses — it only answers', async () => {
+      // The confirmation the phase brief asks for, restated as a test: `rosterSet`
+      // — the only function that could persist any of this — is not imported
+      // anywhere this route's module graph reaches; `tests/web/boundary.test.ts`'s
+      // `FORBIDDEN` list is the structural half of that guarantee, and
+      // `tests/web/read.test.ts`'s hash-the-tree test is the behavioural half.
+      const before = await roster({ selected: [], skipped: {} })
+      const after = await roster({ selected: [], skipped: {} })
+      expect(after?.body).toEqual(before?.body)
+    })
+
+    it('answers 404 for a track this project does not define', async () => {
+      const result = await call(
+        `/api/roster/nonsense/valid?roster=${encodeURIComponent(JSON.stringify({ selected: [], skipped: {} }))}`,
+      )
+      expect(result?.status).toBe(404)
+      expect(result?.body).toEqual({ error: { code: 'error.notFound' } })
+    })
+
+    it('answers 400 for malformed JSON in the query, rather than 500ing', async () => {
+      expect((await call('/api/roster/edit/valid?roster=%7Bnot-json'))?.status).toBe(400)
+    })
+
+    it('answers 400 for well-formed JSON that does not fit the candidate shape', async () => {
+      // `strictObject`, like every wire schema `api.ts` parses: an unknown key
+      // is refused rather than silently ignored.
+      expect((await roster({ selected: 'editor', skipped: {} }))?.status).toBe(400)
+      expect((await roster({ selected: [], skipped: {}, cycle: 1 }))?.status).toBe(400)
+    })
+
+    it('answers 404 with no /valid suffix, and 405 for anything but GET', async () => {
+      expect((await call('/api/roster/edit'))?.status).toBe(404)
+      expect((await roster({ selected: [], skipped: {} }, 'POST'))?.status).toBe(405)
+    })
+  })
+
   it('refuses anything that is not a read', async () => {
     for (const method of ['POST', 'PUT', 'DELETE', 'PATCH']) {
       expect((await call('/api/state', method))?.status).toBe(405)
@@ -419,6 +487,8 @@ describe('handleApi', () => {
       '/api/features/F001/../../state.json',
       '/api/transcripts/../../etc',
       '/api/transcripts/..%2F..%2Fconfig.yaml',
+      '/api/roster/../../etc/valid',
+      '/api/roster/..%2F..%2Fconfig.yaml/valid',
       // An un-normalised path, which a browser would never send but a raw
       // socket can: it is still ours to refuse rather than to resolve.
       '/api/../app.js',
@@ -446,6 +516,8 @@ describe('handleApi', () => {
       await call('/api/runs/nope/skills'),
       await call('/api/preflight/nonsense'),
       await call('/api/preflight/not a track'),
+      await call('/api/roster/nonsense/valid'),
+      await call('/api/roster/edit/valid?roster=not json'),
       await call('/api/profile/1'),
       await call('/api/features/nonsense'),
       await call('/api/features/F404'),

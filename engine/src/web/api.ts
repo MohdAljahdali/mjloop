@@ -1,5 +1,6 @@
 import crypto from 'node:crypto'
 import type http from 'node:http'
+import * as z from 'zod'
 import type { WebCode } from './codes.js'
 import { FeatureIdSchema } from '../schemas/feature.js'
 import { PlanIdSchema, StoryIdSchema } from '../schemas/plan.js'
@@ -15,6 +16,7 @@ import {
   readPlanDetail,
   readPreflightEstimate,
   readProfileView,
+  readRosterValidity,
   readRunDetail,
   readRuns,
   readSkillManifest,
@@ -67,6 +69,20 @@ const MEMORY_ID = /^M\d{3}$/
  */
 const JOB_ID = /^\d{8}T\d{6}-\d+$/
 
+/**
+ * The one route on this file whose answer depends on more than its path: a
+ * candidate roster has a `selected` list and a `skipped` map, neither of
+ * which is id-shaped, so there is no path segment to validate it with the way
+ * `PlanIdSchema`/`JOB_ID` above validate everything else. It travels as one
+ * query parameter, `?roster=<json>`, and is parsed with `JSON.parse` — never
+ * `eval`, never a filesystem path built from it — so a malformed value is a
+ * 400 from a string comparison, not a crash or a traversal.
+ */
+const RosterCandidateSchema = z.strictObject({
+  selected: z.array(z.string().min(1)).default([]),
+  skipped: z.record(z.string().min(1), z.string().min(1)).default({}),
+})
+
 export interface ApiResult {
   status: number
   body: unknown
@@ -78,16 +94,31 @@ const fail = (status: number, code: WebCode): ApiResult => ({ status, body: { er
 /**
  * Answer an `/api/...` GET, or return null when the path is not ours.
  *
+ * `pathname` may carry a trailing `?query`, split off with `indexOf('?')`
+ * rather than `new URL()`: the WHATWG URL parser also collapses `..`
+ * segments, which is exactly the un-normalised traversal shape
+ * `tests/web/api.test.ts`'s `'cannot be steered out of .mjloop'` feeds this
+ * function directly (bypassing `server.ts`'s own `new URL()`, on purpose —
+ * that test's whole point is that this function does not lean on a caller
+ * having normalised anything first). A plain `indexOf` touches none of that:
+ * the path half is untouched string, exactly as every route below already
+ * assumed, and only the query half — new with this route — goes through
+ * `URLSearchParams`, which does no path normalisation at all.
+ *
  * @param method so a `POST` is a 405 rather than being served as a read.
  */
 export async function handleApi(projectDir: string, method: string, pathname: string): Promise<ApiResult | null> {
-  if (!pathname.startsWith('/api/') && pathname !== '/api') return null
+  const mark = pathname.indexOf('?')
+  const path = mark === -1 ? pathname : pathname.slice(0, mark)
+  const query = new URLSearchParams(mark === -1 ? '' : pathname.slice(mark + 1))
+
+  if (!path.startsWith('/api/') && path !== '/api') return null
   if (method !== 'GET') return fail(405, 'error.badRequest')
 
-  const segments = pathname.split('/').filter((part) => part.length > 0).slice(1)
+  const segments = path.split('/').filter((part) => part.length > 0).slice(1)
 
   try {
-    return await route(projectDir, segments)
+    return await route(projectDir, segments, query)
   } catch (error) {
     if (error instanceof NotFoundError) return fail(404, 'error.notFound')
     // Everything else is a project on disk in a shape we could not read. The
@@ -98,7 +129,7 @@ export async function handleApi(projectDir: string, method: string, pathname: st
   }
 }
 
-async function route(projectDir: string, segments: readonly string[]): Promise<ApiResult> {
+async function route(projectDir: string, segments: readonly string[], query: URLSearchParams): Promise<ApiResult> {
   const [head, first, second] = segments
 
   switch (head) {
@@ -157,6 +188,33 @@ async function route(projectDir: string, segments: readonly string[]): Promise<A
       // `[A-Za-z0-9_-]`, so `..` cannot match.
       if (!IdSchema.safeParse(first).success) return fail(400, 'error.badRequest')
       return ok(await readPreflightEstimate(projectDir, first))
+
+    case 'roster':
+      // `/api/roster/<track>/valid` — "would this composition be accepted for
+      // this track", read-only. This does NOT give the browser a write it did
+      // not have: `rosterSet` — the only function that could persist a roster
+      // — is not imported anywhere under `src/web/`, `web/writes.ts` never
+      // dispatches to it, and `tests/web/boundary.test.ts`'s `FORBIDDEN` list
+      // names it explicitly. This route answers a question about a track; it
+      // performs nothing.
+      if (segments.length !== 3 || first === undefined || second !== 'valid') break
+      // Same guard as `preflight` above and the same reason: a track name is
+      // an `IdSchema` id everywhere else in the engine.
+      if (!IdSchema.safeParse(first).success) return fail(400, 'error.badRequest')
+      {
+        const raw = query.get('roster')
+        let json: unknown = {}
+        if (raw !== null) {
+          try {
+            json = JSON.parse(raw)
+          } catch {
+            return fail(400, 'error.badRequest')
+          }
+        }
+        const parsed = RosterCandidateSchema.safeParse(json)
+        if (!parsed.success) return fail(400, 'error.badRequest')
+        return ok(await readRosterValidity(projectDir, first, parsed.data))
+      }
 
     case 'profile':
       // No parameter, and none a later story should add: the accepted profile

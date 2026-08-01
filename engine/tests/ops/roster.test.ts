@@ -1,10 +1,11 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { RosterViolationError, RunNotClosedError, rosterSet } from '../../src/ops/roster.js'
+import { RosterViolationError, RunNotClosedError, rosterSet, rosterValidity, rosterViolations } from '../../src/ops/roster.js'
 import { initLoop } from '../../src/ops/init.js'
 import { runLog } from '../../src/ops/log.js'
-import { cycleAdvance, cycleDirPath, runDirPath, runStart } from '../../src/ops/run.js'
+import { cycleAdvance, cycleDirPath, runDirPath, runStart, UnknownTrackError } from '../../src/ops/run.js'
+import { findTrack } from '../../src/schemas/config.js'
 import { RosterSchema } from '../../src/schemas/contract.js'
 import { StateStore } from '../../src/store/state-store.js'
 import { loadConfig, writeConfig } from '../../src/store/config-store.js'
@@ -446,5 +447,132 @@ describe('the closing roster', () => {
     )
     const state = await new StateStore(project.dir).get()
     await expect(fs.readdir(path.join(runDirPath(project.dir, state), 'closing'))).rejects.toThrow(/ENOENT/)
+  })
+})
+
+/** `edit`'s track and config as they stand after the top `beforeEach` above. */
+async function trackFor(name: string): Promise<{ config: Awaited<ReturnType<typeof loadConfig>>; track: ReturnType<typeof findTrack> }> {
+  const config = await loadConfig(project.dir)
+  const track = findTrack(config, name)
+  return { config, track }
+}
+
+describe('rosterViolations — the composition rules, split out as a pure function', () => {
+  it('is callable with no run started at all', async () => {
+    // The property C3 exists for: `cycleRosterSet` above needs `runStart`
+    // first in every other describe block in this file; this one does not.
+    const { config, track } = await trackFor('edit')
+    expect(track).toBeDefined()
+    expect(
+      rosterViolations('edit', track!, config, ['editor', 'verifier'], {
+        scout: 'known files',
+        critic: 'single-file change',
+      }),
+    ).toEqual([])
+  })
+
+  it('codes a missing required agent as roster.required', async () => {
+    const { config, track } = await trackFor('edit')
+    const violations = rosterViolations('edit', track!, config, ['editor'], { scout: 'x', critic: 'y' })
+    expect(violations).toContainEqual({ code: 'roster.required', params: { agent: 'verifier', track: 'edit' } })
+  })
+
+  it('codes an agent in neither required nor available as roster.unknown', async () => {
+    const { config, track } = await trackFor('edit')
+    const violations = rosterViolations('edit', track!, config, ['editor', 'verifier', 'invented'], {
+      scout: 'x',
+      critic: 'y',
+    })
+    expect(violations).toContainEqual({ code: 'roster.unknown', params: { agent: 'invented', track: 'edit' } })
+  })
+
+  it('codes a forced specialist dropped as roster.forced', async () => {
+    // Written and reloaded rather than used in-memory: `config.tracks.edit`
+    // set as a bare literal has no `closing` — `ConfigSchema.parse`, which
+    // `loadConfig` runs on the round trip through disk, is what defaults it.
+    const config = await loadConfig(project.dir)
+    config.tracks.edit = { required: ['editor', 'verifier'], available: ['critic'], max_cycles: 3 }
+    config.specialists = { critic: 'always' }
+    await writeConfig(project.dir, config)
+    const { config: reloaded, track } = await trackFor('edit')
+    expect(reloaded.specialists['critic']).toBe('always')
+    const violations = rosterViolations('edit', track!, reloaded, ['editor', 'verifier'], {})
+    expect(violations).toContainEqual({ code: 'roster.forced', params: { agent: 'critic' } })
+  })
+
+  it('codes a forbidden specialist drafted as roster.forbidden', async () => {
+    const config = await loadConfig(project.dir)
+    config.tracks.edit = { required: ['editor', 'verifier'], available: ['critic'], max_cycles: 3 }
+    config.specialists = { critic: 'never' }
+    await writeConfig(project.dir, config)
+    const { config: reloaded, track } = await trackFor('edit')
+    const violations = rosterViolations('edit', track!, reloaded, ['editor', 'verifier', 'critic'], {})
+    expect(violations).toContainEqual({ code: 'roster.forbidden', params: { agent: 'critic' } })
+  })
+
+  it('codes a closing agent drafted into a working cycle as roster.closing', async () => {
+    const config = await loadConfig(project.dir)
+    config.tracks.edit = { required: ['editor', 'verifier'], available: ['scout'], closing: ['docs'], max_cycles: 3 }
+    const track = findTrack(config, 'edit')!
+    const violations = rosterViolations('edit', track, config, ['editor', 'verifier', 'docs'], {
+      scout: 'known files',
+    })
+    expect(violations).toContainEqual({ code: 'roster.closing', params: { agent: 'docs', track: 'edit' } })
+    // The closing check has to pre-empt the permitted check, or `docs` would
+    // earn a second, contradictory `roster.unknown` too — `permittedAgents`
+    // includes the closing set, so without the `continue` this would fire.
+    expect(violations.filter((v) => v.code === 'roster.unknown')).toEqual([])
+  })
+
+  it('codes a drafted-and-skipped agent as roster.contradiction', async () => {
+    const { config, track } = await trackFor('edit')
+    const violations = rosterViolations('edit', track!, config, ['editor', 'verifier', 'scout'], {
+      scout: 'story references known files only',
+      critic: 'single-file change',
+    })
+    expect(violations).toContainEqual({ code: 'roster.contradiction', params: { agent: 'scout' } })
+  })
+
+  it('codes an unexplained omission as roster.unexplained', async () => {
+    const { config, track } = await trackFor('edit')
+    const violations = rosterViolations('edit', track!, config, ['editor', 'verifier'], {})
+    expect(violations).toContainEqual({ code: 'roster.unexplained', params: { agent: 'scout' } })
+    expect(violations).toContainEqual({ code: 'roster.unexplained', params: { agent: 'critic' } })
+  })
+})
+
+describe('rosterValidity — the read door behind /api/roster/<track>/valid', () => {
+  it('answers with no run in progress, and no state at all to compare against', async () => {
+    const fresh = await makeTmpProject()
+    try {
+      await initLoop(fresh.dir, clock)
+      const config = await loadConfig(fresh.dir)
+      config.tracks.edit = { required: ['editor', 'verifier'], available: ['scout'], max_cycles: 3 }
+      await writeConfig(fresh.dir, config)
+
+      const result = await rosterValidity(fresh.dir, { track: 'edit', selected: ['editor'], skipped: {} })
+      expect(result.valid).toBe(false)
+      expect(result.violations).toContainEqual({
+        code: 'roster.required',
+        params: { agent: 'verifier', track: 'edit' },
+      })
+    } finally {
+      await fresh.cleanup()
+    }
+  })
+
+  it('reports valid: true for a composition cycleRosterSet would accept, with no violations', async () => {
+    const result = await rosterValidity(project.dir, {
+      track: 'edit',
+      selected: ['editor', 'verifier'],
+      skipped: { scout: 'known files', critic: 'single-file change' },
+    })
+    expect(result).toEqual({ valid: true, violations: [] })
+  })
+
+  it('raises UnknownTrackError for a track this project does not define, as cycleRosterSet does', async () => {
+    await expect(rosterValidity(project.dir, { track: 'nonsense', selected: [], skipped: {} })).rejects.toBeInstanceOf(
+      UnknownTrackError,
+    )
   })
 })

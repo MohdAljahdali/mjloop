@@ -557,6 +557,15 @@
   "error.unreadable": "Could not read that — see the terminal the server was started from.",
   "error.badRequest": "That request was not understood.",
 
+  "roster.cycle": "That composition is for a different cycle than the one running now.",
+  "roster.required": "“{agent}” is required by the {track} track and cannot be dropped.",
+  "roster.forced": "“{agent}” always runs by project settings and cannot be dropped.",
+  "roster.forbidden": "“{agent}” never runs by project settings and cannot be drafted.",
+  "roster.closing": "“{agent}” closes the {track} track after the run passes — it cannot be drafted into a working cycle.",
+  "roster.unknown": "“{agent}” is not part of the {track} track.",
+  "roster.contradiction": "“{agent}” is both drafted and skipped — pick one.",
+  "roster.unexplained": "“{agent}” was left out with no reason given.",
+
   "write.stale.plan": "That plan was decided on somewhere else in the meantime — nothing was changed.",
   "write.stale.story": "That story moved on in the meantime — nothing was changed.",
   "write.stale.run": "A different run is active now — nothing was changed.",

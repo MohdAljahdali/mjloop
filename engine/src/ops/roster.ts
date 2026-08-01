@@ -13,11 +13,62 @@ import {
 import { RosterSchema, type Roster } from '../schemas/contract.js'
 import { loadConfig } from '../store/config-store.js'
 import { StateStore } from '../store/state-store.js'
+// Type-only: erased at emit (`tsconfig.json` has neither `isolatedModules` nor
+// `verbatimModuleSyntax`, so `import type` never survives to `dist/ops/roster.js`
+// — `npm run build`'s byte-identical mirror and `verify:ship`'s import walk
+// both see the same zero-dependency file this always was). `web/codes.ts`'s
+// `WEB_CODES` is the one place a code is declared; a plain `import` here would
+// invert the direction `tests/web/boundary.test.ts` polices (`src/web/` must
+// not reach certain `ops/` writes), but that test says nothing about `ops/`
+// reaching a *type* under `src/web/`, and this reaches nothing else there.
+import type { WebCode } from '../web/codes.js'
 import { NoActiveRunError, UnknownTrackError, cycleDirPath, runDirPath } from './run.js'
 
+/** Every code `rosterViolations` and `cycleRosterSet`'s cycle check can produce. */
+export type RosterViolationCode = Extract<WebCode, `roster.${string}`>
+
+/** One reason a candidate composition is refused, in the vocabulary the wire speaks. */
+export interface RosterViolation {
+  code: RosterViolationCode
+  params?: Record<string, string | number>
+}
+
+/**
+ * The MCP caller's English, built FROM a violation's code and params so the
+ * two cannot drift the way a hand-written sentence beside a hand-written code
+ * always eventually does. Never called for anything that reaches the browser
+ * — `readRosterValidity` (`web/read.ts`) ships `{code, params}` on the wire and
+ * lets the page render its own words, per `api.ts`'s header on that rule.
+ */
+function describeViolation(violation: RosterViolation): string {
+  const agent = violation.params?.['agent']
+  const track = violation.params?.['track']
+  switch (violation.code) {
+    case 'roster.cycle':
+      return `roster is for cycle ${violation.params?.['given']} but state is at cycle ${violation.params?.['actual']}`
+    case 'roster.required':
+      return `"${agent}" is required by track "${track}" and cannot be dropped`
+    case 'roster.forced':
+      return `"${agent}" is configured as specialists.${agent}=always and cannot be dropped`
+    case 'roster.forbidden':
+      return `"${agent}" is configured as specialists.${agent}=never and cannot be drafted`
+    case 'roster.closing':
+      return (
+        `"${agent}" is a closing agent on track "${track}" and runs after the run passes — ` +
+        'drafting it into a working cycle is what `closing` exists to prevent'
+      )
+    case 'roster.unknown':
+      return `"${agent}" is not in track "${track}" — add it to required or available first`
+    case 'roster.contradiction':
+      return `"${agent}" is both drafted and skipped — a roster must say one or the other`
+    case 'roster.unexplained':
+      return `"${agent}" was omitted without a reason — add it to skipped`
+  }
+}
+
 export class RosterViolationError extends Error {
-  constructor(violations: string[]) {
-    super(`roster rejected:\n${violations.map((v) => `- ${v}`).join('\n')}`)
+  constructor(violations: (string | RosterViolation)[]) {
+    super(`roster rejected:\n${violations.map((v) => `- ${typeof v === 'string' ? v : describeViolation(v)}`).join('\n')}`)
     this.name = 'RosterViolationError'
   }
 }
@@ -114,28 +165,48 @@ function isClosingRoster(roster: RosterDeclaration): roster is ClosingRoster {
   return 'closing' in roster && roster.closing === true
 }
 
-/** One working cycle's composition, written to `cycle-NN/roster.json`. */
-async function cycleRosterSet(projectDir: string, parsed: Roster): Promise<{ path: string; waves: string[][] }> {
-  const state = await new StateStore(projectDir).get()
-  if (state.status !== 'running' || state.track === null) throw new NoActiveRunError()
-
-  const { config, track } = await loadTrack(projectDir, state.track)
-
+/**
+ * Whether a candidate composition — which agents are drafted, and the stated
+ * reason for each one left out — would be accepted for a track.
+ *
+ * Pure and stateless: `track` carries its own gate as `track.gate` (the "gate
+ * state" this function needs travels in with it — there is no separate
+ * parameter for it), `config` is where `forcedSpecialists`/
+ * `forbiddenSpecialists` read `specialists.*` from, and `selected`/`skipped`
+ * are the candidate itself. Nothing here opens a file, which is what lets
+ * `rosterValidity` below call it from a read that must write nothing
+ * (`tests/web/read.test.ts` hashes every file under `.mjloop/` around every
+ * reader) while `cycleRosterSet` calls the exact same rules right before it
+ * persists something.
+ *
+ * This is `cycleRosterSet`'s own rule set, unchanged, minus the one rule that
+ * is not a fact about the composition at all: whether the declaration names
+ * the cycle a run is actually on. That check stays in `cycleRosterSet`, which
+ * is the only caller with a running cycle to compare against.
+ */
+export function rosterViolations(
+  trackName: string,
+  track: Track,
+  config: Config,
+  selected: Iterable<string>,
+  skipped: Record<string, string>,
+): RosterViolation[] {
   const forced = forcedSpecialists(config)
   const forbidden = new Set(forbiddenSpecialists(config))
   const permitted = permittedAgents(config, track)
   const closing = new Set(track.closing)
-  const selected = new Set(parsed.selected)
+  // Kept as the array it arrived as for the loop below, which walks it once
+  // per entry the way `cycleRosterSet` always did — a duplicate name in
+  // `selected` produced one violation per occurrence before this refactor, and
+  // a `Set` here would silently start collapsing that to one.
+  const selectedList = [...selected]
+  const selectedSet = new Set(selectedList)
 
-  const violations: string[] = []
-
-  if (parsed.cycle !== state.cycle) {
-    violations.push(`roster is for cycle ${parsed.cycle} but state is at cycle ${state.cycle}`)
-  }
+  const violations: RosterViolation[] = []
 
   for (const agent of track.required) {
-    if (!selected.has(agent)) {
-      violations.push(`"${agent}" is required by track "${state.track}" and cannot be dropped`)
+    if (!selectedSet.has(agent)) {
+      violations.push({ code: 'roster.required', params: { agent, track: trackName } })
     }
   }
 
@@ -149,8 +220,8 @@ async function cycleRosterSet(projectDir: string, parsed: Roster): Promise<{ pat
     // estimate and the enforcement describing the same track. The force is not
     // discarded: `closingRosterSet` applies it where the agent actually runs.
     if (closing.has(agent)) continue
-    if (!selected.has(agent)) {
-      violations.push(`"${agent}" is configured as specialists.${agent}=always and cannot be dropped`)
+    if (!selectedSet.has(agent)) {
+      violations.push({ code: 'roster.forced', params: { agent } })
     }
   }
 
@@ -159,12 +230,12 @@ async function cycleRosterSet(projectDir: string, parsed: Roster): Promise<{ pat
   // modes and enforced one, so a project asking for no security review got one
   // whenever the leader felt like drafting it.
   for (const agent of forbidden) {
-    if (selected.has(agent)) {
-      violations.push(`"${agent}" is configured as specialists.${agent}=never and cannot be drafted`)
+    if (selectedSet.has(agent)) {
+      violations.push({ code: 'roster.forbidden', params: { agent } })
     }
   }
 
-  for (const agent of parsed.selected) {
+  for (const agent of selectedList) {
     // Checked before `permitted`, which now contains the closing set — a
     // closing agent passes that test and would otherwise be drafted into a
     // working cycle with nothing to stop it. Documentation written against
@@ -172,18 +243,19 @@ async function cycleRosterSet(projectDir: string, parsed: Roster): Promise<{ pat
     // to remove, and permitting it while recommending against it would leave
     // the defect in place under a recommendation.
     if (closing.has(agent)) {
-      violations.push(
-        `"${agent}" is a closing agent on track "${state.track}" and runs after the run passes — ` +
-          'drafting it into a working cycle is what `closing` exists to prevent',
-      )
+      violations.push({ code: 'roster.closing', params: { agent, track: trackName } })
       continue
     }
     if (!permitted.has(agent)) {
-      violations.push(`"${agent}" is not in track "${state.track}" — add it to required or available first`)
+      violations.push({ code: 'roster.unknown', params: { agent, track: trackName } })
     }
   }
 
-  violations.push(...contradictions(selected, parsed.skipped))
+  violations.push(
+    ...Object.keys(skipped)
+      .filter((agent) => selectedSet.has(agent))
+      .map((agent) => ({ code: 'roster.contradiction' as const, params: { agent } })),
+  )
 
   // Every optional agent is either drafted or explained. Silence is not an
   // answer — except where the config or the track has already answered.
@@ -198,10 +270,65 @@ async function cycleRosterSet(projectDir: string, parsed: Roster): Promise<{ pat
     // reason every cycle for not being drafted — and the reason it owes is
     // already recorded once, in `closing/roster.json`.
     if (closing.has(agent)) continue
-    if (!selected.has(agent) && parsed.skipped[agent] === undefined) {
-      violations.push(`"${agent}" was omitted without a reason — add it to skipped`)
+    if (!selectedSet.has(agent) && skipped[agent] === undefined) {
+      violations.push({ code: 'roster.unexplained', params: { agent } })
     }
   }
+
+  return violations
+}
+
+export interface RosterValidity {
+  valid: boolean
+  violations: RosterViolation[]
+}
+
+/**
+ * The read door: "would this composition be accepted for this track", with no
+ * run required and nothing written.
+ *
+ * `web/read.ts`'s `readRosterValidity` is the only caller, from a route that
+ * `web/writes.ts` and `tests/web/boundary.test.ts`'s `FORBIDDEN` list do not
+ * touch — `rosterSet` itself stays refused there. This hands the browser an
+ * answer to a question about a track, never a way to make the answer come
+ * true: nothing here writes, and nothing here requires (or reads) a running
+ * state.
+ */
+export async function rosterValidity(
+  projectDir: string,
+  input: { track: string; selected: readonly string[]; skipped: Record<string, string> },
+): Promise<RosterValidity> {
+  const { config, track } = await loadTrack(projectDir, input.track)
+  const violations = rosterViolations(input.track, track, config, input.selected, input.skipped)
+  return { valid: violations.length === 0, violations }
+}
+
+/** One working cycle's composition, written to `cycle-NN/roster.json`. */
+async function cycleRosterSet(projectDir: string, parsed: Roster): Promise<{ path: string; waves: string[][] }> {
+  const state = await new StateStore(projectDir).get()
+  if (state.status !== 'running' || state.track === null) throw new NoActiveRunError()
+
+  const { config, track } = await loadTrack(projectDir, state.track)
+
+  const violations: (string | RosterViolation)[] = []
+
+  if (parsed.cycle !== state.cycle) {
+    // Not one of `rosterViolations`'s rules: it is a fact about *when* this
+    // declaration arrived, not about whether this track would accept this
+    // composition, and it needs a running cycle to compare against — exactly
+    // what the read door above does not have and does not ask for.
+    violations.push({
+      code: 'roster.cycle',
+      // Strings, not numbers: `lib/i18n.js:129` says a cycle number must never
+      // reach `renderParam`, which runs a JS `number` through
+      // `Intl.NumberFormat` and would render Arabic-Indic digits. This code
+      // never reaches the browser today — `rosterSet` is on `FORBIDDEN` — but
+      // it is built the same disciplined way the ones that do are.
+      params: { given: String(parsed.cycle), actual: String(state.cycle) },
+    })
+  }
+
+  violations.push(...rosterViolations(state.track, track, config, parsed.selected, parsed.skipped))
 
   if (violations.length > 0) throw new RosterViolationError(violations)
 
@@ -303,8 +430,12 @@ async function closingRosterSet(projectDir: string, parsed: ClosingRoster): Prom
  * per known agent, whatever the leader actually dispatched, and the persisted
  * roster — the only record of either fact — contradicts itself about both.
  *
- * One rule for both kinds of roster, because it is one rule: a cycle roster and
- * a closing roster make the same two claims about an agent, a cycle apart.
+ * `closingRosterSet`'s own rule, now: a cycle roster makes the same claim
+ * through `rosterViolations`'s own contradiction check above, in `{code,
+ * params}` rather than a string, so it can be returned to a read as well as
+ * thrown from a write. The closing pass has no read door to share it with —
+ * `rosterValidity` above takes a track, not "which pass" — so this one string
+ * form is left as it was rather than split for a caller that does not exist.
  */
 function contradictions(selected: Set<string>, skipped: Record<string, string>): string[] {
   return Object.keys(skipped)

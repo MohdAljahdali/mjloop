@@ -34461,10 +34461,32 @@ function round(value, decimals) {
 // src/ops/roster.ts
 import fs20 from "node:fs/promises";
 import path20 from "node:path";
+function describeViolation(violation) {
+  const agent = violation.params?.["agent"];
+  const track = violation.params?.["track"];
+  switch (violation.code) {
+    case "roster.cycle":
+      return `roster is for cycle ${violation.params?.["given"]} but state is at cycle ${violation.params?.["actual"]}`;
+    case "roster.required":
+      return `"${agent}" is required by track "${track}" and cannot be dropped`;
+    case "roster.forced":
+      return `"${agent}" is configured as specialists.${agent}=always and cannot be dropped`;
+    case "roster.forbidden":
+      return `"${agent}" is configured as specialists.${agent}=never and cannot be drafted`;
+    case "roster.closing":
+      return `"${agent}" is a closing agent on track "${track}" and runs after the run passes \u2014 drafting it into a working cycle is what \`closing\` exists to prevent`;
+    case "roster.unknown":
+      return `"${agent}" is not in track "${track}" \u2014 add it to required or available first`;
+    case "roster.contradiction":
+      return `"${agent}" is both drafted and skipped \u2014 a roster must say one or the other`;
+    case "roster.unexplained":
+      return `"${agent}" was omitted without a reason \u2014 add it to skipped`;
+  }
+}
 var RosterViolationError = class extends Error {
   constructor(violations) {
     super(`roster rejected:
-${violations.map((v) => `- ${v}`).join("\n")}`);
+${violations.map((v) => `- ${typeof v === "string" ? v : describeViolation(v)}`).join("\n")}`);
     this.name = "RosterViolationError";
   }
 };
@@ -34494,54 +34516,68 @@ async function rosterSet(projectDir, roster) {
 function isClosingRoster(roster) {
   return "closing" in roster && roster.closing === true;
 }
-async function cycleRosterSet(projectDir, parsed) {
-  const state = await new StateStore(projectDir).get();
-  if (state.status !== "running" || state.track === null) throw new NoActiveRunError();
-  const { config: config2, track } = await loadTrack(projectDir, state.track);
+function rosterViolations(trackName, track, config2, selected, skipped) {
   const forced = forcedSpecialists(config2);
   const forbidden = new Set(forbiddenSpecialists(config2));
   const permitted = permittedAgents(config2, track);
   const closing = new Set(track.closing);
-  const selected = new Set(parsed.selected);
+  const selectedList = [...selected];
+  const selectedSet = new Set(selectedList);
   const violations = [];
-  if (parsed.cycle !== state.cycle) {
-    violations.push(`roster is for cycle ${parsed.cycle} but state is at cycle ${state.cycle}`);
-  }
   for (const agent of track.required) {
-    if (!selected.has(agent)) {
-      violations.push(`"${agent}" is required by track "${state.track}" and cannot be dropped`);
+    if (!selectedSet.has(agent)) {
+      violations.push({ code: "roster.required", params: { agent, track: trackName } });
     }
   }
   for (const agent of forced) {
     if (closing.has(agent)) continue;
-    if (!selected.has(agent)) {
-      violations.push(`"${agent}" is configured as specialists.${agent}=always and cannot be dropped`);
+    if (!selectedSet.has(agent)) {
+      violations.push({ code: "roster.forced", params: { agent } });
     }
   }
   for (const agent of forbidden) {
-    if (selected.has(agent)) {
-      violations.push(`"${agent}" is configured as specialists.${agent}=never and cannot be drafted`);
+    if (selectedSet.has(agent)) {
+      violations.push({ code: "roster.forbidden", params: { agent } });
     }
   }
-  for (const agent of parsed.selected) {
+  for (const agent of selectedList) {
     if (closing.has(agent)) {
-      violations.push(
-        `"${agent}" is a closing agent on track "${state.track}" and runs after the run passes \u2014 drafting it into a working cycle is what \`closing\` exists to prevent`
-      );
+      violations.push({ code: "roster.closing", params: { agent, track: trackName } });
       continue;
     }
     if (!permitted.has(agent)) {
-      violations.push(`"${agent}" is not in track "${state.track}" \u2014 add it to required or available first`);
+      violations.push({ code: "roster.unknown", params: { agent, track: trackName } });
     }
   }
-  violations.push(...contradictions(selected, parsed.skipped));
+  violations.push(
+    ...Object.keys(skipped).filter((agent) => selectedSet.has(agent)).map((agent) => ({ code: "roster.contradiction", params: { agent } }))
+  );
   for (const agent of track.available) {
     if (forbidden.has(agent)) continue;
     if (closing.has(agent)) continue;
-    if (!selected.has(agent) && parsed.skipped[agent] === void 0) {
-      violations.push(`"${agent}" was omitted without a reason \u2014 add it to skipped`);
+    if (!selectedSet.has(agent) && skipped[agent] === void 0) {
+      violations.push({ code: "roster.unexplained", params: { agent } });
     }
   }
+  return violations;
+}
+async function cycleRosterSet(projectDir, parsed) {
+  const state = await new StateStore(projectDir).get();
+  if (state.status !== "running" || state.track === null) throw new NoActiveRunError();
+  const { config: config2, track } = await loadTrack(projectDir, state.track);
+  const violations = [];
+  if (parsed.cycle !== state.cycle) {
+    violations.push({
+      code: "roster.cycle",
+      // Strings, not numbers: `lib/i18n.js:129` says a cycle number must never
+      // reach `renderParam`, which runs a JS `number` through
+      // `Intl.NumberFormat` and would render Arabic-Indic digits. This code
+      // never reaches the browser today — `rosterSet` is on `FORBIDDEN` — but
+      // it is built the same disciplined way the ones that do are.
+      params: { given: String(parsed.cycle), actual: String(state.cycle) }
+    });
+  }
+  violations.push(...rosterViolations(state.track, track, config2, parsed.selected, parsed.skipped));
   if (violations.length > 0) throw new RosterViolationError(violations);
   const { path: file } = await write(path20.join(cycleDirPath(projectDir, state), "roster.json"), parsed);
   return { path: file, waves: dispatchWaves(track, parsed.selected) };

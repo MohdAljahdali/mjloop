@@ -318,8 +318,13 @@ async function handleRequest(
   }
 
   // Matched after the token check and before the static resolver, so no `/api`
-  // path can ever reach a file on disk.
-  const api = await handleApi(projectDir, request.method ?? 'GET', url.pathname)
+  // path can ever reach a file on disk. `url.pathname + url.search` rather
+  // than `url.pathname` alone: the roster validity route reads its candidate
+  // composition from a `?roster=` query parameter, and `handleApi` splits that
+  // back off itself (`api.ts`'s own header explains why it is a plain
+  // `indexOf('?')` there rather than a second `new URL`). Every other route
+  // ignores a query string entirely, so this changes nothing for them.
+  const api = await handleApi(projectDir, request.method ?? 'GET', url.pathname + url.search)
   if (api !== null) {
     sendApi(request, response, api)
     return

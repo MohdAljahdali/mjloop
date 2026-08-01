@@ -16809,6 +16809,9 @@ function pinnedAgents(track) {
   if (track.gate !== void 0) pinned.push(track.gate.proven_by);
   return pinned;
 }
+function permittedAgents(config2, track) {
+  return /* @__PURE__ */ new Set([...track.required, ...track.available, ...track.closing, ...forcedSpecialists(config2)]);
+}
 function dispatchWaves(track, selected) {
   const chosen = [...new Set(selected)];
   const isChosen = new Set(chosen);
@@ -18656,6 +18659,76 @@ function round(value, decimals) {
   return Math.round(value * scale) / scale;
 }
 
+// src/ops/roster.ts
+var ClosingRosterSchema = strictObject({
+  /**
+   * Which kind of roster this is. A literal rather than a boolean: `false`
+   * carries no meaning here, and a caller that passes it is answering a
+   * question this function does not ask — better a loud parse failure than a
+   * cycle roster silently validated against the wrong set of agents.
+   */
+  closing: literal(true),
+  selected: array(string2().min(1)).default([]),
+  /** agent name -> why closing the run without it was safe */
+  skipped: record(string2().min(1), string2().min(1)).default({})
+});
+function rosterViolations(trackName, track, config2, selected, skipped) {
+  const forced = forcedSpecialists(config2);
+  const forbidden = new Set(forbiddenSpecialists(config2));
+  const permitted = permittedAgents(config2, track);
+  const closing = new Set(track.closing);
+  const selectedList = [...selected];
+  const selectedSet = new Set(selectedList);
+  const violations = [];
+  for (const agent of track.required) {
+    if (!selectedSet.has(agent)) {
+      violations.push({ code: "roster.required", params: { agent, track: trackName } });
+    }
+  }
+  for (const agent of forced) {
+    if (closing.has(agent)) continue;
+    if (!selectedSet.has(agent)) {
+      violations.push({ code: "roster.forced", params: { agent } });
+    }
+  }
+  for (const agent of forbidden) {
+    if (selectedSet.has(agent)) {
+      violations.push({ code: "roster.forbidden", params: { agent } });
+    }
+  }
+  for (const agent of selectedList) {
+    if (closing.has(agent)) {
+      violations.push({ code: "roster.closing", params: { agent, track: trackName } });
+      continue;
+    }
+    if (!permitted.has(agent)) {
+      violations.push({ code: "roster.unknown", params: { agent, track: trackName } });
+    }
+  }
+  violations.push(
+    ...Object.keys(skipped).filter((agent) => selectedSet.has(agent)).map((agent) => ({ code: "roster.contradiction", params: { agent } }))
+  );
+  for (const agent of track.available) {
+    if (forbidden.has(agent)) continue;
+    if (closing.has(agent)) continue;
+    if (!selectedSet.has(agent) && skipped[agent] === void 0) {
+      violations.push({ code: "roster.unexplained", params: { agent } });
+    }
+  }
+  return violations;
+}
+async function rosterValidity(projectDir, input) {
+  const { config: config2, track } = await loadTrack(projectDir, input.track);
+  const violations = rosterViolations(input.track, track, config2, input.selected, input.skipped);
+  return { valid: violations.length === 0, violations };
+}
+async function loadTrack(projectDir, name) {
+  const config2 = await loadConfig(projectDir);
+  const track = findTrack(config2, name);
+  if (track === void 0) throw new UnknownTrackError(name, Object.keys(config2.tracks));
+  return { config: config2, track };
+}
+
 // src/ops/telemetry.ts
 var TELEMETRY_MAX_ROWS = 40;
 var TELEMETRY_FLAG_DRAFTS = 5;
@@ -19318,6 +19391,15 @@ async function readPreflightEstimate(projectDir, track) {
     throw error2;
   }
 }
+async function readRosterValidity(projectDir, track, candidate) {
+  try {
+    return await rosterValidity(projectDir, { track, ...candidate });
+  } catch (error2) {
+    if (error2 instanceof UnknownTrackError) throw new NotFoundError("track");
+    if (error2 instanceof ConfigMissingError) throw new NotFoundError("config");
+    throw error2;
+  }
+}
 async function readJson2(file, schema) {
   try {
     const parsed = schema.safeParse(JSON.parse(await fs16.readFile(file, "utf8")));
@@ -19331,14 +19413,21 @@ async function readJson2(file, schema) {
 var RUN_ID = /^[\w-]+$/;
 var MEMORY_ID = /^M\d{3}$/;
 var JOB_ID = /^\d{8}T\d{6}-\d+$/;
+var RosterCandidateSchema = strictObject({
+  selected: array(string2().min(1)).default([]),
+  skipped: record(string2().min(1), string2().min(1)).default({})
+});
 var ok = (body) => ({ status: 200, body });
 var fail = (status, code) => ({ status, body: { error: { code } } });
 async function handleApi(projectDir, method, pathname) {
-  if (!pathname.startsWith("/api/") && pathname !== "/api") return null;
+  const mark = pathname.indexOf("?");
+  const path24 = mark === -1 ? pathname : pathname.slice(0, mark);
+  const query = new URLSearchParams(mark === -1 ? "" : pathname.slice(mark + 1));
+  if (!path24.startsWith("/api/") && path24 !== "/api") return null;
   if (method !== "GET") return fail(405, "error.badRequest");
-  const segments = pathname.split("/").filter((part) => part.length > 0).slice(1);
+  const segments = path24.split("/").filter((part) => part.length > 0).slice(1);
   try {
-    return await route(projectDir, segments);
+    return await route(projectDir, segments, query);
   } catch (error2) {
     if (error2 instanceof NotFoundError) return fail(404, "error.notFound");
     process.stderr.write(`mjloop web: ${String(error2)}
@@ -19346,7 +19435,7 @@ async function handleApi(projectDir, method, pathname) {
     return fail(500, "error.unreadable");
   }
 }
-async function route(projectDir, segments) {
+async function route(projectDir, segments, query) {
   const [head, first, second] = segments;
   switch (head) {
     case "state":
@@ -19383,6 +19472,23 @@ async function route(projectDir, segments) {
       if (segments.length !== 2 || first === void 0) break;
       if (!IdSchema.safeParse(first).success) return fail(400, "error.badRequest");
       return ok(await readPreflightEstimate(projectDir, first));
+    case "roster":
+      if (segments.length !== 3 || first === void 0 || second !== "valid") break;
+      if (!IdSchema.safeParse(first).success) return fail(400, "error.badRequest");
+      {
+        const raw = query.get("roster");
+        let json = {};
+        if (raw !== null) {
+          try {
+            json = JSON.parse(raw);
+          } catch {
+            return fail(400, "error.badRequest");
+          }
+        }
+        const parsed = RosterCandidateSchema.safeParse(json);
+        if (!parsed.success) return fail(400, "error.badRequest");
+        return ok(await readRosterValidity(projectDir, first, parsed.data));
+      }
     case "profile":
       if (segments.length !== 1) break;
       return ok(await readProfileView(projectDir));
@@ -20678,7 +20784,7 @@ async function handleRequest(request, response, token, projectDir) {
     response.end("unauthorized");
     return;
   }
-  const api = await handleApi(projectDir, request.method ?? "GET", url.pathname);
+  const api = await handleApi(projectDir, request.method ?? "GET", url.pathname + url.search);
   if (api !== null) {
     sendApi(request, response, api);
     return;

@@ -47,6 +47,25 @@ export const WEB_CODES = [
   'write.ok.halt',
   'write.ok.config',
   'write.ok.feature',
+
+  /* the roster's own rules. `ops/roster.ts`'s `rosterViolations` returns seven
+     of these — everything a candidate composition can get wrong about a track
+     — and `cycleRosterSet` adds the eighth, `roster.cycle`, for the one thing
+     that is not a fact about the composition: whether it arrived for the
+     cycle a run is actually on. `readRosterValidity` (`web/read.ts`) is the
+     only one of the two that can put any of these on the wire — `rosterSet`
+     itself stays refused to the browser (`web/writes.ts`,
+     `tests/web/boundary.test.ts`'s `FORBIDDEN` list) — but the MCP caller's
+     thrown message is built from the same seven-or-eight plus `params`, so a
+     code and its English cannot drift apart. */
+  'roster.cycle',
+  'roster.required',
+  'roster.forced',
+  'roster.forbidden',
+  'roster.closing',
+  'roster.unknown',
+  'roster.contradiction',
+  'roster.unexplained',
 ] as const
 
 export type WebCode = (typeof WEB_CODES)[number]

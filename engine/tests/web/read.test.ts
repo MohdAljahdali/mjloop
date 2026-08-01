@@ -26,6 +26,7 @@ import {
   readPreflightEstimate,
   readProfileView,
   readRosterProgress,
+  readRosterValidity,
   readRunDetail,
   readRuns,
   readSkillManifest,
@@ -222,6 +223,10 @@ describe('read', () => {
       // could repair what it opens.
       readTelemetryReport(project.dir),
       readPreflightEstimate(project.dir, 'edit'),
+      // The dry-run door: it answers against a track's config alone, never a
+      // running state, so it must be exactly as inert on disk as every reader
+      // beside it — even while it reports a composition that would be refused.
+      readRosterValidity(project.dir, 'edit', { selected: ['editor'], skipped: {} }),
       // A profile the browser can look at is a profile the browser must not be
       // able to change: this reader neither accepts a proposal nor rescans, so
       // it cannot write even when the proposal and the accepted map disagree.

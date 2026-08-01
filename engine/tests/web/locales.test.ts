@@ -63,6 +63,7 @@ const NAMESPACES = [
   'preflight',
   'queue',
   'rail',
+  'roster',
   'run',
   'session',
   'skills',

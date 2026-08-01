@@ -2,6 +2,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { HISTORY_DEFAULT_LIMIT } from '../ops/history.js'
 import { preflightEstimate, type Preflight } from '../ops/preflight.js'
+import { rosterValidity, type RosterValidity } from '../ops/roster.js'
 import { UnknownTrackError } from '../ops/run.js'
 import { readTelemetry, type Telemetry } from '../ops/telemetry.js'
 import { readVerifyLedger } from '../ops/verify.js'
@@ -769,6 +770,34 @@ export async function readTelemetryReport(projectDir: string): Promise<Telemetry
 export async function readPreflightEstimate(projectDir: string, track: string): Promise<Preflight> {
   try {
     return await preflightEstimate(projectDir, { track })
+  } catch (error) {
+    if (error instanceof UnknownTrackError) throw new NotFoundError('track')
+    if (error instanceof ConfigMissingError) throw new NotFoundError('config')
+    throw error
+  }
+}
+
+/* ── roster validity ─────────────────────────────────────────────────────── */
+
+/**
+ * "Would this composition be accepted for this track" — `rosterValidity`
+ * (`ops/roster.ts`), the dry-run half of `cycleRosterSet`'s own rules, wrapped
+ * the same way `readPreflightEstimate` above wraps `preflightEstimate`: an
+ * unknown track or a project with no config is a 404, not a 500, and neither
+ * is this server failing to read something it should have.
+ *
+ * `rosterSet` itself is not on this file's import list and never will be —
+ * `web/writes.ts` and `tests/web/boundary.test.ts`'s `FORBIDDEN` list refuse
+ * it from every file under `src/web/`. This answers a question about a track;
+ * it grants no way to make the answer come true.
+ */
+export async function readRosterValidity(
+  projectDir: string,
+  track: string,
+  candidate: { selected: readonly string[]; skipped: Record<string, string> },
+): Promise<RosterValidity> {
+  try {
+    return await rosterValidity(projectDir, { track, ...candidate })
   } catch (error) {
     if (error instanceof UnknownTrackError) throw new NotFoundError('track')
     if (error instanceof ConfigMissingError) throw new NotFoundError('config')
