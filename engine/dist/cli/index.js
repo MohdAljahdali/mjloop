@@ -12728,12 +12728,15 @@ var TrackSchema = strictObject({
    * skipped, would make every cycle that omits an optional predecessor
    * uncomposable (a non-UI cycle on `build` could never satisfy `builder
    * after ui-designer` once `ui-designer` is skipped). The omission itself
-   * is already the record `roster` demands: `cycleRosterSet` (ops/roster.ts)
-   * refuses a roster that omits an `available` agent with no reason in
-   * `skipped`, so a predecessor missing from `selected` always carries a
-   * stated reason somewhere in the same file. `dispatchWaves` below applies
-   * this rule; do not "fix" it into an unconditional edge, or every track
-   * that orders around an optional agent becomes unusable without it.
+   * is on the record either way, just not always in the same place:
+   * `cycleRosterSet` (ops/roster.ts:170-183) demands a reason in `skipped`
+   * for an omitted `available` agent *unless* `specialists.<agent>: never`
+   * already forbade drafting it at all (ops/roster.ts:174 exempts exactly
+   * that case) — and a `never` is itself recorded, in `config.yaml`, not in
+   * `roster.json`. Either way the omission is explained somewhere, which is
+   * what makes the vacuous reading safe. `dispatchWaves` below applies this
+   * rule; do not "fix" it into an unconditional edge, or every track that
+   * orders around an optional agent becomes unusable without it.
    */
   order: array(OrderEdgeSchema).default([])
 }).superRefine((track, ctx) => {
@@ -12812,7 +12815,8 @@ var TrackSchema = strictObject({
       });
     }
   }
-  const cycle = findOrderCycle(track.order);
+  const gateEdges = track.gate === void 0 ? [] : track.gate.blocks.map((agent) => ({ agent, after: [track.gate.proven_by] }));
+  const cycle = findOrderCycle([...track.order, ...gateEdges]);
   if (cycle !== null) {
     ctx.addIssue({
       code: "custom",

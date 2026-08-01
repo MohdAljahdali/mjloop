@@ -741,6 +741,35 @@ describe('order', () => {
     expect(ConfigSchema.safeParse(good).success).toBe(true)
   })
 
+  it('rejects a gate inversion through a third agent, not just a direct one', () => {
+    // The direct check only looks at edge.agent === gate.proven_by with
+    // gate.blocks in that same edge's `after` — a 2-cycle. This is the same
+    // deadlock one hop removed: fixer waits on investigator, investigator
+    // waits on reproducer (order), and the gate makes fixer wait on
+    // reproducer's pass — so reproducer, which must run first, is forced to
+    // wait on fixer, which cannot run until reproducer already has. Nothing
+    // in the cycle could ever be logged. Review-caught: a prior version of
+    // this check only tested the direct inversion in isolation and admitted
+    // this graph.
+    const bad = {
+      version: 1,
+      tracks: {
+        fix: {
+          required: ['reproducer', 'fixer', 'investigator'],
+          max_cycles: 3,
+          gate: { proven_by: 'reproducer', blocks: ['fixer'] },
+          order: [
+            { agent: 'reproducer', after: ['investigator'] },
+            { agent: 'investigator', after: ['fixer'] },
+          ],
+        },
+      },
+    }
+    const parsed = ConfigSchema.safeParse(bad)
+    expect(parsed.success).toBe(false)
+    if (!parsed.success) expect(z.prettifyError(parsed.error)).toContain('cycle')
+  })
+
   it('rejects an edge with no after entries', () => {
     const bad = {
       version: 1,

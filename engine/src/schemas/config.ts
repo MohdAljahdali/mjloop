@@ -33,9 +33,12 @@ export const MapSchema = z.strictObject({
 })
 
 /**
- * One directed edge in a track's ordering graph: `agent` may not be composed
- * into a cycle's roster until every name in `after` has a logged result for
- * that same cycle.
+ * One directed edge in a track's ordering graph: `agent` may not be
+ * dispatched — and `runLog` will refuse its result — until every name in
+ * `after` has a logged result for that same cycle. The agent stays in the
+ * roster; ordering constrains when it runs, not whether it is composed
+ * (`ops/roster.ts:116-120` forbids dropping a required agent from the roster
+ * at all, and this field does not change that).
  *
  * A set of edges rather than a position in an array, because the two
  * orderings this schema exists to express are both cross-set —
@@ -89,12 +92,15 @@ export const TrackSchema = z
      * skipped, would make every cycle that omits an optional predecessor
      * uncomposable (a non-UI cycle on `build` could never satisfy `builder
      * after ui-designer` once `ui-designer` is skipped). The omission itself
-     * is already the record `roster` demands: `cycleRosterSet` (ops/roster.ts)
-     * refuses a roster that omits an `available` agent with no reason in
-     * `skipped`, so a predecessor missing from `selected` always carries a
-     * stated reason somewhere in the same file. `dispatchWaves` below applies
-     * this rule; do not "fix" it into an unconditional edge, or every track
-     * that orders around an optional agent becomes unusable without it.
+     * is on the record either way, just not always in the same place:
+     * `cycleRosterSet` (ops/roster.ts:170-183) demands a reason in `skipped`
+     * for an omitted `available` agent *unless* `specialists.<agent>: never`
+     * already forbade drafting it at all (ops/roster.ts:174 exempts exactly
+     * that case) — and a `never` is itself recorded, in `config.yaml`, not in
+     * `roster.json`. Either way the omission is explained somewhere, which is
+     * what makes the vacuous reading safe. `dispatchWaves` below applies this
+     * rule; do not "fix" it into an unconditional edge, or every track that
+     * orders around an optional agent becomes unusable without it.
      */
     order: z.array(OrderEdgeSchema).default([]),
   })
@@ -215,7 +221,21 @@ export const TrackSchema = z
       }
     }
 
-    const cycle = findOrderCycle(track.order)
+    // The direct check above catches `edge.agent === gate.proven_by` with
+    // `gate.blocks` in its own `after` — a 2-cycle. It does not catch the same
+    // deadlock through a third agent: `fixer after investigator`, `investigator
+    // after reproducer`-shaped, with `gate: {proven_by: reproducer, blocks:
+    // [fixer]}`, closes the same loop one hop removed and the direct test
+    // never looks past `edge.after` itself. Folding the gate's own
+    // precondition in as an edge — `blocked after proven_by`, one per name in
+    // `blocks` — turns every length of that deadlock, direct or transitive,
+    // into an ordinary cycle over the same detector already walking `order`,
+    // so one check covers both instead of two independent, incomplete ones.
+    const gateEdges =
+      track.gate === undefined
+        ? []
+        : track.gate.blocks.map((agent) => ({ agent, after: [track.gate!.proven_by] }))
+    const cycle = findOrderCycle([...track.order, ...gateEdges])
     if (cycle !== null) {
       ctx.addIssue({
         code: 'custom',
