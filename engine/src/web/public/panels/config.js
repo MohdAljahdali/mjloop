@@ -390,7 +390,7 @@ export function mountConfig() {
       if (!NAME.test(name)) return
       mutate((model) => {
         if (name in model.tracks) return false
-        model.tracks[name] = { required: [], available: [], closing: [], max_cycles: 5 }
+        model.tracks[name] = { required: [], available: [], closing: [], order: [], max_cycles: 5 }
       })
       trackNew.value = ''
     },
@@ -444,6 +444,66 @@ export function mountConfig() {
         const at = bucket.indexOf(agent)
         if (at < 0) return false
         bucket.splice(at, 1)
+      })
+    },
+    /**
+     * A predecessor, onto one agent's order edge. `element` is the row's `+`
+     * button — `data-track`/`data-agent` name the edge, and the box beside it
+     * (like every other list on this card) holds the name being added.
+     *
+     * @param {HTMLElement} element
+     */
+    edgeAdd(element) {
+      const track = element.dataset['track'] ?? ''
+      const agent = element.dataset['agent'] ?? ''
+      const box = element.parentElement?.querySelector('input')
+      if (!(box instanceof HTMLInputElement)) return
+      const pred = box.value.trim()
+      // Naming itself is a 1-node cycle `findOrderCycle` would refuse anyway
+      // (schemas/config.ts:266-311) — caught here so the draft never even
+      // holds it, the same way the other lists reject a duplicate before the
+      // problem list has to say so.
+      if (!validAgent(pred) || pred === agent) return
+      mutate((model) => {
+        const entry = model.tracks[track]
+        if (entry === undefined) return false
+        /** @type {{ agent: string, after: string[] }[]} */
+        const order = Array.isArray(entry.order) ? entry.order : (entry.order = [])
+        let edge = order.find((candidate) => candidate.agent === agent)
+        if (edge === undefined) {
+          edge = { agent, after: [] }
+          order.push(edge)
+        }
+        if (edge.after.includes(pred)) return false
+        edge.after.push(pred)
+      })
+      box.value = ''
+    },
+    /**
+     * @param {HTMLElement} element The chip's own remove button —
+     *   `data-track`/`data-agent`/`data-pred` name the one predecessor leaving.
+     */
+    edgeRemove(element) {
+      const track = element.dataset['track'] ?? ''
+      const agent = element.dataset['agent'] ?? ''
+      const pred = element.dataset['pred'] ?? ''
+      mutate((model) => {
+        const entry = model.tracks[track]
+        if (entry === undefined || !Array.isArray(entry.order)) return false
+        /** @type {{ agent: string, after: string[] }[]} */
+        const order = entry.order
+        const edge = order.find((candidate) => candidate.agent === agent)
+        if (edge === undefined) return false
+        const at = edge.after.indexOf(pred)
+        if (at < 0) return false
+        edge.after.splice(at, 1)
+        // `OrderEdgeSchema.after` is `.min(1)` (schemas/config.ts:62) — an edge
+        // with zero predecessors is not "no constraint", it is a shape the
+        // server refuses outright. Dropping the whole edge here is what lets
+        // removing the last predecessor read as clearing the constraint,
+        // the way every other chip removal on this card does, rather than
+        // leaving a draft that Save can never reach.
+        if (edge.after.length === 0) order.splice(order.indexOf(edge), 1)
       })
     },
   }
@@ -723,6 +783,66 @@ export function mountConfig() {
     }
   }
 
+  /**
+   * One required/available agent's row in the order graph: its name, the
+   * chips naming what it waits on, and the combobox that adds one more.
+   *
+   * A dependency graph rather than a sortable list — Milestone C's design
+   * (`docs/superpowers/specs/2026-08-01-plans-stories-split-design.md`,
+   * Milestone C) — because the track's two real orderings are both cross-set
+   * (`ui-designer` before `builder`, `verifier` before `ui-critic`) and
+   * neither is a position in `required` or `available` alone. So the control
+   * this row offers is per-agent — "which agents does *this one* wait for" —
+   * the same shape `required`/`available`/`closing`/`blocks` already use:
+   * chips plus a combobox, following `agentList` above rather than inventing
+   * a second control shape for one more list.
+   */
+  function orderAgentRow() {
+    const { root, slots } = clone('tpl-track-order-agent')
+    return {
+      root,
+      /** @param {{ track: string, agent: string, after: string[] }} entry */
+      update({ track, agent, after }) {
+        const name = slots['agent']
+        if (name !== undefined) verbatim(name, agent)
+        const add = slots['add']
+        if (add !== undefined) {
+          attr(add, 'data-track', track)
+          attr(add, 'data-agent', agent)
+        }
+        const empty = slots['empty']
+        if (empty !== undefined) flag(empty, 'hidden', after.length > 0)
+        const chips = slots['chips']
+        if (chips === undefined) return
+        reconcile(
+          chips,
+          after.map((pred) => ({ track, agent, pred })),
+          (chip) => chip.pred,
+          edgeChip,
+        )
+      },
+    }
+  }
+
+  /** One predecessor inside one agent's order edge. */
+  function edgeChip() {
+    const { root, slots } = clone('tpl-edge-chip')
+    return {
+      root,
+      /** @param {{ track: string, agent: string, pred: string }} chip */
+      update({ track, agent, pred }) {
+        const name = slots['name']
+        if (name !== undefined) text(name, pred)
+        const remove = slots['remove']
+        if (remove !== undefined) {
+          attr(remove, 'data-track', track)
+          attr(remove, 'data-agent', agent)
+          attr(remove, 'data-pred', pred)
+        }
+      },
+    }
+  }
+
   /** One reason this track would be rejected. */
   function problemRow() {
     const { root, slots } = clone('tpl-track-problem')
@@ -809,6 +929,22 @@ export function mountConfig() {
           // closing agent is a document no run ever writes — `config.ts` rejects
           // it, so the control must not offer it.
           fillSelect(mapDrafted, draftable, track.map?.drafted_by ?? '')
+        }
+
+        // One row per required/available agent — `draftable`, the same set
+        // `mapDrafted` above scopes to and for the same reason: a closing
+        // agent runs once, after the run passes, so `TrackSchema.superRefine`
+        // (schemas/config.ts:186-199) refuses an edge naming one as either
+        // side, and a row that could never be legal has nothing useful to
+        // offer here.
+        const orderAgents = slots['orderAgents']
+        if (orderAgents !== undefined) {
+          reconcile(
+            orderAgents,
+            draftable.map((agent) => ({ track: name, agent, after: edgeAfter(track.order ?? [], agent) })),
+            (entry) => entry.agent,
+            orderAgentRow,
+          )
         }
 
         const problems = slots['problems']
@@ -911,6 +1047,21 @@ export function collectConfigChanges(form, baseline) {
     })
   }
 
+  // `order` rides through here with the rest of the track — no new write kind
+  // for the edge editor. `ConfigChangeSchema`'s `track` variant already types
+  // `value` as `TrackSchema.nullable()` (store/config-mutation.ts), and
+  // `TrackSchema` already carries `order` (schemas/config.ts), so a draft that
+  // moved only its order graph is, from this loop's point of view, a track
+  // whose serialised JSON changed like any other edit to the same object.
+  //
+  // The cost that comes with reusing this door: `applyConfigChange`'s `track`
+  // case (store/config-mutation.ts:220-222) calls `setIn(['tracks', track],
+  // value)`, replacing the whole subtree — so saving one new edge also
+  // discards any YAML comment written inside that track's block, not only the
+  // fields this editor exposes. Showing the reader what a save would replace
+  // before they press it is C6 (Milestone C, "Change-impact preview") — this
+  // phase does not add that preview, and this comment is where C6 should look
+  // first.
   const tracks = record(value('tracks_json'))
   for (const track of [...new Set([...Object.keys(baseline.tracks), ...Object.keys(tracks)])].sort()) {
     const next = track in tracks ? tracks[track] : null
@@ -1167,12 +1318,12 @@ function trackProblems(model, name) {
   /** @type {{ id: string, key: string, params: Record<string, string> }[]} */
   const problems = []
   const seen = new Set()
-  /** @param {string} key @param {string} [agent] */
-  const add = (key, agent) => {
-    const id = agent === undefined ? key : `${key}:${agent}`
+  /** @param {string} key @param {string} [name] @param {string} [paramName] */
+  const add = (key, name, paramName) => {
+    const id = name === undefined ? key : `${key}:${name}`
     if (seen.has(id)) return
     seen.add(id)
-    problems.push({ id, key, params: agent === undefined ? {} : { agent } })
+    problems.push({ id, key, params: name === undefined ? {} : { [paramName ?? 'agent']: name } })
   }
 
   const known = new Set([...track.required, ...(track.available ?? []), ...(track.closing ?? [])])
@@ -1204,7 +1355,113 @@ function trackProblems(model, name) {
     if (forbidden.has(agent)) add('config.problem.forbidden', agent)
   }
 
+  // C1's four order refusals (`TrackSchema.superRefine`, schemas/config.ts:
+  // 186-232 for the per-edge checks and :244-255 for the cycle, folding the
+  // gate in beside `track.order` exactly as that block does). Mirrored, never
+  // replacing — the server re-parses the whole document under the project
+  // lock and remains the authority, same as every check above this one.
+  /** @type {{ agent: string, after: string[] }[]} */
+  const order = track.order ?? []
+  for (const edge of order) {
+    if (!known.has(edge.agent)) add('config.problem.orderAgentUnknown', edge.agent)
+    else if (track.closing.includes(edge.agent)) add('config.problem.orderAgentClosing', edge.agent)
+    for (const pred of edge.after ?? []) {
+      if (!known.has(pred)) add('config.problem.orderPredUnknown', pred)
+      else if (track.closing.includes(pred)) add('config.problem.orderPredClosing', pred)
+    }
+    // The gate checks above already make `gate.proven_by`'s pass the
+    // precondition every name in `gate.blocks` waits on; an edge that makes
+    // `proven_by` itself wait on one of them demands the opposite order.
+    if (
+      track.gate !== undefined &&
+      edge.agent === track.gate.proven_by &&
+      (edge.after ?? []).some((pred) => (track.gate?.blocks ?? []).includes(pred))
+    ) {
+      add('config.problem.orderInvertsGate', edge.agent)
+    }
+  }
+  // The gate folded in as edges, the same way `dispatchWaves` and
+  // `TrackSchema.superRefine`'s own cycle check fold it in (schemas/
+  // config.ts:244-247) — this is what catches a deadlock through a third
+  // agent, one hop past what the direct check above sees.
+  /** @type {string[]} */
+  const blocks = track.gate?.blocks ?? []
+  const gateEdges = track.gate === undefined ? [] : blocks.map((agent) => ({ agent, after: [track.gate.proven_by] }))
+  const cycle = findOrderCycle([...order, ...gateEdges])
+  if (cycle !== null) add('config.problem.orderCycle', cycle.join(' → '), 'path')
+
   return problems
+}
+
+/** @param {{ agent: string, after: string[] }[]} order @param {string} agent @returns {string[]} */
+function edgeAfter(order, agent) {
+  return order.find((edge) => edge.agent === agent)?.after ?? []
+}
+
+/**
+ * The first cycle a track's order graph contains, as the path that closes it,
+ * or `null` if the graph is acyclic.
+ *
+ * A client-side mirror of `findOrderCycle` (schemas/config.ts:266-311): the
+ * same three-colour DFS over the same predecessor -> successor adjacency (an
+ * `after`-edge from `pred` to `edge.agent` means "`edge.agent` depends on
+ * `pred`"). Mirrored, never replacing — `trackProblems` above is the only
+ * caller, and the server re-parses through `TrackSchema.superRefine` under
+ * the project lock regardless of what this says.
+ *
+ * @param {{ agent: string, after: string[] }[]} order
+ * @returns {string[] | null}
+ */
+function findOrderCycle(order) {
+  /** @type {Map<string, string[]>} */
+  const successors = new Map()
+  /** @type {Set<string>} */
+  const nodes = new Set()
+  for (const edge of order) {
+    nodes.add(edge.agent)
+    for (const pred of edge.after) {
+      nodes.add(pred)
+      const list = successors.get(pred) ?? []
+      list.push(edge.agent)
+      successors.set(pred, list)
+    }
+  }
+
+  const WHITE = 0
+  const GRAY = 1
+  const BLACK = 2
+  /** @type {Map<string, number>} */
+  const color = new Map()
+  /** @type {string[]} */
+  const path = []
+
+  /** @param {string} node @returns {string[] | null} */
+  function visit(node) {
+    color.set(node, GRAY)
+    path.push(node)
+    for (const next of successors.get(node) ?? []) {
+      const state = color.get(next) ?? WHITE
+      if (state === GRAY) {
+        const start = path.indexOf(next)
+        return [...path.slice(start), next]
+      }
+      if (state === WHITE) {
+        const found = visit(next)
+        if (found !== null) return found
+      }
+    }
+    color.set(node, BLACK)
+    path.pop()
+    return null
+  }
+
+  for (const node of nodes) {
+    if ((color.get(node) ?? WHITE) === WHITE) {
+      const found = visit(node)
+      if (found !== null) return found
+    }
+  }
+  return null
 }
 
 /**

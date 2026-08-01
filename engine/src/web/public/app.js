@@ -216,6 +216,8 @@ bus.on('track-remove', (element) => config.trackRemove(element))
 bus.on('track-duplicate', (element) => config.trackDuplicate(element))
 bus.on('agent-add', (element) => config.agentAdd(element))
 bus.on('agent-remove', (element) => config.agentRemove(element))
+bus.on('edge-add', (element) => config.edgeAdd(element))
+bus.on('edge-remove', (element) => config.edgeRemove(element))
 bus.on('new-plan', (element) => {
   // A form, but the same execution path as everything else: it composes a loop
   // command and enqueues it.

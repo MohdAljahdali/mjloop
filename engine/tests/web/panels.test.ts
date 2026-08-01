@@ -2013,6 +2013,178 @@ describe('config', () => {
     expect((document.getElementById('config-reset') as HTMLButtonElement).disabled).toBe(false)
   })
 
+  describe('order edges', () => {
+    /** The `+` for one required/available agent's own row in the order graph. */
+    const edgeAddButton = (track: string, agent: string): HTMLElement =>
+      document.querySelector(`[data-act="edge-add"][data-track="${track}"][data-agent="${agent}"]`) as HTMLElement
+
+    it("adds and removes a predecessor through an agent's own row, and carries it into the change set", async () => {
+      serve({
+        '/api/config': configView({
+          tracks: { build: { required: ['builder', 'verifier'], available: ['ui-designer'], max_cycles: 5 } },
+        }),
+      })
+
+      reveal('panel-config')
+      const config = mountConfig()
+      draw(emptySnapshot())
+      await vi.waitFor(() => expect(document.querySelectorAll('.track-editor')).toHaveLength(1))
+
+      const add = edgeAddButton('build', 'verifier')
+      expect(add, 'no order row for verifier').not.toBeNull()
+      const box = add.parentElement?.querySelector('input') as HTMLInputElement
+      box.value = 'builder'
+      config.edgeAdd(add)
+
+      const row = add.closest('.track-order-agent') as HTMLElement
+      expect(row.querySelector('.chips')?.textContent).toContain('builder')
+      // Cleared the way every other add box on this card clears itself, once
+      // the edge it named has actually landed in the draft.
+      expect(box.value).toBe('')
+
+      const form = document.getElementById('config-editor') as HTMLFormElement
+      const baseline = ConfigSchema.parse({
+        version: 1,
+        tracks: { build: { required: ['builder', 'verifier'], available: ['ui-designer'], max_cycles: 5 } },
+      })
+      expect(collectConfigChanges(form, baseline)).toEqual([
+        {
+          kind: 'track',
+          track: 'build',
+          value: {
+            required: ['builder', 'verifier'],
+            available: ['ui-designer'],
+            closing: [],
+            order: [{ agent: 'verifier', after: ['builder'] }],
+            max_cycles: 5,
+          },
+        },
+      ])
+
+      // The predecessor's own chip, removed the way a chip on any other list
+      // removes itself — down to the last one, which drops the whole edge
+      // rather than leaving `after: []` behind (`OrderEdgeSchema.after` is
+      // `.min(1)`, schemas/config.ts:62).
+      const remove = row.querySelector('[data-act="edge-remove"]') as HTMLElement
+      expect(remove.dataset['track']).toBe('build')
+      expect(remove.dataset['agent']).toBe('verifier')
+      expect(remove.dataset['pred']).toBe('builder')
+      config.edgeRemove(remove)
+
+      expect(row.querySelector('.chips')?.textContent?.trim()).toBe('')
+      expect((row.querySelector('.track-list-empty') as HTMLElement).hidden).toBe(false)
+      expect(collectConfigChanges(form, baseline)).toEqual([])
+    })
+
+    /** The fill-in-the-blanks a locale string's `{param}` holes actually render as. */
+    const fill = (key: string, params: Record<string, string>): string =>
+      Object.entries(params).reduce((text, [name, value]) => text.split(`{${name}}`).join(value), english[key] ?? key)
+
+    it("flags an edge that waits on an agent the track never runs, the way TrackSchema's own check would", async () => {
+      serve({ '/api/config': configView({ tracks: { mine: { required: ['alpha'], max_cycles: 3 } } }) })
+
+      reveal('panel-config')
+      const config = mountConfig()
+      draw(emptySnapshot())
+      await vi.waitFor(() => expect(document.querySelectorAll('.track-editor')).toHaveLength(1))
+
+      const add = edgeAddButton('mine', 'alpha')
+      const box = add.parentElement?.querySelector('input') as HTMLInputElement
+      box.value = 'ghost'
+      config.edgeAdd(add)
+
+      // The chip lands regardless — a name's *shape* is all `validAgent`
+      // checks, the same as every other list on this card — and the problem
+      // list is what says a name this track never runs is not enough.
+      expect(add.closest('.track-order-agent')?.querySelector('.chips')?.textContent).toContain('ghost')
+      const problems = document.querySelectorAll('[data-track="mine"] .track-problem')
+      expect([...problems].map((node) => node.textContent)).toContain(
+        fill('config.problem.orderPredUnknown', { agent: 'ghost' }),
+      )
+      expect((document.getElementById('config-save') as HTMLButtonElement).disabled).toBe(true)
+    })
+
+    it('flags an edge that waits on a closing agent, which could never log a result inside a cycle', async () => {
+      serve({
+        '/api/config': configView({
+          tracks: { mine: { required: ['alpha'], closing: ['docs'], max_cycles: 3 } },
+        }),
+      })
+
+      reveal('panel-config')
+      const config = mountConfig()
+      draw(emptySnapshot())
+      await vi.waitFor(() => expect(document.querySelectorAll('.track-editor')).toHaveLength(1))
+
+      const add = edgeAddButton('mine', 'alpha')
+      const box = add.parentElement?.querySelector('input') as HTMLInputElement
+      box.value = 'docs'
+      config.edgeAdd(add)
+
+      const problems = document.querySelectorAll('[data-track="mine"] .track-problem')
+      expect([...problems].map((node) => node.textContent)).toContain(
+        fill('config.problem.orderPredClosing', { agent: 'docs' }),
+      )
+      expect((document.getElementById('config-save') as HTMLButtonElement).disabled).toBe(true)
+    })
+
+    it("flags an edge that inverts the track's own gate", async () => {
+      serve({
+        '/api/config': configView({
+          tracks: {
+            mine: {
+              required: ['prover', 'blocked'],
+              max_cycles: 3,
+              gate: { proven_by: 'prover', blocks: ['blocked'] },
+            },
+          },
+        }),
+      })
+
+      reveal('panel-config')
+      const config = mountConfig()
+      draw(emptySnapshot())
+      await vi.waitFor(() => expect(document.querySelectorAll('.track-editor')).toHaveLength(1))
+
+      // The gate already makes `prover`'s pass the precondition `blocked`
+      // waits on; ordering `prover` after `blocked` demands the opposite.
+      const add = edgeAddButton('mine', 'prover')
+      const box = add.parentElement?.querySelector('input') as HTMLInputElement
+      box.value = 'blocked'
+      config.edgeAdd(add)
+
+      const problems = document.querySelectorAll('[data-track="mine"] .track-problem')
+      expect([...problems].map((node) => node.textContent)).toContain(
+        fill('config.problem.orderInvertsGate', { agent: 'prover' }),
+      )
+      expect((document.getElementById('config-save') as HTMLButtonElement).disabled).toBe(true)
+    })
+
+    it('flags a cycle two edges close between them, the same graph `findOrderCycle` walks on the server', async () => {
+      serve({
+        '/api/config': configView({ tracks: { mine: { required: ['alpha', 'beta'], max_cycles: 3 } } }),
+      })
+
+      reveal('panel-config')
+      const config = mountConfig()
+      draw(emptySnapshot())
+      await vi.waitFor(() => expect(document.querySelectorAll('.track-editor')).toHaveLength(1))
+
+      const alphaAdd = edgeAddButton('mine', 'alpha')
+      ;(alphaAdd.parentElement?.querySelector('input') as HTMLInputElement).value = 'beta'
+      config.edgeAdd(alphaAdd)
+
+      const betaAdd = edgeAddButton('mine', 'beta')
+      ;(betaAdd.parentElement?.querySelector('input') as HTMLInputElement).value = 'alpha'
+      config.edgeAdd(betaAdd)
+
+      const problems = document.querySelectorAll('[data-track="mine"] .track-problem')
+      expect([...problems].map((node) => node.textContent)).toContain(
+        fill('config.problem.orderCycle', { path: 'alpha → beta → alpha' }),
+      )
+      expect((document.getElementById('config-save') as HTMLButtonElement).disabled).toBe(true)
+    })
+  })
 })
 
 /**

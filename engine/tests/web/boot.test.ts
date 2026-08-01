@@ -2,6 +2,7 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 import { emptySnapshot, loadPage, readLocale } from './helpers/page.js'
 import { installScheduler } from '../../src/web/public/ui/render.js'
+import { ConfigSchema } from '../../src/schemas/config.js'
 import type { ServerMessage } from '../../src/web/protocol.js'
 
 /**
@@ -87,6 +88,7 @@ beforeAll(async () => {
       return Promise.resolve(new Response(JSON.stringify(FEATURE_DETAIL), { status: 200 }))
     }
     if (at === '/api/skills') return Promise.resolve(new Response(JSON.stringify(SKILLS_VIEW), { status: 200 }))
+    if (at === '/api/config') return Promise.resolve(new Response(JSON.stringify(CONFIG_VIEW), { status: 200 }))
     if (at === '/api/plans/P001') {
       planFetches += 1
       return Promise.resolve(new Response(JSON.stringify(PLAN_DETAIL), { status: 200 }))
@@ -194,6 +196,21 @@ const FEATURE_DETAIL = {
   status: 'draft',
   revisions: [{ revision: 1, status: 'draft' }],
   digest: DIGEST,
+}
+
+/**
+ * A track with two draftable agents (`verifier` runs after nothing yet),
+ * parsed through the engine's own schema so `order`'s `[]` default — and
+ * every other one — is real rather than hand-typed.
+ */
+const CONFIG_VIEW = {
+  raw: 'version: 1\n',
+  revision: 'c'.repeat(64),
+  parsed: ConfigSchema.parse({
+    version: 1,
+    tracks: { build: { required: ['builder', 'verifier'], available: ['ui-designer'], max_cycles: 5 } },
+  }),
+  invalid: false,
 }
 
 const SKILLS_VIEW = {
@@ -590,5 +607,65 @@ describe('boot', () => {
 
     click('[data-act="notice-toggle"]')
     expect(document.querySelector('#notice-list .notice-row')?.textContent).toContain('P009-S01')
+  })
+
+  it("carries a real order edge, added through the Config tab's own card, through to a real config.patch frame", async () => {
+    // C4 (Milestone C): the edge editor lives in the track card `trackProblems`
+    // already validates, not in a panel of its own — this is the seam every
+    // other suite in this file exercises, boot's `app.js` wiring end to end,
+    // for the one control this milestone adds.
+    sent.length = 0
+    open('config')
+    poll({ revisions: { ...emptySnapshot().revisions, config: 'edge-1' } })
+    // The config feed resolves over a real (mocked) fetch, so nothing on
+    // screen names the track yet — waited on the card actually rendering
+    // rather than `.disabled`, which starts `false` before any JS has run
+    // and would make this wait pass before the fetch even settles.
+    await vi.waitFor(() =>
+      expect(document.querySelectorAll('#config-track-editors .track-editor').length).toBe(1),
+    )
+
+    // `verifier`'s own row: the combobox beside its (empty) chip list, found
+    // the way a person would reach it — by the row naming `build`/`verifier`
+    // — not by an id nothing else on the page carries.
+    const add = document.querySelector(
+      '[data-act="edge-add"][data-track="build"][data-agent="verifier"]',
+    ) as HTMLElement
+    expect(add, 'no order row for verifier').not.toBeNull()
+    const input = add.parentElement?.querySelector('input') as HTMLInputElement
+    input.value = 'builder'
+    add.dispatchEvent(new Event('click', { bubbles: true }))
+
+    const row = add.closest('.track-order-agent') as HTMLElement
+    expect(row.querySelector('.chips')?.textContent).toContain('builder')
+
+    sent.length = 0
+    // `#config-editor`, not its submit button: `ui/bus.js`'s delegated
+    // handler acts on a form's own `submit` event and deliberately ignores a
+    // `click` that bubbles up to it from inside — the same guard that stops
+    // the halt write firing twice — so this is the event a real press of the
+    // (disabled-by-default, now-enabled) save button actually raises.
+    document.getElementById('config-editor')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+
+    const frame = sent.find((message) => (message as { type: string }).type === 'write') as
+      | { type: 'write'; id: string; write: unknown }
+      | undefined
+    expect(frame?.write).toEqual({
+      kind: 'config.patch',
+      revision: CONFIG_VIEW.revision,
+      changes: [
+        {
+          kind: 'track',
+          track: 'build',
+          value: {
+            required: ['builder', 'verifier'],
+            available: ['ui-designer'],
+            closing: [],
+            order: [{ agent: 'verifier', after: ['builder'] }],
+            max_cycles: 5,
+          },
+        },
+      ],
+    })
   })
 })

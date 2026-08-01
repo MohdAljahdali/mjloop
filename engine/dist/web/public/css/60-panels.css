@@ -1142,6 +1142,49 @@ button.primary:disabled {
   display: none;
 }
 
+/* The order graph: one row per required/available agent, each a name plus a
+   chip list plus the combobox that extends it — the same "chips and a
+   combobox" shape `.track-list-body` above uses for the other four lists. */
+.track-order-agents {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-block-start: 8px;
+}
+
+/* Overrides `.rule-why`'s `flex: 1`, meant for the row it sits beside in
+   `.rule` (a specialist's mode select) — here it is a block caption above a
+   list of rows, not a flex sibling, and the browser's own paragraph margin
+   would otherwise open a gap `.track-list-label` never has. */
+.track-optional > .rule-why {
+  flex: initial;
+  margin: 0 0 8px;
+}
+
+.track-order-agent {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.track-order-name {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--accent);
+}
+
+.track-order-after {
+  color: var(--dim);
+  font-size: 12px;
+}
+
+.track-order-agent .chips {
+  flex: 1;
+  min-width: 200px;
+}
+
 .track-problem {
   margin-block-start: 10px;
   padding: 8px 12px;

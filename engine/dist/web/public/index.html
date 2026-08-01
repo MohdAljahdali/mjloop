@@ -1599,6 +1599,16 @@
           </div>
         </div>
 
+        <!-- One row per required/available agent: which agents it runs after.
+             Not toggleable like the gate and map above it — an agent with no
+             predecessors simply shows an empty chip list, which is the
+             `order: []` default every track already carries. -->
+        <div class="track-optional">
+          <span class="track-list-label" data-i18n="config.order"></span>
+          <p class="rule-why" data-i18n="config.orderWhy"></p>
+          <div class="track-order-agents" data-slot="orderAgents"></div>
+        </div>
+
         <ul class="track-problems" data-slot="problems"></ul>
       </section>
     </template>
@@ -1621,6 +1631,30 @@
       <li class="chip chip-agent">
         <bdi data-slot="name"></bdi>
         <button type="button" class="icon" data-act="agent-remove" data-slot="remove" data-i18n-label="config.remove">×</button>
+      </li>
+    </template>
+
+    <!-- One required/available agent's row in a track's order graph: its name,
+         the chips naming what it waits on, and the combobox that adds one
+         more. A separate template from `tpl-track-list` because a removal
+         here needs two keys (the agent and the predecessor), not one. -->
+    <template id="tpl-track-order-agent">
+      <div class="track-order-agent">
+        <code class="track-order-name" data-slot="agent"></code>
+        <span class="track-order-after" data-i18n="config.orderAfter"></span>
+        <ul class="chips" data-slot="chips"></ul>
+        <span class="track-list-empty" data-slot="empty" hidden data-i18n="config.noAgents"></span>
+        <div class="rule-add">
+          <input list="config-agent-names" dir="ltr" autocomplete="off" spellcheck="false" data-slot="entry" data-i18n-placeholder="config.agentName" data-i18n-label="config.agentName" />
+          <button type="button" class="icon" data-act="edge-add" data-slot="add" data-i18n-label="config.add">+</button>
+        </div>
+      </div>
+    </template>
+
+    <template id="tpl-edge-chip">
+      <li class="chip chip-agent">
+        <bdi data-slot="name"></bdi>
+        <button type="button" class="icon" data-act="edge-remove" data-slot="remove" data-i18n-label="config.remove">×</button>
       </li>
     </template>
 
