@@ -207,6 +207,40 @@ describe('handleApi', () => {
     expect(result?.body).toEqual({ error: { code: 'error.notFound' } })
   })
 
+  describe('/api/transcripts', () => {
+    it("serves a job's durable transcript by id", async () => {
+      const dir = path.join(project.dir, '.mjloop', 'web', 'transcripts')
+      await fs.mkdir(dir, { recursive: true })
+      await fs.writeFile(path.join(dir, '20260728T090000-1.log'), 'hello from the pty', 'utf8')
+
+      const result = await call('/api/transcripts/20260728T090000-1')
+      expect(result?.status).toBe(200)
+      expect(result?.body).toBe('hello from the pty')
+    })
+
+    it('answers 404 for a job with no durable transcript, and offers no listing', async () => {
+      expect((await call('/api/transcripts/20260728T090000-1'))?.status).toBe(404)
+      // No index route, unlike `/api/runs` and `/api/memory`: every reader
+      // here already knows the one id it wants.
+      expect((await call('/api/transcripts'))?.status).toBe(404)
+      expect((await call('/api/transcripts/20260728T090000-1/extra'))?.status).toBe(404)
+    })
+
+    it('refuses anything that is not shaped like a job id before reading a file', async () => {
+      // `<compact ISO>-<counter>` is `Job.id`'s own shape and the traversal
+      // guard at once — refused here before a path is ever built from it.
+      for (const bad of ['nonsense', '2026-07-28-1', '20260728T090000', '20260728T090000-']) {
+        expect((await call(`/api/transcripts/${bad}`))?.status).toBe(400)
+      }
+    })
+
+    it('is a read and nothing else', async () => {
+      for (const method of ['POST', 'PUT', 'DELETE', 'PATCH']) {
+        expect((await call('/api/transcripts/20260728T090000-1', method))?.status).toBe(405)
+      }
+    })
+  })
+
   describe('/api/skills', () => {
     const DIGEST_A = 'a'.repeat(64)
     let dataHome: string
@@ -345,6 +379,8 @@ describe('handleApi', () => {
       '/api/features/../../etc',
       '/api/features/..%2F..%2Fconfig.yaml',
       '/api/features/F001/../../state.json',
+      '/api/transcripts/../../etc',
+      '/api/transcripts/..%2F..%2Fconfig.yaml',
       // An un-normalised path, which a browser would never send but a raw
       // socket can: it is still ours to refuse rather than to resolve.
       '/api/../app.js',
@@ -375,6 +411,8 @@ describe('handleApi', () => {
       await call('/api/profile/1'),
       await call('/api/features/nonsense'),
       await call('/api/features/F404'),
+      await call('/api/transcripts/nonsense'),
+      await call('/api/transcripts/20260728T090000-1'),
     ]
     for (const failure of failures) {
       const error = (failure?.body as { error?: Record<string, unknown> }).error ?? {}

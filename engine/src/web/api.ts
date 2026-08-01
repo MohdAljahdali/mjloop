@@ -22,6 +22,7 @@ import {
   readState,
   readStoryDetail,
   readTelemetryReport,
+  readTranscript,
 } from './read.js'
 
 /**
@@ -57,6 +58,13 @@ import {
 /** `<run_id>--<story|adhoc>--<track>`, all three of which are already id-shaped. */
 const RUN_ID = /^[\w-]+$/
 const MEMORY_ID = /^M\d{3}$/
+/**
+ * `<server start, compact ISO>-<counter>` — `Job.id`'s own shape, restated
+ * here for the same reason `PlanIdSchema` is reused rather than retyped
+ * elsewhere in this file: the id shape *is* the traversal guard. Digits, `T`
+ * and `-` only, so `.` and `/` are both outside the class and `..` cannot match.
+ */
+const JOB_ID = /^\d{8}T\d{6}-\d+$/
 
 export interface ApiResult {
   status: number
@@ -173,6 +181,14 @@ async function route(projectDir: string, segments: readonly string[]): Promise<A
       if (segments.length !== 2 || first === undefined) break
       if (!MEMORY_ID.test(first)) return fail(400, 'error.badRequest')
       return ok(await readMemoryEntry(projectDir, first))
+
+    case 'transcripts':
+      // No listing at `/api/transcripts`, unlike `runs` and `memory` above:
+      // there is no panel that browses every job that ever ran, only ever one
+      // that already knows the id it wants.
+      if (segments.length !== 2 || first === undefined) break
+      if (!JOB_ID.test(first)) return fail(400, 'error.badRequest')
+      return ok(await readTranscript(projectDir, first))
 
     case 'skills':
       // No parameter, and none a later story should add: activation is a

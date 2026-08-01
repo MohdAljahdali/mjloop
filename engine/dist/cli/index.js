@@ -13001,6 +13001,17 @@ function resolveLoopPaths(projectDir) {
      * `PROTECTED_DIRECTORY_REASONS` in `cli/index.ts` was written to demand.
      */
     skills: path.join(root, "skills"),
+    /**
+     * Durable job transcripts: `web/transcripts/<jobId>.log`, raw pty bytes,
+     * append-only, written by `JobQueue` and read by `readTranscript`.
+     *
+     * Named here rather than left as a literal join in `queue.ts` and `read.ts`
+     * for the reason every other entry in this map is: one place decides where
+     * a `.mjloop/` path is rooted. It carries no key in `revision.ts` — job ids
+     * are unique across restarts (`Job.id`'s own doc says why), so a tab that
+     * wants one fetches it once, by id, rather than polling for a change.
+     */
+    webTranscripts: path.join(root, "web", "transcripts"),
     lock: path.join(root, ".lock"),
     /**
      * Mutual exclusion for verify *execution*, and never the same directory as

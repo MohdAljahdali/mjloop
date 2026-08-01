@@ -33,6 +33,7 @@ import {
   readState,
   readStoryDetail,
   readTelemetryReport,
+  readTranscript,
 } from '../../src/web/read.js'
 import { configRevision } from '../../src/store/config-mutation.js'
 import {
@@ -193,6 +194,14 @@ describe('read', () => {
     await approveFeature('F001', 1)
     await supersedeFeatureBrief(project.dir, { id: 'F001', expectRevision: 1 }, clock)
 
+    // A durable transcript on disk, written the way `JobQueue` writes one —
+    // never by anything in this file. Exercised here so a reader that lazily
+    // materialised a transcript on the way to answering `readTranscript`
+    // would fail this test by construction, exactly as the header above says.
+    const transcriptDir = path.join(project.dir, '.mjloop', 'web', 'transcripts')
+    await fs.mkdir(transcriptDir, { recursive: true })
+    await fs.writeFile(path.join(transcriptDir, '20260728T090000-1.log'), 'hello from the pty\n', 'utf8')
+
     const before = await hashTree(project.dir)
     await Promise.all([
       readState(project.dir),
@@ -204,6 +213,7 @@ describe('read', () => {
       readSkillManifest(project.dir, runId),
       readMemories(project.dir),
       readMemoryEntry(project.dir, 'M001'),
+      readTranscript(project.dir, '20260728T090000-1'),
       // Both cross-run reports walk every run directory in the project. A walk
       // is still a read, and the property this test defends is the whole reason
       // they are projections over `readRunHistory` rather than anything that
@@ -835,5 +845,24 @@ describe('read', () => {
     expect(memories).toHaveLength(1)
     expect(memories[0]).toMatchObject({ id: 'M001', kind: 'decision', title: 'Cookies over tokens' })
     expect(memories[0]?.body).toContain('SSR')
+  })
+
+  describe('readTranscript', () => {
+    it('serves a durable transcript exactly as it was written to disk', async () => {
+      const dir = path.join(project.dir, '.mjloop', 'web', 'transcripts')
+      await fs.mkdir(dir, { recursive: true })
+      // Raw pty bytes, unbounded and unescaped — no `verbatim()`-style decision
+      // made here, the same policy `PlanDetail.body` states for itself.
+      await fs.writeFile(path.join(dir, '20260728T090000-1.log'), 'line one\r\nline two\r\n', 'utf8')
+
+      expect(await readTranscript(project.dir, '20260728T090000-1')).toBe('line one\r\nline two\r\n')
+    })
+
+    it('answers 404 for a job that has no durable transcript', async () => {
+      // Ordinary, not exceptional: a job that never produced output, one whose
+      // file has already aged out of retention, and a project that has never
+      // run anything at all are the same case from here.
+      await expect(readTranscript(project.dir, '20260728T090000-1')).rejects.toBeInstanceOf(NotFoundError)
+    })
   })
 })

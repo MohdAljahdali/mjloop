@@ -437,6 +437,31 @@ async function readManifestTitle(dir: string): Promise<string | null> {
   }
 }
 
+/* ── transcripts ──────────────────────────────────────────────────────────── */
+
+/**
+ * A job's durable transcript, `.mjloop/web/transcripts/<jobId>.log`, exactly
+ * as `JobQueue.writeTranscriptChunk` appended it — raw pty bytes, unbounded,
+ * for the same reason `PlanDetail.body` is: the writer applies no ceiling of
+ * its own, so a reader that invented one would be trimming from the wrong end
+ * of a decision that belongs to the write side.
+ *
+ * A `fs.readFile` and nothing else — the file is produced by `JobQueue`, on
+ * the process actually running the job, never by this function. That is what
+ * keeps it inside the boundary `read.test.ts` polices: hashing every file
+ * under `.mjloop/` around every reader in this module only proves a poll
+ * never writes if none of them can materialise the thing they were asked to
+ * read.
+ */
+export async function readTranscript(projectDir: string, jobId: string): Promise<string> {
+  const file = path.join(resolveLoopPaths(projectDir).webTranscripts, `${jobId}.log`)
+  try {
+    return await fs.readFile(file, 'utf8')
+  } catch {
+    throw new NotFoundError('transcript')
+  }
+}
+
 /* ── runs ─────────────────────────────────────────────────────────────────── */
 
 export interface RunSummary {

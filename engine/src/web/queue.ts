@@ -1,4 +1,7 @@
+import fs from 'node:fs/promises'
+import path from 'node:path'
 import type { StateSummary } from '../ops/summary.js'
+import { resolveLoopPaths } from '../store/paths.js'
 import { NEW_TRACKER, isStalled, observe, type Tracker, type Verdict } from './completion.js'
 import type { Job, JobStatus, Message, SessionView } from './protocol.js'
 import type { LoopSession, SessionFactory } from './session.js'
@@ -17,8 +20,36 @@ const KILL_WAIT_MS = 3_000
 
 /** Per job. Enough to scroll back through a cycle, bounded so a loud run cannot eat the heap. */
 const TRANSCRIPT_MAX = 1_000_000
-/** How many finished transcripts to keep. */
+/** How many finished transcripts to keep in memory. */
 const TRANSCRIPT_KEEP = 20
+
+/**
+ * Retention for `.mjloop/web/transcripts/`, independent of `TRANSCRIPT_KEEP`
+ * above: a restarted server has no in-memory copies at all, so the disk is
+ * what a project's history rests on the moment one restart has happened.
+ *
+ * Bounded three ways rather than one, because this is the only destructive
+ * operation this server ever performs against `.mjloop/` and deserves the same
+ * care `read.ts`'s non-destructiveness gets. A file is never a candidate for
+ * any of the three while its job is still queued or running — see
+ * `pruneTranscriptFiles` — so a long-lived run is never cut off mid-way for
+ * being large, old, or merely one file too many.
+ */
+export const TRANSCRIPT_DISK_KEEP = 20
+/** Thirty days is enough for the run somebody is coming back to ask about. */
+export const TRANSCRIPT_DISK_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000
+/**
+ * Plain text pty output; 20 MB is generously more than `TRANSCRIPT_DISK_KEEP` ordinary cycles.
+ *
+ * A single transcript over this cap is kept anyway, deliberately: `pruneTranscriptFiles`'s
+ * byte loop stops at one survivor rather than zero, so the newest transcript — the long,
+ * loud run somebody is most likely to come back and read — can never be the thing this cap
+ * empties the directory to enforce. The in-memory bound beside this one makes the same call
+ * the other way (`TRANSCRIPT_MAX` above truncates to the last 1 MB rather than dropping the
+ * job's history), because the live socket has no "at least keep the file" fallback to fall
+ * back to; disk does.
+ */
+export const TRANSCRIPT_DISK_MAX_BYTES = 20_000_000
 
 export interface QueueEvents {
   onOutput: (jobId: string, data: string) => void
@@ -73,6 +104,18 @@ export class JobQueue {
   private readonly transcripts = new Map<string, string>()
   private active: Active | null = null
   private counter = 0
+  /**
+   * Serialises durable writes across every chunk of every job.
+   *
+   * `append` fires `writeTranscriptChunk` without awaiting it — the pty data
+   * handler that calls `append` must not stall on disk — so two chunks that
+   * land in the same tick race unless something orders them. This is that
+   * something: each write is chained onto the last rather than started
+   * independently, which is what keeps a `.log` file in the order the pty
+   * actually produced it rather than whichever `fs.appendFile` call happened
+   * to finish first.
+   */
+  private transcriptWrites: Promise<void> = Promise.resolve()
   private cols = 120
   private rows = 40
   private stalledSince: string | null = null
@@ -318,6 +361,128 @@ export class JobQueue {
     const existing = this.transcripts.get(jobId) ?? ''
     const next = existing + chunk
     this.transcripts.set(jobId, next.length > TRANSCRIPT_MAX ? next.slice(-TRANSCRIPT_MAX) : next)
+    // Durable and best-effort, deliberately not awaited here: a slow or
+    // failing disk must not hold up the pty data this method exists to hand
+    // back to `onOutput` on the next line of its caller. Chained onto
+    // `transcriptWrites` rather than started independently, so a chunk that
+    // hits the slower ENOENT-then-mkdir path in `writeTranscriptChunk` cannot
+    // finish after a later chunk that did not.
+    this.transcriptWrites = this.transcriptWrites.then(() => this.writeTranscriptChunk(jobId, chunk))
+  }
+
+  /**
+   * Append raw pty bytes to `.mjloop/web/transcripts/<jobId>.log`.
+   *
+   * This is the write side of the boundary `read.test.ts` polices: that test
+   * hashes every file under `.mjloop/` around every function in `read.ts` to
+   * prove a poll never writes, and that only holds if a transcript is produced
+   * here — by the process actually running the job — and never lazily by
+   * whatever later reads it.
+   *
+   * Safe to append rather than needing to check for a stale file first: job
+   * ids are unique across restarts (`Job.id`'s own doc — the epoch above is
+   * the server's start stamp, not a counter that resets to it), so this call
+   * can never land one server's bytes after another's in the same file, and
+   * `fs.appendFile` never truncates what is already there.
+   *
+   * Every failure is swallowed — a missing directory on the first job of a
+   * fresh project, a full disk, a read-only `.mjloop`. A transcript that
+   * cannot be written is a transcript that is simply not durable this time;
+   * it must never be a job that stops running because of it.
+   */
+  private async writeTranscriptChunk(jobId: string, chunk: string): Promise<void> {
+    const file = path.join(this.transcriptDir(), `${jobId}.log`)
+    try {
+      await fs.appendFile(file, chunk)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') return
+      try {
+        await fs.mkdir(this.transcriptDir(), { recursive: true })
+        await fs.appendFile(file, chunk)
+      } catch {
+        // Still failing — disk full, read-only, or something else this queue
+        // has no way to fix. The run continues regardless.
+      }
+    }
+  }
+
+  private transcriptDir(): string {
+    // `this.options.cwd` *is* the project directory — `server.ts` passes the
+    // same value for both — so there is no second field to keep in step with it.
+    return resolveLoopPaths(this.options.cwd).webTranscripts
+  }
+
+  /**
+   * Delete durable transcript files this project no longer needs to keep.
+   *
+   * Protected ids are read first, synchronously, before any `await` below —
+   * not because `handleExit`'s own mid-transition state is at risk (a job
+   * only ever moves queued → running there, and both are protected either
+   * way), but because `cancel` and `clear` (queue.ts:163, :195) mutate a
+   * pending job's status synchronously and could run on an event-loop turn
+   * this function yields to between one `await` and the next. Reading the set
+   * once up front keeps it independent of anything that happens while this
+   * function is not running, rather than trusting that nothing reachable from
+   * an `await` here ever moves a job out of `queued`. Anything queued or
+   * running at that instant is never a deletion candidate at all, independent
+   * of the three bounds below: losing the transcript of a job the operator
+   * can still see in the queue would be worse than the disk this function
+   * exists to bound.
+   */
+  private async pruneTranscriptFiles(): Promise<void> {
+    const protectedIds = new Set(
+      this.jobs()
+        .filter((job) => job.status === 'queued' || job.status === 'running')
+        .map((job) => job.id),
+    )
+
+    const dir = this.transcriptDir()
+    let names: string[]
+    try {
+      names = await fs.readdir(dir)
+    } catch {
+      // No directory yet, or it went away underneath us — nothing to prune.
+      return
+    }
+
+    const stamped = await Promise.all(
+      names
+        .filter((name) => name.endsWith('.log') && !protectedIds.has(name.slice(0, -'.log'.length)))
+        .map(async (name) => {
+          const file = path.join(dir, name)
+          const stats = await fs.stat(file).catch(() => null)
+          return stats === null ? null : { file, mtimeMs: stats.mtimeMs, size: stats.size }
+        }),
+    )
+    const candidates = stamped
+      .filter((entry): entry is { file: string; mtimeMs: number; size: number } => entry !== null)
+      .sort((a, b) => a.mtimeMs - b.mtimeMs) // oldest first, throughout
+
+    const now = this.clock().getTime()
+    const toDelete = new Set<string>()
+    for (const entry of candidates) {
+      if (now - entry.mtimeMs > TRANSCRIPT_DISK_MAX_AGE_MS) toDelete.add(entry.file)
+    }
+
+    const byCount = candidates.filter((entry) => !toDelete.has(entry.file))
+    for (const entry of byCount.slice(0, Math.max(0, byCount.length - TRANSCRIPT_DISK_KEEP))) {
+      toDelete.add(entry.file)
+    }
+
+    const survivors = candidates.filter((entry) => !toDelete.has(entry.file))
+    let total = survivors.reduce((sum, entry) => sum + entry.size, 0)
+    // `> 1`, not `> 0`: the newest survivor is never a candidate for the byte
+    // bound, so one transcript over the cap on its own empties disk history
+    // down to that one file rather than to nothing — see the doc comment on
+    // `TRANSCRIPT_DISK_MAX_BYTES`.
+    while (total > TRANSCRIPT_DISK_MAX_BYTES && survivors.length > 1) {
+      const oldest = survivors.shift()
+      if (oldest === undefined) break
+      toDelete.add(oldest.file)
+      total -= oldest.size
+    }
+
+    await Promise.all([...toDelete].map((file) => fs.unlink(file).catch(() => {})))
   }
 
   private beginShutdown(active: Active, outcome: { status: JobStatus; reason: Message | null }): void {
@@ -404,5 +569,10 @@ export class JobQueue {
     for (const id of this.transcripts.keys()) {
       if (!keep.has(id)) this.transcripts.delete(id)
     }
+    // Best-effort and fire-and-forget, like the write it is the other half
+    // of: a slow or failing disk walk must not delay the job that just
+    // finished, and a rejection here is swallowed the same way a failed
+    // append is.
+    void this.pruneTranscriptFiles().catch(() => {})
   }
 }

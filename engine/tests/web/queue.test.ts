@@ -1,7 +1,10 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import fs from 'node:fs/promises'
+import path from 'node:path'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Message } from '../../src/web/protocol.js'
-import { JobQueue, STALL_MS } from '../../src/web/queue.js'
+import { JobQueue, STALL_MS, TRANSCRIPT_DISK_KEEP, TRANSCRIPT_DISK_MAX_BYTES } from '../../src/web/queue.js'
 import { fakeSessions, type FakeSessions } from '../helpers/fake-session.js'
+import { makeTmpProject, type TmpProject } from '../helpers/tmp-project.js'
 import { running, summary } from '../helpers/summary.js'
 
 function makeClock(start = 1_000_000) {
@@ -357,5 +360,215 @@ describe('JobQueue', () => {
     const before = queue.jobs()
     first.end(0)
     expect(queue.jobs()).toEqual(before)
+  })
+})
+
+describe('durable transcripts', () => {
+  let project: TmpProject
+
+  beforeEach(async () => {
+    project = await makeTmpProject()
+  })
+  afterEach(async () => {
+    await project.cleanup()
+  })
+
+  function transcriptDir(): string {
+    return path.join(project.dir, '.mjloop', 'web', 'transcripts')
+  }
+
+  function makeQueue(overrides: { clock?: () => Date } = {}): JobQueue {
+    return new JobQueue({
+      cwd: project.dir,
+      spawn: sessions.factory,
+      clock: overrides.clock ?? clock.clock,
+      onOutput: () => {},
+      onChange: () => {},
+      onNotice: (message) => notices.push(message),
+    })
+  }
+
+  it("appends every output chunk to the job's own file on disk", async () => {
+    const q = makeQueue()
+    const job = q.enqueue('/mjloop:build P001-S01')
+    sessions.last().emit('hello ')
+    sessions.last().emit('world')
+
+    await vi.waitFor(async () => {
+      expect(await fs.readFile(path.join(transcriptDir(), `${job.id}.log`), 'utf8')).toBe('hello world')
+    })
+  })
+
+  it('appends rather than clobbers when a restart reuses a job id', async () => {
+    // The counter resets to 0 every boot, so two `JobQueue`s built off the
+    // same clock compute the identical first id — the exact case `Job.id`'s
+    // own doc names as safe only because the write is append, never overwrite.
+    const first = makeQueue()
+    const job = first.enqueue('/mjloop:build P001-S01')
+    sessions.last().emit('run one')
+    const file = path.join(transcriptDir(), `${job.id}.log`)
+    await vi.waitFor(async () => {
+      expect(await fs.readFile(file, 'utf8')).toBe('run one')
+    })
+
+    const restarted = makeQueue()
+    expect(restarted.enqueue('/mjloop:build P001-S02').id).toBe(job.id)
+    sessions.last().emit(' run two')
+
+    await vi.waitFor(async () => {
+      expect(await fs.readFile(file, 'utf8')).toBe('run one run two')
+    })
+  })
+
+  it('does not let a failing durable write affect the job', async () => {
+    // A plain file where the writer needs a directory: every `mkdir` under it
+    // fails with `ENOTDIR`, the shape a read-only or exhausted filesystem
+    // takes too, and the one this queue has no way to fix.
+    await fs.writeFile(path.join(project.dir, '.mjloop'), 'not a directory')
+    const q = makeQueue()
+    const job = q.enqueue('/mjloop:build P001-S01')
+    sessions.last().emit('hello')
+
+    // Give the doomed write a turn to fail and be swallowed.
+    await new Promise((resolve) => setTimeout(resolve, 20))
+
+    expect(q.jobs()[0]?.status).toBe('running')
+    // The in-memory copy — what the live socket serves — is unaffected.
+    expect(q.transcript(job.id)).toBe('hello')
+    // And the write really did fail, rather than the assertion above passing
+    // for an unrelated reason.
+    await expect(fs.stat(transcriptDir())).rejects.toThrow()
+  })
+
+  it('keeps only the newest finished transcripts on disk, oldest dropped first', async () => {
+    const dir = transcriptDir()
+    await fs.mkdir(dir, { recursive: true })
+    for (let index = 0; index <= TRANSCRIPT_DISK_KEEP; index += 1) {
+      const file = path.join(dir, `stale-${index}.log`)
+      await fs.writeFile(file, 'x')
+      await fs.utimes(file, new Date(index * 1000), new Date(index * 1000))
+    }
+
+    const q = makeQueue()
+    q.enqueue('/mjloop:build P001-S01')
+    q.observe(running())
+    q.observe(summary({ status: 'done', run_id: '2026-07-28-001' }))
+    sessions.last().end(0)
+
+    await vi.waitFor(async () => {
+      const remaining = await fs.readdir(dir)
+      expect(remaining.filter((name) => name.startsWith('stale-'))).toHaveLength(TRANSCRIPT_DISK_KEEP)
+    })
+    const remaining = await fs.readdir(dir)
+    // The single oldest file went — not an arbitrary member of the set.
+    expect(remaining).not.toContain('stale-0.log')
+    expect(remaining).toContain(`stale-${TRANSCRIPT_DISK_KEEP}.log`)
+  })
+
+  it('drops a transcript older than the retention window regardless of count', async () => {
+    const dir = transcriptDir()
+    await fs.mkdir(dir, { recursive: true })
+    const ancient = path.join(dir, 'ancient.log')
+    await fs.writeFile(ancient, 'old content')
+    await fs.utimes(ancient, new Date(0), new Date(0))
+
+    // "Now" thirty-five days after the epoch, so a file stamped at the epoch
+    // is outside the thirty-day window regardless of how few files exist.
+    const q = makeQueue({ clock: () => new Date(35 * 24 * 60 * 60 * 1000) })
+    q.enqueue('/mjloop:build P001-S01')
+    q.observe(running())
+    q.observe(summary({ status: 'done', run_id: '2026-07-28-001' }))
+    sessions.last().end(0)
+
+    await vi.waitFor(async () => {
+      expect(await fs.readdir(dir)).not.toContain('ancient.log')
+    })
+  })
+
+  it('keeps total transcript bytes under the disk cap, oldest first', async () => {
+    const dir = transcriptDir()
+    await fs.mkdir(dir, { recursive: true })
+    // Two files that are each under the cap but together are well over it, so
+    // pruning must delete the older one whole rather than trim both.
+    const chunk = Math.ceil(TRANSCRIPT_DISK_MAX_BYTES * 0.6)
+    const older = path.join(dir, 'older.log')
+    const newer = path.join(dir, 'newer.log')
+    await fs.writeFile(older, Buffer.alloc(chunk))
+    await fs.utimes(older, new Date(0), new Date(0))
+    await fs.writeFile(newer, Buffer.alloc(chunk))
+    await fs.utimes(newer, new Date(1000), new Date(1000))
+
+    const q = makeQueue()
+    q.enqueue('/mjloop:build P001-S01')
+    q.observe(running())
+    q.observe(summary({ status: 'done', run_id: '2026-07-28-001' }))
+    sessions.last().end(0)
+
+    await vi.waitFor(async () => {
+      expect(await fs.readdir(dir)).not.toContain('older.log')
+    })
+    expect(await fs.readdir(dir)).toContain('newer.log')
+  })
+
+  it('keeps a single transcript over the byte cap rather than emptying the directory', async () => {
+    const dir = transcriptDir()
+    await fs.mkdir(dir, { recursive: true })
+    // Sole survivor of the byte bound, newest by mtime (there is nothing older
+    // to compare it to), already over the cap on its own — the case the byte
+    // loop must not treat as "delete until it fits", because that leaves zero
+    // survivors.
+    const oversized = path.join(dir, 'oversized.log')
+    await fs.writeFile(oversized, Buffer.alloc(TRANSCRIPT_DISK_MAX_BYTES + 1_000_000))
+    // A second file, deleted by the age bound alone (mtime 0, clock past the
+    // 30-day window) rather than the byte one. Both files are unlinked, if at
+    // all, inside the same `Promise.all` in `pruneTranscriptFiles`, so waiting
+    // for this one's deletion — reliable, unlike waiting for `oversized.log`
+    // to still be there, which would pass instantly on a fresh `readdir`
+    // whether or not pruning had run yet — proves the byte-loop's decision
+    // about `oversized.log` has also already been made and applied.
+    const ancient = path.join(dir, 'ancient.log')
+    await fs.writeFile(ancient, 'old')
+    await fs.utimes(ancient, new Date(0), new Date(0))
+
+    const q = makeQueue({ clock: () => new Date(35 * 24 * 60 * 60 * 1000) })
+    q.enqueue('/mjloop:build P001-S01')
+    q.observe(running())
+    q.observe(summary({ status: 'done', run_id: '2026-07-28-001' }))
+    sessions.last().end(0)
+
+    await vi.waitFor(async () => {
+      expect(await fs.readdir(dir)).not.toContain('ancient.log')
+    })
+    expect(await fs.readdir(dir)).toContain('oversized.log')
+  })
+
+  it('never deletes a transcript for a job still queued or running, however old', async () => {
+    const dir = transcriptDir()
+    await fs.mkdir(dir, { recursive: true })
+
+    // Past the retention window (30 days), the same relationship the age test
+    // above relies on to make its own fixture fire. Without this, "now" sits
+    // at the default clock's 1_000_000ms and the file below (mtime 0) is only
+    // ~11.6 days old — inside every one of the three bounds regardless of
+    // protection, so the assertion below would pass whether or not the
+    // protected-id filter actually did anything.
+    const q = makeQueue({ clock: () => new Date(35 * 24 * 60 * 60 * 1000) })
+    q.enqueue('/mjloop:build P001-S01')
+    const second = q.enqueue('/mjloop:build P001-S02') // stays queued behind the first
+
+    // A stale file for the still-queued job, as if left behind by an earlier
+    // attempt. It is now outside the age window, over the count, and — being
+    // the only other file — irrelevant to the byte cap: only the protected-id
+    // filter stands between it and deletion.
+    const queuedFile = path.join(dir, `${second.id}.log`)
+    await fs.writeFile(queuedFile, 'stale')
+    await fs.utimes(queuedFile, new Date(0), new Date(0))
+
+    q.observe(running())
+    q.observe(summary({ status: 'done', run_id: '2026-07-28-001' }))
+    sessions.last().end(0) // finishes the first job and triggers a prune
+
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(await fs.readFile(queuedFile, 'utf8')).toBe('stale')
   })
 })

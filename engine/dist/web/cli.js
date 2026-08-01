@@ -3722,17 +3722,17 @@ var require_visit = __commonJS({
     visit.BREAK = BREAK;
     visit.SKIP = SKIP;
     visit.REMOVE = REMOVE;
-    function visit_(key, node, visitor, path23) {
-      const ctrl = callVisitor(key, node, visitor, path23);
+    function visit_(key, node, visitor, path24) {
+      const ctrl = callVisitor(key, node, visitor, path24);
       if (identity.isNode(ctrl) || identity.isPair(ctrl)) {
-        replaceNode(key, path23, ctrl);
-        return visit_(key, ctrl, visitor, path23);
+        replaceNode(key, path24, ctrl);
+        return visit_(key, ctrl, visitor, path24);
       }
       if (typeof ctrl !== "symbol") {
         if (identity.isCollection(node)) {
-          path23 = Object.freeze(path23.concat(node));
+          path24 = Object.freeze(path24.concat(node));
           for (let i = 0; i < node.items.length; ++i) {
-            const ci = visit_(i, node.items[i], visitor, path23);
+            const ci = visit_(i, node.items[i], visitor, path24);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -3743,13 +3743,13 @@ var require_visit = __commonJS({
             }
           }
         } else if (identity.isPair(node)) {
-          path23 = Object.freeze(path23.concat(node));
-          const ck = visit_("key", node.key, visitor, path23);
+          path24 = Object.freeze(path24.concat(node));
+          const ck = visit_("key", node.key, visitor, path24);
           if (ck === BREAK)
             return BREAK;
           else if (ck === REMOVE)
             node.key = null;
-          const cv = visit_("value", node.value, visitor, path23);
+          const cv = visit_("value", node.value, visitor, path24);
           if (cv === BREAK)
             return BREAK;
           else if (cv === REMOVE)
@@ -3770,17 +3770,17 @@ var require_visit = __commonJS({
     visitAsync.BREAK = BREAK;
     visitAsync.SKIP = SKIP;
     visitAsync.REMOVE = REMOVE;
-    async function visitAsync_(key, node, visitor, path23) {
-      const ctrl = await callVisitor(key, node, visitor, path23);
+    async function visitAsync_(key, node, visitor, path24) {
+      const ctrl = await callVisitor(key, node, visitor, path24);
       if (identity.isNode(ctrl) || identity.isPair(ctrl)) {
-        replaceNode(key, path23, ctrl);
-        return visitAsync_(key, ctrl, visitor, path23);
+        replaceNode(key, path24, ctrl);
+        return visitAsync_(key, ctrl, visitor, path24);
       }
       if (typeof ctrl !== "symbol") {
         if (identity.isCollection(node)) {
-          path23 = Object.freeze(path23.concat(node));
+          path24 = Object.freeze(path24.concat(node));
           for (let i = 0; i < node.items.length; ++i) {
-            const ci = await visitAsync_(i, node.items[i], visitor, path23);
+            const ci = await visitAsync_(i, node.items[i], visitor, path24);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -3791,13 +3791,13 @@ var require_visit = __commonJS({
             }
           }
         } else if (identity.isPair(node)) {
-          path23 = Object.freeze(path23.concat(node));
-          const ck = await visitAsync_("key", node.key, visitor, path23);
+          path24 = Object.freeze(path24.concat(node));
+          const ck = await visitAsync_("key", node.key, visitor, path24);
           if (ck === BREAK)
             return BREAK;
           else if (ck === REMOVE)
             node.key = null;
-          const cv = await visitAsync_("value", node.value, visitor, path23);
+          const cv = await visitAsync_("value", node.value, visitor, path24);
           if (cv === BREAK)
             return BREAK;
           else if (cv === REMOVE)
@@ -3824,23 +3824,23 @@ var require_visit = __commonJS({
       }
       return visitor;
     }
-    function callVisitor(key, node, visitor, path23) {
+    function callVisitor(key, node, visitor, path24) {
       if (typeof visitor === "function")
-        return visitor(key, node, path23);
+        return visitor(key, node, path24);
       if (identity.isMap(node))
-        return visitor.Map?.(key, node, path23);
+        return visitor.Map?.(key, node, path24);
       if (identity.isSeq(node))
-        return visitor.Seq?.(key, node, path23);
+        return visitor.Seq?.(key, node, path24);
       if (identity.isPair(node))
-        return visitor.Pair?.(key, node, path23);
+        return visitor.Pair?.(key, node, path24);
       if (identity.isScalar(node))
-        return visitor.Scalar?.(key, node, path23);
+        return visitor.Scalar?.(key, node, path24);
       if (identity.isAlias(node))
-        return visitor.Alias?.(key, node, path23);
+        return visitor.Alias?.(key, node, path24);
       return void 0;
     }
-    function replaceNode(key, path23, node) {
-      const parent = path23[path23.length - 1];
+    function replaceNode(key, path24, node) {
+      const parent = path24[path24.length - 1];
       if (identity.isCollection(parent)) {
         parent.items[key] = node;
       } else if (identity.isPair(parent)) {
@@ -4450,10 +4450,10 @@ var require_Collection = __commonJS({
     var createNode = require_createNode();
     var identity = require_identity();
     var Node = require_Node();
-    function collectionFromPath(schema, path23, value) {
+    function collectionFromPath(schema, path24, value) {
       let v = value;
-      for (let i = path23.length - 1; i >= 0; --i) {
-        const k = path23[i];
+      for (let i = path24.length - 1; i >= 0; --i) {
+        const k = path24[i];
         if (typeof k === "number" && Number.isInteger(k) && k >= 0) {
           const a = [];
           a[k] = v;
@@ -4472,7 +4472,7 @@ var require_Collection = __commonJS({
         sourceObjects: /* @__PURE__ */ new Map()
       });
     }
-    var isEmptyPath = (path23) => path23 == null || typeof path23 === "object" && !!path23[Symbol.iterator]().next().done;
+    var isEmptyPath = (path24) => path24 == null || typeof path24 === "object" && !!path24[Symbol.iterator]().next().done;
     var Collection = class extends Node.NodeBase {
       constructor(type, schema) {
         super(type);
@@ -4502,11 +4502,11 @@ var require_Collection = __commonJS({
        * be a Pair instance or a `{ key, value }` object, which may not have a key
        * that already exists in the map.
        */
-      addIn(path23, value) {
-        if (isEmptyPath(path23))
+      addIn(path24, value) {
+        if (isEmptyPath(path24))
           this.add(value);
         else {
-          const [key, ...rest] = path23;
+          const [key, ...rest] = path24;
           const node = this.get(key, true);
           if (identity.isCollection(node))
             node.addIn(rest, value);
@@ -4520,8 +4520,8 @@ var require_Collection = __commonJS({
        * Removes a value from the collection.
        * @returns `true` if the item was found and removed.
        */
-      deleteIn(path23) {
-        const [key, ...rest] = path23;
+      deleteIn(path24) {
+        const [key, ...rest] = path24;
         if (rest.length === 0)
           return this.delete(key);
         const node = this.get(key, true);
@@ -4535,8 +4535,8 @@ var require_Collection = __commonJS({
        * scalar values from their surrounding node; to disable set `keepScalar` to
        * `true` (collections are always returned intact).
        */
-      getIn(path23, keepScalar) {
-        const [key, ...rest] = path23;
+      getIn(path24, keepScalar) {
+        const [key, ...rest] = path24;
         const node = this.get(key, true);
         if (rest.length === 0)
           return !keepScalar && identity.isScalar(node) ? node.value : node;
@@ -4554,8 +4554,8 @@ var require_Collection = __commonJS({
       /**
        * Checks if the collection includes a value with the key `key`.
        */
-      hasIn(path23) {
-        const [key, ...rest] = path23;
+      hasIn(path24) {
+        const [key, ...rest] = path24;
         if (rest.length === 0)
           return this.has(key);
         const node = this.get(key, true);
@@ -4565,8 +4565,8 @@ var require_Collection = __commonJS({
        * Sets a value in this collection. For `!!set`, `value` needs to be a
        * boolean to add/remove the item from the set.
        */
-      setIn(path23, value) {
-        const [key, ...rest] = path23;
+      setIn(path24, value) {
+        const [key, ...rest] = path24;
         if (rest.length === 0) {
           this.set(key, value);
         } else {
@@ -7081,9 +7081,9 @@ var require_Document = __commonJS({
           this.contents.add(value);
       }
       /** Adds a value to the document. */
-      addIn(path23, value) {
+      addIn(path24, value) {
         if (assertCollection(this.contents))
-          this.contents.addIn(path23, value);
+          this.contents.addIn(path24, value);
       }
       /**
        * Create a new `Alias` node, ensuring that the target `node` has the required anchor.
@@ -7158,14 +7158,14 @@ var require_Document = __commonJS({
        * Removes a value from the document.
        * @returns `true` if the item was found and removed.
        */
-      deleteIn(path23) {
-        if (Collection.isEmptyPath(path23)) {
+      deleteIn(path24) {
+        if (Collection.isEmptyPath(path24)) {
           if (this.contents == null)
             return false;
           this.contents = null;
           return true;
         }
-        return assertCollection(this.contents) ? this.contents.deleteIn(path23) : false;
+        return assertCollection(this.contents) ? this.contents.deleteIn(path24) : false;
       }
       /**
        * Returns item at `key`, or `undefined` if not found. By default unwraps
@@ -7180,10 +7180,10 @@ var require_Document = __commonJS({
        * scalar values from their surrounding node; to disable set `keepScalar` to
        * `true` (collections are always returned intact).
        */
-      getIn(path23, keepScalar) {
-        if (Collection.isEmptyPath(path23))
+      getIn(path24, keepScalar) {
+        if (Collection.isEmptyPath(path24))
           return !keepScalar && identity.isScalar(this.contents) ? this.contents.value : this.contents;
-        return identity.isCollection(this.contents) ? this.contents.getIn(path23, keepScalar) : void 0;
+        return identity.isCollection(this.contents) ? this.contents.getIn(path24, keepScalar) : void 0;
       }
       /**
        * Checks if the document includes a value with the key `key`.
@@ -7194,10 +7194,10 @@ var require_Document = __commonJS({
       /**
        * Checks if the document includes a value at `path`.
        */
-      hasIn(path23) {
-        if (Collection.isEmptyPath(path23))
+      hasIn(path24) {
+        if (Collection.isEmptyPath(path24))
           return this.contents !== void 0;
-        return identity.isCollection(this.contents) ? this.contents.hasIn(path23) : false;
+        return identity.isCollection(this.contents) ? this.contents.hasIn(path24) : false;
       }
       /**
        * Sets a value in this document. For `!!set`, `value` needs to be a
@@ -7214,13 +7214,13 @@ var require_Document = __commonJS({
        * Sets a value in this document. For `!!set`, `value` needs to be a
        * boolean to add/remove the item from the set.
        */
-      setIn(path23, value) {
-        if (Collection.isEmptyPath(path23)) {
+      setIn(path24, value) {
+        if (Collection.isEmptyPath(path24)) {
           this.contents = value;
         } else if (this.contents == null) {
-          this.contents = Collection.collectionFromPath(this.schema, Array.from(path23), value);
+          this.contents = Collection.collectionFromPath(this.schema, Array.from(path24), value);
         } else if (assertCollection(this.contents)) {
-          this.contents.setIn(path23, value);
+          this.contents.setIn(path24, value);
         }
       }
       /**
@@ -9180,9 +9180,9 @@ var require_cst_visit = __commonJS({
     visit.BREAK = BREAK;
     visit.SKIP = SKIP;
     visit.REMOVE = REMOVE;
-    visit.itemAtPath = (cst, path23) => {
+    visit.itemAtPath = (cst, path24) => {
       let item = cst;
-      for (const [field, index] of path23) {
+      for (const [field, index] of path24) {
         const tok = item?.[field];
         if (tok && "items" in tok) {
           item = tok.items[index];
@@ -9191,23 +9191,23 @@ var require_cst_visit = __commonJS({
       }
       return item;
     };
-    visit.parentCollection = (cst, path23) => {
-      const parent = visit.itemAtPath(cst, path23.slice(0, -1));
-      const field = path23[path23.length - 1][0];
+    visit.parentCollection = (cst, path24) => {
+      const parent = visit.itemAtPath(cst, path24.slice(0, -1));
+      const field = path24[path24.length - 1][0];
       const coll = parent?.[field];
       if (coll && "items" in coll)
         return coll;
       throw new Error("Parent collection not found");
     };
-    function _visit(path23, item, visitor) {
-      let ctrl = visitor(item, path23);
+    function _visit(path24, item, visitor) {
+      let ctrl = visitor(item, path24);
       if (typeof ctrl === "symbol")
         return ctrl;
       for (const field of ["key", "value"]) {
         const token = item[field];
         if (token && "items" in token) {
           for (let i = 0; i < token.items.length; ++i) {
-            const ci = _visit(Object.freeze(path23.concat([[field, i]])), token.items[i], visitor);
+            const ci = _visit(Object.freeze(path24.concat([[field, i]])), token.items[i], visitor);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -9218,10 +9218,10 @@ var require_cst_visit = __commonJS({
             }
           }
           if (typeof ctrl === "function" && field === "key")
-            ctrl = ctrl(item, path23);
+            ctrl = ctrl(item, path24);
         }
       }
-      return typeof ctrl === "function" ? ctrl(item, path23) : ctrl;
+      return typeof ctrl === "function" ? ctrl(item, path24) : ctrl;
     }
     exports.visit = visit;
   }
@@ -10523,14 +10523,14 @@ var require_parser = __commonJS({
             case "scalar":
             case "single-quoted-scalar":
             case "double-quoted-scalar": {
-              const fs23 = this.flowScalar(this.type);
+              const fs24 = this.flowScalar(this.type);
               if (atNextItem || it.value) {
-                map.items.push({ start, key: fs23, sep: [] });
+                map.items.push({ start, key: fs24, sep: [] });
                 this.onKeyLine = true;
               } else if (it.sep) {
-                this.stack.push(fs23);
+                this.stack.push(fs24);
               } else {
-                Object.assign(it, { key: fs23, sep: [] });
+                Object.assign(it, { key: fs24, sep: [] });
                 this.onKeyLine = true;
               }
               return;
@@ -10658,13 +10658,13 @@ var require_parser = __commonJS({
             case "scalar":
             case "single-quoted-scalar":
             case "double-quoted-scalar": {
-              const fs23 = this.flowScalar(this.type);
+              const fs24 = this.flowScalar(this.type);
               if (!it || it.value)
-                fc.items.push({ start: [], key: fs23, sep: [] });
+                fc.items.push({ start: [], key: fs24, sep: [] });
               else if (it.sep)
-                this.stack.push(fs23);
+                this.stack.push(fs24);
               else
-                Object.assign(it, { key: fs23, sep: [] });
+                Object.assign(it, { key: fs24, sep: [] });
               return;
             }
             case "flow-map-end":
@@ -10974,8 +10974,8 @@ var require_dist = __commonJS({
 
 // src/web/cli.ts
 import { spawn } from "node:child_process";
-import fs22 from "node:fs/promises";
-import path22 from "node:path";
+import fs23 from "node:fs/promises";
+import path23 from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 
 // src/store/paths.ts
@@ -11028,6 +11028,17 @@ function resolveLoopPaths(projectDir) {
      * `PROTECTED_DIRECTORY_REASONS` in `cli/index.ts` was written to demand.
      */
     skills: path.join(root, "skills"),
+    /**
+     * Durable job transcripts: `web/transcripts/<jobId>.log`, raw pty bytes,
+     * append-only, written by `JobQueue` and read by `readTranscript`.
+     *
+     * Named here rather than left as a literal join in `queue.ts` and `read.ts`
+     * for the reason every other entry in this map is: one place decides where
+     * a `.mjloop/` path is rooted. It carries no key in `revision.ts` — job ids
+     * are unique across restarts (`Job.id`'s own doc says why), so a tab that
+     * wants one fetches it once, by id, rather than polling for a change.
+     */
+    webTranscripts: path.join(root, "web", "transcripts"),
     lock: path.join(root, ".lock"),
     /**
      * Mutual exclusion for verify *execution*, and never the same directory as
@@ -11066,9 +11077,9 @@ async function isEntrypoint(moduleUrl) {
 
 // src/web/server.ts
 import crypto4 from "node:crypto";
-import fs21 from "node:fs/promises";
+import fs22 from "node:fs/promises";
 import http from "node:http";
-import path21 from "node:path";
+import path22 from "node:path";
 import { fileURLToPath } from "node:url";
 
 // node_modules/ws/wrapper.mjs
@@ -11322,10 +11333,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj, path23) {
-  if (!path23)
+function getElementAtPath(obj, path24) {
+  if (!path24)
     return obj;
-  return path23.reduce((acc, key) => acc?.[key], obj);
+  return path24.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -11734,11 +11745,11 @@ function explicitlyAborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path23, issues) {
+function prefixIssues(path24, issues) {
   return issues.map((iss) => {
     var _a3;
     (_a3 = iss).path ?? (_a3.path = []);
-    iss.path.unshift(path23);
+    iss.path.unshift(path24);
     return iss;
   });
 }
@@ -11885,16 +11896,16 @@ function flattenError(error2, mapper = (issue2) => issue2.message) {
 }
 function formatError(error2, mapper = (issue2) => issue2.message) {
   const fieldErrors = { _errors: [] };
-  const processError = (error3, path23 = []) => {
+  const processError = (error3, path24 = []) => {
     for (const issue2 of error3.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path23, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path24, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path23, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path24, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path23, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path24, ...issue2.path]);
       } else {
-        const fullpath = [...path23, ...issue2.path];
+        const fullpath = [...path24, ...issue2.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue2));
         } else {
@@ -11921,8 +11932,8 @@ function formatError(error2, mapper = (issue2) => issue2.message) {
 }
 function toDotPath(_path) {
   const segs = [];
-  const path23 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
-  for (const seg of path23) {
+  const path24 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
+  for (const seg of path24) {
     if (typeof seg === "number")
       segs.push(`[${seg}]`);
     else if (typeof seg === "symbol")
@@ -18713,11 +18724,11 @@ var ConfigPatchSchema = strictObject({
 var ConfigMutationError = class extends Error {
   kind;
   path;
-  constructor(kind, path23 = []) {
+  constructor(kind, path24 = []) {
     super(kind);
     this.name = "ConfigMutationError";
     this.kind = kind;
-    this.path = path23;
+    this.path = path24;
   }
 };
 function configRevision(raw) {
@@ -19029,6 +19040,14 @@ async function readManifestTitle(dir) {
     return null;
   }
 }
+async function readTranscript(projectDir, jobId) {
+  const file = path15.join(resolveLoopPaths(projectDir).webTranscripts, `${jobId}.log`);
+  try {
+    return await fs16.readFile(file, "utf8");
+  } catch {
+    throw new NotFoundError("transcript");
+  }
+}
 async function readRuns(projectDir) {
   const runs = resolveLoopPaths(projectDir).runs;
   const names = await fs16.readdir(runs, { withFileTypes: true }).then((found) => found.filter((entry) => entry.isDirectory()).map((entry) => entry.name)).catch(() => []);
@@ -19136,6 +19155,7 @@ async function readJson2(file, schema) {
 // src/web/api.ts
 var RUN_ID = /^[\w-]+$/;
 var MEMORY_ID = /^M\d{3}$/;
+var JOB_ID = /^\d{8}T\d{6}-\d+$/;
 var ok = (body) => ({ status: 200, body });
 var fail = (status, code) => ({ status, body: { error: { code } } });
 async function handleApi(projectDir, method, pathname) {
@@ -19199,6 +19219,10 @@ async function route(projectDir, segments) {
       if (segments.length !== 2 || first === void 0) break;
       if (!MEMORY_ID.test(first)) return fail(400, "error.badRequest");
       return ok(await readMemoryEntry(projectDir, first));
+    case "transcripts":
+      if (segments.length !== 2 || first === void 0) break;
+      if (!JOB_ID.test(first)) return fail(400, "error.badRequest");
+      return ok(await readTranscript(projectDir, first));
     case "skills":
       if (segments.length !== 1) break;
       return ok(await readSkillsView(projectDir));
@@ -19226,6 +19250,10 @@ function sendApi(request, response, result) {
   response.end(body);
 }
 
+// src/web/queue.ts
+import fs17 from "node:fs/promises";
+import path16 from "node:path";
+
 // src/web/completion.ts
 var NEW_TRACKER = { started: false, runId: null };
 var TERMINAL = /* @__PURE__ */ new Set(["done", "halted", "failed", "idle"]);
@@ -19251,6 +19279,9 @@ var TERM_WAIT_MS = 3e3;
 var KILL_WAIT_MS = 3e3;
 var TRANSCRIPT_MAX = 1e6;
 var TRANSCRIPT_KEEP = 20;
+var TRANSCRIPT_DISK_KEEP = 20;
+var TRANSCRIPT_DISK_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1e3;
+var TRANSCRIPT_DISK_MAX_BYTES = 2e7;
 var JobQueue = class {
   options;
   clock;
@@ -19259,6 +19290,18 @@ var JobQueue = class {
   transcripts = /* @__PURE__ */ new Map();
   active = null;
   counter = 0;
+  /**
+   * Serialises durable writes across every chunk of every job.
+   *
+   * `append` fires `writeTranscriptChunk` without awaiting it — the pty data
+   * handler that calls `append` must not stall on disk — so two chunks that
+   * land in the same tick race unless something orders them. This is that
+   * something: each write is chained onto the last rather than started
+   * independently, which is what keeps a `.log` file in the order the pty
+   * actually produced it rather than whichever `fs.appendFile` call happened
+   * to finish first.
+   */
+  transcriptWrites = Promise.resolve();
   cols = 120;
   rows = 40;
   stalledSince = null;
@@ -19474,6 +19517,99 @@ var JobQueue = class {
     const existing = this.transcripts.get(jobId) ?? "";
     const next = existing + chunk;
     this.transcripts.set(jobId, next.length > TRANSCRIPT_MAX ? next.slice(-TRANSCRIPT_MAX) : next);
+    this.transcriptWrites = this.transcriptWrites.then(() => this.writeTranscriptChunk(jobId, chunk));
+  }
+  /**
+   * Append raw pty bytes to `.mjloop/web/transcripts/<jobId>.log`.
+   *
+   * This is the write side of the boundary `read.test.ts` polices: that test
+   * hashes every file under `.mjloop/` around every function in `read.ts` to
+   * prove a poll never writes, and that only holds if a transcript is produced
+   * here — by the process actually running the job — and never lazily by
+   * whatever later reads it.
+   *
+   * Safe to append rather than needing to check for a stale file first: job
+   * ids are unique across restarts (`Job.id`'s own doc — the epoch above is
+   * the server's start stamp, not a counter that resets to it), so this call
+   * can never land one server's bytes after another's in the same file, and
+   * `fs.appendFile` never truncates what is already there.
+   *
+   * Every failure is swallowed — a missing directory on the first job of a
+   * fresh project, a full disk, a read-only `.mjloop`. A transcript that
+   * cannot be written is a transcript that is simply not durable this time;
+   * it must never be a job that stops running because of it.
+   */
+  async writeTranscriptChunk(jobId, chunk) {
+    const file = path16.join(this.transcriptDir(), `${jobId}.log`);
+    try {
+      await fs17.appendFile(file, chunk);
+    } catch (error2) {
+      if (error2.code !== "ENOENT") return;
+      try {
+        await fs17.mkdir(this.transcriptDir(), { recursive: true });
+        await fs17.appendFile(file, chunk);
+      } catch {
+      }
+    }
+  }
+  transcriptDir() {
+    return resolveLoopPaths(this.options.cwd).webTranscripts;
+  }
+  /**
+   * Delete durable transcript files this project no longer needs to keep.
+   *
+   * Protected ids are read first, synchronously, before any `await` below —
+   * not because `handleExit`'s own mid-transition state is at risk (a job
+   * only ever moves queued → running there, and both are protected either
+   * way), but because `cancel` and `clear` (queue.ts:163, :195) mutate a
+   * pending job's status synchronously and could run on an event-loop turn
+   * this function yields to between one `await` and the next. Reading the set
+   * once up front keeps it independent of anything that happens while this
+   * function is not running, rather than trusting that nothing reachable from
+   * an `await` here ever moves a job out of `queued`. Anything queued or
+   * running at that instant is never a deletion candidate at all, independent
+   * of the three bounds below: losing the transcript of a job the operator
+   * can still see in the queue would be worse than the disk this function
+   * exists to bound.
+   */
+  async pruneTranscriptFiles() {
+    const protectedIds = new Set(
+      this.jobs().filter((job) => job.status === "queued" || job.status === "running").map((job) => job.id)
+    );
+    const dir = this.transcriptDir();
+    let names;
+    try {
+      names = await fs17.readdir(dir);
+    } catch {
+      return;
+    }
+    const stamped = await Promise.all(
+      names.filter((name) => name.endsWith(".log") && !protectedIds.has(name.slice(0, -".log".length))).map(async (name) => {
+        const file = path16.join(dir, name);
+        const stats = await fs17.stat(file).catch(() => null);
+        return stats === null ? null : { file, mtimeMs: stats.mtimeMs, size: stats.size };
+      })
+    );
+    const candidates = stamped.filter((entry) => entry !== null).sort((a, b) => a.mtimeMs - b.mtimeMs);
+    const now = this.clock().getTime();
+    const toDelete = /* @__PURE__ */ new Set();
+    for (const entry of candidates) {
+      if (now - entry.mtimeMs > TRANSCRIPT_DISK_MAX_AGE_MS) toDelete.add(entry.file);
+    }
+    const byCount = candidates.filter((entry) => !toDelete.has(entry.file));
+    for (const entry of byCount.slice(0, Math.max(0, byCount.length - TRANSCRIPT_DISK_KEEP))) {
+      toDelete.add(entry.file);
+    }
+    const survivors = candidates.filter((entry) => !toDelete.has(entry.file));
+    let total = survivors.reduce((sum, entry) => sum + entry.size, 0);
+    while (total > TRANSCRIPT_DISK_MAX_BYTES && survivors.length > 1) {
+      const oldest = survivors.shift();
+      if (oldest === void 0) break;
+      toDelete.add(oldest.file);
+      total -= oldest.size;
+    }
+    await Promise.all([...toDelete].map((file) => fs17.unlink(file).catch(() => {
+    })));
   }
   beginShutdown(active, outcome) {
     if (active.shutdown !== null) return;
@@ -19535,6 +19671,8 @@ var JobQueue = class {
     for (const id of this.transcripts.keys()) {
       if (!keep.has(id)) this.transcripts.delete(id);
     }
+    void this.pruneTranscriptFiles().catch(() => {
+    });
   }
 };
 
@@ -19542,13 +19680,13 @@ var JobQueue = class {
 import os2 from "node:os";
 
 // src/ops/plan.ts
-import fs17 from "node:fs/promises";
-import path17 from "node:path";
+import fs18 from "node:fs/promises";
+import path18 from "node:path";
 
 // src/ops/manifest.ts
-import path16 from "node:path";
+import path17 from "node:path";
 function manifestPath(planDir) {
-  return path16.join(planDir, "manifest.json");
+  return path17.join(planDir, "manifest.json");
 }
 async function renderManifest(projectDir, planId, now = () => /* @__PURE__ */ new Date()) {
   const plan = await readPlan(projectDir, planId);
@@ -19565,7 +19703,7 @@ async function renderManifest(projectDir, planId, now = () => /* @__PURE__ */ ne
       status: story.frontmatter.status,
       ui: story.frontmatter.ui,
       depends_on: story.frontmatter.depends_on,
-      file: path16.relative(plan.dir, story.file)
+      file: path17.relative(plan.dir, story.file)
     }))
   });
   await writeJsonAtomic(manifestPath(plan.dir), manifest, { backup: false });
@@ -19645,8 +19783,8 @@ async function storyUpdate(projectDir, storyId, patch, now = () => /* @__PURE__ 
       );
       assertDependenciesResolve(siblings, merged.data);
     }
-    const renamed = path17.join(path17.dirname(current.file), storyFileName(merged.data));
-    if (renamed !== current.file) await fs17.rename(current.file, renamed);
+    const renamed = path18.join(path18.dirname(current.file), storyFileName(merged.data));
+    if (renamed !== current.file) await fs18.rename(current.file, renamed);
     const file = await writeStory(projectDir, { frontmatter: merged.data, body: current.body });
     const manifest = await renderManifest(projectDir, planId, now);
     return { id: storyId, file, manifest };
@@ -19879,17 +20017,17 @@ var spawnPtySession = ({ cwd, command, cols, rows }) => {
 };
 
 // src/web/snapshot.ts
-import fs20 from "node:fs/promises";
-import path20 from "node:path";
+import fs21 from "node:fs/promises";
+import path21 from "node:path";
 
 // src/ops/summary.ts
-import fs18 from "node:fs/promises";
-import path18 from "node:path";
+import fs19 from "node:fs/promises";
+import path19 from "node:path";
 var NO_FINDINGS = { high: 0, medium: 0, low: 0 };
 var MAP_FILE = "map.md";
 async function hasDesignSystem(projectDir) {
   try {
-    return (await fs18.stat(resolveLoopPaths(projectDir).designSystem)).isFile();
+    return (await fs19.stat(resolveLoopPaths(projectDir).designSystem)).isFile();
   } catch {
     return false;
   }
@@ -19897,11 +20035,11 @@ async function hasDesignSystem(projectDir) {
 async function runMap(projectDir, state) {
   if (state.run_id === null || state.track === null) return null;
   try {
-    if (!(await fs18.stat(path18.join(runDirPath(projectDir, state), MAP_FILE))).isFile()) return null;
+    if (!(await fs19.stat(path19.join(runDirPath(projectDir, state), MAP_FILE))).isFile()) return null;
   } catch {
     return null;
   }
-  return path18.join(".mjloop", "runs", runDirName(state), MAP_FILE);
+  return path19.join(".mjloop", "runs", runDirName(state), MAP_FILE);
 }
 async function stateSummary(projectDir) {
   let config2 = null;
@@ -19973,11 +20111,11 @@ async function stateSummary(projectDir) {
 }
 
 // src/web/revision.ts
-import fs19 from "node:fs/promises";
-import path19 from "node:path";
+import fs20 from "node:fs/promises";
+import path20 from "node:path";
 async function stamp(file) {
   try {
-    const stats = await fs19.stat(file);
+    const stats = await fs20.stat(file);
     return `${Math.trunc(stats.mtimeMs)}.${stats.size}`;
   } catch {
     return "-";
@@ -19985,12 +20123,12 @@ async function stamp(file) {
 }
 async function stampDir(dir, documents) {
   const parts = [await stamp(dir)];
-  for (const document of documents) parts.push(await stamp(path19.join(dir, document)));
+  for (const document of documents) parts.push(await stamp(path20.join(dir, document)));
   return parts.join(":");
 }
 async function entries(dir) {
   try {
-    return (await fs19.readdir(dir)).sort();
+    return (await fs20.readdir(dir)).sort();
   } catch {
     return [];
   }
@@ -20002,7 +20140,7 @@ async function stampListing(dir) {
 async function stampTree(dir) {
   const parts = [await stamp(dir)];
   for (const name of await entries(dir)) {
-    const child = path19.join(dir, name);
+    const child = path20.join(dir, name);
     parts.push(`${name}=${await stamp(child)}=${await stampListing(child)}`);
   }
   return parts.join("|");
@@ -20019,8 +20157,8 @@ async function readRevisions(projectDir, tick, running) {
   const planDirs = await entries(paths.plans);
   const plans = {};
   for (const dir of planDirs) {
-    const documents = await stampDir(path19.join(paths.plans, dir), PLAN_DOCUMENTS);
-    const stories = await stamp(path19.join(paths.plans, dir, "stories"));
+    const documents = await stampDir(path20.join(paths.plans, dir), PLAN_DOCUMENTS);
+    const stories = await stamp(path20.join(paths.plans, dir, "stories"));
     const key = /^P\d{3}(?=-|$)/.exec(dir)?.[0] ?? dir;
     const stamped = `${documents}:${stories}`;
     plans[key] = plans[key] === void 0 ? stamped : `${plans[key]}|${stamped}`;
@@ -20117,14 +20255,14 @@ async function readPlanView(projectDir, id) {
     id,
     // The directory name is the last resort, and it always exists — `findPlanDir`
     // found the plan by it.
-    title: frontmatter?.title ?? manifest?.title ?? path20.basename(dir),
+    title: frontmatter?.title ?? manifest?.title ?? path21.basename(dir),
     approval: frontmatter?.approval?.decision ?? null,
     stories: manifest?.stories ?? []
   };
 }
 async function readPlanFrontmatter(dir) {
   try {
-    const raw = await fs20.readFile(path20.join(dir, "PLAN.md"), "utf8");
+    const raw = await fs21.readFile(path21.join(dir, "PLAN.md"), "utf8");
     const parsed = PlanFrontmatterSchema.safeParse(parseFrontmatter(raw).data);
     if (!parsed.success) return null;
     return { title: parsed.data.title, approval: parsed.data.approval };
@@ -20134,7 +20272,7 @@ async function readPlanFrontmatter(dir) {
 }
 async function readManifest(dir) {
   try {
-    const raw = await fs20.readFile(path20.join(dir, "manifest.json"), "utf8");
+    const raw = await fs21.readFile(path21.join(dir, "manifest.json"), "utf8");
     const parsed = ManifestSchema.safeParse(JSON.parse(raw));
     if (!parsed.success) return null;
     return {
@@ -20153,7 +20291,7 @@ async function readManifest(dir) {
 }
 async function listRuns(projectDir) {
   try {
-    const entries2 = await fs20.readdir(resolveLoopPaths(projectDir).runs, { withFileTypes: true });
+    const entries2 = await fs21.readdir(resolveLoopPaths(projectDir).runs, { withFileTypes: true });
     return entries2.filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort().reverse();
   } catch {
     return [];
@@ -20369,15 +20507,15 @@ async function handleRequest(request, response, token, projectDir) {
     return;
   }
   const requested = url.pathname === "/" ? "/index.html" : url.pathname;
-  const file = path21.resolve(PUBLIC_DIR, `.${requested}`);
+  const file = path22.resolve(PUBLIC_DIR, `.${requested}`);
   if (!file.startsWith(PUBLIC_DIR)) {
     response.writeHead(403).end();
     return;
   }
   try {
-    const body = await fs21.readFile(file);
+    const body = await fs22.readFile(file);
     response.writeHead(200, {
-      "content-type": MIME[path21.extname(file)] ?? "application/octet-stream",
+      "content-type": MIME[path22.extname(file)] ?? "application/octet-stream",
       // The page carries a token in its URL. Keeping it out of caches and
       // referrers is most of what stops it leaking.
       "cache-control": "no-store",
@@ -20409,7 +20547,7 @@ function parseArgs(argv, cwd) {
       case "--dir": {
         const value = argv[++index];
         if (value === void 0) throw new UsageError("--dir needs a path");
-        args.dir = path22.resolve(cwd, value);
+        args.dir = path23.resolve(cwd, value);
         break;
       }
       case "--port": {
@@ -20472,7 +20610,7 @@ ${USAGE}`);
     return 1;
   }
   try {
-    await fs22.stat(resolveLoopPaths(args.dir).root);
+    await fs23.stat(resolveLoopPaths(args.dir).root);
   } catch {
     process.stderr.write(`no .mjloop/ in ${args.dir} \u2014 run /mjloop:init there first.
 `);
