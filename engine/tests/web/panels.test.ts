@@ -2017,6 +2017,14 @@ describe('config', () => {
     /** The `+` for one required/available agent's own row in the order graph. */
     const edgeAddButton = (track: string, agent: string): HTMLElement =>
       document.querySelector(`[data-act="edge-add"][data-track="${track}"][data-agent="${agent}"]`) as HTMLElement
+    /** One chip's own × inside `required`/`available`/`closing`/`blocks`. */
+    const agentRemoveButton = (track: string, list: string, agent: string): HTMLElement =>
+      document.querySelector(
+        `[data-act="agent-remove"][data-track="${track}"][data-list="${list}"][data-agent="${agent}"]`,
+      ) as HTMLElement
+    /** The `+` beside one of the four plain agent lists. */
+    const agentAddButton = (track: string, list: string): HTMLElement =>
+      document.querySelector(`[data-act="agent-add"][data-track="${track}"][data-list="${list}"]`) as HTMLElement
 
     it("adds and removes a predecessor through an agent's own row, and carries it into the change set", async () => {
       serve({
@@ -2074,6 +2082,86 @@ describe('config', () => {
       expect(row.querySelector('.chips')?.textContent?.trim()).toBe('')
       expect((row.querySelector('.track-list-empty') as HTMLElement).hidden).toBe(false)
       expect(collectConfigChanges(form, baseline)).toEqual([])
+    })
+
+    it('shows and edits the union of predecessors when two edges name the same agent, matching what the engine enforces', async () => {
+      // The engine deliberately supports this plural shape: `findOrderViolation`
+      // (ops/log.ts:598-611) filters `track.order` for every edge naming an
+      // agent and loops all of them, and `dispatchWaves` (schemas/config.ts:
+      // 767-773) iterates every edge — a `.find` here would show and edit only
+      // the first, silently hiding the second predecessor from the operator.
+      serve({
+        '/api/config': configView({
+          tracks: {
+            mine: {
+              required: ['alpha', 'beta', 'gamma'],
+              max_cycles: 3,
+              order: [
+                { agent: 'alpha', after: ['beta'] },
+                { agent: 'alpha', after: ['gamma'] },
+              ],
+            },
+          },
+        }),
+      })
+
+      reveal('panel-config')
+      const config = mountConfig()
+      draw(emptySnapshot())
+      await vi.waitFor(() => expect(document.querySelectorAll('.track-editor')).toHaveLength(1))
+
+      const row = edgeAddButton('mine', 'alpha').closest('.track-order-agent') as HTMLElement
+      expect(row.querySelector('.chips')?.textContent).toContain('beta')
+      expect(row.querySelector('.chips')?.textContent).toContain('gamma')
+
+      const form = document.getElementById('config-editor') as HTMLFormElement
+      const baseline = ConfigSchema.parse({
+        version: 1,
+        tracks: {
+          mine: {
+            required: ['alpha', 'beta', 'gamma'],
+            max_cycles: 3,
+            order: [
+              { agent: 'alpha', after: ['beta'] },
+              { agent: 'alpha', after: ['gamma'] },
+            ],
+          },
+        },
+      })
+
+      // A name already present in the *second* edge is still a duplicate,
+      // even though `.find` would only ever see the first — checked against
+      // the draft itself, not the rendered chip count: a render-side dedup
+      // could keep the chip count at two even if the add silently pushed a
+      // second copy of `gamma` into the *first* edge underneath.
+      const add = edgeAddButton('mine', 'alpha')
+      ;(add.parentElement?.querySelector('input') as HTMLInputElement).value = 'gamma'
+      config.edgeAdd(add)
+      expect(row.querySelectorAll('.chips .chip-agent')).toHaveLength(2)
+      expect(collectConfigChanges(form, baseline)).toEqual([])
+
+      // Removing gamma's chip clears it from the edge that actually names it
+      // — the second one — leaving beta, and the first edge, untouched.
+      const removeGamma = row.querySelector('[data-act="edge-remove"][data-pred="gamma"]') as HTMLElement
+      config.edgeRemove(removeGamma)
+      expect(row.querySelector('.chips')?.textContent).toContain('beta')
+      expect(row.querySelector('.chips')?.textContent).not.toContain('gamma')
+
+      // The now-empty second edge is dropped entirely, the same way the
+      // single-edge case drops its last predecessor.
+      expect(collectConfigChanges(form, baseline)).toEqual([
+        {
+          kind: 'track',
+          track: 'mine',
+          value: {
+            required: ['alpha', 'beta', 'gamma'],
+            available: [],
+            closing: [],
+            order: [{ agent: 'alpha', after: ['beta'] }],
+            max_cycles: 3,
+          },
+        },
+      ])
     })
 
     /** The fill-in-the-blanks a locale string's `{param}` holes actually render as. */
@@ -2181,6 +2269,118 @@ describe('config', () => {
       const problems = document.querySelectorAll('[data-track="mine"] .track-problem')
       expect([...problems].map((node) => node.textContent)).toContain(
         fill('config.problem.orderCycle', { path: 'alpha → beta → alpha' }),
+      )
+      expect((document.getElementById('config-save') as HTMLButtonElement).disabled).toBe(true)
+    })
+
+    it('flags an edge whose own agent was removed from the track, and keeps the row reachable so it can be undone', async () => {
+      // Starts from a *valid* config carrying an order edge, then reaches the
+      // agent-side refusal the same way an operator would: through
+      // `agentRemove` on the chip, not by hand-editing the draft.
+      serve({
+        '/api/config': configView({
+          tracks: {
+            mine: { required: ['alpha', 'beta'], max_cycles: 3, order: [{ agent: 'alpha', after: ['beta'] }] },
+          },
+        }),
+      })
+
+      reveal('panel-config')
+      const config = mountConfig()
+      draw(emptySnapshot())
+      await vi.waitFor(() => expect(document.querySelectorAll('.track-editor')).toHaveLength(1))
+      expect(edgeAddButton('mine', 'alpha'), 'no order row for alpha before removal').not.toBeNull()
+
+      const remove = agentRemoveButton('mine', 'required', 'alpha')
+      expect(remove, 'no chip to remove alpha from required').not.toBeNull()
+      config.agentRemove(remove)
+
+      // The row survives: `draftable` no longer names `alpha`, but its edge
+      // is still in the draft, and the row is the union of `draftable` and
+      // every `edge.agent` already in `track.order` — so the chip, and the ×
+      // that clears it, are both still reachable without a Reset.
+      const row = edgeAddButton('mine', 'alpha')
+      expect(row, 'the orphaned edge lost its row').not.toBeNull()
+      expect(row.closest('.track-order-agent')?.querySelector('.chips')?.textContent).toContain('beta')
+
+      const problems = document.querySelectorAll('[data-track="mine"] .track-problem')
+      expect([...problems].map((node) => node.textContent)).toContain(
+        fill('config.problem.orderAgentUnknown', { agent: 'alpha' }),
+      )
+      expect((document.getElementById('config-save') as HTMLButtonElement).disabled).toBe(true)
+    })
+
+    it('flags an edge whose own agent moved into closing, which could never log a result inside a cycle', async () => {
+      serve({
+        '/api/config': configView({
+          tracks: {
+            mine: { required: ['alpha', 'beta'], max_cycles: 3, order: [{ agent: 'alpha', after: ['beta'] }] },
+          },
+        }),
+      })
+
+      reveal('panel-config')
+      const config = mountConfig()
+      draw(emptySnapshot())
+      await vi.waitFor(() => expect(document.querySelectorAll('.track-editor')).toHaveLength(1))
+
+      config.agentRemove(agentRemoveButton('mine', 'required', 'alpha'))
+      const closingAdd = agentAddButton('mine', 'closing')
+      ;(closingAdd.parentElement?.querySelector('input') as HTMLInputElement).value = 'alpha'
+      config.agentAdd(closingAdd)
+
+      // `alpha` is `known` again (it is in `closing` now), so this is the
+      // closing-agent refusal rather than the unknown-agent one above.
+      const row = edgeAddButton('mine', 'alpha')
+      expect(row, 'the orphaned edge lost its row').not.toBeNull()
+
+      const problems = document.querySelectorAll('[data-track="mine"] .track-problem')
+      expect([...problems].map((node) => node.textContent)).toContain(
+        fill('config.problem.orderAgentClosing', { agent: 'alpha' }),
+      )
+      expect((document.getElementById('config-save') as HTMLButtonElement).disabled).toBe(true)
+    })
+
+    it("folds the gate's own precondition into the cycle check, catching a deadlock one hop past the direct edge", async () => {
+      // The direct check (`orderInvertsGate`, asserted above) only sees
+      // `edge.agent === gate.proven_by` with a `gate.blocks` name in that same
+      // edge's own `after`. This is one hop further: `verifier after planner`,
+      // `planner after builder`, with `gate: {proven_by: verifier, blocks:
+      // [builder]}` — no edge here names `builder` waiting on `verifier`
+      // directly, but the gate already makes `verifier`'s pass the
+      // precondition `builder` waits on, so folding `builder after verifier`
+      // in as an edge (`schemas/config.ts:244-247`, `config.js`'s own
+      // `gateEdges`) is what closes the loop: `verifier -> builder -> planner
+      // -> verifier`. Without the fold there is no cycle at all — `builder ->
+      // planner -> verifier` alone is an acyclic chain.
+      serve({
+        '/api/config': configView({
+          tracks: {
+            mine: {
+              required: ['verifier', 'builder', 'planner'],
+              max_cycles: 3,
+              gate: { proven_by: 'verifier', blocks: ['builder'] },
+            },
+          },
+        }),
+      })
+
+      reveal('panel-config')
+      const config = mountConfig()
+      draw(emptySnapshot())
+      await vi.waitFor(() => expect(document.querySelectorAll('.track-editor')).toHaveLength(1))
+
+      const verifierAdd = edgeAddButton('mine', 'verifier')
+      ;(verifierAdd.parentElement?.querySelector('input') as HTMLInputElement).value = 'planner'
+      config.edgeAdd(verifierAdd)
+
+      const plannerAdd = edgeAddButton('mine', 'planner')
+      ;(plannerAdd.parentElement?.querySelector('input') as HTMLInputElement).value = 'builder'
+      config.edgeAdd(plannerAdd)
+
+      const problems = document.querySelectorAll('[data-track="mine"] .track-problem')
+      expect([...problems].map((node) => node.textContent)).toContain(
+        fill('config.problem.orderCycle', { path: 'verifier → builder → planner → verifier' }),
       )
       expect((document.getElementById('config-save') as HTMLButtonElement).disabled).toBe(true)
     })

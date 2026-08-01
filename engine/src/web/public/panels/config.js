@@ -469,12 +469,22 @@ export function mountConfig() {
         if (entry === undefined) return false
         /** @type {{ agent: string, after: string[] }[]} */
         const order = Array.isArray(entry.order) ? entry.order : (entry.order = [])
-        let edge = order.find((candidate) => candidate.agent === agent)
+        // The engine supports more than one edge naming the same agent —
+        // `findOrderViolation` (ops/log.ts:598-611) filters `track.order` for
+        // every edge naming `agent` and loops all of them, and
+        // `dispatchWaves` (schemas/config.ts:767-773) does the same — so
+        // membership has to be checked across every edge already naming
+        // `agent`, not just the first one `.find` would return, or a second
+        // edge's predecessor could be re-added here even though the row
+        // (whose chips are that same union, see `edgeAfter` below) already
+        // shows it as present.
+        const edges = order.filter((candidate) => candidate.agent === agent)
+        if (edges.some((edge) => edge.after.includes(pred))) return false
+        let edge = edges[0]
         if (edge === undefined) {
           edge = { agent, after: [] }
           order.push(edge)
         }
-        if (edge.after.includes(pred)) return false
         edge.after.push(pred)
       })
       box.value = ''
@@ -492,18 +502,27 @@ export function mountConfig() {
         if (entry === undefined || !Array.isArray(entry.order)) return false
         /** @type {{ agent: string, after: string[] }[]} */
         const order = entry.order
-        const edge = order.find((candidate) => candidate.agent === agent)
-        if (edge === undefined) return false
-        const at = edge.after.indexOf(pred)
-        if (at < 0) return false
-        edge.after.splice(at, 1)
-        // `OrderEdgeSchema.after` is `.min(1)` (schemas/config.ts:62) — an edge
-        // with zero predecessors is not "no constraint", it is a shape the
-        // server refuses outright. Dropping the whole edge here is what lets
-        // removing the last predecessor read as clearing the constraint,
-        // the way every other chip removal on this card does, rather than
-        // leaving a draft that Save can never reach.
-        if (edge.after.length === 0) order.splice(order.indexOf(edge), 1)
+        // The chip this row shows is the union across every edge naming
+        // `agent` (`edgeAfter` below), so removing one has to clear `pred`
+        // from every one of those edges too — walked back-to-front so the
+        // splice below cannot skip the edge after the one just removed.
+        let removed = false
+        for (let i = order.length - 1; i >= 0; i--) {
+          const edge = order[i]
+          if (edge === undefined || edge.agent !== agent) continue
+          const at = edge.after.indexOf(pred)
+          if (at < 0) continue
+          edge.after.splice(at, 1)
+          removed = true
+          // `OrderEdgeSchema.after` is `.min(1)` (schemas/config.ts:62) — an
+          // edge with zero predecessors is not "no constraint", it is a
+          // shape the server refuses outright. Dropping the whole edge here
+          // is what lets removing its last predecessor read as clearing the
+          // constraint, the way every other chip removal on this card does,
+          // rather than leaving a draft that Save can never reach.
+          if (edge.after.length === 0) order.splice(i, 1)
+        }
+        if (!removed) return false
       })
     },
   }
@@ -934,14 +953,33 @@ export function mountConfig() {
         // One row per required/available agent — `draftable`, the same set
         // `mapDrafted` above scopes to and for the same reason: a closing
         // agent runs once, after the run passes, so `TrackSchema.superRefine`
-        // (schemas/config.ts:186-199) refuses an edge naming one as either
-        // side, and a row that could never be legal has nothing useful to
-        // offer here.
+        // (schemas/config.ts:186-214, the whole per-edge block: the agent-side
+        // closing check at 193-199 and the predecessor-side one at 207-213)
+        // refuses an edge naming one as either side, and a row that could
+        // never be legal has nothing useful to offer here.
+        //
+        // `draftable` alone would leave an edge whose own agent fell out of
+        // `required`/`available` with no row at all: `agentRemove` only ever
+        // touches the four membership lists, never `track.order`, so the edge
+        // is still in the draft and `trackProblems` below still raises
+        // `config.problem.orderAgentUnknown` (or `...Closing`, if the agent
+        // landed in `closing` instead) for it — a refusal naming a control
+        // nothing on the card could reach. `fillSelect` below keeps a stale
+        // `gate.proven_by` visible for the identical reason: "dropping it
+        // would silently rewrite the config… and the problem list is what
+        // says it is wrong." So the rows are the union of `draftable` and
+        // every `edge.agent` already in `track.order`, draftable first and
+        // orphans after, and an orphan gets the same chips and the same × as
+        // any other row — chipping its predecessors away one at a time drops
+        // the edge itself, the way `edgeRemove` below already empties it.
         const orderAgents = slots['orderAgents']
         if (orderAgents !== undefined) {
+          /** @type {{ agent: string, after: string[] }[]} */
+          const order = track.order ?? []
+          const orphans = [...new Set(order.map((edge) => edge.agent))].filter((agent) => !draftable.includes(agent))
           reconcile(
             orderAgents,
-            draftable.map((agent) => ({ track: name, agent, after: edgeAfter(track.order ?? [], agent) })),
+            [...draftable, ...orphans].map((agent) => ({ track: name, agent, after: edgeAfter(order, agent) })),
             (entry) => entry.agent,
             orderAgentRow,
           )
@@ -1393,9 +1431,18 @@ function trackProblems(model, name) {
   return problems
 }
 
-/** @param {{ agent: string, after: string[] }[]} order @param {string} agent @returns {string[]} */
+/**
+ * Every predecessor a track's order graph names for one agent, across every
+ * edge that names it — not just the first `.find` would return. The engine
+ * treats a second edge naming the same agent as real (`findOrderViolation`,
+ * ops/log.ts:598-611, filters and loops all of them; `dispatchWaves`,
+ * schemas/config.ts:767-773, iterates every edge), so a row that showed only
+ * the first edge's chips would read as a smaller set than `runLog` enforces.
+ *
+ * @param {{ agent: string, after: string[] }[]} order @param {string} agent @returns {string[]}
+ */
 function edgeAfter(order, agent) {
-  return order.find((edge) => edge.agent === agent)?.after ?? []
+  return [...new Set(order.filter((edge) => edge.agent === agent).flatMap((edge) => edge.after))]
 }
 
 /**
