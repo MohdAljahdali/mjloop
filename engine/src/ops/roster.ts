@@ -1,7 +1,15 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import * as z from 'zod'
-import { findTrack, forbiddenSpecialists, forcedSpecialists, permittedAgents, type Config, type Track } from '../schemas/config.js'
+import {
+  dispatchWaves,
+  findTrack,
+  forbiddenSpecialists,
+  forcedSpecialists,
+  permittedAgents,
+  type Config,
+  type Track,
+} from '../schemas/config.js'
 import { RosterSchema, type Roster } from '../schemas/contract.js'
 import { loadConfig } from '../store/config-store.js'
 import { StateStore } from '../store/state-store.js'
@@ -83,8 +91,20 @@ export type RosterDeclaration = Roster | ClosingRoster
  * directories, and neither can be mistaken for the other: a cycle roster is
  * checked against `available` and lands in `cycle-NN/`, a closing roster is
  * checked against `closing` and lands in `closing/`.
+ *
+ * Returns `waves` — the topological layers `dispatchWaves` computes over the
+ * roster's own `selected`, so the leader is *told* the dispatch order rather
+ * than left to re-derive it from `.mjloop/config.yaml` and its own reading of
+ * `order`. A closing pass has no edges that can reach it — `TrackSchema`
+ * refuses any `order` edge naming a closing agent, on either end — so its
+ * `waves` is always one layer holding everything `selected` names; the field
+ * is still returned, rather than only from the cycle branch, so a caller
+ * does not need to know which kind of roster it declared to read the answer.
  */
-export async function rosterSet(projectDir: string, roster: RosterDeclaration): Promise<{ path: string }> {
+export async function rosterSet(
+  projectDir: string,
+  roster: RosterDeclaration,
+): Promise<{ path: string; waves: string[][] }> {
   return isClosingRoster(roster)
     ? closingRosterSet(projectDir, ClosingRosterSchema.parse(roster))
     : cycleRosterSet(projectDir, RosterSchema.parse(roster))
@@ -95,7 +115,7 @@ function isClosingRoster(roster: RosterDeclaration): roster is ClosingRoster {
 }
 
 /** One working cycle's composition, written to `cycle-NN/roster.json`. */
-async function cycleRosterSet(projectDir: string, parsed: Roster): Promise<{ path: string }> {
+async function cycleRosterSet(projectDir: string, parsed: Roster): Promise<{ path: string; waves: string[][] }> {
   const state = await new StateStore(projectDir).get()
   if (state.status !== 'running' || state.track === null) throw new NoActiveRunError()
 
@@ -190,7 +210,8 @@ async function cycleRosterSet(projectDir: string, parsed: Roster): Promise<{ pat
   // holding only its last composition — and the stated reason for each
   // omission, which is the whole product of the invariant, is not recoverable
   // from anywhere else.
-  return write(path.join(cycleDirPath(projectDir, state), 'roster.json'), parsed)
+  const { path: file } = await write(path.join(cycleDirPath(projectDir, state), 'roster.json'), parsed)
+  return { path: file, waves: dispatchWaves(track, parsed.selected) }
 }
 
 /**
@@ -207,7 +228,7 @@ async function cycleRosterSet(projectDir: string, parsed: Roster): Promise<{ pat
  * an agent its own track closes with, so the combination cannot reach this
  * function.
  */
-async function closingRosterSet(projectDir: string, parsed: ClosingRoster): Promise<{ path: string }> {
+async function closingRosterSet(projectDir: string, parsed: ClosingRoster): Promise<{ path: string; waves: string[][] }> {
   const state = await new StateStore(projectDir).get()
   // `done`, not `running`. This is also what keeps a late closing roster out of
   // a run that replaced this one — the hazard §12 gives `runLog` a `run_id`
@@ -272,7 +293,8 @@ async function closingRosterSet(projectDir: string, parsed: ClosingRoster): Prom
   // stripped, so the file says which kind of roster it is to a person reading
   // it and to the strict `RosterSchema`, which will refuse it if it ever
   // reaches a cycle reader by mistake.
-  return write(path.join(runDirPath(projectDir, state), 'closing', 'roster.json'), parsed)
+  const { path: file } = await write(path.join(runDirPath(projectDir, state), 'closing', 'roster.json'), parsed)
+  return { path: file, waves: dispatchWaves(track, parsed.selected) }
 }
 
 /**

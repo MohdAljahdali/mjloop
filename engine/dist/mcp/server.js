@@ -29854,6 +29854,34 @@ function pinnedAgents(track) {
 function permittedAgents(config2, track) {
   return /* @__PURE__ */ new Set([...track.required, ...track.available, ...track.closing, ...forcedSpecialists(config2)]);
 }
+function dispatchWaves(track, selected) {
+  const chosen = [...new Set(selected)];
+  const isChosen = new Set(chosen);
+  const remaining = /* @__PURE__ */ new Map();
+  for (const agent of chosen) remaining.set(agent, /* @__PURE__ */ new Set());
+  for (const edge of track.order) {
+    if (!isChosen.has(edge.agent)) continue;
+    for (const pred of edge.after) {
+      if (!isChosen.has(pred)) continue;
+      remaining.get(edge.agent)?.add(pred);
+    }
+  }
+  const waves = [];
+  const done = /* @__PURE__ */ new Set();
+  let pending = chosen;
+  while (pending.length > 0) {
+    const wave = pending.filter((agent) => [...remaining.get(agent) ?? []].every((dep) => done.has(dep)));
+    if (wave.length === 0) {
+      throw new RangeError(
+        `dispatchWaves: no agent among [${pending.join(", ")}] has every dependency satisfied \u2014 this track has a cycle among the selected agents, which TrackSchema.superRefine should have refused at parse`
+      );
+    }
+    for (const agent of wave) done.add(agent);
+    waves.push(wave);
+    pending = pending.filter((agent) => !done.has(agent));
+  }
+  return waves;
+}
 var DEFAULT_TRACKS = {
   // Every literal spells `closing` and `order` out, including the four that
   // declare no edges. `Track` is the output type, in which a `.default()`ed
@@ -29871,14 +29899,17 @@ var DEFAULT_TRACKS = {
     // in cycle 2 describes code cycle 4 replaces, and the alternative under the
     // old rule was four cycles of boilerplate skip reasons.
     closing: ["docs"],
-    // The build track's two real orderings — `ui-designer` before `builder`,
-    // `verifier` before `ui-critic` — stay prose in `skills/mjloop-leader/
-    // SKILL.md` until C2, which is where this milestone table (Milestone C,
-    // `docs/superpowers/specs/2026-08-01-plans-stories-split-design.md`)
-    // assigns moving them into edges and deleting the prose. Landing them
-    // here a phase early would leave `SKILL.md` and `config.yaml` disagreeing
-    // about which one is authoritative for a phase's length.
-    order: [],
+    // The build track's two real orderings, as data rather than as prose in
+    // `skills/mjloop-leader/SKILL.md`: `ui-designer` writes the contract
+    // `builder` codes against, and `ui-critic` judges the change `verifier`
+    // has already passed — a check with nothing to check until the code
+    // exists. Both are vacuous when their predecessor is skipped (the
+    // `order` field's own comment above states why), so a non-UI cycle that
+    // drafts neither `ui-designer` nor `ui-critic` is unaffected.
+    order: [
+      { agent: "builder", after: ["ui-designer"] },
+      { agent: "ui-critic", after: ["verifier"] }
+    ],
     max_cycles: 5,
     // The only track with ground worth handing forward: `edit` is one cycle,
     // `fix` has a reproduction, and `plan` produces a document.
@@ -33517,6 +33548,14 @@ var GateClosedError = class extends Error {
     this.name = "GateClosedError";
   }
 };
+var OrderViolationError = class extends Error {
+  constructor(agent, predecessor, track) {
+    super(
+      `"${agent}" is ordered after "${predecessor}" on track "${track}", and "${predecessor}" was drafted into this cycle but has not logged a result yet. Log "${predecessor}" first, then log "${agent}".`
+    );
+    this.name = "OrderViolationError";
+  }
+};
 var ContradictedEvidenceError = class extends Error {
   constructor(agent, entry, log) {
     super(
@@ -33578,6 +33617,8 @@ async function runLog(projectDir, input, now = () => /* @__PURE__ */ new Date())
     if (blocked) throw new GateClosedError(agent.data, gate.proven_by);
   }
   const cycleDir = cycleDirPath(projectDir, state);
+  const violation = await findOrderViolation(cycleDir, track, agent.data);
+  if (violation !== null) throw new OrderViolationError(agent.data, violation, state.track);
   const ledger = await readVerifyLedger(cycleDir);
   refuseContradicted(projectDir, cycleDir, agent.data, parsed.value, ledger, gate?.proven_by);
   const capped = await capAndSpill(projectDir, cycleDir, basename, parsed.value, ledger);
@@ -33635,6 +33676,30 @@ function safeJson(raw) {
   } catch {
     return null;
   }
+}
+var CycleRosterFields = object2({ selected: array(string2().min(1)).default([]) });
+async function selectedThisCycle(cycleDir) {
+  try {
+    const raw = await fs15.readFile(path16.join(cycleDir, "roster.json"), "utf8");
+    const parsed = CycleRosterFields.safeParse(JSON.parse(raw));
+    return parsed.success ? new Set(parsed.data.selected) : null;
+  } catch {
+    return null;
+  }
+}
+async function findOrderViolation(cycleDir, track, agent) {
+  const edges = track.order.filter((edge) => edge.agent === agent);
+  if (edges.length === 0) return null;
+  const selected = await selectedThisCycle(cycleDir);
+  if (selected === null) return null;
+  for (const edge of edges) {
+    for (const predecessor of edge.after) {
+      if (!selected.has(predecessor)) continue;
+      const exists4 = await fs15.access(path16.join(cycleDir, `${predecessor}.json`)).then(() => true).catch(() => false);
+      if (!exists4) return predecessor;
+    }
+  }
+  return null;
 }
 function refuseContradicted(projectDir, workDir, agent, result, ledger, provenBy) {
   if (result.status !== "pass" || provenBy === agent) return;
@@ -34299,6 +34364,10 @@ async function preflightEstimate(projectDir, input) {
       closing: [...track.closing]
     },
     dispatches_per_cycle: dispatchesPerCycle,
+    // The widest cycle as a `selected` array: `dispatchWaves` only needs
+    // membership, and `perCycle` is already exactly the set the estimate
+    // above is built from — the same widest-cycle reading, not a second one.
+    dispatch_waves: dispatchWaves(track, [...perCycle]).length,
     ceiling: {
       cycles: track.max_cycles,
       // The closing set is added once rather than per cycle, and it is added:
@@ -34443,7 +34512,8 @@ async function cycleRosterSet(projectDir, parsed) {
     }
   }
   if (violations.length > 0) throw new RosterViolationError(violations);
-  return write(path20.join(cycleDirPath(projectDir, state), "roster.json"), parsed);
+  const { path: file } = await write(path20.join(cycleDirPath(projectDir, state), "roster.json"), parsed);
+  return { path: file, waves: dispatchWaves(track, parsed.selected) };
 }
 async function closingRosterSet(projectDir, parsed) {
   const state = await new StateStore(projectDir).get();
@@ -34479,7 +34549,8 @@ async function closingRosterSet(projectDir, parsed) {
     }
   }
   if (violations.length > 0) throw new RosterViolationError(violations);
-  return write(path20.join(runDirPath(projectDir, state), "closing", "roster.json"), parsed);
+  const { path: file } = await write(path20.join(runDirPath(projectDir, state), "closing", "roster.json"), parsed);
+  return { path: file, waves: dispatchWaves(track, parsed.selected) };
 }
 function contradictions(selected, skipped) {
   return Object.keys(skipped).filter((agent) => selected.has(agent)).map((agent) => `"${agent}" is both drafted and skipped \u2014 a roster must say one or the other`);

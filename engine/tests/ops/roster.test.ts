@@ -103,6 +103,50 @@ describe('rosterSet', () => {
   })
 })
 
+describe('the dispatch waves rosterSet returns', () => {
+  // A track with a real cross-set edge — the same shape the build track's two
+  // real orderings take — so `dispatchWaves` has something to layer. `c` is
+  // `available`, `b` is `required`, and `b` waits on `c`.
+  beforeEach(async () => {
+    const config = await loadConfig(project.dir)
+    config.tracks.mine = {
+      required: ['a', 'b'],
+      available: ['c'],
+      closing: [],
+      order: [{ agent: 'b', after: ['c'] }],
+      max_cycles: 3,
+    }
+    await writeConfig(project.dir, config)
+    await runStart(project.dir, { track: 'mine', goal: 'demo' }, clock)
+  })
+
+  it('groups a cycle roster into the layers its order edges require', async () => {
+    const { waves } = await rosterSet(project.dir, { cycle: 1, selected: ['a', 'b', 'c'], skipped: {} })
+    // `b` waits on `c`, so the two of them cannot share a wave with `b` first.
+    expect(waves).toEqual([
+      ['a', 'c'],
+      ['b'],
+    ])
+  })
+
+  it('puts everything in one wave when the predecessor was not drafted', async () => {
+    // The vacuous-edge rule TrackSchema.order's comment states: `c` is not in
+    // `selected`, so `b`'s edge is satisfied by the omission, not violated.
+    const { waves } = await rosterSet(project.dir, { cycle: 1, selected: ['a', 'b'], skipped: { c: 'not needed' } })
+    expect(waves).toEqual([['a', 'b']])
+  })
+
+  it('returns one wave for a closing pass, since order edges can never name a closing agent', async () => {
+    const config = await loadConfig(project.dir)
+    config.tracks.mine = { ...config.tracks.mine!, closing: ['d'] }
+    await writeConfig(project.dir, config)
+    await cycleAdvance(project.dir, { agents: ['a', 'b'], result: 'pass' }, clock)
+
+    const { waves } = await rosterSet(project.dir, { closing: true, selected: ['d'], skipped: {} })
+    expect(waves).toEqual([['d']])
+  })
+})
+
 describe('an agent both drafted and skipped', () => {
   it('is rejected, so the roster cannot claim it ran and was safely omitted', async () => {
     await expect(

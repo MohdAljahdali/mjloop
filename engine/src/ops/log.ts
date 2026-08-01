@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import * as z from 'zod'
-import { findTrack, forbiddenSpecialists, permittedAgents } from '../schemas/config.js'
+import { findTrack, forbiddenSpecialists, permittedAgents, type Track } from '../schemas/config.js'
 import { AgentNameSchema, capEvidence, parseAgentResult, type AgentResult } from '../schemas/contract.js'
 import { SkillManifestSchema, type SkillManifest } from '../schemas/skill-selection.js'
 import type { State } from '../schemas/state.js'
@@ -150,6 +150,29 @@ export class GateClosedError extends Error {
         `Run "${provenBy}" first, or halt the run — nothing opens this gate by assertion.`,
     )
     this.name = 'GateClosedError'
+  }
+}
+
+/**
+ * The `order` mirror of `GateClosedError`: generic, built from the track's own
+ * `order` edge rather than a hardcoded agent name, and refusing the same way —
+ * nothing the blocked agent produces is recorded until the predecessor's
+ * result exists.
+ *
+ * This is the only enforcement an engine that dispatches nothing can give an
+ * `order` edge. The leader is a skill and the engine is MCP tools, so nothing
+ * here stops a leader from dispatching `agent` before `predecessor` returns —
+ * it can only refuse to *log* what comes back, exactly as `GateClosedError`
+ * cannot stop a blocked agent from being dispatched early, only from being
+ * recorded.
+ */
+export class OrderViolationError extends Error {
+  constructor(agent: string, predecessor: string, track: string) {
+    super(
+      `"${agent}" is ordered after "${predecessor}" on track "${track}", and "${predecessor}" was drafted into ` +
+        `this cycle but has not logged a result yet. Log "${predecessor}" first, then log "${agent}".`,
+    )
+    this.name = 'OrderViolationError'
   }
 }
 
@@ -356,9 +379,16 @@ export async function runLog(
     if (blocked) throw new GateClosedError(agent.data, gate.proven_by)
   }
 
-  /* 6 — the contradiction check, which must precede everything that writes. */
+  /* 5b — the order edges, refused the same shape the gate is. */
 
+  // Moved above the contradiction check so an out-of-order result is refused
+  // before anything is read that a legitimate write below would depend on —
+  // the same reasoning that puts the gate probe ahead of it.
   const cycleDir = cycleDirPath(projectDir, state)
+  const violation = await findOrderViolation(cycleDir, track, agent.data)
+  if (violation !== null) throw new OrderViolationError(agent.data, violation, state.track)
+
+  /* 6 — the contradiction check, which must precede everything that writes. */
   // Absent for every cycle of every project that predates the engine running
   // verify commands itself, and `[]` there — so the check below is inert rather
   // than newly strict about history.
@@ -520,6 +550,70 @@ function safeJson(raw: string): SkillManifest | null {
   } catch {
     return null
   }
+}
+
+/* ── the cycle roster, read rather than written ────────────────────────────── */
+
+/**
+ * Fields `cycle-NN/roster.json` carries that this check needs, read leniently
+ * rather than through `RosterSchema`. That schema is `strictObject` and
+ * requires `cycle`; a roster written by a later milestone that adds a key
+ * must still tell this check who was drafted, so an unrecognised key must not
+ * fail the read the way it correctly fails `rosterSet`'s own write.
+ */
+const CycleRosterFields = z.object({ selected: z.array(z.string().min(1)).default([]) })
+
+/** This cycle's declared `selected` set, or `null` for anything that will not read back as one. */
+async function selectedThisCycle(cycleDir: string): Promise<Set<string> | null> {
+  try {
+    const raw = await fs.readFile(path.join(cycleDir, 'roster.json'), 'utf8')
+    const parsed = CycleRosterFields.safeParse(JSON.parse(raw) as unknown)
+    return parsed.success ? new Set(parsed.data.selected) : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * The predecessor `agent` is ordered after but has no logged result yet, or
+ * `null` when nothing in `track.order` blocks it.
+ *
+ * Reads `cycle-NN/roster.json` from disk rather than any in-memory record of
+ * what has run, and that is load-bearing rather than incidental: the leader's
+ * resume path (`skills/mjloop-leader/SKILL.md` step 2a) picks an interrupted
+ * cycle back up from exactly the result files already on disk, with no
+ * dispatch history surviving the restart that carried it there. A check keyed
+ * on anything else would refuse every agent after the first on every resume.
+ *
+ * Applies the same vacuous-edge rule `dispatchWaves` applies: a predecessor
+ * this cycle never drafted cannot be waited on, so an edge naming one is
+ * satisfied rather than violated. A roster that is missing or will not parse
+ * is read the same way `refuseUnselectedSkills` reads a missing manifest —
+ * as "nothing on record", which is fail-open here. The alternative — refusing
+ * every result until a roster exists — would make `runLog` a second, stricter
+ * copy of the "declare the roster first" rule `mjloop-leader/SKILL.md` step 3
+ * already states in prose, and wrong about it whenever a project reads a
+ * roster this check cannot parse for a reason that has nothing to do with
+ * ordering.
+ */
+async function findOrderViolation(cycleDir: string, track: Track, agent: string): Promise<string | null> {
+  const edges = track.order.filter((edge) => edge.agent === agent)
+  if (edges.length === 0) return null
+
+  const selected = await selectedThisCycle(cycleDir)
+  if (selected === null) return null
+
+  for (const edge of edges) {
+    for (const predecessor of edge.after) {
+      if (!selected.has(predecessor)) continue // vacuous: predecessor was not drafted this cycle
+      const exists = await fs
+        .access(path.join(cycleDir, `${predecessor}.json`))
+        .then(() => true)
+        .catch(() => false)
+      if (!exists) return predecessor
+    }
+  }
+  return null
 }
 
 /* ── the ledger, read rather than written ─────────────────────────────────── */

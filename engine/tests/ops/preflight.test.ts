@@ -68,6 +68,20 @@ describe('preflightEstimate', () => {
     expect(preflight.ceiling).toEqual({ cycles: 5, dispatches: 41 })
   })
 
+  it('reports the dispatch layers the widest build cycle would need', async () => {
+    const preflight = await preflightEstimate(project.dir, { track: 'build' })
+
+    // The build track's two real orderings — `builder after ui-designer`,
+    // `ui-critic after verifier` — both land inside the widest possible
+    // cycle, so it takes two rounds to clear rather than one.
+    expect(preflight.dispatch_waves).toBe(2)
+  })
+
+  it('reports one wave for a track with no order edges', async () => {
+    const preflight = await preflightEstimate(project.dir, { track: 'edit' })
+    expect(preflight.dispatch_waves).toBe(1)
+  })
+
   it('excludes a specialist set to never from the dispatch count', async () => {
     const config = await loadConfig(project.dir)
     config.specialists = { security: 'never' }

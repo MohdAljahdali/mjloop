@@ -1,4 +1,4 @@
-import { findTrack, forbiddenSpecialists, forcedSpecialists } from '../schemas/config.js'
+import { dispatchWaves, findTrack, forbiddenSpecialists, forcedSpecialists } from '../schemas/config.js'
 import { loadConfig } from '../store/config-store.js'
 import { readRunHistory, type RunRecord } from './history.js'
 import { UnknownTrackError } from './run.js'
@@ -53,6 +53,16 @@ export interface Preflight {
   }
   /** required + available + forced, minus forbidden and minus closing — the widest cycle possible. */
   dispatches_per_cycle: number
+  /**
+   * How many sequential layers `dispatchWaves` groups the widest cycle into,
+   * over `track.order` — 1 when the track has no edges, or when every
+   * predecessor an edge names sits outside the widest cycle already computed
+   * above. The shape of a run, not only its size: two tracks with the same
+   * `dispatches_per_cycle` can still take a different number of rounds to
+   * clear, and a person deciding whether to start one should see that before
+   * the first dispatch, not discover it cycle by cycle.
+   */
+  dispatch_waves: number
   ceiling: { cycles: number; dispatches: number }
   /** `null` when the project has no comparable run: *no basis* is an answer, and an invented one is not. */
   comparable: Comparable | null
@@ -101,6 +111,10 @@ export async function preflightEstimate(projectDir: string, input: PreflightInpu
       closing: [...track.closing],
     },
     dispatches_per_cycle: dispatchesPerCycle,
+    // The widest cycle as a `selected` array: `dispatchWaves` only needs
+    // membership, and `perCycle` is already exactly the set the estimate
+    // above is built from — the same widest-cycle reading, not a second one.
+    dispatch_waves: dispatchWaves(track, [...perCycle]).length,
     ceiling: {
       cycles: track.max_cycles,
       // The closing set is added once rather than per cycle, and it is added:

@@ -16809,6 +16809,34 @@ function pinnedAgents(track) {
   if (track.gate !== void 0) pinned.push(track.gate.proven_by);
   return pinned;
 }
+function dispatchWaves(track, selected) {
+  const chosen = [...new Set(selected)];
+  const isChosen = new Set(chosen);
+  const remaining = /* @__PURE__ */ new Map();
+  for (const agent of chosen) remaining.set(agent, /* @__PURE__ */ new Set());
+  for (const edge of track.order) {
+    if (!isChosen.has(edge.agent)) continue;
+    for (const pred of edge.after) {
+      if (!isChosen.has(pred)) continue;
+      remaining.get(edge.agent)?.add(pred);
+    }
+  }
+  const waves = [];
+  const done = /* @__PURE__ */ new Set();
+  let pending = chosen;
+  while (pending.length > 0) {
+    const wave = pending.filter((agent) => [...remaining.get(agent) ?? []].every((dep) => done.has(dep)));
+    if (wave.length === 0) {
+      throw new RangeError(
+        `dispatchWaves: no agent among [${pending.join(", ")}] has every dependency satisfied \u2014 this track has a cycle among the selected agents, which TrackSchema.superRefine should have refused at parse`
+      );
+    }
+    for (const agent of wave) done.add(agent);
+    waves.push(wave);
+    pending = pending.filter((agent) => !done.has(agent));
+  }
+  return waves;
+}
 
 // src/schemas/feature.ts
 var FeatureIdSchema = string2().regex(/^F\d{3}$/, "a feature id looks like F001");
@@ -18564,6 +18592,10 @@ async function preflightEstimate(projectDir, input) {
       closing: [...track.closing]
     },
     dispatches_per_cycle: dispatchesPerCycle,
+    // The widest cycle as a `selected` array: `dispatchWaves` only needs
+    // membership, and `perCycle` is already exactly the set the estimate
+    // above is built from — the same widest-cycle reading, not a second one.
+    dispatch_waves: dispatchWaves(track, [...perCycle]).length,
     ceiling: {
       cycles: track.max_cycles,
       // The closing set is added once rather than per cycle, and it is added:

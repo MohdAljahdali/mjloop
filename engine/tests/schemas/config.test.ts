@@ -63,7 +63,14 @@ describe('DEFAULT_TRACKS', () => {
       required: ['builder', 'verifier'],
       available: ['scout', 'critic', 'ui-designer', 'ui-critic', 'security', 'perf'],
       closing: ['docs'],
-      order: [],
+      // The leader's two real orderings, as edges rather than as prose in
+      // skills/mjloop-leader/SKILL.md: a contract nobody checks and a check
+      // with no contract are both worthless, so the pair is ordered on both
+      // sides of the code it concerns.
+      order: [
+        { agent: 'builder', after: ['ui-designer'] },
+        { agent: 'ui-critic', after: ['verifier'] },
+      ],
       max_cycles: 5,
       map: { drafted_by: 'scout' },
     })
@@ -91,10 +98,20 @@ describe('DEFAULT_TRACKS', () => {
     })
   })
 
-  it('ships every default track with no ordering edges — C2 is where the leader prose becomes data', () => {
+  it('ships every default track but build with no ordering edges', () => {
+    // C2 is where build's two real orderings became these edges; the other
+    // three tracks have never had an ordering to express.
     for (const [name, track] of Object.entries(DEFAULT_TRACKS)) {
+      if (name === 'build') continue
       expect(track.order, name).toEqual([])
     }
+  })
+
+  it('orders the build track exactly on its two real dependencies', () => {
+    expect(DEFAULT_TRACKS.build?.order).toEqual([
+      { agent: 'builder', after: ['ui-designer'] },
+      { agent: 'ui-critic', after: ['verifier'] },
+    ])
   })
 
   it('spells closing out on every track, not only the one that uses it', () => {

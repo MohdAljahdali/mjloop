@@ -59,6 +59,24 @@ describe('a UI cycle', () => {
       selected: ['builder', 'verifier', 'ui-designer', 'ui-critic'],
       skipped: ALL_SKIPPED,
     })
+    // `ui-critic` is ordered after `verifier` on the build track — there is
+    // nothing to judge until the change exists and passes — so `runLog`
+    // refuses `ui-critic`'s result until `verifier`'s is on disk.
+    await runLog(
+      project.dir,
+      {
+        agent: 'verifier',
+        result: {
+          status: 'pass',
+          summary: 'The suite is green.',
+          evidence: [{ kind: 'command', ref: 'npm test', excerpt: '4 passed' }],
+          findings: [],
+          files_touched: [],
+          next_hint: null,
+        },
+      },
+      clock,
+    )
     await runLog(
       project.dir,
       {

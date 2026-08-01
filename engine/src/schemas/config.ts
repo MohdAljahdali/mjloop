@@ -43,9 +43,19 @@ export const MapSchema = z.strictObject({
  * A set of edges rather than a position in an array, because the two
  * orderings this schema exists to express are both cross-set —
  * `ui-designer` (available) before `builder` (required), and `verifier`
- * (required) before `ui-critic` (available), today stated only in prose at
- * `skills/mjloop-leader/SKILL.md` around lines 124-126 — and neither is
- * expressible as a position in `required` or `available` alone.
+ * (required) before `ui-critic` (available) — and neither is expressible as
+ * a position in `required` or `available` alone. `DEFAULT_TRACKS.build.order`
+ * below carries those two as data; nothing in `skills/mjloop-leader/SKILL.md`
+ * states them in prose any more, which is the point of moving them here —
+ * a project that renames or drops one of the two agents edits this file, not
+ * a skill written in English.
+ *
+ * An edge is enforced twice, at the two seams a dispatch is observable to an
+ * engine that dispatches nothing itself: `dispatchWaves` below groups a
+ * roster's `selected` into the layers a leader must dispatch in order, and
+ * `ops/log.ts`'s `runLog` refuses a result from `edge.agent` while `after`
+ * names an agent this cycle drafted whose own result is not yet on disk —
+ * the same shape `GateClosedError` already refuses a blocked one in.
  */
 export const OrderEdgeSchema = z.strictObject({
   agent: z.string().min(1),
@@ -780,14 +790,17 @@ export const DEFAULT_TRACKS: Record<string, Track> = {
     // in cycle 2 describes code cycle 4 replaces, and the alternative under the
     // old rule was four cycles of boilerplate skip reasons.
     closing: ['docs'],
-    // The build track's two real orderings — `ui-designer` before `builder`,
-    // `verifier` before `ui-critic` — stay prose in `skills/mjloop-leader/
-    // SKILL.md` until C2, which is where this milestone table (Milestone C,
-    // `docs/superpowers/specs/2026-08-01-plans-stories-split-design.md`)
-    // assigns moving them into edges and deleting the prose. Landing them
-    // here a phase early would leave `SKILL.md` and `config.yaml` disagreeing
-    // about which one is authoritative for a phase's length.
-    order: [],
+    // The build track's two real orderings, as data rather than as prose in
+    // `skills/mjloop-leader/SKILL.md`: `ui-designer` writes the contract
+    // `builder` codes against, and `ui-critic` judges the change `verifier`
+    // has already passed — a check with nothing to check until the code
+    // exists. Both are vacuous when their predecessor is skipped (the
+    // `order` field's own comment above states why), so a non-UI cycle that
+    // drafts neither `ui-designer` nor `ui-critic` is unaffected.
+    order: [
+      { agent: 'builder', after: ['ui-designer'] },
+      { agent: 'ui-critic', after: ['verifier'] },
+    ],
     max_cycles: 5,
     // The only track with ground worth handing forward: `edit` is one cycle,
     // `fix` has a reproduction, and `plan` produces a document.

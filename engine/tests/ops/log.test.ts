@@ -12,12 +12,14 @@ import {
   GateClosedError,
   InvalidAgentNameError,
   InvalidAgentResultError,
+  OrderViolationError,
   RunReplacedError,
   UnknownAgentError,
   UnselectedSkillError,
   runLog,
 } from '../../src/ops/log.js'
 import { initLoop } from '../../src/ops/init.js'
+import { rosterSet } from '../../src/ops/roster.js'
 import { NoActiveRunError, UnknownTrackError, cycleAdvance, runDirPath, runStart } from '../../src/ops/run.js'
 import { EVIDENCE_EXCERPT_MAX } from '../../src/schemas/contract.js'
 import { SkillManifestSchema } from '../../src/schemas/skill-selection.js'
@@ -575,6 +577,94 @@ describe('the reproduction gate', () => {
       expect(state.goal).toBe('A different defect')
       expect(state.reproduction).toBeNull()
     }
+  })
+})
+
+describe('runLog against order edges', () => {
+  // A track with one real edge, the same cross-set shape the build track's
+  // two real orderings take: `b` is required, `c` is available, and `b` may
+  // not be logged until `c` has a result — when `c` was drafted at all.
+  beforeEach(async () => {
+    const config = await loadConfig(project.dir)
+    config.tracks.mine = {
+      required: ['a', 'b'],
+      available: ['c'],
+      closing: [],
+      order: [{ agent: 'b', after: ['c'] }],
+      max_cycles: 3,
+    }
+    await writeConfig(project.dir, config)
+    await runStart(project.dir, { track: 'mine', goal: 'demo' }, clock)
+  })
+
+  it('refuses a result while its predecessor was drafted but has not logged one yet', async () => {
+    await rosterSet(project.dir, { cycle: 1, selected: ['a', 'b', 'c'], skipped: {} })
+    await expect(runLog(project.dir, { agent: 'b', result: RESULT }, clock)).rejects.toBeInstanceOf(
+      OrderViolationError,
+    )
+  })
+
+  it('names the agent, the predecessor and the track', async () => {
+    await rosterSet(project.dir, { cycle: 1, selected: ['a', 'b', 'c'], skipped: {} })
+    await expect(runLog(project.dir, { agent: 'b', result: RESULT }, clock)).rejects.toThrow(
+      /"b" is ordered after "c" on track "mine"/,
+    )
+  })
+
+  it('writes nothing and touches no state when it refuses', async () => {
+    await rosterSet(project.dir, { cycle: 1, selected: ['a', 'b', 'c'], skipped: {} })
+    await expect(runLog(project.dir, { agent: 'b', result: RESULT }, clock)).rejects.toThrow()
+
+    const state = await new StateStore(project.dir).get()
+    const cycleDir = path.join(runDirPath(project.dir, state), 'cycle-01')
+    await expect(fs.access(path.join(cycleDir, 'b.json'))).rejects.toThrow()
+    expect(state.findings).toEqual([])
+  })
+
+  it('accepts the result once the predecessor has logged its own', async () => {
+    await rosterSet(project.dir, { cycle: 1, selected: ['a', 'b', 'c'], skipped: {} })
+    await runLog(project.dir, { agent: 'c', result: RESULT }, clock)
+    const { path: file } = await runLog(project.dir, { agent: 'b', result: RESULT }, clock)
+    expect(path.basename(file)).toBe('b.json')
+  })
+
+  it('does not block when the predecessor was not drafted this cycle', async () => {
+    // The vacuous-edge rule TrackSchema.order's comment states: `c` is not in
+    // `selected`, so `b`'s edge is satisfied by the omission, not violated —
+    // dispatchWaves applies the same rule when it groups the roster.
+    await rosterSet(project.dir, { cycle: 1, selected: ['a', 'b'], skipped: { c: 'not needed' } })
+    await expect(runLog(project.dir, { agent: 'b', result: RESULT }, clock)).resolves.toBeDefined()
+  })
+
+  it('does not block when no roster is on record for the cycle', async () => {
+    // A roster this check cannot read says nothing about who was drafted, so
+    // it must not refuse work over a decision it cannot see — the same
+    // fail-open direction `refuseUnselectedSkills` takes for a missing
+    // pinned manifest.
+    await expect(runLog(project.dir, { agent: 'b', result: RESULT }, clock)).resolves.toBeDefined()
+  })
+
+  it('accepts a resumed cycle from result files already on disk, not from anything this process declared', async () => {
+    // The hazard C2 names: the leader's resume path (skills/mjloop-leader/
+    // SKILL.md step 2a) picks an interrupted cycle back up from exactly the
+    // files already in the cycle directory, with nothing about what ran
+    // before the restart surviving in memory. Neither `rosterSet` nor
+    // `runLog` is called in this process for the roster or for `c` — both
+    // are written straight to disk — so a check keyed on anything but the
+    // cycle directory would refuse this, and `/mjloop:resume` would start
+    // refusing every agent after the first on every project that uses it.
+    const state = await new StateStore(project.dir).get()
+    const cycleDir = path.join(runDirPath(project.dir, state), 'cycle-01')
+    await fs.mkdir(cycleDir, { recursive: true })
+    await fs.writeFile(
+      path.join(cycleDir, 'roster.json'),
+      JSON.stringify({ cycle: 1, selected: ['a', 'b', 'c'], skipped: {} }),
+      'utf8',
+    )
+    await fs.writeFile(path.join(cycleDir, 'c.json'), JSON.stringify(RESULT), 'utf8')
+
+    const { path: file } = await runLog(project.dir, { agent: 'b', result: RESULT }, clock)
+    expect(path.basename(file)).toBe('b.json')
   })
 })
 

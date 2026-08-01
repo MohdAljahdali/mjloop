@@ -105,7 +105,10 @@ Read `.mjloop/config.yaml` for the track's `required`, `available` and `closing`
   `mjloop_roster_set` rejects a roster that names one. Step 8 is where it is dispatched.
 
 Call `mjloop_roster_set`. **If it rejects your roster, fix the roster.** Do not work around
-it — the rejection is the invariant doing its job.
+it — the rejection is the invariant doing its job. On success it returns `waves` — the
+agents you just drafted, grouped into the layers the track's `order` edges require and
+already put in the order you must dispatch them. Step 4 dispatches exactly this; you do not
+re-derive it from `config.yaml` yourself.
 
 ### Drafting the specialists
 
@@ -121,9 +124,8 @@ These are the conditions that call for each:
   verification pays for itself.
 - **`ui-designer` and `ui-critic`** — the story has `ui: true`, or the change alters what
   a user sees. Draft them as a pair: a contract nobody checks and a check with no contract
-  are both worthless. `ui-designer` runs **before** `builder`, because a contract written
-  after the code is a description. `ui-critic` runs **after** `verifier`, because there is
-  nothing to judge until the change exists and passes.
+  are both worthless. You do not have to work out when each one runs — the track's `order`
+  edges place them, and `mjloop_roster_set`'s `waves` tell you where.
 - **`security`** — the change touches authentication, authorisation, input handling, a
   network boundary, a query, a file path, or a secret.
 - **`perf`** — the change touches a hot path, a loop over data, or a data-access pattern.
@@ -259,10 +261,13 @@ command that builds the first one — `/mjloop:build --next`.
 
 ### 4. Dispatch
 
-Send each agent the brief from **mjloop-contract**. Independent agents may run in
-parallel up to `limits.max_parallel_agents`; an agent that consumes another's output
-waits for it. `verifier` runs after every agent that touches code — only `ui-critic`,
-which judges the verified result against the contract, runs after it.
+Dispatch the `waves` step 3 returned, one wave at a time. Send every agent named in one
+wave the brief from **mjloop-contract**; they may run in parallel, up to
+`limits.max_parallel_agents`. Do not start the next wave until `mjloop_run_log` has
+recorded a result for every agent in the one before it — `mjloop_run_log` refuses a result
+from a later wave's agent while an earlier wave's agent it is ordered after has none on
+file yet, and the refusal names both. A track with no `order` edges among the agents you
+drafted returns one wave holding all of them, which is every track before this one existed.
 
 The `Map:` and `Handoff:` lines carry paths, not documents. `mjloop_state_get` returns the
 map path and `mjloop_cycle_advance` returned the handoff path when it closed the last cycle,
@@ -322,10 +327,10 @@ Only those three decide the verdict. Another agent's `fail` — `critic`'s, typi
 not a veto: its `medium` and `low` findings ride with the cycle instead of blocking it,
 and they are reported (step 6) or worked (step 7). They are never quietly dropped.
 
-Judge only once every agent the roster drafted has returned. `ui-critic` is the one to
-watch, because it runs after `verifier`: a cycle directory holding a `roster.json` that
-names it and no `ui-critic.json` has not been checked, and a pass declared there commits
-work whose UI nobody judged.
+Judge only once every agent the roster drafted has returned. Watch the later waves
+especially: a cycle directory holding a `roster.json` that names an agent from the last
+wave and no result file for it has not been checked, and a pass declared there commits
+work that agent was drafted to judge and never did.
 
 ### 6. Close the cycle
 
