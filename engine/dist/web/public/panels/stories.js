@@ -77,6 +77,8 @@ export function mountStories() {
   const acceptDetails = pick('story-open-accept-details')
   const acceptSummary = pick('story-open-accept-summary')
   const acceptance = pick('story-open-acceptance')
+  const bodyDetails = pick('story-open-body-details')
+  const body = pick('story-open-body')
 
   const listEmpty = pick('stories-empty')
   const host = pick('stories-list')
@@ -260,6 +262,11 @@ export function mountStories() {
         },
       }
     })
+
+    // A document, not prose: `verbatim()`, exactly as `panels/plans.js` renders
+    // PLAN.md — same collapsed-by-default shape, same "nothing written" tell.
+    verbatim(body, story.body)
+    flag(bodyDetails, 'hidden', story.body.trim().length === 0)
   }
 
   /**

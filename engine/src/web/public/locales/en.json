@@ -276,6 +276,7 @@
   "story.tab.unpin": "Unpin {id}",
   "story.tab.reopen": "Reopen the last closed tab",
   "story.open.clear": "Nothing is holding this story up.",
+  "story.readBody": "Read the story file",
   "story.fact.plan": "Plan",
   "story.fact.dependsOn": "Depends on",
   "story.fact.ui": "UI story",

@@ -280,6 +280,7 @@
   "story.tab.unpin": "أزل تثبيت ‏{id}‏",
   "story.tab.reopen": "أعد فتح آخر تبويب مُغلَق",
   "story.open.clear": "لا شيء يعطّل هذه القصّة.",
+  "story.readBody": "اقرأ ملف القصّة",
   "story.fact.plan": "الخطة",
   "story.fact.dependsOn": "تعتمد على",
   "story.fact.ui": "قصّة واجهة",

@@ -69,6 +69,7 @@ const detailStory = (patch: Partial<StoryDetail> & { id: string }): StoryDetail 
   depends_on: [],
   acceptance: [],
   evidence: null,
+  body: '',
   ...patch,
 })
 
@@ -475,6 +476,36 @@ describe('stories', () => {
     expect(document.getElementById('story-open-title')?.textContent).toBe('P001-S02 — Two')
     // Everything in the pane comes off the document the list already has.
     expect(document.getElementById('story-open-accept-summary')?.textContent).toContain('1')
+    // A story nobody wrote a body for renders one that shows nothing —
+    // collapsed and empty, not omitted.
+    expect((document.getElementById('story-open-body-details') as HTMLElement).hidden).toBe(true)
+  })
+
+  it('renders the story body B4 adds to the read side, beside the acceptance criteria', async () => {
+    installStorage(memoryStorage(JSON.stringify({ activePlan: 'P001' })))
+    serve({
+      '/api/plans/P001': {
+        id: 'P001',
+        title: 'A plan',
+        approval: null,
+        body: '',
+        review: null,
+        stories: [detailStory({ id: 'P001-S01', title: 'One', body: 'Log in with a mailed link.' })],
+      },
+    })
+    mountDoc()
+    reveal('panel-stories')
+    const stories = mountStories()
+    draw(emptySnapshot({ plans: [plan({ id: 'P001', stories: [story({ id: 'P001-S01' })] })] }))
+    await vi.waitFor(() => expect(document.querySelectorAll('#stories-list .story')).toHaveLength(1))
+
+    stories.openTab('P001-S01')
+    await vi.waitFor(() => expect((document.getElementById('story-open') as HTMLElement).hidden).toBe(false))
+
+    // A document, not prose: rendered through `verbatim()`, exactly as
+    // `panels/plans.js` renders PLAN.md — never translated, never escaped.
+    expect((document.getElementById('story-open-body-details') as HTMLElement).hidden).toBe(false)
+    expect(document.getElementById('story-open-body')?.textContent).toBe('Log in with a mailed link.')
   })
 
   it('walks the strip with the arrow keys, and the direction follows the document', async () => {

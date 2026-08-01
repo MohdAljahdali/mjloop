@@ -22,7 +22,7 @@ import {
 import { parseFrontmatter } from '../store/frontmatter.js'
 import { listMemories, readMemory } from '../store/memory-store.js'
 import { resolveLoopPaths } from '../store/paths.js'
-import { findPlanDir, listStories } from '../store/plan-store.js'
+import { findPlanDir, listStories, type Story } from '../store/plan-store.js'
 import { readAcceptedProfile, readProposedProfile } from '../store/project-profile-store.js'
 import { listAcceptances } from '../store/skill-acceptance-store.js'
 import { listPackages, type UnreadablePackage } from '../store/skill-library-store.js'
@@ -342,6 +342,13 @@ export interface StoryDetail {
   acceptance: string[]
   /** The run directory holding the proof this story is done. Null until it is. */
   evidence: string | null
+  /**
+   * The story file's markdown body. Same policy as `PlanDetail.body`: whole,
+   * unbounded, rendered through `verbatim()`; the page escapes nothing. There
+   * is no `CYCLE_HANDOFF_MAX`-style ceiling here because there is none on the
+   * plan body either, and a story is served from the same array.
+   */
+  body: string
 }
 
 export interface PlanDetail {
@@ -392,10 +399,17 @@ export async function readPlanDetail(projectDir: string, planId: string): Promis
  */
 async function readStoryDetails(projectDir: string, planId: string): Promise<StoryDetail[]> {
   const stories = await listStories(projectDir, planId).catch(() => [])
-  return stories.map((story) => toStoryDetail(story.frontmatter))
+  return stories.map((story) => toStoryDetail(story))
 }
 
-function toStoryDetail(frontmatter: ReturnType<typeof StoryFrontmatterSchema.parse>): StoryDetail {
+/**
+ * Takes the whole `Story`, not just its frontmatter: `readPlanDetail` embeds
+ * this same array in `PlanDetail.stories`, and `readStoryDetail` below finds
+ * one element of it. A body added to one shape and not the other would ship
+ * two divergent views of the same record — this function is the one place
+ * that cannot happen.
+ */
+function toStoryDetail({ frontmatter, body }: Story): StoryDetail {
   return {
     id: frontmatter.id,
     title: frontmatter.title,
@@ -404,6 +418,7 @@ function toStoryDetail(frontmatter: ReturnType<typeof StoryFrontmatterSchema.par
     depends_on: frontmatter.depends_on,
     acceptance: frontmatter.acceptance,
     evidence: frontmatter.evidence,
+    body,
   }
 }
 

@@ -242,6 +242,25 @@ describe('read', () => {
     expect(story.depends_on).toEqual([])
   })
 
+  it('carries the story body identically on both shapes it is served in', async () => {
+    // B4's trap: `readStoryDetail` and the `stories` array `readPlanDetail`
+    // embeds are built from the same `toStoryDetail`, so a body missing from
+    // one but not the other would mean two divergent shapes of one record.
+    await seed()
+    await storyAdd(project.dir, { plan: 'P001', title: 'Password reset', body: 'A link, not a form.' }, clock)
+
+    const direct = await readStoryDetail(project.dir, 'P001-S03')
+    expect(direct.body).toBe('A link, not a form.')
+
+    const embedded = (await readPlanDetail(project.dir, 'P001')).stories.find((story) => story.id === 'P001-S03')
+    expect(embedded?.body).toBe('A link, not a form.')
+
+    // A story nobody wrote a body for reports one that renders nothing, not a
+    // missing field — `panels/stories.js`'s `flag(bodyDetails, ...)` reads
+    // `.trim()` on exactly this value.
+    expect((await readStoryDetail(project.dir, 'P001-S01')).body).toBe('')
+  })
+
   it('reports the review the engine itself never reads', async () => {
     await seed()
     const file = path.join(project.dir, '.mjloop', 'plans', 'P001-user-auth', 'REVIEW.md')

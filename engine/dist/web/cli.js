@@ -19002,9 +19002,9 @@ async function readPlanDetail(projectDir, planId) {
 }
 async function readStoryDetails(projectDir, planId) {
   const stories = await listStories(projectDir, planId).catch(() => []);
-  return stories.map((story) => toStoryDetail(story.frontmatter));
+  return stories.map((story) => toStoryDetail(story));
 }
-function toStoryDetail(frontmatter) {
+function toStoryDetail({ frontmatter, body }) {
   return {
     id: frontmatter.id,
     title: frontmatter.title,
@@ -19012,7 +19012,8 @@ function toStoryDetail(frontmatter) {
     ui: frontmatter.ui,
     depends_on: frontmatter.depends_on,
     acceptance: frontmatter.acceptance,
-    evidence: frontmatter.evidence
+    evidence: frontmatter.evidence,
+    body
   };
 }
 async function readStoryDetail(projectDir, storyId) {
