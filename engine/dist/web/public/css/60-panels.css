@@ -38,6 +38,17 @@
  */
 .panel-grid {
   display: grid;
+  /* `minmax(0, 1fr)`, not the `auto` a bare `display: grid` implies: an `auto`
+     track's automatic minimum is its content's min-content size, so a
+     non-wrapping row inside `.panel-main` (`.worktabs`, `flex: 0 0 auto` tabs
+     with its own `overflow-x: auto`) set the *track* wide enough to fit every
+     tab unclipped — 733px of track in a 673px panel at 720px wide, confirmed
+     by reading `getComputedStyle(.panel-grid).gridTemplateColumns` in Chrome.
+     `main` only has `overflow-y: auto` (10-layout.css:85), and the spec makes
+     an unset `overflow-x` compute to `auto` the moment its sibling axis is not
+     `visible`, so the blowout surfaced as the whole tab body scrolling
+     sideways instead of the one strip that means to. */
+  grid-template-columns: minmax(0, 1fr);
   gap: 18px;
   align-items: start;
 }

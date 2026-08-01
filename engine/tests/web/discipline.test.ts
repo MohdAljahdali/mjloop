@@ -217,6 +217,13 @@ describe('the invariants a stylesheet edit could undo', () => {
     expect(read('app.css')).toMatch(/grid-template-columns:\s*minmax\(0,\s*1fr\)/)
     expect(read('css/30-tabs.css')).toMatch(/\.tabs\s*\{[^}]*overflow-x:\s*auto/)
     expect(read('css/20-rail.css')).toMatch(/\.rail\s*\{[^}]*overflow-x:\s*auto/)
+    // `.panel-grid` without this is an `auto` track, and an `auto` track's
+    // automatic minimum is its content's min-content size — a non-wrapping row
+    // inside it (`.worktabs`, `flex: 0 0 auto` tabs) then sets the *track*
+    // wide enough to hold every tab unclipped, which widens `.panel-main`,
+    // `.panel-stories` and `main` right along with it. Measured in Chrome at
+    // 720px wide: the track sized itself to 733px inside a 673px panel.
+    expect(read('css/60-panels.css')).toMatch(/\.panel-grid\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/)
   })
 
   it('never lets a pane mode un-clip the terminal', () => {
