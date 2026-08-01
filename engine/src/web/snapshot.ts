@@ -50,9 +50,12 @@ export async function buildSnapshot(projectDir: string, cache: SnapshotCache = e
 
   // Paid for in cash: `manifest.json` used to be read twice per plan per tick,
   // and every plan was re-read on every tick whether or not anything had moved.
-  if (revisions.plans !== cache.plansRevision) {
+  // Serialised, not compared by reference: `revisions.plans` is a fresh object
+  // every tick. Stable because `readRevisions` builds it from sorted ids.
+  const plansRevision = JSON.stringify(revisions.plans)
+  if (plansRevision !== cache.plansRevision) {
     cache.plans = await readPlans(projectDir)
-    cache.plansRevision = revisions.plans
+    cache.plansRevision = plansRevision
   }
 
   const [runs, roster] = await Promise.all([

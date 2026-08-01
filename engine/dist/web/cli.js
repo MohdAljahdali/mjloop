@@ -19999,11 +19999,14 @@ async function stampLibrary(projectDir) {
 }
 async function readRevisions(projectDir, tick, running) {
   const paths = resolveLoopPaths(projectDir);
-  const planIds = await entries(paths.plans);
-  const plans = [];
-  for (const id of planIds) {
-    plans.push(`${id}=${await stampDir(path19.join(paths.plans, id), PLAN_DOCUMENTS)}`);
-    plans.push(await stamp(path19.join(paths.plans, id, "stories")));
+  const planDirs = await entries(paths.plans);
+  const plans = {};
+  for (const dir of planDirs) {
+    const documents = await stampDir(path19.join(paths.plans, dir), PLAN_DOCUMENTS);
+    const stories = await stamp(path19.join(paths.plans, dir, "stories"));
+    const key = /^P\d{3}(?=-|$)/.exec(dir)?.[0] ?? dir;
+    const stamped = `${documents}:${stories}`;
+    plans[key] = plans[key] === void 0 ? stamped : `${plans[key]}|${stamped}`;
   }
   const [state, config2, memory, runs, profile, features, acceptances, library] = await Promise.all([
     stamp(paths.state),
@@ -20023,7 +20026,7 @@ async function readRevisions(projectDir, tick, running) {
   return {
     state,
     config: config2,
-    plans: plans.join("|"),
+    plans,
     runs,
     cycle: running ? String(tick) : "idle",
     memory,
@@ -20042,9 +20045,10 @@ async function buildSnapshot(projectDir, cache = emptyCache()) {
   const [state, guards] = await Promise.all([stateSummary(projectDir), readGuards(projectDir)]);
   const running = state.status === "running";
   const revisions = await readRevisions(projectDir, cache.tick, running);
-  if (revisions.plans !== cache.plansRevision) {
+  const plansRevision = JSON.stringify(revisions.plans);
+  if (plansRevision !== cache.plansRevision) {
     cache.plans = await readPlans(projectDir);
-    cache.plansRevision = revisions.plans;
+    cache.plansRevision = plansRevision;
   }
   const [runs, roster] = await Promise.all([
     listRuns(projectDir),

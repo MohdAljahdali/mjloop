@@ -70,7 +70,10 @@ export function emptySnapshot(patch: Partial<Snapshot> = {}): Snapshot {
     revisions: {
       state: '-',
       config: '-',
-      plans: '',
+      // Derived from the plans the caller passed, so a test that opens a plan
+      // gets a key for it without naming one. A test about re-fetching passes
+      // `revisions` itself, which replaces this wholesale.
+      plans: Object.fromEntries((patch.plans ?? []).map((plan) => [plan.id, 'r1'])),
       runs: '',
       cycle: 'idle',
       memory: '',

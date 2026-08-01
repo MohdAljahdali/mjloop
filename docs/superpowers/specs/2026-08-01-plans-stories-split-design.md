@@ -144,9 +144,9 @@ keyed on it — tolerable with one panel, multiplied by a Plans workspace, a Sto
 tabs, against a transport whose 304 path is dead in the browser. It becomes per-plan keys, and
 `lib/plandoc.js` owns one shared plan-document feed.
 
-**The feed is pumped from an always-visible registration**, following `app.js:109-116` and
-`ui/pane.js:87-92`. `ui/render.js` skips hidden panels, so a feed pumped from a panel's `update()` goes
-stale whenever that panel is closed — which after the split is most of the time.
+Who *pumps* that feed does not change here — it stays on the Plans panel's `update()`, exactly where it
+was. That relocation is A5a's whole content, and fusing it in would put the one change with a silent
+failure mode inside the one commit that widens a wire shape.
 
 One guard evaporates unless this commit replaces it. `snapshot.test.ts`'s byte-identity assertion compares
 `revisions` with `toEqual`, which is key-order-insensitive: once `plans` is a `Record`, an unstable key

@@ -24,10 +24,10 @@
  *     wrote it.
  */
 import { attr, clone, cls, flag, label, phrase, verbatim } from '../ui/dom.js'
-import { feed } from '../lib/api.js'
 import { stamp } from '../lib/fmt.js'
 import { t } from '../lib/i18n.js'
 import { planKey, storyKey } from '../lib/keys.js'
+import { mountPlanDoc, subscribe, value as planDoc } from '../lib/plandoc.js'
 import { activePlan, setActivePlan, setStoryFilter, storyFilter } from '../lib/selection.js'
 import { FILTERS, planIndex, planStatus, ready, readyIn, sift, statusIndex, tally, unmet } from '../lib/stories.js'
 import { reconcile } from '../ui/list.js'
@@ -138,15 +138,11 @@ export function mountPlans() {
    */
   let first = /** @type {string | null} */ (null)
 
-  /** @type {import('../lib/api.js').Feed<PlanDetail>} */
-  const plan = feed({
-    // Only the open plan is fetched, and only while it is open. One feed rather
-    // than one per row: a project with forty plans would otherwise issue forty
-    // conditional GETs a second to draw four visible lines of prose.
-    dep: (state) => (opened() === null ? null : `${opened()}:${state.revisions.plans}`),
-    path: () => `/api/plans/${encodeURIComponent(opened() ?? '')}`,
-    onChange: () => draw(),
-  })
+  // Only the open plan is fetched, and only while it is open — and the feed
+  // itself is in `lib/plandoc.js`, because the Stories side reads the same
+  // document and two feeds would fetch it twice.
+  const plan = mountPlanDoc()
+  subscribe(() => draw())
 
   register({
     id: 'plans',
@@ -189,7 +185,7 @@ export function mountPlans() {
         phrase(option, `plans.filter.${option.value === '' ? 'all' : option.value}`)
       }
 
-      drawDetail(plan.value())
+      drawDetail(planDoc())
     },
   })
 

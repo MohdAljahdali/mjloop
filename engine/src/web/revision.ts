@@ -19,7 +19,22 @@ import { resolveLoopPaths } from '../store/paths.js'
 export interface Revisions {
   state: string
   config: string
-  plans: string
+  /**
+   * One fingerprint per plan, keyed by id.
+   *
+   * A single joined string was one subscription for every plan at once, so
+   * editing a story in `P003` re-fetched an open `P001` document — tolerable
+   * while one panel read it, and multiplied by a Plans workspace, a Stories
+   * workspace and every open story tab. The browser has no working 304 path to
+   * absorb that: `lib/api.js`'s `get()` sends no `if-none-match` and the api
+   * answers `cache-control: no-store`.
+   *
+   * Built from sorted ids for the reason `entries()` sorts: a key order that
+   * flaps is a body that flaps, which is the failure this whole shape exists to
+   * avoid. `snapshot.test.ts` compares the serialisation rather than the object,
+   * because `toEqual` does not see key order.
+   */
+  plans: Record<string, string>
   runs: string
   /**
    * **Always dirty while a run is live**, because it is the poller's own tick
@@ -177,13 +192,23 @@ async function stampLibrary(projectDir: string): Promise<string> {
 export async function readRevisions(projectDir: string, tick: number, running: boolean): Promise<Revisions> {
   const paths = resolveLoopPaths(projectDir)
 
-  const planIds = await entries(paths.plans)
-  const plans: string[] = []
-  for (const id of planIds) {
-    plans.push(`${id}=${await stampDir(path.join(paths.plans, id), PLAN_DOCUMENTS)}`)
+  const planDirs = await entries(paths.plans)
+  /** Insertion order is `entries()`'s sort, so the serialisation is stable. */
+  const plans: Record<string, string> = {}
+  for (const dir of planDirs) {
+    const documents = await stampDir(path.join(paths.plans, dir), PLAN_DOCUMENTS)
     // The stories directory is a directory of documents; its own mtime moves
     // when a story is added or removed, which is what `--next` reads.
-    plans.push(await stamp(path.join(paths.plans, id, 'stories')))
+    const stories = await stamp(path.join(paths.plans, dir, 'stories'))
+    // Keyed by plan id, because the id is what a subscriber has: the page knows
+    // `P001`, never `P001-user-auth`. A directory whose name does not carry one
+    // keeps its own name as the key rather than being dropped — a fingerprint
+    // that silently stops covering a directory is worse than an odd key — and
+    // two directories claiming one id are folded rather than overwriting, so
+    // neither becomes invisible.
+    const key = /^P\d{3}(?=-|$)/.exec(dir)?.[0] ?? dir
+    const stamped = `${documents}:${stories}`
+    plans[key] = plans[key] === undefined ? stamped : `${plans[key]}|${stamped}`
   }
 
   const [state, config, memory, runs, profile, features, acceptances, library] = await Promise.all([
@@ -205,7 +230,7 @@ export async function readRevisions(projectDir: string, tick: number, running: b
   return {
     state,
     config,
-    plans: plans.join('|'),
+    plans,
     runs,
     cycle: running ? String(tick) : 'idle',
     memory,

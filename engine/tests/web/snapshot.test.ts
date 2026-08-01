@@ -109,7 +109,14 @@ describe('revisions', () => {
     const second = await buildSnapshot(project.dir, cache)
     // A flapping revision silently turns the poller into a 1.25 Hz broadcaster
     // and every open tab into a 1.25 Hz fetcher.
-    expect(second.revisions).toEqual({ ...first.revisions, cycle: second.revisions.cycle })
+    //
+    // Compared as JSON rather than with `toEqual`, because `plans` is an object
+    // now and deep equality does not see key order — the exact property
+    // `readRevisions` sorts to guarantee. With `toEqual` this assertion stayed
+    // green while the key order was flapped on every call.
+    expect(JSON.stringify({ ...second.revisions, cycle: '-' })).toBe(
+      JSON.stringify({ ...first.revisions, cycle: '-' }),
+    )
     expect(first.revisions.cycle).toBe('idle')
   })
 
@@ -117,11 +124,28 @@ describe('revisions', () => {
     await initLoop(project.dir, clock)
     await planCreate(project.dir, { slug: 'user-auth', title: 'User authentication' }, clock)
 
-    const before = (await buildSnapshot(project.dir)).revisions.plans
+    const before = (await buildSnapshot(project.dir)).revisions.plans['P001']
     await gateSet(project.dir, { plan: 'P001', decision: 'approved', by: 'Mohd' }, () => new Date('2026-07-28T10:00:00.000Z'))
     // No directory's mtime moves for an in-place overwrite, which is why the
     // fingerprint stats each document by name.
-    expect((await buildSnapshot(project.dir)).revisions.plans).not.toBe(before)
+    expect((await buildSnapshot(project.dir)).revisions.plans['P001']).not.toBe(before)
+  })
+
+  it('are per plan, so editing one does not re-fetch the others', async () => {
+    // The reason the key is an object. A page with a plan open, a story list
+    // beside it and N story tabs subscribes to this once per surface; a single
+    // joined string made every one of them follow every plan in the project.
+    await initLoop(project.dir, clock)
+    await planCreate(project.dir, { slug: 'user-auth', title: 'User authentication' }, clock)
+    await planCreate(project.dir, { slug: 'billing', title: 'Billing' }, clock)
+
+    const before = (await buildSnapshot(project.dir)).revisions.plans
+    expect(Object.keys(before)).toEqual(['P001', 'P002'])
+
+    await gateSet(project.dir, { plan: 'P002', decision: 'approved', by: 'Mohd' }, () => new Date('2026-07-28T10:00:00.000Z'))
+    const after = (await buildSnapshot(project.dir)).revisions.plans
+    expect(after['P002']).not.toBe(before['P002'])
+    expect(after['P001']).toBe(before['P001'])
   })
 
   it('cover the clean-pass hole', async () => {

@@ -243,6 +243,33 @@ describe('plans', () => {
     )
   })
 
+  it('follows only the open plan, so another plan moving does not re-fetch it', async () => {
+    // The reason revisions.plans is keyed per plan. With one joined string, a
+    // story edited in P002 moved the key P001's document was subscribed to, and
+    // every open surface refetched a document that had not changed.
+    let fetches = 0
+    const detail = { id: 'P001', title: 'One', approval: null, body: '', review: null, stories: [] }
+    vi.stubGlobal('fetch', (url: string) => {
+      if (url.startsWith('/api/plans/P001')) fetches += 1
+      return Promise.resolve(new Response(JSON.stringify(detail), { status: 200 }))
+    })
+    installStorage(memoryStorage(JSON.stringify({ activePlan: 'P001' })))
+    reveal('panel-plans')
+    mountPlans()
+
+    const plans = [plan({ id: 'P001' }), plan({ id: 'P002' })]
+    draw(emptySnapshot({ plans, revisions: { ...emptySnapshot().revisions, plans: { P001: 'a', P002: 'a' } } }))
+    await vi.waitFor(() => expect(fetches).toBe(1))
+
+    // P002 moved; P001 did not.
+    draw(emptySnapshot({ plans, revisions: { ...emptySnapshot().revisions, plans: { P001: 'a', P002: 'b' } } }))
+    expect(fetches).toBe(1)
+
+    // P001 moved; it refetches.
+    draw(emptySnapshot({ plans, revisions: { ...emptySnapshot().revisions, plans: { P001: 'b', P002: 'b' } } }))
+    await vi.waitFor(() => expect(fetches).toBe(2))
+  })
+
   it('keeps a plan the snapshot has stopped listing rather than forgetting it', async () => {
     // A frame that does not list the open plan hides the detail; it must not
     // write the selection away. snapshot.ts already refuses to let one
