@@ -21,9 +21,21 @@ import { attr, clone, cls, flag, label, phrase, verbatim } from '../ui/dom.js'
 import { t } from '../lib/i18n.js'
 import { storyKey } from '../lib/keys.js'
 import { subscribe, value as planDoc } from '../lib/plandoc.js'
-import { activePlan, setStoryFilter, storyFilter } from '../lib/selection.js'
+import {
+  activePlan,
+  activeStory,
+  closeStory,
+  openStories,
+  openStory,
+  pinStory,
+  recentlyClosed,
+  reopenStory,
+  setStoryFilter,
+  storyFilter,
+} from '../lib/selection.js'
 import { FILTERS, planIndex, readyIn, sift, statusIndex, unmet } from '../lib/stories.js'
 import { reconcile } from '../ui/list.js'
+import { mountWorktabs } from '../ui/worktabs.js'
 import { draw, register } from '../ui/render.js'
 import { submit } from '../ui/writes.js'
 
@@ -46,6 +58,7 @@ const pick = (id) => /** @type {HTMLElement} */ (document.getElementById(id))
 export function mountStories() {
   const node = pick('panel-stories')
   const none = pick('stories-none')
+  const planRow = pick('stories-plan')
   const planId = pick('stories-plan-id')
 
   const readyBlock = pick('stories-ready')
@@ -54,6 +67,17 @@ export function mountStories() {
 
   const query = /** @type {HTMLInputElement} */ (document.getElementById('story-query'))
   const filterPicker = /** @type {HTMLSelectElement} */ (document.getElementById('story-filter'))
+  const strip = pick('story-tabs')
+  const reopenRow = pick('story-tabs-reopen')
+  const openPane = pick('story-open')
+  const openTitle = pick('story-open-title')
+  const openStatus = pick('story-open-status')
+  const openMeta = pick('story-open-meta')
+  const openFacts = pick('story-open-facts')
+  const acceptDetails = pick('story-open-accept-details')
+  const acceptSummary = pick('story-open-accept-summary')
+  const acceptance = pick('story-open-acceptance')
+
   const listEmpty = pick('stories-empty')
   const host = pick('stories-list')
   const more = pick('stories-more')
@@ -93,12 +117,24 @@ export function mountStories() {
   // The document is fetched and ticked elsewhere; this panel only reads it.
   subscribe(() => draw())
 
+  const worktabs = mountWorktabs({
+    strip,
+    tabs: () => tabsFrom(planDoc()?.stories ?? []),
+    active: activeStory,
+    onSelect: (id) => {
+      openStory(id)
+      draw()
+    },
+  })
+
   register({
     id: 'stories',
     node,
     update(state) {
       const id = activePlan()
       const view = planDoc()
+      // A link to "this plan" with no plan is a control that goes nowhere.
+      flag(planRow, 'hidden', id === null)
       verbatim(planId, id ?? '')
 
       // Read once, and defensively: the document is fetched, so between a plan
@@ -134,8 +170,97 @@ export function mountStories() {
       const drawn = reconcile(host, shown, storyKey(id ?? ''), storyDetailRow)
       flag(more, 'hidden', drawn.shown >= drawn.total)
       if (drawn.shown < drawn.total) phrase(more, 'story.listMore', { shown: drawn.shown, total: drawn.total })
+
+      worktabs.update()
+      flag(reopenRow, 'hidden', recentlyClosed().length === 0)
+      drawOpen(stories)
     },
   })
+
+  /**
+   * The tab strip's model, from the same document the list draws.
+   *
+   * A tab whose story the plan no longer carries is dropped rather than drawn
+   * as a stub: a story can be renamed on disk, and a tab that outlives its
+   * subject is a control that opens nothing.
+   *
+   * @param {readonly StoryDetail[]} stories
+   * @returns {import('../ui/worktabs.js').WorkTab[]}
+   */
+  function tabsFrom(stories) {
+    const byId = new Map(stories.map((story) => [story.id, story]))
+    return openStories()
+      .filter((tab) => byId.has(tab.id))
+      .map((tab) => {
+        const story = byId.get(tab.id)
+        return {
+          id: tab.id,
+          label: tab.id,
+          pinned: tab.pinned,
+          ...(story === undefined ? {} : { state: story.status }),
+        }
+      })
+  }
+
+  /**
+   * The open tab's story, drawn from the record the page already has.
+   *
+   * Everything here comes off `/api/plans/:id`. Nothing is fetched a second
+   * time for the tab, and nothing is shown that the engine does not already
+   * write — which is why there is no estimate, no owner and no elapsed time.
+   *
+   * @param {readonly StoryDetail[]} stories
+   */
+  function drawOpen(stories) {
+    const id = activeStory()
+    const story = id === null ? undefined : stories.find((entry) => entry.id === id)
+    flag(openPane, 'hidden', story === undefined)
+    if (story === undefined) return
+
+    verbatim(openTitle, `${story.id} — ${story.title}`)
+    phrase(openStatus, `story.status.${story.status}`)
+    cls(openStatus, 'status', story.status)
+
+    const waiting = unmet(story, statuses)
+    phrase(openMeta, waiting.length === 0 ? 'story.open.clear' : 'story.blockedBy', {
+      ids: waiting.join(', '),
+    })
+
+    // Facts rather than prose, so each one is a labelled cell a reader can scan
+    // and a translator can move.
+    const facts = [
+      { key: 'story.fact.plan', value: story.id.slice(0, 4) },
+      { key: 'story.fact.dependsOn', value: story.depends_on.join(', ') || '—' },
+      { key: 'story.fact.ui', value: story.ui ? 'yes' : 'no' },
+      { key: 'story.fact.evidence', value: story.evidence ?? '—' },
+    ]
+    reconcile(openFacts, facts, (fact) => fact.key, () => {
+      const row = clone('tpl-fact')
+      return {
+        root: row.root,
+        /** @param {{ key: string, value: string }} fact */
+        update(fact) {
+          const k = row.slots['label']
+          if (k !== undefined) phrase(k, fact.key)
+          const v = row.slots['value']
+          if (v !== undefined) verbatim(v, fact.value)
+        },
+      }
+    })
+
+    flag(acceptDetails, 'hidden', story.acceptance.length === 0)
+    phrase(acceptSummary, 'story.acceptance', { n: story.acceptance.length })
+    reconcile(acceptance, story.acceptance, (line) => line, () => {
+      const row = clone('tpl-acceptance')
+      return {
+        root: row.root,
+        /** @param {string} line */
+        update(line) {
+          verbatim(row.slots['text'] ?? row.root, line)
+        },
+      }
+    })
+  }
 
   /**
    * @param {Map<string, string>} plansOf
@@ -198,6 +323,16 @@ export function mountStories() {
         if (ui !== undefined) {
           phrase(ui, 'story.ui')
           flag(ui, 'hidden', !story.ui)
+        }
+
+        // The way into the workspace. A word, like every other action here: the
+        // id chip is a label, not a control, and a row whose only way in is
+        // clicking its title is a row nobody discovers.
+        const openIt = slots['open']
+        if (openIt !== undefined) {
+          openIt.dataset['story'] = story.id
+          phrase(openIt, 'story.tab.open')
+          label(openIt, 'title', 'story.tab.openTitle', { id: story.id })
         }
 
         const waiting = unmet(story, statuses)
@@ -279,6 +414,25 @@ export function mountStories() {
   }
 
   return {
+    /** @param {string} id */
+    openTab(id) {
+      openStory(id)
+      draw()
+    },
+    /** @param {string} id */
+    closeTab(id) {
+      closeStory(id)
+      draw()
+    },
+    /** @param {string} id */
+    pinTab(id) {
+      pinStory(id)
+      draw()
+    },
+    reopenTab() {
+      reopenStory()
+      draw()
+    },
     /**
      * @param {string} story
      * @param {string} from

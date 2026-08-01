@@ -28,6 +28,7 @@
  * @property {string} memoryQuery
  * @property {string | null} activePlan
  * @property {string} storyFilter
+ * @property {string | null} activeStory
  * @property {readonly OpenStory[]} openStories
  * @property {readonly string[]} recentlyClosed
  */
@@ -49,6 +50,7 @@ const DEFAULTS = {
   memoryQuery: '',
   activePlan: null,
   storyFilter: '',
+  activeStory: null,
   // Frozen, because `read()` hands the cache back by reference and a caller
   // that pushed onto a default would be editing every later reader's default.
   openStories: Object.freeze([]),
@@ -156,6 +158,7 @@ function parse(raw) {
   // storage module to a derivation module, and an unknown filter shows every
   // story rather than none — a value from a newer page degrades to "all".
   if (typeof value['storyFilter'] === 'string') out.storyFilter = value['storyFilter']
+  if (typeof value['activeStory'] === 'string') out.activeStory = value['activeStory']
   if (Array.isArray(value['openStories'])) out.openStories = tabs(value['openStories'])
   if (Array.isArray(value['recentlyClosed'])) {
     out.recentlyClosed = value['recentlyClosed']

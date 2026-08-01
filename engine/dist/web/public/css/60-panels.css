@@ -1317,3 +1317,129 @@ details summary {
   font-size: 12px;
   color: var(--dim);
 }
+
+/* ── the story worktabs ──────────────────────────────────────────────────── */
+
+/* A strip, not a nav. These are a working set the reader opens and closes, so
+   they scroll rather than wrap: a set that reflows to a second row moves every
+   tab under the pointer that was about to click one. */
+.worktabs {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-block-end: 4px;
+  margin-block-end: 12px;
+  scrollbar-width: thin;
+}
+
+.worktab {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 2px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.worktab-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  border-radius: 7px;
+}
+
+/* The selected tab is marked twice over — a border and a weight — because a
+   single accent colour is the whole signal for a reader who cannot see it, and
+   `aria-selected` is what actually carries it to one who cannot. */
+.worktab-open[aria-selected='true'] {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.worktab:has(.worktab-open[aria-selected='true']) {
+  border-color: var(--accent);
+}
+
+.worktab-open:focus-visible,
+.worktab-pin:focus-visible,
+.worktab-close:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.worktab-label {
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.worktab-state {
+  font-size: 11px;
+  color: var(--dim);
+}
+
+.worktab-pin,
+.worktab-close {
+  border: 0;
+  background: none;
+  color: var(--dim);
+  cursor: pointer;
+  padding: 4px 6px;
+  line-height: 1;
+  font-size: 13px;
+}
+
+.worktab-pin::before {
+  content: '☆';
+}
+
+.worktab-pin.pinned-yes::before {
+  content: '★';
+  color: var(--accent);
+}
+
+.worktab-close::before {
+  content: '×';
+  font-size: 16px;
+}
+
+.worktab-pin:hover,
+.worktab-close:hover {
+  color: var(--fg);
+}
+
+.worktabs-reopen {
+  margin: -6px 0 12px;
+}
+
+.worktabs-reopen button {
+  border: 0;
+  background: none;
+  color: var(--accent);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  padding: 0;
+}
+
+.story-open-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.story-open-head h2 {
+  margin: 0;
+}
+
+.story-open-meta {
+  color: var(--dim);
+  margin: 6px 0 12px;
+}

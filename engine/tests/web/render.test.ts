@@ -105,6 +105,7 @@ describe('templates', () => {
       'dot',
       'evidence',
       'id',
+      'open',
       'requeue',
       'status',
       'title',

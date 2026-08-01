@@ -339,7 +339,7 @@
             <h1 id="panel-stories-title" data-i18n="panel.stories.title"></h1>
             <p class="hint" data-i18n="panel.stories.help"></p>
           </div>
-          <p class="stories-plan">
+          <p class="stories-plan" id="stories-plan" hidden>
             <span id="stories-plan-id"></span>
             <a href="#plans" data-i18n="story.toPlans"></a>
           </p>
@@ -356,6 +356,33 @@
               <h2 data-i18n="story.next"></h2>
               <ul class="ready" id="stories-ready-list"></ul>
               <p class="more" id="stories-ready-more" hidden></p>
+            </section>
+
+            <!-- The working set. A tab is opened from a story's row, kept while
+                 it is being worked on, and closed when it is not — so it is not
+                 a panel and not a route, and `ui/tabs.js` stays what it is. -->
+            <div
+              class="worktabs"
+              id="story-tabs"
+              role="tablist"
+              data-i18n-label="story.tab.strip"
+              hidden
+            ></div>
+            <p class="worktabs-reopen" id="story-tabs-reopen" hidden>
+              <button type="button" data-act="story-tab-reopen" data-i18n="story.tab.reopen"></button>
+            </p>
+
+            <section class="block story-open" id="story-open" hidden>
+              <header class="story-open-head">
+                <h2 id="story-open-title" tabindex="-1"></h2>
+                <span class="tag" id="story-open-status"></span>
+              </header>
+              <p class="story-open-meta" id="story-open-meta"></p>
+              <dl class="facts" id="story-open-facts"></dl>
+              <details id="story-open-accept-details" hidden>
+                <summary id="story-open-accept-summary"></summary>
+                <ul class="acceptance" id="story-open-acceptance"></ul>
+              </details>
             </section>
 
             <section class="block">
@@ -1025,6 +1052,20 @@
       </article>
     </template>
 
+    <!-- Every control here carries its `data-act` in the markup rather than
+         being assigned one in JS: `discipline.test.ts` harvests them from this
+         file only, so an action wired in a module looks unreachable to it. -->
+    <template id="tpl-worktab">
+      <span class="worktab" role="presentation">
+        <button type="button" class="worktab-open" role="tab" data-act="story-tab" data-slot="open">
+          <span class="worktab-label" data-slot="label"></span>
+          <span class="worktab-state" data-slot="state" hidden></span>
+        </button>
+        <button type="button" class="worktab-pin" data-act="story-tab-pin" data-slot="pin"></button>
+        <button type="button" class="worktab-close" data-act="story-tab-close" data-slot="close"></button>
+      </span>
+    </template>
+
     <template id="tpl-job">
       <li class="job">
         <span class="pos" data-slot="position" hidden></span>
@@ -1427,6 +1468,7 @@
         <span class="waits" data-slot="waits" hidden></span>
         <span class="waits anomaly" data-slot="anomaly" hidden></span>
         <span class="row-actions">
+          <button type="button" data-act="story-tab" data-slot="open"></button>
           <button type="button" class="primary" data-act="story-run" data-slot="build"></button>
           <button type="button" data-act="story-requeue" data-slot="requeue" hidden></button>
         </span>

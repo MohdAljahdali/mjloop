@@ -418,6 +418,152 @@ describe('stories', () => {
 
   })
 
+  /** A plan document with three stories, and the panel mounted over it. */
+  async function openThree(
+    seed: Record<string, unknown> = { activePlan: 'P001' },
+  ): Promise<ReturnType<typeof mountStories>> {
+    installStorage(memoryStorage(JSON.stringify(seed)))
+    serve({
+      '/api/plans/P001': {
+        id: 'P001',
+        title: 'A plan',
+        approval: null,
+        body: '',
+        review: null,
+        stories: [
+          detailStory({ id: 'P001-S01', title: 'One', status: 'done' }),
+          detailStory({ id: 'P001-S02', title: 'Two', acceptance: ['It works.'] }),
+          detailStory({ id: 'P001-S03', title: 'Three', depends_on: ['P001-S02'] }),
+        ],
+      },
+    })
+    mountDoc()
+    reveal('panel-stories')
+    const mounted = mountStories()
+    draw(
+      emptySnapshot({
+        plans: [
+          plan({
+            id: 'P001',
+            stories: [
+              story({ id: 'P001-S01', status: 'done' }),
+              story({ id: 'P001-S02' }),
+              story({ id: 'P001-S03', depends_on: ['P001-S02'] }),
+            ],
+          }),
+        ],
+      }),
+    )
+    await vi.waitFor(() => expect(document.querySelectorAll('#stories-list .story')).toHaveLength(3))
+    return mounted
+  }
+
+  const tabIds = (): (string | undefined)[] =>
+    [...document.querySelectorAll('#story-tabs .worktab-open')].map((node) => (node as HTMLElement).dataset['tab'])
+
+  const selected = (): string | undefined =>
+    (document.querySelector('#story-tabs [aria-selected="true"]') as HTMLElement | null)?.dataset['tab']
+
+  it('opens a story into a tab, and the tab shows that story', async () => {
+    const stories = await openThree()
+    expect((document.getElementById('story-tabs') as HTMLElement).hidden).toBe(true)
+
+    stories.openTab('P001-S02')
+    await vi.waitFor(() => expect(tabIds()).toEqual(['P001-S02']))
+    expect(selected()).toBe('P001-S02')
+    expect((document.getElementById('story-open') as HTMLElement).hidden).toBe(false)
+    expect(document.getElementById('story-open-title')?.textContent).toBe('P001-S02 — Two')
+    // Everything in the pane comes off the document the list already has.
+    expect(document.getElementById('story-open-accept-summary')?.textContent).toContain('1')
+  })
+
+  it('walks the strip with the arrow keys, and the direction follows the document', async () => {
+    // The page's first keyboard interaction. ui/tabs.js refused role="tablist"
+    // precisely because arrows have to honour text direction; this takes that on
+    // rather than hardcoding a sign, so the Arabic case is its own assertion.
+    const stories = await openThree()
+    stories.openTab('P001-S01')
+    stories.openTab('P001-S02')
+    stories.openTab('P001-S03')
+    await vi.waitFor(() => expect(tabIds()).toEqual(['P001-S01', 'P001-S02', 'P001-S03']))
+    expect(selected()).toBe('P001-S03')
+
+    const strip = document.getElementById('story-tabs') as HTMLElement
+    const press = (key: string) => strip.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }))
+
+    document.documentElement.dir = 'ltr'
+    press('ArrowRight')
+    expect(selected()).toBe('P001-S01')
+    press('ArrowLeft')
+    expect(selected()).toBe('P001-S03')
+    press('Home')
+    expect(selected()).toBe('P001-S01')
+    press('End')
+    expect(selected()).toBe('P001-S03')
+
+    // Mirrored. ArrowRight means *previous* when the document runs right to left.
+    document.documentElement.dir = 'rtl'
+    press('Home')
+    expect(selected()).toBe('P001-S01')
+    press('ArrowRight')
+    expect(selected()).toBe('P001-S03')
+    press('ArrowLeft')
+    expect(selected()).toBe('P001-S01')
+    document.documentElement.dir = 'ltr'
+  })
+
+  it('keeps exactly one tab in the page tab order', async () => {
+    const stories = await openThree()
+    stories.openTab('P001-S01')
+    stories.openTab('P001-S02')
+    await vi.waitFor(() => expect(tabIds()).toHaveLength(2))
+
+    const order = [...document.querySelectorAll('#story-tabs .worktab-open')].map((node) =>
+      node.getAttribute('tabindex'),
+    )
+    // Roving: a strip of twelve stories that each cost a Tab press to walk past
+    // is a strip nobody keyboards through twice.
+    expect(order).toEqual(['-1', '0'])
+  })
+
+  it('closes a tab, and puts the last closed one back', async () => {
+    const stories = await openThree()
+    stories.openTab('P001-S01')
+    stories.openTab('P001-S02')
+    await vi.waitFor(() => expect(tabIds()).toHaveLength(2))
+
+    stories.closeTab('P001-S02')
+    await vi.waitFor(() => expect(tabIds()).toEqual(['P001-S01']))
+    expect((document.getElementById('story-tabs-reopen') as HTMLElement).hidden).toBe(false)
+
+    stories.reopenTab()
+    await vi.waitFor(() => expect(tabIds()).toEqual(['P001-S01', 'P001-S02']))
+    expect((document.getElementById('story-tabs-reopen') as HTMLElement).hidden).toBe(true)
+  })
+
+  it('a pinned tab offers no close button', async () => {
+    const stories = await openThree()
+    stories.openTab('P001-S01')
+    await vi.waitFor(() => expect(tabIds()).toEqual(['P001-S01']))
+    expect((document.querySelector('#story-tabs .worktab-close') as HTMLElement).hidden).toBe(false)
+
+    stories.pinTab('P001-S01')
+    // Not a disabled one: the point of pinning is that closing is not the next
+    // thing you do.
+    await vi.waitFor(() =>
+      expect((document.querySelector('#story-tabs .worktab-close') as HTMLElement).hidden).toBe(true),
+    )
+    expect(document.querySelector('#story-tabs .worktab-pin')?.classList.contains('pinned-yes')).toBe(true)
+  })
+
+  it('drops a tab whose story the plan no longer carries', async () => {
+    // A story can be renamed on disk. A tab that outlives its subject is a
+    // control that opens nothing.
+    await openThree({ activePlan: 'P001', openStories: [{ id: 'P001-S99', pinned: false }] })
+    expect(tabIds()).toEqual([])
+    expect((document.getElementById('story-open') as HTMLElement).hidden).toBe(true)
+  })
+
   it('restores the filter the reader chose, with no click', async () => {
     // The picker shows the remembered value rather than merely holding it: a
     // list filtered to `done` under a picker reading `All stories` is a page
