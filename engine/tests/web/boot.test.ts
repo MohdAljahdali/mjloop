@@ -94,6 +94,9 @@ beforeAll(async () => {
     if (at === '/api/plans/P002') {
       return Promise.resolve(new Response(JSON.stringify(PLAN_WITH_STORIES), { status: 200 }))
     }
+    if (at === '/api/plans/P003') {
+      return Promise.resolve(new Response(JSON.stringify(PLAN_WITH_JOB), { status: 200 }))
+    }
     return Promise.resolve(new Response(JSON.stringify({ error: { code: 'error.notFound' } }), { status: 404 }))
   })
 
@@ -132,6 +135,33 @@ const PLAN_DETAIL = {
   body: '# A plan',
   review: null,
   stories: [],
+}
+
+/**
+ * A third plan of its own, so the attach test below can open its plan detail
+ * without inheriting whichever of P001/P002 an earlier test in this file left
+ * open — `plans.toggle` closes an already-open id rather than reopening it, so
+ * sharing a fixture with `open-plan` clicked earlier in the file would flip a
+ * coin on whether this test's own click opens or closes it.
+ */
+const PLAN_WITH_JOB = {
+  id: 'P003',
+  title: 'Has a job',
+  approval: null,
+  body: '',
+  review: null,
+  stories: [
+    {
+      id: 'P003-S01',
+      title: 'Ready to go',
+      status: 'todo',
+      ui: false,
+      depends_on: [],
+      acceptance: [],
+      evidence: null,
+      body: '',
+    },
+  ],
 }
 
 const FEATURE_SUMMARY = {
@@ -257,6 +287,163 @@ describe('boot', () => {
     sent.length = 0
     click('#stories-ready-list [data-act="story-run"]')
     expect(commands()).toEqual([{ type: 'enqueue', command: '/mjloop:build P002-S01', story: 'P002-S01' }])
+  })
+
+  it("attaches the shared terminal to a story tab's own job on a real press", async () => {
+    // `ui/pane.js` and `ui/terminal.js` carry no test of their own — this file
+    // stubs `Terminal` away above — so this is the only suite that can see
+    // whether pressing the story pane's control actually reaches the wire.
+    sent.length = 0
+    open('plans')
+    const plans = [
+      {
+        id: 'P003',
+        title: 'Has a job',
+        approval: null,
+        stories: [{ id: 'P003-S01', title: 'Ready to go', status: 'todo', ui: false, depends_on: [] }],
+      },
+    ]
+    poll({ plans, revisions: { ...emptySnapshot().revisions, plans: { P003: 'a' } } })
+    await vi.waitFor(() => expect(document.querySelectorAll('#plans-list > *').length).toBe(1))
+    click('[data-act="open-plan"]')
+
+    open('stories')
+    // Waited on the row's own id, not merely a count: `lib/plandoc.js`'s feed
+    // keeps serving the previous plan's document until the new fetch resolves
+    // — deliberately, so switching plans does not flash an empty list — and an
+    // earlier test in this file left P002's single-story document in that seat.
+    // A count-only wait would pass on that stale row while `/api/plans/P003`
+    // is still in flight, and this row's story has no `body` field, so opening
+    // it crashes `drawOpen`'s `story.body.trim()`.
+    await vi.waitFor(() => expect(document.querySelector('#stories-list .story-id')?.textContent).toBe('P003-S01'))
+
+    // Into a tab of its own, the way the list actually offers it. Scoped to
+    // the list row rather than the bare action name: the worktab strip's own
+    // buttons carry the same `data-act="story-tab"` for whichever tab an
+    // earlier test in this file left open, and an unscoped query would hit
+    // whichever of the two comes first in the document.
+    click('#stories-list [data-act="story-tab"]')
+    await vi.waitFor(() => expect(document.getElementById('story-open-title')?.textContent).toBe('P003-S01 — Ready to go'))
+
+    // Nothing is queued yet, so the control has nothing to offer.
+    expect((document.getElementById('story-open-attach') as HTMLElement).hidden).toBe(true)
+
+    // A job naming this story lands in the queue, but only `queued` — not
+    // started, and `server.ts` has no transcript entry for it yet.
+    // `panels/queue.js:181` hides its identical control for exactly this
+    // group (`WAITING`); `jobForStory` must agree, or this control offers to
+    // attach to a job that produces a blank pane and a "finished" label for
+    // work that has not begun.
+    poll({
+      plans,
+      revisions: { ...emptySnapshot().revisions, plans: { P003: 'a' } },
+      queue: [
+        {
+          id: 'j0',
+          command: '/mjloop:build P003-S01',
+          story: 'P003-S01',
+          status: 'queued',
+          reason: null,
+          startedAt: null,
+          endedAt: null,
+        },
+      ],
+    })
+    expect((document.getElementById('story-open-attach') as HTMLElement).hidden).toBe(true)
+
+    // The same job, now running — the control appears.
+    poll({
+      plans,
+      revisions: { ...emptySnapshot().revisions, plans: { P003: 'a' } },
+      queue: [
+        {
+          id: 'j1',
+          command: '/mjloop:build P003-S01',
+          story: 'P003-S01',
+          status: 'running',
+          reason: null,
+          startedAt: '2026-07-28T09:00:00.000Z',
+          endedAt: null,
+        },
+      ],
+      session: { jobId: 'j1', blocked: false, pausedBy: null, closing: false, stalledSince: null },
+    })
+    await vi.waitFor(() => expect((document.getElementById('story-open-attach') as HTMLElement).hidden).toBe(false))
+    // Cutting `phrase(openAttach, 'job.view')` to a no-op would leave every
+    // other assertion in this suite green — an invisible control in a flex
+    // row is still "not hidden".
+    expect(document.getElementById('story-open-attach')?.textContent).toBe(english['job.view'])
+
+    sent.length = 0
+    click('#story-open-attach')
+    // Filtered to the attach frame itself: the pane was already docked by
+    // `app.js`'s own `pane.follow()` when `session.jobId` turned into `j1`
+    // above, so `pane.reveal()`'s `refit()` (`ui/pane.js`) reports the
+    // terminal's geometry same as it would from any other resize — noise
+    // to assert around here, not the subject.
+    const attaches = sent.filter((frame) => (frame as { type: string }).type === 'attach')
+    // The same frame the Queue tab's own `job-attach` sends — this reuses that
+    // action rather than inventing a second one, so the wire cannot tell the
+    // two controls apart.
+    expect(attaches).toEqual([{ type: 'attach', jobId: 'j1' }])
+  })
+
+  it('opens the session view out of a collapsed, queue-view pane when a story tab presses attach', async () => {
+    // The Queue tab's own `job-attach` (`panels/queue.js:177-182`) only ever
+    // renders inside `.pane-body`, so pressing it happens with the pane
+    // already open — it never has to prove this. The story tab's control
+    // sits outside that subtree (`index.html:384`, inside `#story-open-head`,
+    // not `.pane-body`), so it is the one press that can be made while the
+    // pane is `collapsed` — the state the page opens in
+    // (`40-terminal.css:170-173`) — or showing the Queue view instead of the
+    // session view (`#view-session-body`) a transcript actually lands in.
+    sent.length = 0
+    // Reuses the P003 plan and the story tab the previous test already
+    // opened: `plans.toggle` closes an already-open id rather than reopening
+    // it (see the comment on `PLAN_WITH_JOB` above), so clicking
+    // `open-plan` again here would close what that test opened rather than
+    // reopen it.
+    open('stories')
+    poll({
+      plans: [
+        {
+          id: 'P003',
+          title: 'Has a job',
+          approval: null,
+          stories: [{ id: 'P003-S01', title: 'Ready to go', status: 'todo', ui: false, depends_on: [] }],
+        },
+      ],
+      revisions: { ...emptySnapshot().revisions, plans: { P003: 'a' } },
+      // Finished, not running: naming a job in `session.jobId` triggers
+      // `app.js`'s own `pane.follow()` on the transition into it, which would
+      // dock the pane before this test's press and prove nothing about the
+      // press itself. `session` is left at its default (`jobId: null`).
+      queue: [
+        {
+          id: 'j2',
+          command: '/mjloop:build P003-S01',
+          story: 'P003-S01',
+          status: 'done',
+          reason: null,
+          startedAt: '2026-07-28T09:00:00.000Z',
+          endedAt: '2026-07-28T09:05:00.000Z',
+        },
+      ],
+    })
+    await vi.waitFor(() =>
+      expect((document.getElementById('story-open-attach') as HTMLElement).dataset['job']).toBe('j2'),
+    )
+
+    // Forced to `collapsed` and the Queue view, so the press below has to do
+    // both jobs itself rather than inherit an already-open pane left behind
+    // by an earlier test in this file.
+    while (document.body.dataset['pane'] !== 'collapsed') click('[data-act="pane-cycle"]')
+    click('[data-act="view-queue"]')
+    expect((document.getElementById('view-session-body') as HTMLElement).hidden).toBe(true)
+
+    click('#story-open-attach')
+    expect(document.body.dataset['pane']).not.toBe('collapsed')
+    expect((document.getElementById('view-session-body') as HTMLElement).hidden).toBe(false)
   })
 
   it('reaches every panel the navigation offers', () => {

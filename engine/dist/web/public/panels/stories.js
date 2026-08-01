@@ -43,6 +43,7 @@ import { submit } from '../ui/writes.js'
 /**
  * @typedef {import('../../protocol.js').PlanView} PlanView
  * @typedef {import('../../protocol.js').StoryView} StoryView
+ * @typedef {import('../../protocol.js').Job} Job
  * @typedef {import('../../read.js').PlanDetail} PlanDetail
  * @typedef {import('../../read.js').StoryDetail} StoryDetail
  * @typedef {import('../../read.js').RunSummary} RunSummary
@@ -56,6 +57,40 @@ const READY_SHOWN = 6
  * @returns {HTMLElement}
  */
 const pick = (id) => /** @type {HTMLElement} */ (document.getElementById(id))
+
+/**
+ * The job the story pane's own control would attach to — the newest job the
+ * queue holds for this story that has actually started, running or finished.
+ *
+ * `Job.story` survives every status a job passes through, so more than one
+ * entry in one session can name the same story: a `/mjloop:build` that failed
+ * and a `/mjloop:fix` that followed it both would. `JobQueue.jobs()`
+ * (`engine/src/web/queue.ts:220`) returns `[...finished, ...active, ...pending]`
+ * with each of those three parts oldest first, which makes the whole array a
+ * rough timeline — history, then what is happening now, then what has not
+ * started yet. Walking it from the end therefore answers with whichever job is
+ * the newest action against this story.
+ *
+ * `queued` is skipped rather than treated as fair game, matching the rule
+ * `panels/queue.js:181` already enforces on the identical control
+ * (`flag(attach, 'hidden', group === WAITING)`): attaching to a job that has
+ * not started sends `{type:'attach', jobId}` for an id `server.ts`'s
+ * transcript map has no entry for, which blanks whatever the reader was
+ * actually watching and, if that job is the running one's queue-mate, mislabels
+ * a live run as "Reading a finished job" (`terminal.viewing`) before it has
+ * produced a line.
+ *
+ * @param {readonly Job[]} queue
+ * @param {string} storyId
+ * @returns {Job | null}
+ */
+function jobForStory(queue, storyId) {
+  // `.slice().reverse()` rather than a manual index walk: `noUncheckedIndexedAccess`
+  // makes `queue[index]` an `undefined`-shadowed type the loop has to narrow
+  // itself, and `queue.js`'s own `history` group already reverses this same
+  // way to read newest first.
+  return queue.slice().reverse().find((job) => job.story === storyId && job.status !== 'queued') ?? null
+}
 
 export function mountStories() {
   const node = pick('panel-stories')
@@ -74,6 +109,7 @@ export function mountStories() {
   const openPane = pick('story-open')
   const openTitle = pick('story-open-title')
   const openStatus = pick('story-open-status')
+  const openAttach = pick('story-open-attach')
   const openMeta = pick('story-open-meta')
   const openFacts = pick('story-open-facts')
   const acceptDetails = pick('story-open-accept-details')
@@ -199,7 +235,7 @@ export function mountStories() {
 
       worktabs.update()
       flag(reopenRow, 'hidden', recentlyClosed().length === 0)
-      drawOpen(stories)
+      drawOpen(stories, state.queue)
     },
   })
 
@@ -236,8 +272,9 @@ export function mountStories() {
    * still no estimate, no owner and no elapsed time.
    *
    * @param {readonly StoryDetail[]} stories
+   * @param {readonly Job[]} queue
    */
-  function drawOpen(stories) {
+  function drawOpen(stories, queue) {
     const id = activeStory()
     const story = id === null ? undefined : stories.find((entry) => entry.id === id)
     flag(openPane, 'hidden', story === undefined)
@@ -246,6 +283,34 @@ export function mountStories() {
     verbatim(openTitle, `${story.id} — ${story.title}`)
     phrase(openStatus, `story.status.${story.status}`)
     cls(openStatus, 'status', story.status)
+
+    // Offered only while the queue holds a job for this story that has actually
+    // started — never drawn as a disabled stand-in for "nothing to show", which
+    // is what turns a control into decoration, and never offered for a merely
+    // `queued` job either: `jobForStory` skips those (see its own comment) for
+    // the same reason `panels/queue.js:181` hides its identical control for the
+    // WAITING group. Concurrency is not the question here: only one job is ever
+    // the *running* one (`queue.ts:57`), but a story can still have an old
+    // finished run on record, and that is worth attaching to as well.
+    //
+    // Deliberately a press, not a side effect of opening the tab: `job-attach`
+    // sends `{type:'attach'}` and `app.js`'s handler for the reply calls
+    // `showJob`, which is the one thing `followQueue` (`ui/pane.js`) treats as
+    // "the reader has looked at something on purpose" — from then on a job
+    // starting elsewhere leaves `shown` alone, exactly as it already does for a
+    // reader who opened a finished transcript from the Queue view. Auto-attaching
+    // the moment this story becomes active would make opening a tab silently
+    // steal the pane from whatever the reader was actually watching; requiring
+    // the press keeps that decision the reader's.
+    //
+    // And the honest "typing goes nowhere" note already lives on the pane
+    // itself (`ui/pane.js`'s `viewing` binding, driven by `shown === running`)
+    // and fires on its own the moment this attaches to anything but the live
+    // job, so there is no second wording to invent here.
+    const job = jobForStory(queue, story.id)
+    if (job !== null) openAttach.dataset['job'] = job.id
+    flag(openAttach, 'hidden', job === null)
+    phrase(openAttach, 'job.view')
 
     const waiting = unmet(story, statuses)
     phrase(openMeta, waiting.length === 0 ? 'story.open.clear' : 'story.blockedBy', {

@@ -207,7 +207,20 @@ bus.on('new-plan', (element) => {
   field.value = ''
 })
 bus.on('job-cancel', (element) => send({ type: 'cancel', jobId: element.dataset['job'] ?? '' }))
-bus.on('job-attach', (element) => send({ type: 'attach', jobId: element.dataset['job'] ?? '' }))
+bus.on('job-attach', (element) => {
+  send({ type: 'attach', jobId: element.dataset['job'] ?? '' })
+  // The transcript this asks for lands in `#view-session-body`, which is
+  // hidden whenever the pane is `collapsed` (40-terminal.css:170-173) or its
+  // view is `queue` (`ui/pane.js`'s `applyView`) — both true right now for a
+  // reader who has not yet had a job open the pane, or who is looking at the
+  // Queue tab, and both silent: the frame goes up, `shownJob()` changes, and
+  // nothing on screen does. `setView` and `reveal` cover the two hiding
+  // places; `reveal` is not `follow` because this press, unlike a job simply
+  // starting, is the reader's own request and must win even over a height
+  // they chose deliberately.
+  pane.setView('session')
+  pane.reveal()
+})
 bus.on('view-session', () => pane.setView('session'))
 bus.on('view-queue', () => pane.setView('queue'))
 bus.on('pane-cycle', () => pane.cycle())

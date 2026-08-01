@@ -1450,6 +1450,13 @@ details summary {
   margin: 0;
 }
 
+/* Pushed to the row's far end, as `.plan-head button` already is: the title
+   and the status tag are what the head is about, and the attach control is
+   something else it merely also offers. */
+.story-open-head button {
+  margin-inline-start: auto;
+}
+
 .story-open-meta {
   color: var(--dim);
   margin: 6px 0 12px;

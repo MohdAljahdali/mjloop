@@ -376,6 +376,12 @@
               <header class="story-open-head">
                 <h2 id="story-open-title" tabindex="-1"></h2>
                 <span class="tag" id="story-open-status"></span>
+                <!-- Offered only while the queue is holding a job that names this
+                     story. `job-attach` is the very action `panels/queue.js`
+                     already wires for its own rows — reused rather than
+                     duplicated, because both do exactly the same thing: ask the
+                     one shared terminal to show one job's transcript. -->
+                <button type="button" id="story-open-attach" data-act="job-attach" hidden></button>
               </header>
               <p class="story-open-meta" id="story-open-meta"></p>
               <dl class="facts" id="story-open-facts"></dl>

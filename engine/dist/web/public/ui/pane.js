@@ -155,5 +155,28 @@ export function mountPane() {
       setPane('docked')
       refit()
     },
+    /**
+     * Force the pane open enough to show a transcript that was just asked for
+     * by name.
+     *
+     * `follow()` defers to a height the reader already chose, because the
+     * event it answers — a job starting somewhere — is not something they
+     * asked for. A press on `job-attach` *is* the ask: the reader named
+     * exactly what they want on screen, so it must win even over a height
+     * they picked deliberately, or the button does nothing the one time
+     * pressing it was the reader's own idea. `chosen` is set here too, on the
+     * same logic `cycle()` and `toggleFull()` already follow — an explicit
+     * action, not a side effect for a later automatic one to override.
+     *
+     * `app.js`'s `job-attach` handler is the only caller, and pairs this with
+     * `setView('session')`: the transcript lands in `#view-session-body`,
+     * which `applyView()` hides while the queue view is up, and getting the
+     * pane out of `collapsed` does nothing about that second hiding place.
+     */
+    reveal() {
+      chosen = true
+      if (pane() === 'collapsed') setPane('docked')
+      refit()
+    },
   }
 }
