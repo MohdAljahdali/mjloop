@@ -54,6 +54,7 @@ describe('handleApi', () => {
     expect((await call('/api/config'))?.status).toBe(200)
     expect((await call('/api/plans/P001'))?.status).toBe(200)
     expect((await call('/api/stories/P001-S01'))?.status).toBe(200)
+    expect((await call('/api/stories/P001-S01/runs'))?.status).toBe(200)
     expect((await call('/api/runs'))?.status).toBe(200)
     expect((await call('/api/memory'))?.status).toBe(200)
     // The Config tab's specialist table and the idle Run tab's estimate. Both
@@ -205,6 +206,42 @@ describe('handleApi', () => {
     const result = await call('/api/runs/nope/skills')
     expect(result?.status).toBe(404)
     expect(result?.body).toEqual({ error: { code: 'error.notFound' } })
+  })
+
+  describe('/api/stories/:id/runs', () => {
+    it("serves one story's own execution history, not another's and not an ad-hoc run", async () => {
+      await storyAdd(project.dir, { plan: 'P001', title: 'Session cookie' }, clock)
+
+      const first = await runStart(project.dir, { track: 'edit', goal: 'Login form', story: 'P001-S01' }, clock)
+      const second = await runStart(project.dir, { track: 'edit', goal: 'Session cookie', story: 'P001-S02' }, clock)
+      // Names no story at all — must be attributed to neither.
+      await runStart(project.dir, { track: 'edit', goal: 'Rename a label' }, clock)
+
+      const forFirst = await call('/api/stories/P001-S01/runs')
+      expect(forFirst?.status).toBe(200)
+      expect(forFirst?.body).toMatchObject([{ id: runDirName(first), story: 'P001-S01', track: 'edit' }])
+
+      const forSecond = await call('/api/stories/P001-S02/runs')
+      expect(forSecond?.status).toBe(200)
+      expect(forSecond?.body).toMatchObject([{ id: runDirName(second), story: 'P001-S02', track: 'edit' }])
+    })
+
+    it('is empty at 200 for a story with no runs yet, and 400 for an id not shaped like one', async () => {
+      const result = await call('/api/stories/P001-S01/runs')
+      expect(result?.status).toBe(200)
+      expect(result?.body).toEqual([])
+
+      expect((await call('/api/stories/nonsense/runs'))?.status).toBe(400)
+      expect((await call('/api/stories/P1-S1/runs'))?.status).toBe(400)
+    })
+
+    it('is a read and nothing else, and refuses a third path segment', async () => {
+      for (const method of ['POST', 'PUT', 'DELETE', 'PATCH']) {
+        expect((await call('/api/stories/P001-S01/runs', method))?.status).toBe(405)
+      }
+      expect((await call('/api/stories/P001-S01/runs/extra'))?.status).toBe(404)
+      expect((await call('/api/stories/P001-S01/nonsense'))?.status).toBe(404)
+    })
   })
 
   describe('/api/transcripts', () => {
@@ -368,6 +405,7 @@ describe('handleApi', () => {
       '/api/plans/../../etc',
       '/api/plans/..%2F..%2Fetc',
       '/api/stories/../../../etc/passwd',
+      '/api/stories/../../../etc/passwd/runs',
       '/api/runs/../..',
       '/api/memory/../config.yaml',
       '/api/runs/P001/../../..',

@@ -21,6 +21,7 @@ import {
   readSkillsView,
   readState,
   readStoryDetail,
+  readStoryRuns,
   readTelemetryReport,
   readTranscript,
 } from './read.js'
@@ -115,9 +116,15 @@ async function route(projectDir: string, segments: readonly string[]): Promise<A
       return ok(await readPlanDetail(projectDir, first))
 
     case 'stories':
-      if (segments.length !== 2 || first === undefined) break
+      if (first === undefined) break
       if (!StoryIdSchema.safeParse(first).success) return fail(400, 'error.badRequest')
-      return ok(await readStoryDetail(projectDir, first))
+      if (segments.length === 2) return ok(await readStoryDetail(projectDir, first))
+      // The story's own execution history: the same convention-not-foreign-key
+      // filter `readRuns`'s own doc states (`web/read.ts:467-495`), served
+      // pre-filtered rather than making every caller fetch the whole run list
+      // to find the handful that are one story's own.
+      if (segments.length === 3 && second === 'runs') return ok(await readStoryRuns(projectDir, first))
+      break
 
     case 'runs':
       if (segments.length === 1) return ok(await readRuns(projectDir))

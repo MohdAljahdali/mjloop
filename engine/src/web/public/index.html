@@ -258,13 +258,15 @@
                 </header>
 
                 <!-- Four derived surfaces below, none of them a sixth write
-                     kind or a new schema field — see
+                     kind — see
                      docs/superpowers/specs/2026-08-01-plans-stories-split-design.md,
                      Decision 3. Each names what kind of derivation it is in
                      its own hint: a shared rule (Progress), the one record on
                      file (Decision), a filename convention (Evidence), or a
-                     plain text match (Memory) — so none of them reads as a
-                     fact the engine stores when it is not one. -->
+                     join on the memory's own `plan`/`story` fields (Memory) —
+                     Decision 3's one calculated exception, landed in B11 —
+                     so none of them reads as a fact the engine stores when it
+                     is not one. -->
                 <section class="plan-detail-sub" id="plan-progress" hidden>
                   <h3 data-i18n="plans.progressTitle"></h3>
                   <p class="hint" data-i18n="plans.progressHint"></p>
@@ -326,8 +328,9 @@
                   <p class="more" id="plan-evidence-more" hidden></p>
                 </section>
 
-                <!-- A text match over the whole memory corpus, not a join —
-                     see panels/plans.js's comment above `planMemories`. -->
+                <!-- A join over the whole memory corpus on the memory's own
+                     `plan`/`story` fields — see panels/plans.js's comment
+                     above `planMemories`. -->
                 <section class="plan-detail-sub">
                   <h3 data-i18n="plans.memory.title"></h3>
                   <p class="hint" data-i18n="plans.memory.hint"></p>

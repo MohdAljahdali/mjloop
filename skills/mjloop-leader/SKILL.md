@@ -447,6 +447,12 @@ No hit costs one call.
 - a **lesson** from a halt — what the run learned about this project the hard way
 - a **pattern** worth following next time
 
+Pass `plan` and `story` when the run carries them — step 2b already gave `mjloop_run_start`
+both, so you are not looking them up again — so the memory is scoped to what it is about
+rather than merely mentioning it in prose. The cockpit's Plan Memory drawer joins on these
+fields, not on text, and a memory recorded with neither is project-wide, not this plan's. An
+ad-hoc run has no plan or story to pass, and the memory stays project-wide, correctly.
+
 Not a diary. A memory per cycle buries the entries that matter, and the corpus is only
 worth searching while it is worth reading.
 

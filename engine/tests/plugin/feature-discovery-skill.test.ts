@@ -514,6 +514,21 @@ describe('the leader skill', () => {
     expect(neverDo().filter((rule) => /discovery/i.test(rule) && /brief/i.test(rule))).not.toEqual([])
   })
 
+  it('tells the leader to pass plan and story into the memory it records', () => {
+    // The cockpit's Plan Memory drawer (`panels/plans.js`'s `planMemories`)
+    // joins a memory to a plan on the memory's own `plan`/`story` fields, not
+    // on a text match — but `mjloop_memory_add` defaults both to null, and the
+    // leader is the only caller of it. A `### Memory` section that forgot to
+    // say "pass them" is a drawer with a join and no producer, which is
+    // exactly the defect this test exists to keep fixed: it went unnoticed
+    // once already, because nothing outside a live run can prove the leader
+    // obeys prose, only that the prose still says it.
+    const memory = section(leader, '### Memory')
+    expect(memory).toMatch(/\bmjloop_run_start\b/)
+    expect(memory).toMatch(/\bplan\b/)
+    expect(memory).toMatch(/\bstory\b/)
+  })
+
   it('is forbidden from approving a brief itself', () => {
     // The prohibition S04 adds, and the reason it has to be written down: the
     // leader holds `mjloop_feature_approve` — every tool this server registers

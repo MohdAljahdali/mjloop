@@ -30,6 +30,9 @@ export interface MemoryAddInput {
   body: string
   tags?: string[]
   run?: string | null
+  /** The plan and story this memory is scoped to. Both null for a project-wide entry. */
+  plan?: string | null
+  story?: string | null
 }
 
 /**
@@ -72,6 +75,8 @@ export async function memoryAdd(
       at: now().toISOString(),
       tags: input.tags ?? [],
       run: input.run ?? null,
+      plan: input.plan ?? null,
+      story: input.story ?? null,
     })
     if (!frontmatter.success) throw new InvalidMemoryInputError(z.prettifyError(frontmatter.error))
 

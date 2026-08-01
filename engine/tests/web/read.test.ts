@@ -32,6 +32,7 @@ import {
   readSkillsView,
   readState,
   readStoryDetail,
+  readStoryRuns,
   readTelemetryReport,
   readTranscript,
 } from '../../src/web/read.js'
@@ -209,6 +210,7 @@ describe('read', () => {
       readPlanDetail(project.dir, 'P001'),
       readStoryDetail(project.dir, 'P001-S01'),
       readRuns(project.dir),
+      readStoryRuns(project.dir, 'P001-S01'),
       readCycleDetail(project.dir, runId, 1),
       readSkillManifest(project.dir, runId),
       readMemories(project.dir),
@@ -290,6 +292,33 @@ describe('read', () => {
     const detail = await readRunDetail(project.dir, runs[0]?.id ?? '')
     expect(detail.cycles).toEqual([1])
     expect(detail.halt).toBe(null)
+  })
+
+  it("filters to one story's own runs, the same convention `readRuns` already documents", async () => {
+    await seed()
+    await runStart(project.dir, { track: 'edit', goal: 'Build the login form', story: 'P001-S01' }, clock)
+    await rosterSet(project.dir, { cycle: 1, selected: ['editor', 'verifier'], skipped: {} })
+    await runStart(project.dir, { track: 'edit', goal: 'Build the session cookie', story: 'P001-S02' }, clock)
+    await rosterSet(project.dir, { cycle: 1, selected: ['editor', 'verifier'], skipped: {} })
+    // An ad-hoc run names no story at all, and must not be attributed to either.
+    await runStart(project.dir, { track: 'edit', goal: 'Rename a label' }, clock)
+    await rosterSet(project.dir, { cycle: 1, selected: ['editor', 'verifier'], skipped: {} })
+
+    const all = await readRuns(project.dir)
+    expect(all).toHaveLength(3)
+
+    const forFirst = await readStoryRuns(project.dir, 'P001-S01')
+    expect(forFirst).toHaveLength(1)
+    expect(forFirst[0]).toMatchObject({ story: 'P001-S01', track: 'edit' })
+
+    const forSecond = await readStoryRuns(project.dir, 'P001-S02')
+    expect(forSecond).toHaveLength(1)
+    expect(forSecond[0]).toMatchObject({ story: 'P001-S02', track: 'edit' })
+  })
+
+  it('is empty for a story with no runs, rather than raising', async () => {
+    await seed()
+    expect(await readStoryRuns(project.dir, 'P001-S01')).toEqual([])
   })
 
   it("serves a run's pinned skill manifest, and null for one that pinned none", async () => {
@@ -838,13 +867,27 @@ describe('read', () => {
 
   it('serves memory whole so the page can facet it', async () => {
     await seed()
+    // A second entry, scoped to a plan and a story, alongside `seed()`'s
+    // unscoped one — so this test proves both that `plan`/`story` survive the
+    // wire and that a memory with neither still reads as null, not dropped.
+    await memoryAdd(
+      project.dir,
+      { kind: 'pattern', title: 'Scope memory at record time', body: 'Passed at the call, not guessed later.', plan: 'P001', story: 'P001-S01' },
+      clock,
+    )
     const memories = await readMemories(project.dir)
     // `memorySearch` filters by none of kind, tag, time or run, so faceting
     // cannot be pushed to the server — and its `reason` is engine-authored
     // prose that must not cross this wire.
-    expect(memories).toHaveLength(1)
-    expect(memories[0]).toMatchObject({ id: 'M001', kind: 'decision', title: 'Cookies over tokens' })
+    expect(memories).toHaveLength(2)
+    expect(memories[0]).toMatchObject({ id: 'M001', kind: 'decision', title: 'Cookies over tokens', plan: null, story: null })
     expect(memories[0]?.body).toContain('SSR')
+    // The seam `panels/plans.js`'s `planMemories` join reads: a projection
+    // that reshaped this DTO and dropped these two fields would leave every
+    // test above green while the browser's Plan Memory drawer went silent —
+    // mutation M7 proved exactly that by nulling both here and passing the
+    // whole suite.
+    expect(memories[1]).toMatchObject({ id: 'M002', kind: 'pattern', plan: 'P001', story: 'P001-S01' })
   })
 
   describe('readTranscript', () => {

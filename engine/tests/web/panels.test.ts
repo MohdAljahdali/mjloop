@@ -446,7 +446,12 @@ describe('plans', () => {
       tags: [],
       at: NOW,
       run: null,
-      body: `A note that mentions P001, entry ${index}.`,
+      // `plan` is the join key now, not a mention in the body — a fixture
+      // that only mentioned P001 in prose would match nothing after
+      // `planMemories` became a real join.
+      plan: 'P001',
+      story: null,
+      body: `Entry ${index}.`,
     }))
     serve({
       '/api/plans/P001': {
@@ -469,13 +474,15 @@ describe('plans', () => {
     expect(document.getElementById('plan-memory-more')?.textContent).toBe('Showing 200 of 240 entries.')
   })
 
-  it("matches Plan Memory by a text mention of this plan or its stories, never by the memory's own `run` field", async () => {
+  it("joins Plan Memory on the memory's own `plan`/`story` fields, never on a prose mention or the `run` field", async () => {
     const memory = (patch: Partial<MemoryView> & { id: string }): MemoryView => ({
       kind: 'decision',
       title: 'Something else entirely',
       tags: [],
       at: NOW,
       run: null,
+      plan: null,
+      story: null,
       body: '',
       ...patch,
     })
@@ -489,14 +496,17 @@ describe('plans', () => {
         stories: [detailStory({ id: 'P001-S01' })],
       },
       '/api/memory': [
-        memory({ id: 'M001', title: 'Why P001 shipped without an SVG graph' }),
-        memory({ id: 'M002', body: 'A lesson that came out of P001-S01.' }),
-        // Mentions neither the plan nor its story anywhere in its own text —
-        // but its `run` field happens to name a run that *did* belong to this
-        // plan. If this showed up, the filter would be joining on `run`
-        // rather than doing the text match its own doc says it is.
-        memory({ id: 'M003', title: 'Unrelated', run: '2026-07-28-001--P001-S01--build' }),
-        memory({ id: 'M004', title: 'A different project entirely' }),
+        memory({ id: 'M001', plan: 'P001', title: 'Why P001 shipped without an SVG graph' }),
+        memory({ id: 'M002', story: 'P001-S01', body: 'A lesson that came out of this story.' }),
+        // Mentions the plan and the story in its own prose, but carries no
+        // `plan`/`story` field. If this showed up, the join would have
+        // regressed to the text match it replaced.
+        memory({ id: 'M003', title: 'P001-S01, allegedly', body: 'About P001 in passing.' }),
+        // Its `run` field happens to name a run that *did* belong to this
+        // plan. `run` is not the join key.
+        memory({ id: 'M004', run: '2026-07-28-001--P001-S01--build' }),
+        // Scoped to a different plan entirely.
+        memory({ id: 'M005', plan: 'P002', title: 'A different plan entirely' }),
       ],
     })
     reveal('panel-plans')
@@ -508,10 +518,16 @@ describe('plans', () => {
     expect(cells('#plan-memory-list .memory-id')).toEqual(['M001', 'M002'])
     expect((document.getElementById('plan-memory-empty') as HTMLElement).hidden).toBe(true)
 
-    // The pure match, unit-tested directly for the `run`-is-not-a-join case
-    // the DOM fixture above only demonstrates indirectly.
+    // The pure match, unit-tested directly for the cases the DOM fixture
+    // above only demonstrates indirectly.
     const plainPlan = { id: 'P001', stories: [{ id: 'P001-S01' }] }
-    expect(planMemories([memory({ id: 'M003', run: '2026-07-28-001--P001-S01--build' })], plainPlan)).toEqual([])
+    expect(planMemories([memory({ id: 'M003', title: 'P001-S01, allegedly', body: 'About P001' })], plainPlan)).toEqual([])
+    expect(planMemories([memory({ id: 'M004', run: '2026-07-28-001--P001-S01--build' })], plainPlan)).toEqual([])
+    expect(planMemories([memory({ id: 'M005', plan: 'P002' })], plainPlan)).toEqual([])
+    expect(planMemories([memory({ id: 'M001', plan: 'P001' })], plainPlan)).toEqual([memory({ id: 'M001', plan: 'P001' })])
+    expect(planMemories([memory({ id: 'M002', story: 'P001-S01' })], plainPlan)).toEqual([
+      memory({ id: 'M002', story: 'P001-S01' }),
+    ])
   })
 
   it('shows the empty tells when nothing matches, and hides them when something does', async () => {

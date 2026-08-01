@@ -1,4 +1,5 @@
 import * as z from 'zod'
+import { PlanIdSchema, StoryIdSchema } from './plan.js'
 
 /**
  * `decision` — a choice made and why, the thing a reader cannot reconstruct
@@ -56,6 +57,19 @@ export const MemoryFrontmatterSchema = z.strictObject({
   tags: MemoryTagsSchema.default([]),
   /** The run that produced it, or null when a person wrote it directly. */
   run: z.string().min(1).nullable().default(null),
+  /**
+   * The plan and story this memory is scoped to, or null when it is
+   * project-wide. Both are bounded by the engine's own id shapes rather than
+   * a free string because they reach a query — `panels/plans.js`'s Plan
+   * Memory joins on them — and an id that could not name a real plan or story
+   * would join against nothing while looking like it matched something.
+   *
+   * Both default to null, as `run` above does: the schema is strict, so
+   * without a default every memory recorded before this field existed would
+   * fail validation on the next read.
+   */
+  plan: PlanIdSchema.nullable().default(null),
+  story: StoryIdSchema.nullable().default(null),
 })
 
 export type MemoryKind = z.infer<typeof MemoryKindSchema>

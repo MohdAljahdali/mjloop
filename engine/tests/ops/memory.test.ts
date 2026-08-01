@@ -87,6 +87,31 @@ describe('memoryAdd', () => {
     expect(memory.frontmatter.run).toBe('2026-07-27-003')
     expect(memory.frontmatter.at).toBe(NOW.toISOString())
   })
+
+  it('records a plan and story scope, and defaults both to null when omitted', async () => {
+    const scoped = await memoryAdd(
+      project.dir,
+      { kind: 'decision', title: 'Scoped decision', body: 'x', plan: 'P001', story: 'P001-S02' },
+      clock,
+    )
+    const scopedMemory = await memoryGet(project.dir, scoped.id)
+    expect(scopedMemory.frontmatter.plan).toBe('P001')
+    expect(scopedMemory.frontmatter.story).toBe('P001-S02')
+
+    const unscoped = await memoryAdd(project.dir, { kind: 'decision', title: 'Unscoped', body: 'y' }, clock)
+    const unscopedMemory = await memoryGet(project.dir, unscoped.id)
+    expect(unscopedMemory.frontmatter.plan).toBeNull()
+    expect(unscopedMemory.frontmatter.story).toBeNull()
+  })
+
+  it('refuses a plan or story id not shaped like one', async () => {
+    await expect(
+      memoryAdd(project.dir, { kind: 'decision', title: 'x', body: 'y', plan: 'not-a-plan' }, clock),
+    ).rejects.toBeInstanceOf(InvalidMemoryInputError)
+    await expect(
+      memoryAdd(project.dir, { kind: 'decision', title: 'x', body: 'y', story: '../../etc' }, clock),
+    ).rejects.toBeInstanceOf(InvalidMemoryInputError)
+  })
 })
 
 describe('memoryGet', () => {

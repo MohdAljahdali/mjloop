@@ -71,28 +71,23 @@ export function planRuns(runs, plan) {
 }
 
 /**
- * The memories whose own title, tags or body mention this plan's id or one of
- * its story ids.
+ * The memories scoped to this plan itself, or to one of its stories.
  *
- * A text match, not a join: `MemoryFrontmatterSchema` (`schemas/memory.ts`)
- * carries no `plan` or `story` field, only `run` — and the leader skill's own
- * call to `mjloop_memory_add` (`skills/mjloop-leader/SKILL.md`) never passes
- * it, so `run` is null in practice and could not be the join key even where
- * the field exists. `memory.id` is deliberately left out of the haystack: a
- * memory's own id (`M001`) has nothing to do with a plan's, and matching
- * against it would look exactly like a real join to a reader who has not
- * read this comment.
+ * A real join: `MemoryFrontmatterSchema` (`schemas/memory.ts`) carries `plan`
+ * and `story` fields precisely so this could stop being a text match. A
+ * memory matches when its own `plan` names this plan, or its `story` names
+ * one of this plan's stories — the same two ways `mjloop_memory_add` can
+ * scope an entry. A memory naming neither is project-wide and belongs to no
+ * plan's list, which is what a title or body that merely *mentions* a plan
+ * id in passing used to get wrong.
  *
  * @param {readonly MemoryView[]} memories
  * @param {{ id: string, stories: readonly { id: string }[] }} plan
  * @returns {MemoryView[]}
  */
 export function planMemories(memories, plan) {
-  const terms = [plan.id, ...plan.stories.map((story) => story.id)].map((term) => term.toLowerCase())
-  return memories.filter((memory) => {
-    const haystack = `${memory.title} ${memory.tags.join(' ')} ${memory.body}`.toLowerCase()
-    return terms.some((term) => haystack.includes(term))
-  })
+  const storyIds = new Set(plan.stories.map((story) => story.id))
+  return memories.filter((memory) => memory.plan === plan.id || (memory.story !== null && storyIds.has(memory.story)))
 }
 
 /**
@@ -388,7 +383,7 @@ export function mountPlans() {
       phrase(evidenceMore, 'plans.evidence.more', { shown: evidenceDrawn.shown, total: evidenceDrawn.total })
     }
 
-    // Plan Memory: `planMemories` (above) — a text match, not a join.
+    // Plan Memory: `planMemories` (above) — a real join on `plan`/`story`.
     const memoryRows = planMemories(memories.value() ?? [], view)
     phrase(memoryEmpty, 'plans.memory.empty')
     flag(memoryEmpty, 'hidden', memoryRows.length > 0)

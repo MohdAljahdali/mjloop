@@ -653,6 +653,46 @@ describe('tool behaviour', () => {
     expect(textOf(read)).toContain('no shared session store')
   })
 
+  it('records a memory scoped to a plan and story', async () => {
+    await client.callTool({ name: 'mjloop_init', arguments: { project_dir: project.dir } })
+
+    const added = await client.callTool({
+      name: 'mjloop_memory_add',
+      arguments: {
+        project_dir: project.dir,
+        kind: 'lesson',
+        title: 'Timing needed runInBand',
+        body: 'The suite was flaky under parallel workers.',
+        plan: 'P001',
+        story: 'P001-S02',
+      },
+    })
+    expect(isError(added)).not.toBe(true)
+
+    const read = await client.callTool({
+      name: 'mjloop_memory_get',
+      arguments: { project_dir: project.dir, id: JSON.parse(textOf(added)).id },
+    })
+    const memory = JSON.parse(textOf(read))
+    expect(memory.frontmatter.plan).toBe('P001')
+    expect(memory.frontmatter.story).toBe('P001-S02')
+  })
+
+  it('refuses a plan or story id that is not shaped like one, rather than dropping it', async () => {
+    await client.callTool({ name: 'mjloop_init', arguments: { project_dir: project.dir } })
+    const result = await client.callTool({
+      name: 'mjloop_memory_add',
+      arguments: {
+        project_dir: project.dir,
+        kind: 'lesson',
+        title: 'x',
+        body: 'y',
+        plan: 'not-a-plan',
+      },
+    })
+    expect(isError(result)).toBe(true)
+  })
+
   it('refuses a memory body past the ceiling at the tool boundary', async () => {
     // The ceiling is legible to the caller before it writes a transcript that
     // every later search and add would then have to read.

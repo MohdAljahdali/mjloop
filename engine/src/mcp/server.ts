@@ -6,7 +6,7 @@ import { FeatureDiscoveryModeSchema } from '../schemas/config.js'
 import { AgentNameSchema, AgentResultSchema } from '../schemas/contract.js'
 import { FeatureIdSchema } from '../schemas/feature.js'
 import { MemoryBodySchema, MemoryKindSchema, MemoryTagsSchema, MemoryTitleSchema } from '../schemas/memory.js'
-import { ApprovalDecisionSchema, StoryStatusSchema } from '../schemas/plan.js'
+import { ApprovalDecisionSchema, PlanIdSchema, StoryIdSchema, StoryStatusSchema } from '../schemas/plan.js'
 import { IdSchema, ResultSchema } from '../schemas/state.js'
 import { VerifySlotSchema } from '../schemas/verify.js'
 import { initLoop } from '../ops/init.js'
@@ -735,9 +735,11 @@ export function buildServer(): McpServer {
         body: MemoryBodySchema.describe('The reasoning — the conclusion and why, not the transcript'),
         tags: MemoryTagsSchema.optional(),
         run: z.string().min(1).nullish().describe('The run that produced it, when there is one'),
+        plan: PlanIdSchema.nullish().describe('Plan id, e.g. P001, when this memory is scoped to one'),
+        story: StoryIdSchema.nullish().describe('Story id, e.g. P001-S02, when this memory is scoped to one'),
       },
     },
-    async ({ project_dir, kind, title, body, tags, run }) =>
+    async ({ project_dir, kind, title, body, tags, run, plan, story }) =>
       guard(async () =>
         ok(
           await memoryAdd(resolveProjectDir(project_dir), {
@@ -746,6 +748,8 @@ export function buildServer(): McpServer {
             body,
             ...(tags === undefined ? {} : { tags }),
             ...(run === undefined ? {} : { run }),
+            ...(plan === undefined ? {} : { plan }),
+            ...(story === undefined ? {} : { story }),
           }),
         ),
       ),

@@ -46,10 +46,12 @@ describe('MemoryIdSchema', () => {
 })
 
 describe('MemoryFrontmatterSchema', () => {
-  it('defaults tags and run', () => {
+  it('defaults tags, run, plan and story', () => {
     const parsed = MemoryFrontmatterSchema.parse({ id: 'M001', kind: 'lesson', title: 'A lesson', at: AT })
     expect(parsed.tags).toEqual([])
     expect(parsed.run).toBeNull()
+    expect(parsed.plan).toBeNull()
+    expect(parsed.story).toBeNull()
   })
 
   it('rejects a kind outside the three values', () => {
@@ -60,6 +62,28 @@ describe('MemoryFrontmatterSchema', () => {
   it('rejects an unknown key', () => {
     const bad = { id: 'M001', kind: 'lesson', title: 'x', at: AT, priority: 1 }
     expect(MemoryFrontmatterSchema.safeParse(bad).success).toBe(false)
+  })
+
+  it('accepts a well-formed plan and story scope', () => {
+    const parsed = MemoryFrontmatterSchema.parse({
+      id: 'M001',
+      kind: 'decision',
+      title: 'Scoped',
+      at: AT,
+      plan: 'P001',
+      story: 'P001-S02',
+    })
+    expect(parsed.plan).toBe('P001')
+    expect(parsed.story).toBe('P001-S02')
+  })
+
+  it('rejects a plan or story id that could steer a query, the same shape guard the ids themselves carry', () => {
+    expect(MemoryFrontmatterSchema.safeParse({ id: 'M001', kind: 'decision', title: 'x', at: AT, plan: 'nope' }).success).toBe(
+      false,
+    )
+    expect(
+      MemoryFrontmatterSchema.safeParse({ id: 'M001', kind: 'decision', title: 'x', at: AT, story: '../../etc' }).success,
+    ).toBe(false)
   })
 })
 
@@ -153,5 +177,24 @@ describe('listMemories', () => {
     await fs.writeFile(path.join(dir, 'M002-broken.md'), '---\nid: [unclosed\n---\n', 'utf8')
 
     expect((await listMemories(project.dir)).map((m) => m.frontmatter.id)).toEqual(['M001'])
+  })
+
+  it('reads a memory file written before `plan` and `story` existed, defaulting both to null', async () => {
+    // `MemoryFrontmatterSchema` is strict, so this is the compatibility case
+    // B11 exists to protect: a required field here would fail `safeParse` for
+    // every entry recorded before it, and `listMemories` would silently drop
+    // each one from the corpus rather than raising anywhere.
+    const dir = resolveLoopPaths(project.dir).memory
+    await fs.mkdir(dir, { recursive: true })
+    await fs.writeFile(
+      path.join(dir, 'M001-old-shape.md'),
+      '---\nid: M001\nkind: decision\ntitle: Old shape\nat: 2026-07-27T15:00:00.000Z\ntags: []\nrun: null\n---\n\nWritten before this milestone.\n',
+      'utf8',
+    )
+
+    const memories = await listMemories(project.dir)
+    expect(memories).toHaveLength(1)
+    expect(memories[0]?.frontmatter.plan).toBeNull()
+    expect(memories[0]?.frontmatter.story).toBeNull()
   })
 })

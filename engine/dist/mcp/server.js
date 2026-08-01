@@ -29896,30 +29896,6 @@ var FeatureBriefSchema = strictObject({
   }
 });
 
-// src/schemas/memory.ts
-var MemoryKindSchema = _enum(["decision", "lesson", "pattern"]);
-var MemoryIdSchema = string2().regex(/^M\d{3}$/, "a memory id looks like M001");
-var MAX_MEMORY_NUMBER = 999;
-var TITLE_MAX = 200;
-var TAG_MAX = 40;
-var TAGS_MAX = 10;
-var MemoryTitleSchema = string2().trim().min(1).max(TITLE_MAX, "a memory title is one line \u2014 put the detail in the body");
-var MemoryTagsSchema = array(string2().trim().min(1).max(TAG_MAX)).max(TAGS_MAX);
-var MEMORY_BODY_MAX = 2e4;
-var MemoryBodySchema = string2().trim().min(1).max(
-  MEMORY_BODY_MAX,
-  `a memory body runs to ${MEMORY_BODY_MAX} characters \u2014 record the conclusion, not the transcript`
-);
-var MemoryFrontmatterSchema = strictObject({
-  id: MemoryIdSchema,
-  kind: MemoryKindSchema,
-  title: MemoryTitleSchema,
-  at: iso_exports2.datetime(),
-  tags: MemoryTagsSchema.default([]),
-  /** The run that produced it, or null when a person wrote it directly. */
-  run: string2().min(1).nullable().default(null)
-});
-
 // src/schemas/plan.ts
 var StoryStatusSchema = _enum(["todo", "doing", "done", "blocked"]);
 var PlanIdSchema = string2().regex(/^P\d{3}$/, "a plan id looks like P001");
@@ -29983,6 +29959,43 @@ var ManifestSchema = strictObject({
   title: string2().min(1),
   generated_at: iso_exports2.datetime(),
   stories: array(ManifestEntrySchema)
+});
+
+// src/schemas/memory.ts
+var MemoryKindSchema = _enum(["decision", "lesson", "pattern"]);
+var MemoryIdSchema = string2().regex(/^M\d{3}$/, "a memory id looks like M001");
+var MAX_MEMORY_NUMBER = 999;
+var TITLE_MAX = 200;
+var TAG_MAX = 40;
+var TAGS_MAX = 10;
+var MemoryTitleSchema = string2().trim().min(1).max(TITLE_MAX, "a memory title is one line \u2014 put the detail in the body");
+var MemoryTagsSchema = array(string2().trim().min(1).max(TAG_MAX)).max(TAGS_MAX);
+var MEMORY_BODY_MAX = 2e4;
+var MemoryBodySchema = string2().trim().min(1).max(
+  MEMORY_BODY_MAX,
+  `a memory body runs to ${MEMORY_BODY_MAX} characters \u2014 record the conclusion, not the transcript`
+);
+var MemoryFrontmatterSchema = strictObject({
+  id: MemoryIdSchema,
+  kind: MemoryKindSchema,
+  title: MemoryTitleSchema,
+  at: iso_exports2.datetime(),
+  tags: MemoryTagsSchema.default([]),
+  /** The run that produced it, or null when a person wrote it directly. */
+  run: string2().min(1).nullable().default(null),
+  /**
+   * The plan and story this memory is scoped to, or null when it is
+   * project-wide. Both are bounded by the engine's own id shapes rather than
+   * a free string because they reach a query — `panels/plans.js`'s Plan
+   * Memory joins on them — and an id that could not name a real plan or story
+   * would join against nothing while looking like it matched something.
+   *
+   * Both default to null, as `run` above does: the schema is strict, so
+   * without a default every memory recorded before this field existed would
+   * fail validation on the next read.
+   */
+  plan: PlanIdSchema.nullable().default(null),
+  story: StoryIdSchema.nullable().default(null)
 });
 
 // src/schemas/verify.ts
@@ -33760,7 +33773,9 @@ async function memoryAdd(projectDir, input, now = () => /* @__PURE__ */ new Date
       title: input.title,
       at: now().toISOString(),
       tags: input.tags ?? [],
-      run: input.run ?? null
+      run: input.run ?? null,
+      plan: input.plan ?? null,
+      story: input.story ?? null
     });
     if (!frontmatter.success) throw new InvalidMemoryInputError(prettifyError(frontmatter.error));
     const file = await writeMemory(projectDir, { frontmatter: frontmatter.data, body: body.data });
@@ -35047,17 +35062,21 @@ function buildServer() {
         // caller before it writes a transcript it will have to write again.
         body: MemoryBodySchema.describe("The reasoning \u2014 the conclusion and why, not the transcript"),
         tags: MemoryTagsSchema.optional(),
-        run: string2().min(1).nullish().describe("The run that produced it, when there is one")
+        run: string2().min(1).nullish().describe("The run that produced it, when there is one"),
+        plan: PlanIdSchema.nullish().describe("Plan id, e.g. P001, when this memory is scoped to one"),
+        story: StoryIdSchema.nullish().describe("Story id, e.g. P001-S02, when this memory is scoped to one")
       }
     },
-    async ({ project_dir, kind, title, body, tags, run: run2 }) => guard(
+    async ({ project_dir, kind, title, body, tags, run: run2, plan, story }) => guard(
       async () => ok(
         await memoryAdd(resolveProjectDir(project_dir), {
           kind,
           title,
           body,
           ...tags === void 0 ? {} : { tags },
-          ...run2 === void 0 ? {} : { run: run2 }
+          ...run2 === void 0 ? {} : { run: run2 },
+          ...plan === void 0 ? {} : { plan },
+          ...story === void 0 ? {} : { story }
         })
       )
     )

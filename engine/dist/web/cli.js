@@ -18865,7 +18865,20 @@ var MemoryFrontmatterSchema = strictObject({
   at: iso_exports.datetime(),
   tags: MemoryTagsSchema.default([]),
   /** The run that produced it, or null when a person wrote it directly. */
-  run: string2().min(1).nullable().default(null)
+  run: string2().min(1).nullable().default(null),
+  /**
+   * The plan and story this memory is scoped to, or null when it is
+   * project-wide. Both are bounded by the engine's own id shapes rather than
+   * a free string because they reach a query — `panels/plans.js`'s Plan
+   * Memory joins on them — and an id that could not name a real plan or story
+   * would join against nothing while looking like it matched something.
+   *
+   * Both default to null, as `run` above does: the schema is strict, so
+   * without a default every memory recorded before this field existed would
+   * fail validation on the next read.
+   */
+  plan: PlanIdSchema.nullable().default(null),
+  story: StoryIdSchema.nullable().default(null)
 });
 
 // src/store/memory-store.ts
@@ -19065,6 +19078,10 @@ async function readRuns(projectDir) {
   }
   return out;
 }
+async function readStoryRuns(projectDir, storyId) {
+  const runs = await readRuns(projectDir);
+  return runs.filter((run) => run.story === storyId);
+}
 async function readRunDetail(projectDir, runId) {
   const dir = path15.join(resolveLoopPaths(projectDir).runs, runId);
   const inside = await fs16.readdir(dir).catch(() => null);
@@ -19185,9 +19202,11 @@ async function route(projectDir, segments) {
       if (!PlanIdSchema.safeParse(first).success) return fail(400, "error.badRequest");
       return ok(await readPlanDetail(projectDir, first));
     case "stories":
-      if (segments.length !== 2 || first === void 0) break;
+      if (first === void 0) break;
       if (!StoryIdSchema.safeParse(first).success) return fail(400, "error.badRequest");
-      return ok(await readStoryDetail(projectDir, first));
+      if (segments.length === 2) return ok(await readStoryDetail(projectDir, first));
+      if (segments.length === 3 && second === "runs") return ok(await readStoryRuns(projectDir, first));
+      break;
     case "runs":
       if (segments.length === 1) return ok(await readRuns(projectDir));
       if (first === void 0 || !RUN_ID.test(first)) return fail(400, "error.badRequest");

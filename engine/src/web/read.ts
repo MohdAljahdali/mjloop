@@ -496,6 +496,30 @@ export async function readRuns(projectDir: string): Promise<RunSummary[]> {
   return out
 }
 
+/**
+ * One story's own execution history: every run directory whose name carries
+ * this story's id, in the same newest-first order `readRuns` already returns,
+ * over the same convention `RunSummary.story` already documents — parsed out
+ * of the run *directory name* (`<run_id>--<story|adhoc>--<track>`), never
+ * stored against a story anywhere on disk.
+ *
+ * This route has no consumer yet, and that is a fact about today's tree, not
+ * a plan for one: `panels/stories.js` still fetches every run on `/api/runs`
+ * and filters to `entry.story === story.id` itself — this is that same
+ * filter made available server side, not a replacement for it, and nothing
+ * has been moved. It lands ahead of the caller that would retire the
+ * client-side filter because B11 is the one commit in this milestone that
+ * widens a schema and a wire shape at once (see the design doc's B11 note);
+ * wiring `panels/stories.js` to it is separate, later work. Do not delete the
+ * client-side filter on the strength of this comment, and do not delete this
+ * route on the strength of `panels/stories.js`'s — `tests/web/api.test.ts`
+ * and the read-side tests below pin it independent of any consumer.
+ */
+export async function readStoryRuns(projectDir: string, storyId: string): Promise<RunSummary[]> {
+  const runs = await readRuns(projectDir)
+  return runs.filter((run) => run.story === storyId)
+}
+
 export interface RunDetail {
   id: string
   /** The halt report, verbatim. Null when the run did not halt. */
@@ -670,6 +694,9 @@ export interface MemoryView {
   tags: string[]
   at: string
   run: string | null
+  /** The plan and story this memory is scoped to, or null when it is project-wide. */
+  plan: string | null
+  story: string | null
   body: string
 }
 
