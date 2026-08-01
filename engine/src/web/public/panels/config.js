@@ -527,6 +527,46 @@ export function mountConfig() {
     },
   }
 
+  // Enter inside one of the four `.rule-add` boxes (`css/60-panels.css:994`)
+  // is otherwise swallowed by implicit form submission: `<form
+  // id="config-editor" data-act="config-save">` (index.html:748) has exactly
+  // one submit button, `config-save` (index.html:756), and by the time a name
+  // is typed `editor.addEventListener('input', markDirty)` above has usually
+  // already enabled it. Worst on the edge combobox (`index.html:1648`) — the
+  // one box on this card with no pointer-only fallback keyboard-blocked by
+  // this: the typed name has no `name` attribute, so `collectConfigChanges`
+  // never sees it, and Enter saves the whole track subtree instead of adding
+  // the edge. `agent-add`/`edge-add`/`specialist-add`/`track-add` below call
+  // the same functions the bus dispatches for those buttons (`app.js:212`,
+  // `217`, `214`, `219`) directly rather than through a synthetic click,
+  // because the bus is installed once, on the real document, in `app.js` —
+  // not re-installed by every control that needs to fire its own action.
+  editor.addEventListener('keydown', (event) => {
+    const key = /** @type {KeyboardEvent} */ (event).key
+    if (key !== 'Enter') return
+    const target = event.target
+    if (!(target instanceof HTMLInputElement)) return
+    const box = target.closest('.rule-add')
+    if (box === null) return
+    const button = box.querySelector('[data-act]')
+    if (!(button instanceof HTMLElement)) return
+    event.preventDefault()
+    switch (button.dataset['act']) {
+      case 'agent-add':
+        api.agentAdd(button)
+        break
+      case 'edge-add':
+        api.edgeAdd(button)
+        break
+      case 'specialist-add':
+        api.specialistAdd()
+        break
+      case 'track-add':
+        api.trackAdd()
+        break
+    }
+  })
+
   function markDirty() {
     if (!enabled) return
     dirty = true

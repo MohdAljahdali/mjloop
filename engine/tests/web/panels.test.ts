@@ -2084,6 +2084,39 @@ describe('config', () => {
       expect(collectConfigChanges(form, baseline)).toEqual([])
     })
 
+    it("adds a predecessor when Enter is pressed in the box, instead of falling through to the form's Save", async () => {
+      // The failure this guards: without a same-file keydown handler, Enter in
+      // this box performs the form's implicit submission — `config-save`
+      // (index.html:756) is `<form id="config-editor">`'s only submit button —
+      // and the typed name, which carries no `name` attribute, is discarded
+      // rather than added as an edge.
+      serve({
+        '/api/config': configView({
+          tracks: { build: { required: ['builder', 'verifier'], available: ['ui-designer'], max_cycles: 5 } },
+        }),
+      })
+
+      reveal('panel-config')
+      mountConfig()
+      draw(emptySnapshot())
+      await vi.waitFor(() => expect(document.querySelectorAll('.track-editor')).toHaveLength(1))
+
+      const add = edgeAddButton('build', 'verifier')
+      const box = add.parentElement?.querySelector('input') as HTMLInputElement
+      box.value = 'builder'
+      box.dispatchEvent(new Event('input', { bubbles: true }))
+
+      const enter = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })
+      box.dispatchEvent(enter)
+
+      // The keydown's own default (implicit submission) was cancelled, and
+      // the edge landed the way pressing the `+` button would have.
+      expect(enter.defaultPrevented).toBe(true)
+      const row = add.closest('.track-order-agent') as HTMLElement
+      expect(row.querySelector('.chips')?.textContent).toContain('builder')
+      expect(box.value).toBe('')
+    })
+
     it('shows and edits the union of predecessors when two edges name the same agent, matching what the engine enforces', async () => {
       // The engine deliberately supports this plural shape: `findOrderViolation`
       // (ops/log.ts:598-611) filters `track.order` for every edge naming an

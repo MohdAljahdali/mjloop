@@ -155,24 +155,50 @@ describe('templates and actions', () => {
 })
 
 describe('keyboard before pointer', () => {
-  it('never starts a drag/pointer reorder gesture without a keydown handler in the same file', () => {
-    // C5's rule, made permanent. `ui/worktabs.js` is this page's one reordering-adjacent
-    // control today — roving tabindex, arrow keys read from `document.documentElement.dir`
-    // on every keystroke — and it exists precisely because the alternative, a pointer-only
-    // drag handle, leaves a keyboard user with nothing to press. `panels/config.js`'s edge
-    // editor (C4) reached the same place without this rule: a set of "after" relations has
-    // no position to drag, only membership to add or remove, so it shipped chips and a
-    // combobox — native `<input>`/`<button>` elements, keyboard-operable with no bespoke
-    // handler at all — and never a `dragstart`/`pointerdown` listener. This test is the
-    // guard for the next file that reaches for one anyway: whichever file starts listening
-    // for a pointer-initiated reorder gesture must, in that same file, listen for `keydown`
-    // too, so the keyboard path ships with the pointer path rather than after it, or not at
-    // all. Checked at file granularity because that is what one control's module already is
-    // here — `mountWorktabs` binds both its `keydown` handler and (were one ever added) a
-    // drag handler on `spec.strip` in the same closure.
-    const reorderStart = /\.addEventListener\(\s*['"](?:dragstart|pointerdown)['"]/
-    const keydown = /\.addEventListener\(\s*['"]keydown['"]/
-    const offenders = scripts.filter((name) => reorderStart.test(code(name)) && !keydown.test(code(name)))
+  it('never starts a drag/pointer/mouse/touch reorder gesture without a keydown handler in the same file that also reads an arrow, Home or End key', () => {
+    // C5's rule. Its precedent is narrower than an earlier version of this
+    // comment claimed, so here is what the two headers it can honestly cite
+    // actually say. `ui/tabs.js:6-7` refused `role="tablist"` for the seven
+    // fixed panel links on a cost argument — arrow-key handling "would need
+    // ... to honour text direction, which is a real RTL bug for no gain" —
+    // and the anchors it kept instead were never pointer-only; they were
+    // always keyboard-operable. `ui/worktabs.js:10-13` paid that same RTL
+    // cost anyway, for its one reordering-adjacent control (roving tabindex,
+    // arrow keys read from `document.documentElement.dir` on every
+    // keystroke), because unlike the fixed links "a set that changes cannot
+    // be navigated by anchors". Neither header is about a pointer-only drag
+    // handle, and nothing on this page has ever shipped one — so there is no
+    // existing case here of a keyboard user left with nothing to press. This
+    // rule exists for the day a file reaches for a reorder gesture anyway:
+    // whichever file starts listening for one must, in that same file,
+    // listen for `keydown` too and actually read an arrow/Home/End key from
+    // it, so the keyboard path ships with the pointer path rather than after
+    // it, or not at all — a `keydown` handler that never looks at one of
+    // those keys (an Escape-to-close handler, say) moves nothing and does not
+    // count. Checked at file granularity because that is what one control's
+    // module already is here — `mountWorktabs` binds both its `keydown`
+    // handler and (were one ever added) a drag handler on `spec.strip` in the
+    // same closure.
+    //
+    // The gesture side matches every shape this codebase actually writes for
+    // starting such a thing, not only `.addEventListener('dragstart' |
+    // 'pointerdown', …)`: `mousedown` and `touchstart` reorder just as well,
+    // the property form (`.ondragstart = `, `.onpointerdown = `, …) needs no
+    // `addEventListener` at all, a receiver-less `addEventListener(` is
+    // already this page's style for a top-level listener (`app.js:173`:
+    // `addEventListener('hashchange', fn)`), and HTML5 native drag-reorder
+    // needs nothing beyond a `draggable` flag set true — `el.draggable =
+    // true` in a script or a literal `draggable="true"` in `index.html`,
+    // which `ui/dom.js`'s `attr()` makes trivial to write from a template.
+    const reorderStart =
+      /addEventListener\(\s*['"](?:dragstart|pointerdown|mousedown|touchstart)['"]|\.on(?:dragstart|pointerdown|mousedown|touchstart)\s*=|\bdraggable\s*=\s*["']?true\b/
+    const keydown = /addEventListener\(\s*['"]keydown['"]|\.onkeydown\s*=/
+    const arrowNav = /ArrowUp|ArrowDown|ArrowLeft|ArrowRight|\bHome\b|\bEnd\b/
+    const targets = files.filter((name) => name.endsWith('.js') || name === 'index.html')
+    const offenders = targets.filter((name) => {
+      const text = code(name)
+      return reorderStart.test(text) && !(keydown.test(text) && arrowNav.test(text))
+    })
     expect(offenders).toEqual([])
   })
 })
