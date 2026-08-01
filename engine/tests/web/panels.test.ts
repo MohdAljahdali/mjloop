@@ -2418,6 +2418,142 @@ describe('config', () => {
       expect((document.getElementById('config-save') as HTMLButtonElement).disabled).toBe(true)
     })
   })
+
+  describe('change preview (C6)', () => {
+    /** One track card's preview list — field changes and named order edges alike. */
+    const previewItems = (track: string): string[] =>
+      [...document.querySelectorAll(`[data-track="${track}"] .track-preview-item`)].map(
+        (node) => node.textContent ?? '',
+      )
+    const fill = (key: string, params: Record<string, string>): string =>
+      Object.entries(params).reduce((text, [name, value]) => text.split(`{${name}}`).join(value), english[key] ?? key)
+
+    it('names each order edge Save would add and remove, and nothing else', async () => {
+      // `config.patch`'s `track` variant sends the whole subtree
+      // (store/config-mutation.ts:220-222) under a compare-and-swap over the
+      // whole file (:161) — this is the one place a reader sees, before
+      // pressing Save, which edges that write actually carries.
+      serve({
+        '/api/config': configView({
+          tracks: {
+            build: { required: ['alpha', 'beta', 'gamma'], max_cycles: 5, order: [{ agent: 'alpha', after: ['beta'] }] },
+          },
+        }),
+      })
+
+      reveal('panel-config')
+      const config = mountConfig()
+      draw(emptySnapshot())
+      await vi.waitFor(() => expect(document.querySelectorAll('.track-editor')).toHaveLength(1))
+
+      expect(previewItems('build'), 'nothing pending yet').toEqual([])
+
+      // Adds `alpha after gamma` and removes `alpha after beta`.
+      const add = document.querySelector('[data-act="edge-add"][data-track="build"][data-agent="alpha"]') as HTMLElement
+      ;(add.parentElement?.querySelector('input') as HTMLInputElement).value = 'gamma'
+      config.edgeAdd(add)
+      const removeBeta = document.querySelector(
+        '[data-act="edge-remove"][data-track="build"][data-agent="alpha"][data-pred="beta"]',
+      ) as HTMLElement
+      config.edgeRemove(removeBeta)
+
+      const items = previewItems('build')
+      expect(items).toContain(fill('config.preview.orderAdded', { agent: 'alpha', pred: 'gamma' }))
+      expect(items).toContain(fill('config.preview.orderRemoved', { agent: 'alpha', pred: 'beta' }))
+      // Nothing else on this track moved — `required`, `available`, `closing`,
+      // `max_cycles`, `gate` and `map` are all still what the baseline holds.
+      expect(items).toHaveLength(2)
+    })
+
+    it('says nothing will change while the draft still matches the baseline', async () => {
+      serve({ '/api/config': configView({ tracks: { build: { required: ['alpha'], max_cycles: 5 } } }) })
+
+      reveal('panel-config')
+      mountConfig()
+      draw(emptySnapshot())
+      await vi.waitFor(() => expect(document.querySelectorAll('.track-editor')).toHaveLength(1))
+
+      expect(previewItems('build')).toEqual([])
+      // `.track-list-empty` is shared with the four agent lists, so the
+      // preview's own is found by its text rather than its class alone —
+      // `available` and `closing` are empty here too and show
+      // `config.noAgents` ("none").
+      const previewEmpty = [...document.querySelectorAll('[data-track="build"] .track-list-empty')].find(
+        (node) => node.textContent === english['config.preview.noChanges'],
+      )
+      expect(previewEmpty, 'no "nothing will change" message found').not.toBeUndefined()
+      expect((previewEmpty as HTMLElement).hidden).toBe(false)
+      expect(document.querySelector('[data-track="build"] .track-preview-comments')?.hasAttribute('hidden')).toBe(
+        true,
+      )
+    })
+
+    it("counts the comment lines a pending save would drop from a track's own block, and only once the track is actually part of the save", async () => {
+      // Hand-built rather than through `configView()`, which always serves
+      // `raw: 'version: 1\n'` — this test is the one place `raw` has to carry
+      // real content for `trackCommentLoss` to walk.
+      const raw = [
+        'version: 1',
+        'tracks:',
+        '  build:',
+        "    # Three agents, so one busy day doesn't stall this track.",
+        '    required:',
+        '      - alpha',
+        '      - beta',
+        '      - gamma',
+        "    # Lower until the verifier's own suite gets faster.",
+        '    max_cycles: 5',
+        '  edit:',
+        '    required:',
+        '      - builder',
+        '    max_cycles: 2',
+        '',
+      ].join('\n')
+      serve({
+        '/api/config': {
+          raw,
+          revision: 'a'.repeat(64),
+          parsed: ConfigSchema.parse({
+            version: 1,
+            tracks: {
+              build: { required: ['alpha', 'beta', 'gamma'], max_cycles: 5 },
+              edit: { required: ['builder'], max_cycles: 2 },
+            },
+          }),
+          invalid: false,
+        },
+      })
+
+      reveal('panel-config')
+      mountConfig()
+      draw(emptySnapshot())
+      await vi.waitFor(() => expect(document.querySelectorAll('.track-editor')).toHaveLength(2))
+
+      // Untouched: nothing pending for `build`, so nothing this save would
+      // discard either — the count is not shown before there is a save to
+      // warn about.
+      expect(document.querySelector('[data-track="build"] .track-preview-comments')?.hasAttribute('hidden')).toBe(
+        true,
+      )
+
+      // Turning the gate on is a real field change (`gate` goes from absent
+      // to present), which is what puts this track's whole subtree — and the
+      // two comment lines inside it — on the next Save.
+      const gate = document.querySelector('[data-track="build"] [data-field="gate-enabled"]') as HTMLInputElement
+      gate.checked = true
+      gate.dispatchEvent(new Event('change', { bubbles: true }))
+
+      const comments = document.querySelector('[data-track="build"] .track-preview-comments') as HTMLElement
+      expect(comments.hasAttribute('hidden')).toBe(false)
+      expect(comments.textContent).toBe(fill('config.preview.commentsLost.other', { count: '2' }))
+
+      // `edit`'s own block carries no comment at all, and nothing is pending
+      // for it either — both are reasons its own line stays hidden.
+      expect(document.querySelector('[data-track="edit"] .track-preview-comments')?.hasAttribute('hidden')).toBe(
+        true,
+      )
+    })
+  })
 })
 
 /**

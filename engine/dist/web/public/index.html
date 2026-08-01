@@ -1610,7 +1610,25 @@
         </div>
 
         <ul class="track-problems" data-slot="problems"></ul>
+
+        <!-- C6: what Save on this card would actually do. `config.patch`'s
+             `track` variant replaces this whole subtree under a
+             compare-and-swap over the whole file (store/config-mutation.ts,
+             `applyChange`'s `'track'` case and `mutateConfig`'s revision
+             check), so this is not a diff of the file — it is this track's
+             own before and after, read from state the panel already holds. -->
+        <div class="track-optional">
+          <span class="track-list-label" data-i18n="config.preview.title"></span>
+          <p class="rule-why" data-i18n="config.preview.why"></p>
+          <ul class="track-preview-list" data-slot="previewChanges"></ul>
+          <p class="track-list-empty" data-slot="previewEmpty" hidden data-i18n="config.preview.noChanges"></p>
+          <p class="track-preview-comments" data-slot="previewComments" hidden></p>
+        </div>
       </section>
+    </template>
+
+    <template id="tpl-track-preview-item">
+      <li class="track-preview-item" data-slot="text"></li>
     </template>
 
     <!-- One of a track's four agent lists. `data-list` is what makes the pair

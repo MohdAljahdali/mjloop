@@ -135,6 +135,15 @@ export function mountConfig() {
   let baseline = null
   /** @type {string | null} */
   let editorRevision = null
+  /**
+   * `config.yaml`'s own text, for the same revision `baseline` was seeded
+   * from — never the live feed's, which can move ahead of the draft while a
+   * reader is still typing. The one thing it is for is counting the comment
+   * lines inside one track's own block, in `trackCommentLoss` below.
+   *
+   * @type {string | null}
+   */
+  let rawText = null
   let dirty = false
   let saving = false
   let conflict = false
@@ -592,6 +601,7 @@ export function mountConfig() {
       if (editorRevision !== null && dirty && !saving) {
         baseline = parsed
         editorRevision = revision
+        rawText = view?.raw ?? null
         conflict = true
         flag(editorState, 'hidden', false)
         phrase(editorState, 'config.editorChanged')
@@ -600,6 +610,7 @@ export function mountConfig() {
       }
       baseline = parsed
       editorRevision = revision
+      rawText = view?.raw ?? null
       conflict = false
       dirty = false
       seedDraft(/** @type {Config} */ (parsed))
@@ -1028,6 +1039,34 @@ export function mountConfig() {
         const problems = slots['problems']
         if (problems !== undefined) {
           reconcile(problems, trackProblems(model, name), (problem) => problem.id, problemRow)
+        }
+
+        // C6: what Save on this card would actually do, read from state this
+        // panel already holds — `baseline` (the last-synced document) and
+        // `rawText` (that same document's text), never a second fetch.
+        const previewChanges = slots['previewChanges']
+        const previewEmpty = slots['previewEmpty']
+        const previewComments = slots['previewComments']
+        if (previewChanges !== undefined) {
+          const baselineTrack = baseline?.tracks?.[name]
+          const items = [
+            ...trackFieldChanges(baselineTrack, track),
+            ...(baselineTrack === undefined ? [] : orderEdgeChanges(baselineTrack, track)),
+          ]
+          reconcile(previewChanges, items, (item) => item.id, previewRow)
+          if (previewEmpty !== undefined) flag(previewEmpty, 'hidden', items.length > 0)
+          if (previewComments !== undefined) {
+            // A track Save would not touch is a track whose comments are not
+            // at risk: `collectConfigChanges` sends nothing for a track whose
+            // serialised form did not move (its `JSON.stringify` compare,
+            // above), so an empty `items` here means this track's own block
+            // in `config.yaml` is not part of the next Save at all.
+            const lost = items.length === 0 || baselineTrack === undefined ? null : trackCommentLoss(rawText, name)
+            flag(previewComments, 'hidden', lost === null || lost === 0)
+            if (lost !== null && lost > 0) {
+              phrase(previewComments, pluralKey('config.preview.commentsLost', lost), { count: lost })
+            }
+          }
         }
 
         // Last, so the lists and chips this update just created are translated
@@ -1549,6 +1588,167 @@ function findOrderCycle(order) {
     }
   }
   return null
+}
+
+/* ── C6: change-impact preview ───────────────────────────────────────────
+ *
+ * `config.patch`'s `track` variant replaces the whole subtree
+ * (`store/config-mutation.ts`, `applyChange`'s `'track'` case: `document.
+ * setIn(['tracks', change.track], change.value)`), under a compare-and-swap
+ * over the sha256 of the *whole* `config.yaml` (`mutateConfig`: `if
+ * (configRevision(raw) !== parsedPatch.revision) throw new
+ * ConfigMutationError('stale')`) — so Save on one track card is the most
+ * destructive control this editor has, and everything below exists to show
+ * what it would do before it does it, from state this panel already holds.
+ */
+
+/** @param {string} name @returns {{ id: string, key: string, params: Record<string, string> }} */
+function previewField(name) {
+  return { id: `field:${name}`, key: 'config.preview.fieldChanged', params: { field: name } }
+}
+
+/**
+ * Which of a track's own fields (everything but `order`, named separately
+ * below) would come out of Save different from the baseline this card was
+ * seeded from. `undefined` means the track is not in the baseline at all —
+ * added in this editing session and never yet saved, so there is nothing to
+ * diff it against and nothing of its own for Save to discard.
+ *
+ * @param {{ required?: string[], available?: string[], closing?: string[], max_cycles?: number, gate?: unknown, map?: unknown } | undefined} baselineTrack
+ * @param {{ required: string[], available?: string[], closing?: string[], max_cycles: number, gate?: unknown, map?: unknown }} draftTrack
+ * @returns {{ id: string, key: string, params: Record<string, string> }[]}
+ */
+function trackFieldChanges(baselineTrack, draftTrack) {
+  if (baselineTrack === undefined) return [{ id: 'new', key: 'config.preview.newTrack', params: {} }]
+  const differs = (/** @type {unknown} */ a, /** @type {unknown} */ b) => JSON.stringify(a) !== JSON.stringify(b)
+  /** @type {{ id: string, key: string, params: Record<string, string> }[]} */
+  const changes = []
+  if (differs(baselineTrack.required ?? [], draftTrack.required)) changes.push(previewField('required'))
+  if (differs(baselineTrack.available ?? [], draftTrack.available ?? [])) changes.push(previewField('available'))
+  if (differs(baselineTrack.closing ?? [], draftTrack.closing ?? [])) changes.push(previewField('closing'))
+  if (baselineTrack.max_cycles !== draftTrack.max_cycles) changes.push(previewField('max_cycles'))
+  if (differs(baselineTrack.gate ?? null, draftTrack.gate ?? null)) changes.push(previewField('gate'))
+  if (differs(baselineTrack.map ?? null, draftTrack.map ?? null)) changes.push(previewField('map'))
+  return changes
+}
+
+/**
+ * Every `{agent, pred}` pair a track's order graph names, flattened across
+ * every edge — the same union `edgeAfter` above reads for one agent's own
+ * row, here read for the whole track so a pair can be set-compared against
+ * the other side regardless of which `OrderEdge` object happens to hold it.
+ *
+ * @param {{ agent: string, after: string[] }[]} order
+ * @returns {{ agent: string, pred: string }[]}
+ */
+function flattenOrder(order) {
+  return order.flatMap((edge) => (edge.after ?? []).map((pred) => ({ agent: edge.agent, pred })))
+}
+
+/**
+ * The order edges Save would add and remove, named by agent and predecessor
+ * — not a count and not the raw arrays, because "which edges" is the
+ * question a reader deciding whether to press Save actually has.
+ *
+ * @param {{ order?: { agent: string, after: string[] }[] }} baselineTrack
+ * @param {{ order?: { agent: string, after: string[] }[] }} draftTrack
+ * @returns {{ id: string, key: string, params: Record<string, string> }[]}
+ */
+function orderEdgeChanges(baselineTrack, draftTrack) {
+  const before = flattenOrder(baselineTrack.order ?? [])
+  const after = flattenOrder(draftTrack.order ?? [])
+  const pairKey = (/** @type {{ agent: string, pred: string }} */ pair) => `${pair.agent}:${pair.pred}`
+  const beforeKeys = new Set(before.map(pairKey))
+  const afterKeys = new Set(after.map(pairKey))
+  const added = after.filter((pair) => !beforeKeys.has(pairKey(pair)))
+  const removed = before.filter((pair) => !afterKeys.has(pairKey(pair)))
+  return [
+    ...added.map((pair) => ({ id: `add:${pairKey(pair)}`, key: 'config.preview.orderAdded', params: pair })),
+    ...removed.map((pair) => ({ id: `remove:${pairKey(pair)}`, key: 'config.preview.orderRemoved', params: pair })),
+  ]
+}
+
+/**
+ * How many whole-line comments live inside one track's own block in
+ * `config.yaml`'s raw text, or `null` when that block cannot be located
+ * reliably.
+ *
+ * Deliberately conservative, and deliberately willing to say "cannot tell"
+ * rather than guess: only a line whose trimmed content *starts* with `#`
+ * counts, and only between this track's own `name:` line and the next line
+ * at its indentation or shallower (the next sibling track, or the end of the
+ * `tracks:` block). A trailing `# comment` on a value line is not counted —
+ * telling it apart from a `#` inside a quoted string needs a real YAML
+ * parser, and `public/` ships none (this file's own header, line 4: "The
+ * browser never sends a YAML path or a replacement document"; line 49:
+ * "`public/` is the browser and imports no engine module"). So this
+ * undercounts rather than risks inventing a number, and returns `null`
+ * outright the moment the text does not have the shape this walk assumes —
+ * no `tracks:` block, or no line matching this track's name at the
+ * indentation its siblings sit at.
+ *
+ * @param {string | null} raw
+ * @param {string} track
+ * @returns {number | null}
+ */
+function trackCommentLoss(raw, track) {
+  if (raw === null) return null
+  const lines = raw.split('\n')
+  const indentOf = (/** @type {string} */ line) => line.length - line.trimStart().length
+
+  const tracksAt = lines.findIndex((line) => /^tracks:\s*(#.*)?$/.test(line))
+  if (tracksAt < 0) return null
+
+  let bodyStart = -1
+  let indent = -1
+  for (let i = tracksAt + 1; i < lines.length; i++) {
+    const line = lines[i] ?? ''
+    if (line.trim() === '' || line.trim().startsWith('#')) continue
+    const width = indentOf(line)
+    if (width === 0) break // `tracks:` closed with no body of its own.
+    bodyStart = i
+    indent = width
+    break
+  }
+  if (bodyStart < 0) return null
+
+  const escaped = track.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const header = new RegExp(`^ {${indent}}${escaped}:(\\s|$)`)
+  let headerAt = -1
+  for (let i = bodyStart; i < lines.length; i++) {
+    const line = lines[i] ?? ''
+    if (line.trim() === '') continue
+    const width = indentOf(line)
+    if (width < indent) break // past the whole `tracks:` block.
+    if (width === indent && header.test(line)) {
+      headerAt = i
+      break
+    }
+  }
+  if (headerAt < 0) return null
+
+  let count = 0
+  for (let i = headerAt + 1; i < lines.length; i++) {
+    const line = lines[i] ?? ''
+    if (line.trim() === '') continue
+    const width = indentOf(line)
+    if (width <= indent) break // the next sibling track, or the block closed.
+    if (line.trim().startsWith('#')) count++
+  }
+  return count
+}
+
+/** One line of the change preview: a field that moved, or an order edge added or removed. */
+function previewRow() {
+  const { root, slots } = clone('tpl-track-preview-item')
+  return {
+    root,
+    /** @param {{ id: string, key: string, params: Record<string, string> }} item */
+    update({ key, params }) {
+      const cell = slots['text'] ?? root
+      phrase(cell, key, params)
+    },
+  }
 }
 
 /**
