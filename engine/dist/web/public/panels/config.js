@@ -598,19 +598,27 @@ export function mountConfig() {
     }
 
     if (revision !== editorRevision) {
-      if (editorRevision !== null && dirty && !saving) {
-        baseline = parsed
-        editorRevision = revision
-        rawText = view?.raw ?? null
+      // Decided before `editorRevision` moves, because the question is about
+      // the *old* baseline a dirty draft was diffing against, not the one
+      // this frame is about to install.
+      const conflicting = editorRevision !== null && dirty && !saving
+
+      // One assignment of the trio, on every branch that reaches here, so a
+      // later refactor cannot drop `rawText` from one arm and leave it
+      // pointing at a stale document while `baseline` moves on: both are read
+      // together by `trackCommentLoss` below, which the "counts the comment
+      // lines…" test already covers for this same line.
+      baseline = parsed
+      editorRevision = revision
+      rawText = view?.raw ?? null
+
+      if (conflicting) {
         conflict = true
         flag(editorState, 'hidden', false)
         phrase(editorState, 'config.editorChanged')
         updateEditorActions()
         return
       }
-      baseline = parsed
-      editorRevision = revision
-      rawText = view?.raw ?? null
       conflict = false
       dirty = false
       seedDraft(/** @type {Config} */ (parsed))
@@ -1049,19 +1057,29 @@ export function mountConfig() {
         const previewComments = slots['previewComments']
         if (previewChanges !== undefined) {
           const baselineTrack = baseline?.tracks?.[name]
+          // The same predicate `collectConfigChanges` sends a `kind:'track'`
+          // change on (:1203: `JSON.stringify(baseline.tracks[track] ?? null)
+          // !== JSON.stringify(next)`), computed here from the same two
+          // objects rather than from `items.length`. The two are *not*
+          // equivalent: `onField`'s `gate-enabled`/`map-enabled` cases
+          // `delete entry.gate`/`entry.map` and then reassign it, which moves
+          // that key to the end of the track object without moving any
+          // field's own value — every per-field `differs` check below comes
+          // back equal, so `items` is `[]`, while the whole-track
+          // `JSON.stringify` still differs on key order and Save still sends
+          // the subtree. `items.length === 0` therefore does not imply
+          // nothing is pending; only `!pending` implies the serialised forms
+          // are equal, which is the actual condition a save with nothing to
+          // send requires.
+          const pending = JSON.stringify(baselineTrack ?? null) !== JSON.stringify(track)
           const items = [
             ...trackFieldChanges(baselineTrack, track),
             ...(baselineTrack === undefined ? [] : orderEdgeChanges(baselineTrack, track)),
           ]
           reconcile(previewChanges, items, (item) => item.id, previewRow)
-          if (previewEmpty !== undefined) flag(previewEmpty, 'hidden', items.length > 0)
+          if (previewEmpty !== undefined) flag(previewEmpty, 'hidden', pending)
           if (previewComments !== undefined) {
-            // A track Save would not touch is a track whose comments are not
-            // at risk: `collectConfigChanges` sends nothing for a track whose
-            // serialised form did not move (its `JSON.stringify` compare,
-            // above), so an empty `items` here means this track's own block
-            // in `config.yaml` is not part of the next Save at all.
-            const lost = items.length === 0 || baselineTrack === undefined ? null : trackCommentLoss(rawText, name)
+            const lost = !pending || baselineTrack === undefined ? null : trackCommentLoss(rawText, name)
             flag(previewComments, 'hidden', lost === null || lost === 0)
             if (lost !== null && lost > 0) {
               phrase(previewComments, pluralKey('config.preview.commentsLost', lost), { count: lost })

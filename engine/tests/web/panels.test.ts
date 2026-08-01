@@ -2553,6 +2553,143 @@ describe('config', () => {
         true,
       )
     })
+
+    it('still shows the comment count when a toggle round-trips a field back to its baseline value', async () => {
+      // The review's probe for the converse of the comment above this block:
+      // turning `map` off and back on restores `map`'s own *value* (still
+      // `{drafted_by: 'alpha'}`), so `trackFieldChanges`'s per-field
+      // `differs` check on `map` comes back equal and `items` names nothing —
+      // but `onField`'s `map-enabled` case (:356-364) `delete`s `entry.map`
+      // and then reassigns it, which moves the key to the end of the track
+      // object. `collectConfigChanges`'s own whole-object compare (:1185:
+      // `JSON.stringify(baseline.tracks[track] ?? null) !== JSON.stringify
+      // (next)`) still differs on that key order, so Save still sends this
+      // track's subtree and the comment inside it is still lost. An `items`
+      // count of zero must not be read as "nothing pending".
+      const raw = [
+        'version: 1',
+        'tracks:',
+        '  build:',
+        '    # one comment',
+        '    # two comment',
+        '    required:',
+        '      - alpha',
+        '    max_cycles: 5',
+        '    map:',
+        '      drafted_by: alpha',
+        '',
+      ].join('\n')
+      serve({
+        '/api/config': {
+          raw,
+          revision: 'a'.repeat(64),
+          parsed: ConfigSchema.parse({
+            version: 1,
+            tracks: { build: { required: ['alpha'], max_cycles: 5, map: { drafted_by: 'alpha' } } },
+          }),
+          invalid: false,
+        },
+      })
+
+      reveal('panel-config')
+      mountConfig()
+      draw(emptySnapshot())
+      await vi.waitFor(() => expect(document.querySelectorAll('.track-editor')).toHaveLength(1))
+
+      expect(previewItems('build'), 'nothing pending yet').toEqual([])
+      expect(document.querySelector('[data-track="build"] .track-preview-comments')?.hasAttribute('hidden')).toBe(
+        true,
+      )
+
+      const map = document.querySelector('[data-track="build"] [data-field="map-enabled"]') as HTMLInputElement
+      map.checked = false
+      map.dispatchEvent(new Event('change', { bubbles: true }))
+      map.checked = true
+      map.dispatchEvent(new Event('change', { bubbles: true }))
+
+      // Every named field is back at the value the baseline holds — `items`
+      // still names nothing — but the round trip still moved `map` to the
+      // end of the track object, so the whole-object compare `pending` reads
+      // still differs and this save is still queued.
+      expect(previewItems('build'), 'no single field moved').toEqual([])
+      const previewEmpty = [...document.querySelectorAll('[data-track="build"] .track-list-empty')].find(
+        (node) => node.textContent === english['config.preview.noChanges'],
+      )
+      expect(
+        (previewEmpty as HTMLElement).hidden,
+        '"saving now would change nothing" must not show once a save is queued',
+      ).toBe(true)
+      const comments = document.querySelector('[data-track="build"] .track-preview-comments') as HTMLElement
+      expect(comments.hasAttribute('hidden'), 'the comment this save would drop must still be named').toBe(false)
+      expect(comments.textContent).toBe(fill('config.preview.commentsLost.other', { count: '2' }))
+    })
+
+    it('keeps the comment count in step with a new revision that lands while the draft is dirty, not the raw text it replaced', async () => {
+      // Probe for the review's second defect: `updateEditor`'s conflict
+      // branch (:604 before this fix, now hoisted above the branch) is the
+      // one place `rawText` can move independently of `baseline` — this test
+      // dirties the draft, then serves a second `/api/config` with a
+      // different revision *and* a different `raw`, and asserts the
+      // comment-loss count reads the NEW raw rather than the one the editor
+      // was seeded from.
+      const rawA = ['version: 1', 'tracks:', '  build:', '    # one', '    required:', '      - alpha', '    max_cycles: 5', ''].join(
+        '\n',
+      )
+      const rawB = [
+        'version: 1',
+        'tracks:',
+        '  build:',
+        '    # one',
+        '    # two',
+        '    # three',
+        '    required:',
+        '      - alpha',
+        '    max_cycles: 5',
+        '',
+      ].join('\n')
+      const trackConfig = { version: 1, tracks: { build: { required: ['alpha'], max_cycles: 5 } } }
+
+      let served: unknown = { raw: rawA, revision: 'a'.repeat(64), parsed: ConfigSchema.parse(trackConfig), invalid: false }
+      vi.stubGlobal('fetch', (url: string) => {
+        const config = url.startsWith('/api/config')
+        return Promise.resolve(
+          new Response(JSON.stringify(config ? served : { error: { code: 'error.notFound' } }), {
+            status: config ? 200 : 404,
+          }),
+        )
+      })
+
+      reveal('panel-config')
+      mountConfig()
+      draw(emptySnapshot())
+      await vi.waitFor(() => expect(document.querySelectorAll('.track-editor')).toHaveLength(1))
+
+      // Dirty the draft against `build`, so it is still pending once the
+      // conflicting revision lands and does not get reseeded away. (An empty
+      // `gate.blocks` also makes `trackProblems` flag `noBlocks` and disables
+      // Save — irrelevant here: `markDirty` sets `dirty` regardless of
+      // validity, and `dirty` is the only thing this test's conflict branch
+      // depends on.)
+      const gate = document.querySelector('[data-track="build"] [data-field="gate-enabled"]') as HTMLInputElement
+      gate.checked = true
+      gate.dispatchEvent(new Event('change', { bubbles: true }))
+      expect((document.getElementById('config-reset') as HTMLButtonElement).disabled, 'draft is dirty').toBe(false)
+
+      served = { raw: rawB, revision: 'b'.repeat(64), parsed: ConfigSchema.parse(trackConfig), invalid: false }
+      draw(emptySnapshot({ revisions: { ...emptySnapshot().revisions, config: 'moved' } }))
+      await vi.waitFor(() =>
+        expect(document.getElementById('config-editor-state')?.textContent).toBe(english['config.editorChanged']),
+      )
+
+      // The conflict branch does not reseed the draft, so the gate toggle —
+      // and with it, the pending save on `build` — survives. The comment
+      // count it shows must be `rawB`'s (3), never `rawA`'s (1).
+      const comments = document.querySelector('[data-track="build"] .track-preview-comments') as HTMLElement
+      expect(comments.hasAttribute('hidden'), 'the gate toggle survived the conflict and is still pending').toBe(
+        false,
+      )
+      expect(comments.textContent).toBe(fill('config.preview.commentsLost.other', { count: '3' }))
+    })
   })
 })
 
