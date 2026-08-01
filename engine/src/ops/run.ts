@@ -3,14 +3,24 @@ import path from 'node:path'
 import * as z from 'zod'
 import { findTrack, type Config } from '../schemas/config.js'
 import { AgentResultSchema, RosterSchema, type AgentResult } from '../schemas/contract.js'
+import {
+  SkillManifestSchema,
+  type AcceptedProjectSkill,
+  type SkillManifest,
+  type SkillSelection,
+} from '../schemas/skill-selection.js'
 import type { Finding, Result, Severity, State } from '../schemas/state.js'
 import { LedgerSchema, PinnedVerifySchema, type LedgerEntry } from '../schemas/verify.js'
 import { loadConfig } from '../store/config-store.js'
+import { readFeatureBrief } from '../store/feature-store.js'
 import { resolveLoopPaths } from '../store/paths.js'
 import { readStory } from '../store/plan-store.js'
 import { expect as expectUnchanged } from '../store/precondition.js'
+import { readAcceptedProfile } from '../store/project-profile-store.js'
 import { StateStore, type Clock } from '../store/state-store.js'
 import { cycleFingerprint, distinctFindings, errorFingerprint } from './fingerprint.js'
+import { readAcceptedProjectSkills } from './skill-library.js'
+import { analyseConcurrency, selectSkills } from './skill-selection.js'
 
 export class UnknownTrackError extends Error {
   constructor(track: string, known: string[]) {
@@ -55,6 +65,13 @@ export interface RunStartInput {
   goal: string
   story?: string | null
   plan?: string | null
+  /**
+   * The feature this run's work routes against, for dynamic skill selection —
+   * see `pinSkillManifest`. Absent by construction on every run that predates
+   * this field, and on every run since that simply names none: nothing about
+   * this story changes what a run that never mentions a feature does.
+   */
+  feature?: string | null
 }
 
 export async function runStart(projectDir: string, input: RunStartInput, now: Clock = () => new Date()): Promise<State> {
@@ -66,6 +83,17 @@ export async function runStart(projectDir: string, input: RunStartInput, now: Cl
   // A run named after a story that does not exist would produce a run
   // directory traceable to nothing. readStory throws StoryNotFoundError.
   if (input.story !== undefined && input.story !== null) await readStory(projectDir, input.story)
+
+  // Resolved here, beside `readStory` and for the same reason, rather than
+  // beside the write it feeds below: both of the ways this can throw — a
+  // malformed feature id, and a profile that moved out from under the brief —
+  // are facts about the caller's input, and a caller told its run failed must
+  // be able to fix the input and call again. After the update below there is
+  // no "again": `state.json` already says `running` under a fresh `run_id`
+  // nothing will ever close, and the retry allocates the next id over the top
+  // of the orphan. `resolveSkillManifest` reads and validates; it writes
+  // nothing, so a throw here leaves exactly the nothing an unknown story does.
+  const manifest = await resolveSkillManifest(projectDir, config, input.feature, now)
 
   const state = await new StateStore(projectDir, now).update(async (draft) => {
     // Computed inside the locked update so two overlapping runStart calls
@@ -112,6 +140,7 @@ export async function runStart(projectDir: string, input: RunStartInput, now: Cl
 
   await fs.mkdir(runDirPath(projectDir, state), { recursive: true })
   await pinVerifyBlock(projectDir, state, config, now)
+  await writeSkillManifest(projectDir, state, manifest)
   return state
 }
 
@@ -163,6 +192,187 @@ async function pinVerifyBlock(projectDir: string, state: State, config: Config, 
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
   }
+}
+
+/**
+ * The fixed agent roles a run's pinned skill manifest routes for.
+ *
+ * Locked to exactly the four roles this story extends — `agents/planner.md`,
+ * `builder.md`, `critic.md`, `verifier.md` — because "dynamic skill selection
+ * for fixed agent roles" is the whole shape of the story: the roles never
+ * change, only the guidance handed to one of them does, and there is no
+ * per-technology agent anywhere this list could grow into. A given cycle's
+ * roster may dispatch fewer of these four; the manifest still carries a
+ * selection for every one, because which agents a cycle composes is decided
+ * fresh each cycle and this is decided once, at run start, before any cycle
+ * exists to compose one.
+ */
+const SKILL_SELECTION_AGENTS = ['planner', 'builder', 'critic', 'verifier'] as const
+
+/**
+ * The basename of the run's frozen skill routing decision.
+ *
+ * Exactly `VERIFY_PIN_FILE`'s reasoning, and for the same underlying reason:
+ * `selectSkills` and `analyseConcurrency` are pure functions of whatever the
+ * accepted profile and the project's accepted skills say *right now*, and both
+ * can move while a run is in flight — a later scan can add a profile revision,
+ * and S06's shared library can gain or lose an acceptance. Pinning bounds that
+ * to the run boundary, the same boundary `VERIFY_PIN_FILE` already holds a
+ * `config.yaml` edit to. The word itself is the entire enforcement: it is in
+ * `PROTECTED_BASENAMES` (`store/paths.ts`), which `evaluateStateGuard` matches
+ * by basename anywhere under `.mjloop/`, for the identical reason stated there.
+ *
+ * Exported, unlike `VERIFY_PIN_FILE`, because this pin has a second reader that
+ * is not this module: `runLog` joins an agent's `skills_used` against it, and
+ * the name of the file the two agree on is the one thing that must not drift
+ * between the writer and the check.
+ */
+export const SKILL_MANIFEST_FILE = 'skill-selection.json'
+
+/**
+ * Work out this run's skill routing — the whole manifest, validated — or
+ * `null` when there is nothing to route.
+ *
+ * Split from the write below, and called *before* the `StateStore.update` that
+ * opens the run, because everything that can go wrong here goes wrong on the
+ * caller's own input. `readStory` sits in the same position for the same
+ * reason: after the update there is no way to un-start a run, and a caller
+ * that receives an exception reasonably believes none started.
+ *
+ * **This is the load-bearing case the story names explicitly: a run that pins
+ * nothing behaves exactly as it did before this function existed.** That is
+ * true of every run before this story, because none of them named a feature,
+ * and it stays true of every run after it that still doesn't. Three things
+ * all resolve to "pin nothing", and none of them throws:
+ *
+ *   - `feature` is absent — most runs, forever, since routing skills for one
+ *     is an opt-in a caller has to ask for by naming it;
+ *   - the named feature's latest revision is not `approved` — a draft is
+ *     still being interviewed, or the last approved revision has already been
+ *     superseded and its successor is not sealed yet, and `selectSkills`
+ *     itself refuses to route off anything short of approved;
+ *   - the project has accepted no component map at all, so there is nothing
+ *     for `selectSkills`/`analyseConcurrency` to resolve a component id
+ *     against.
+ *
+ * None of the three is treated as an error, unlike an unknown `story` above.
+ * A story id becomes part of the run directory's name, so one that does not
+ * exist would name a directory after nothing; a feature name has no
+ * filesystem consequence here at all — it is only ever a join key selection
+ * reads — and refusing to *start a run* over a feature still being discovered,
+ * or a project that has not yet accepted a component map, would make dynamic
+ * skill selection a stronger requirement than this story ever asks it to be.
+ *
+ * `acceptedSkills` comes from `readAcceptedProjectSkills` (`skill-library.js`),
+ * S06's seam onto its own library and this project's acceptance records. A
+ * project that has accepted nothing still gets `[]` back — no acceptance
+ * store has ever been written, `listAcceptances` reads that as the ordinary
+ * empty case rather than an error — and `selectSkills` already reads an empty
+ * list as "nothing an agent may use" rather than as a case needing special
+ * handling, which is exactly what keeps every run before this change, and
+ * every run since that still accepts nothing, pinning the identical manifest
+ * it always did. An acceptance whose package this machine's library does not
+ * hold is skipped by that seam rather than failing this call; the skipped ids
+ * are not threaded any further than this function today; a caller that needs
+ * them reads `readAcceptedProjectSkills` directly.
+ *
+ * `UnresolvedComponentError` is deliberately left to propagate rather than
+ * being folded into "pin nothing": it means the accepted profile has moved
+ * *since* the very brief this run was asked to route against was approved —
+ * the profile's own accepted-component invariant breaking, not merely an
+ * absence of one — and an operator needs to see that rather than have this
+ * run start anyway against a brief nothing on disk still supports.
+ */
+async function resolveSkillManifest(
+  projectDir: string,
+  config: Config,
+  feature: string | null | undefined,
+  now: Clock,
+): Promise<SkillManifest | null> {
+  if (feature === undefined || feature === null) return null
+
+  const record = await readFeatureBrief(projectDir, feature)
+  if (record === null || record.brief.status !== 'approved') return null
+
+  const profile = await readAcceptedProfile(projectDir)
+  if (profile === null) return null
+
+  const { skills: acceptedSkills } = await readAcceptedProjectSkills(projectDir)
+  const selections: SkillSelection[] = SKILL_SELECTION_AGENTS.flatMap((agent) =>
+    selectSkills({ brief: record.brief, profile, acceptedSkills, agent }),
+  ).sort(compareSelections)
+
+  return SkillManifestSchema.parse({
+    schema: 1,
+    generatedAt: now().toISOString(),
+    sourceBrief: { id: record.brief.id, revision: record.brief.revision },
+    profileRevision: profile.revision,
+    selections,
+    guidance: renderGuidance(selections, acceptedSkills),
+    concurrency: analyseConcurrency(record.brief, profile, config.orchestration),
+  })
+}
+
+/**
+ * The bounded guidance text for every skill this manifest actually selected,
+ * keyed by skill id.
+ *
+ * This is the half of the dispatch contract that makes the other half worth
+ * carrying: a selection names an id, and an id on its own tells a receiving
+ * agent nothing it can follow. Written once per skill rather than once per
+ * selection because the same skill routinely lands on several (component,
+ * agent) rows, and `guidance` is bounded at 4000 characters precisely so it
+ * can be carried — repeating it per row would multiply that ceiling by the
+ * number of rows for no reader's benefit.
+ *
+ * Only selected skills appear. A project that has accepted a hundred skills
+ * still hands a run the few it routed, which is what keeps the pinned file's
+ * size a function of the work rather than of the library.
+ */
+function renderGuidance(
+  selections: readonly SkillSelection[],
+  acceptedSkills: readonly AcceptedProjectSkill[],
+): Record<string, string> {
+  const selected = new Set(selections.flatMap((selection) => selection.skillIds))
+  const guidance: Record<string, string> = {}
+  for (const skill of acceptedSkills) {
+    if (selected.has(skill.skillId)) guidance[skill.skillId] = skill.guidance
+  }
+  return guidance
+}
+
+/**
+ * Write the resolved manifest into the run directory, once.
+ *
+ * `wx`, with `EEXIST` treated as success, exactly as `pinVerifyBlock` does and
+ * for the identical reason: `/mjloop:resume` continues an existing run rather
+ * than calling `runStart`, so ordinarily nothing attempts a second write, and
+ * the flag is what makes "ordinarily" something nobody has to reason about. A
+ * resume that re-pinned would let a library change reach a run already in
+ * flight, which is the one thing pinning exists to prevent.
+ */
+async function writeSkillManifest(projectDir: string, state: State, manifest: SkillManifest | null): Promise<void> {
+  if (manifest === null) return
+  try {
+    await fs.writeFile(
+      path.join(runDirPath(projectDir, state), SKILL_MANIFEST_FILE),
+      `${JSON.stringify(manifest, null, 2)}\n`,
+      { encoding: 'utf8', flag: 'wx' },
+    )
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
+  }
+}
+
+/**
+ * Component id, then agent — merging `SKILL_SELECTION_AGENTS`' four separate
+ * `selectSkills` calls back into the one order the manifest promises. Each
+ * call already returns its own selections sorted by component, so this only
+ * has to break ties across agents for the same component.
+ */
+function compareSelections(a: SkillSelection, b: SkillSelection): number {
+  if (a.component !== b.component) return a.component < b.component ? -1 : 1
+  return a.agent < b.agent ? -1 : a.agent > b.agent ? 1 : 0
 }
 
 /**
@@ -396,6 +606,13 @@ const HANDOFF_SUMMARY_MAX = 200
 const HANDOFF_FINDINGS_MAX = 20
 const HANDOFF_FILES_MAX = 30
 const HANDOFF_ERRORS_MAX = 10
+/**
+ * Same shape of ceiling as the four above, sized for the same reason: a
+ * project routing many components through the four fixed roles produces one
+ * line per matched skill, and this document is re-read by every agent of the
+ * cycle that follows.
+ */
+const HANDOFF_SKILLS_MAX = 20
 
 /** Highest severity first — the opposite of the alphabetical order `distinctFindings` leaves. */
 const SEVERITY_ORDER: Record<Severity, number> = { high: 0, medium: 1, low: 2 }
@@ -453,6 +670,12 @@ async function writeHandoff(
   const reports = await readAgentReports(dir)
   const roster = await readOptionalJson(path.join(dir, 'roster.json'), RosterSchema)
   const ledger = await readOptionalJson(path.join(dir, 'verify', 'index.json'), LedgerSchema)
+  // Read from the *run* directory, not the cycle's: the manifest is pinned once
+  // at `runStart` (`pinSkillManifest`) and is identical for every cycle of this
+  // run, unlike everything else this function reads. Absent for the run that
+  // named no feature, or named one this project had not yet accepted a
+  // component map for — the ordinary case for every run today.
+  const skills = await readOptionalJson(path.join(runDirPath(projectDir, state), SKILL_MANIFEST_FILE), SkillManifestSchema)
 
   const document = bound(
     [
@@ -481,6 +704,12 @@ async function writeHandoff(
       '',
       ...errorsSection(errors),
       '',
+      // No heading at all — not even an empty one — when this run pinned no
+      // manifest. `writeHandoff` existed for every run before dynamic skill
+      // selection did, and a run that still names no feature must render
+      // byte-for-byte what it always has: an empty section a reader cannot
+      // tell apart from "nothing was selected" is worse than no section.
+      ...(skills === null ? [] : ['## Skills', '', ...skillsSection(skills), '']),
     ].join('\n'),
     cycleRef,
   )
@@ -605,6 +834,41 @@ function errorsSection(errors: string[]): string[] {
     HANDOFF_ERRORS_MAX,
     (rest) => `*${rest} more*`,
   )
+}
+
+/**
+ * This run's routing decision, as a cycle's reader needs it: the concurrency
+ * verdict and the rule that produced it, then one line per skill the manifest
+ * actually selected, naming the component, the role it was offered to, and the
+ * reason `selectSkills` recorded for it — the dispatch-side evidence the story
+ * asks for: what each agent was told, and why.
+ *
+ * The concurrency line comes first and is written unconditionally, because it
+ * is the half of the decision that has consequences for how the *next* cycle
+ * is dispatched rather than for what one agent reads. It is also the only way
+ * `analyseConcurrency`'s `ask` branch can do what its own reason string says —
+ * "the leader should offer the choice" is unreachable advice if the verdict is
+ * never rendered anywhere a leader looks. One line, bounded by construction,
+ * unlike the per-selection rows below.
+ *
+ * A selection with no matched skill contributes no line here. The manifest
+ * itself keeps that row — `skill-selection.json` is where "this component was
+ * considered and nothing matched" has to stay distinguishable from "this
+ * component was never considered" — but repeating an empty verdict once per
+ * (component, agent) pair in a document every agent of the next cycle reads
+ * would be the unbounded-by-default cost every other section here was built
+ * to avoid, for a fact the pinned file already states in full.
+ */
+function skillsSection(manifest: SkillManifest): string[] {
+  const verdict = `- **Concurrency:** \`${manifest.concurrency.mode}\` — ${oneLine(manifest.concurrency.reason)}`
+  const lines = manifest.selections.flatMap((selection) =>
+    selection.skillIds.map((skillId, index) => {
+      const reason = selection.reasons[index] ?? ''
+      return `- \`${selection.component}\` / \`${selection.agent}\`: \`${skillId}\` — ${oneLine(reason)}`
+    }),
+  )
+  if (lines.length === 0) return [verdict, '', '_no skill selected_']
+  return [verdict, '', ...elide(lines, HANDOFF_SKILLS_MAX, (rest) => `*${rest} more in ${SKILL_MANIFEST_FILE}*`)]
 }
 
 /** Keep the first `max`, and say where the rest went. */

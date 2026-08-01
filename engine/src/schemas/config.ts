@@ -154,6 +154,121 @@ export const VerifySchema = z.strictObject({
 })
 
 /**
+ * When a feature request is turned into a brief by questioning the person who
+ * asked for it, rather than by guessing.
+ *
+ * `off` is not "unset" — it is the setting that keeps `/mjloop:plan` behaving
+ * exactly as it did before this block existed.
+ */
+export const FeatureDiscoveryModeSchema = z.enum(['always', 'ask', 'off'])
+
+/** What happens to a brief once discovery has finished producing it. */
+export const DiscoveryCompletionSchema = z.enum(['auto-plan', 'review', 'save-only'])
+
+/**
+ * What to do with stories whose dependencies cannot be proven independent.
+ * `sequential` is the only one of the three that cannot corrupt a worktree by
+ * itself, so it is the default.
+ */
+export const UncertainConcurrencySchema = z.enum(['sequential', 'ask', 'parallel'])
+
+/** Whether an approved plan starts building on its own, or waits to be told. */
+export const AfterPlanApprovalSchema = z.enum(['auto', 'manual'])
+
+/** Where a skill this project does not already have may be discovered from. */
+export const SkillSourceSchema = z.enum(['github', 'registry', 'web'])
+
+/** What happens when a skill this project uses has a newer version. */
+export const SkillUpdateModeSchema = z.enum(['auto', 'review', 'pinned'])
+
+/**
+ * Project-scoped orchestration policy: how much this project wants the loop to
+ * decide on its own, and how much it wants to be asked.
+ *
+ * Every field is defaulted and every sub-block is `.prefault({})`, for the
+ * reason `VerifySchema.prefault({})` states above and one more that is specific
+ * to this block: it lands on projects that are already provisioned. A
+ * `.mjloop/config.yaml` written before this key existed has no `orchestration:`
+ * at all, and one that names a single setting — `discovery: {mode: always}` —
+ * must gain every other default rather than a half-populated tree. A
+ * `.default({...})` literal on a sub-object would satisfy the first case and
+ * fail the second, because `.default` is only consulted when the key is absent.
+ */
+export const OrchestrationSchema = z.strictObject({
+  profile: z
+    .strictObject({
+      /**
+       * May a scan activate a component map with nobody accepting it?
+       *
+       * Off by default. An accepted profile is what every later run routes on,
+       * so a project that gains one without a person looking has had its
+       * routing decided by a directory walk.
+       */
+      auto_accept: z.boolean().default(false),
+    })
+    .prefault({}),
+  discovery: z
+    .strictObject({
+      /**
+       * Deliberately `off`.
+       *
+       * The compatibility rule this whole feature ships under is that an
+       * existing project's plan flow is unchanged by it landing. Any other
+       * default would silently change what `/mjloop:plan` does in every
+       * already-provisioned project the moment the engine is upgraded — the
+       * command would start asking questions nobody configured it to ask.
+       * Turning it on is a decision a project makes, once, in writing.
+       */
+      mode: FeatureDiscoveryModeSchema.default('off'),
+      /**
+       * A ceiling on questions, not a target. The bound is enforced here rather
+       * than at the caller because `config.yaml` is hand-edited: a `0` would
+       * make a mode of `always` ask nothing and look like a broken feature, and
+       * a `200` is an interview no person finishes.
+       */
+      question_budget: z.number().int().min(1).max(20).default(8),
+      completion: DiscoveryCompletionSchema.default('review'),
+    })
+    .prefault({}),
+  execution: z
+    .strictObject({
+      after_plan_approval: AfterPlanApprovalSchema.default('manual'),
+      uncertain_concurrency: UncertainConcurrencySchema.default('sequential'),
+      /**
+       * How many times a failed story may be re-attempted before the run stops
+       * and says so. `0` is a real setting — it means never repair — which is
+       * why the bound starts there rather than at 1.
+       */
+      repair_attempts: z.number().int().min(0).max(5).default(1),
+    })
+    .prefault({}),
+  quality: z
+    .strictObject({
+      independent_plan_review: z.boolean().default(false),
+      independent_verification: z.boolean().default(false),
+    })
+    .prefault({}),
+  skills: z
+    .strictObject({
+      /**
+       * An empty list is meaningful and permitted: it is how a project says no
+       * skill may be discovered from outside it at all.
+       */
+      sources: z.array(SkillSourceSchema).default(['github']),
+      /**
+       * A registry named here is a place this project will fetch executable
+       * instructions from, so plain `http://` is refused at the schema — the
+       * one place a hand-edited, repository-travelling file can be caught.
+       */
+      trusted_registries: z
+        .array(z.string().min(1).startsWith('https://', 'a trusted registry must be an https:// URL'))
+        .default([]),
+      update_mode: SkillUpdateModeSchema.default('review'),
+    })
+    .prefault({}),
+})
+
+/**
  * Keys earlier versions wrote that no longer exist. `loadConfig` drops them
  * before parsing, so a config written by an older milestone keeps parsing.
  *
@@ -230,11 +345,37 @@ export const ConfigSchema = z
       // shape at a time, and the duplicate is one the compiler refuses to let
       // you forget — `npm run typecheck` fails on a missing key here.
       .default({ plan_approval: 'human', commit: 'auto', preflight: 'auto' }),
+    /** `.prefault({})` for the reason `verify` above uses it, and because this
+     * key is absent from every config written before it existed. */
+    orchestration: OrchestrationSchema.prefault({}),
   })
   // A track cannot see the `specialists` map, so the contradiction between a
   // track that requires an agent and a config that forbids it can only be
   // caught here, on the whole document.
   .superRefine((config, ctx) => {
+    // The orchestration contradictions are the same species as the track ones
+    // below: every value involved is legal on its own, the combination can
+    // never take effect, and nothing at runtime would ever report that the
+    // setting did nothing. A sub-schema cannot see across to its sibling, so
+    // the whole document is the only place either can be caught.
+    const { discovery, skills } = config.orchestration
+    if (discovery.completion === 'auto-plan' && discovery.mode === 'off') {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['orchestration', 'discovery', 'completion'],
+        message:
+          'orchestration.discovery.completion is "auto-plan" but orchestration.discovery.mode is "off" — auto-plan names a start driven by an approved feature brief, and a project with discovery off never produces one, so planning would silently never begin the way this setting promises. Set discovery.mode to "ask" or "always", or choose a completion of "review" or "save-only".',
+      })
+    }
+    if (skills.sources.includes('registry') && skills.trusted_registries.length === 0) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['orchestration', 'skills', 'sources'],
+        message:
+          'orchestration.skills.sources names "registry" but orchestration.skills.trusted_registries is empty — a source that names no registry admits nothing, so this project believes it enabled a source that can never return a skill. Add the registry\'s https:// URL to trusted_registries, or drop "registry" from sources.',
+      })
+    }
+
     const forbidden = new Set(
       Object.entries(config.specialists)
         .filter(([, mode]) => mode === 'never')
@@ -287,6 +428,15 @@ export const ConfigSchema = z
   })
 
 export type SpecialistMode = z.infer<typeof SpecialistModeSchema>
+export type FeatureDiscoveryMode = z.infer<typeof FeatureDiscoveryModeSchema>
+export type DiscoveryCompletion = z.infer<typeof DiscoveryCompletionSchema>
+export type UncertainConcurrency = z.infer<typeof UncertainConcurrencySchema>
+export type AfterPlanApproval = z.infer<typeof AfterPlanApprovalSchema>
+export type SkillSource = z.infer<typeof SkillSourceSchema>
+export type SkillUpdateMode = z.infer<typeof SkillUpdateModeSchema>
+/** The parsed block — every key present — not the sparse thing a hand-edited
+ * `config.yaml` may contain. Later stories read policy from this type. */
+export type Orchestration = z.infer<typeof OrchestrationSchema>
 export type Gate = z.infer<typeof GateSchema>
 /** Not `Map`: that name is the global the engine uses everywhere else. */
 export type TrackMap = z.infer<typeof MapSchema>

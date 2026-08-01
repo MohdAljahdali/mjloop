@@ -6,36 +6,102 @@
   justify-content: space-between;
   gap: 16px;
   margin-block-end: 18px;
-  padding-block-end: 12px;
+  padding-block-end: 14px;
   border-block-end: 1px solid var(--line);
 }
 
 .panel-head h1 {
   margin: 0;
-  font-size: 18px;
-  letter-spacing: -0.01em;
+  font-size: 21px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
 }
 
 .panel-head .hint {
-  margin: 3px 0 0;
+  margin: 4px 0 0;
+  /* A help line is prose, and prose stops being readable past about 80
+     characters however much room the panel has. */
+  max-width: 78ch;
 }
 
+/**
+ * The two-column body a wide window earns.
+ *
+ * A panel used to be one stack: every section full width, so on a 1700px screen
+ * a five-number tally stretched across 1300px and the form under the plan list
+ * sat below the fold with a third of the page empty beside it. The aside takes
+ * the things that are *about* the panel — a tally, a create box — and leaves the
+ * main column for the work itself.
+ *
+ * One column until there is genuinely room for two, and the aside comes second
+ * in the markup so it also reads second with no stylesheet at all.
+ */
+.panel-grid {
+  display: grid;
+  gap: 18px;
+  align-items: start;
+}
+
+@media (min-width: 1200px) {
+  .panel-grid {
+    grid-template-columns: minmax(0, 1fr) 300px;
+  }
+}
+
+.panel-side {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  /* It follows the reader down a long plan list rather than scrolling away from
+     the list it describes. */
+  position: sticky;
+  inset-block-start: 0;
+}
+
+.panel-side .block {
+  margin-block-start: 0;
+}
+
+/* A readings table, not prose: the label column is fixed, the value column
+   takes the rest, and a hairline between rows keeps a long goal from bleeding
+   into the story under it. */
 .facts {
   margin: 0;
   display: grid;
-  grid-template-columns: max-content 1fr;
-  gap: 4px 18px;
+  /* The value column is capped rather than greedy. Left as `1fr` on a wide
+     window, a four-character story id sat at the far end of a 1300px row with
+     its own label a screen-width away. */
+  grid-template-columns: max-content minmax(0, 86ch);
+  justify-content: start;
+  gap: 0 20px;
+  padding: 4px 16px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--panel) 82%, transparent);
+  box-shadow: var(--shadow-1);
 }
 
 .fact {
   display: contents;
 }
 
+.facts dt,
+.facts dd {
+  padding-block: 9px;
+  border-block-start: 1px solid var(--line-soft);
+}
+
+.facts .fact:first-child dt,
+.facts .fact:first-child dd {
+  border-block-start: 0;
+}
+
 .facts dt {
-  color: var(--dim);
-  font-size: 12px;
+  color: var(--faint);
+  font-size: 11px;
+  font-weight: 650;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.09em;
 }
 
 .facts dd {
@@ -43,29 +109,179 @@
   overflow-wrap: anywhere;
 }
 
+/* ── plans ───────────────────────────────────────────────────────────────── */
+
+/**
+ * The five numbers, as a column in the aside rather than a strip over the list.
+ *
+ * Ready and blocked are the only two that are ever a decision, so they are the
+ * only two that carry a colour.
+ */
+.tally {
+  display: grid;
+  gap: 2px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.tally li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 2px;
+  border-block-start: 1px solid var(--line-soft);
+}
+
+.tally li:first-child {
+  border-block-start: 0;
+}
+
+.tally .k {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--faint);
+  font-weight: 650;
+}
+
+.tally .v {
+  font-size: 17px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Named `tally-*` rather than `ready`/`blocked`: a bare `.ready` here would also
+   pick up the ready *list*'s own margin and knock this number off its baseline,
+   which is exactly what it did. */
+.tally .v.tally-ready {
+  color: var(--ok);
+}
+
+.tally .v.tally-blocked {
+  color: var(--bad);
+}
+
+/* What can be started right now: the one block on this tab that is an
+   instruction rather than a report, so it is the one block that is lit. */
+.start {
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--line));
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--accent) 9%, transparent), transparent),
+    color-mix(in srgb, var(--panel) 88%, transparent);
+  box-shadow: var(--shadow-2);
+}
+
+.ready {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.ready-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  margin-inline: -8px;
+  border-radius: var(--radius-sm);
+  border-block-start: 1px solid var(--line-soft);
+  transition: background 0.12s ease;
+}
+
+.ready-row:first-child {
+  border-block-start: 0;
+}
+
+.ready-row:hover {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+/* Wraps rather than being clipped: this is the one row on the page a person is
+   deciding from, and on a narrow window a nowrap title made the row wider than
+   the panel and gave `main` a horizontal scrollbar. */
+.ready-row .story-title {
+  flex: 1 1 12ch;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+}
+
+.tag.next {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 50%, transparent);
+  background: var(--tint-accent);
+}
+
+/* The button that starts work, wherever it appears: one story, one press. */
+button.primary {
+  border-color: transparent;
+  color: #08111f;
+  background: var(--loop);
+  font-weight: 700;
+}
+
+button.primary:hover:not(:disabled) {
+  border-color: transparent;
+  background: var(--loop);
+  filter: brightness(1.08);
+}
+
+button.primary:disabled {
+  color: var(--dim);
+  background: none;
+  border-color: var(--line);
+}
+
+/* Row actions sit together at the end of their row, so a row is read as
+   "what it is" then "what I can do about it" in both writing directions. */
+.row-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-inline-start: auto;
+}
+
+.row-actions button {
+  padding: 3px 12px;
+  font-size: 12px;
+}
+
 .plans {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
 }
 
 .plans-workspace {
   display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(360px, 0.85fr);
-  align-items: start;
   gap: 18px;
+  align-items: start;
+}
+
+/* The open plan gets the larger share. The detail is titles, acceptance criteria
+   and prose; the list beside it is an id, a bar and a word — and squeezing the
+   detail into the narrow column is what made every story title arrive as
+   `…g a status vocabulary`. */
+@media (min-width: 1100px) {
+  .plans-workspace[data-detail-open="true"] {
+    grid-template-columns: minmax(0, 0.75fr) minmax(400px, 1.6fr);
+  }
 }
 
 .plan-detail {
   position: sticky;
   inset-block-start: 0;
-  max-height: calc(100vh - var(--pane-h) - 180px);
+  max-height: calc(100vh - var(--pane-space) - 170px);
   overflow-y: auto;
   margin-block-start: 0;
-  padding: 12px;
-  border: 1px solid var(--accent);
+  padding: 16px;
+  border: 1px solid color-mix(in srgb, var(--accent) 50%, var(--line));
   border-radius: var(--radius);
-  background: var(--panel);
+  background: linear-gradient(180deg, var(--panel-2), var(--panel));
+  box-shadow: var(--shadow-2);
 }
 
 .plan-detail-head {
@@ -76,6 +292,7 @@
 
 .plan-detail-head h2 {
   margin: 0;
+  font-size: 15px;
 }
 
 .plan-back {
@@ -83,10 +300,17 @@
 }
 
 .plan {
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-soft);
   border-radius: var(--radius);
-  background: var(--panel);
-  padding: 12px;
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  padding: 14px 16px;
+  box-shadow: var(--shadow-1);
+  transition: border-color 0.14s ease, box-shadow 0.14s ease;
+}
+
+.plan:hover {
+  border-color: color-mix(in srgb, var(--accent) 34%, var(--line));
+  box-shadow: var(--shadow-2);
 }
 
 .plan-head {
@@ -96,20 +320,65 @@
   flex-wrap: wrap;
 }
 
+.plan-head .plan-title {
+  flex: 1;
+  min-inline-size: 12ch;
+}
+
+.plan-head button {
+  margin-inline-start: auto;
+}
+
 .plan-id,
-.count {
+.count,
+.pos {
   font-family: var(--mono);
   color: var(--dim);
   font-size: 12px;
 }
 
-.count {
-  margin-inline-start: auto;
+.pos {
+  min-inline-size: 2ch;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* How far a plan actually got, at a glance. The done/total count beside it is
+   the same fact for anyone who needs the number. */
+.progress {
+  margin-block-start: 12px;
+  block-size: 5px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--bg) 70%, var(--line));
+  overflow: hidden;
+  box-shadow: inset 0 1px 0 rgb(0 0 0 / 30%);
+}
+
+.progress .bar {
+  display: block;
+  block-size: 100%;
+  inline-size: 0;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--ok) 70%, var(--accent)), var(--ok));
+  transition: inline-size 0.3s ease;
+}
+
+.plan-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  align-items: baseline;
+  margin: 10px 0 0;
+}
+
+.ready-note {
+  font-size: 12px;
+  color: var(--ok);
 }
 
 .stories {
   list-style: none;
-  margin: 10px 0 0;
+  margin: 0;
   padding: 0;
 }
 
@@ -117,8 +386,15 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 4px 0;
-  border-block-start: 1px solid var(--line);
+  padding: 7px 8px;
+  margin-inline: -8px;
+  border-radius: var(--radius-sm);
+  border-block-start: 1px solid var(--line-soft);
+  transition: background 0.12s ease;
+}
+
+.story:hover {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
 }
 
 .story-id {
@@ -156,6 +432,103 @@
   color: var(--warn);
 }
 
+/* A story worth reading before building it: the title wraps rather than being
+   cut, and everything that is not the title may fall to a second line rather
+   than compete with it for width. */
+.story.detail {
+  flex-wrap: wrap;
+  align-items: baseline;
+  padding: 9px 8px;
+  gap: 8px 10px;
+}
+
+.story.detail .story-title {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  flex: 1 1 14ch;
+}
+
+.story.detail > details,
+.story.detail .evidence {
+  flex-basis: 100%;
+}
+
+.story.detail > details summary {
+  margin-block-start: 0;
+}
+
+.stories-block {
+  margin-block-start: 16px;
+  border-block-start: 1px solid var(--line);
+  padding-block-start: 12px;
+}
+
+.stories-block h3 {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--dim);
+  font-weight: 650;
+  margin: 0 0 10px;
+}
+
+.acceptance {
+  flex-basis: 100%;
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  color: var(--dim);
+  font-size: 12px;
+}
+
+.acceptance li::before {
+  content: "· ";
+}
+
+.evidence {
+  flex-basis: 100%;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--dim);
+}
+
+.anomaly {
+  color: var(--bad);
+}
+
+.record {
+  color: var(--dim);
+  font-size: 12px;
+  margin: 0 0 10px;
+}
+
+.approve {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-block-end: 12px;
+}
+
+.approve input {
+  flex: 1;
+  min-width: 200px;
+}
+
+.tag.planstate-done {
+  color: var(--ok);
+}
+
+.tag.planstate-doing {
+  color: var(--accent);
+}
+
+.tag.planstate-blocked {
+  color: var(--bad);
+}
+
+/* ── evidence and memory ─────────────────────────────────────────────────── */
+
 .runs {
   list-style: none;
   margin: 0;
@@ -172,20 +545,66 @@
   font-size: 12px;
 }
 
+.memories {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* One remembered thing per card. A memory is a paragraph with a title, and a
+   list of paragraphs separated by hairlines is the one shape that stops being
+   readable past about four entries. */
+.memory {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  padding: 12px 14px;
+  margin-block-end: 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--panel) 78%, transparent);
+  transition: border-color 0.14s ease;
+}
+
+.memory:hover {
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--line));
+}
+
+.memory-id,
+.when {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--dim);
+}
+
+.memory .excerpt {
+  flex-basis: 100%;
+  max-height: 12em;
+}
+
+/* ── the queue ───────────────────────────────────────────────────────────── */
+
 .jobs {
   list-style: none;
   margin: 0;
   padding: 0;
-  overflow-y: auto;
 }
 
 .job {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 4px 0;
-  border-block-end: 1px solid var(--line);
+  padding: 7px 8px;
+  margin-inline: -8px;
+  border-radius: var(--radius-sm);
+  border-block-end: 1px solid var(--line-soft);
   flex-wrap: wrap;
+  transition: background 0.12s ease;
+}
+
+.job:hover {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
 }
 
 .job .cmd {
@@ -195,6 +614,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   flex: 1;
+  min-inline-size: 14ch;
 }
 
 .job .st,
@@ -215,17 +635,66 @@
   color: var(--accent);
 }
 
+.job .st.job-closing {
+  color: var(--warn);
+}
+
 .job .reason {
   color: var(--dim);
   font-size: 12px;
   flex-basis: 100%;
 }
 
+/* Three groups, because "what is running", "what is waiting" and "what already
+   happened" are three questions. One reversed stream made the reader work out
+   which row was which by reading its status word. */
+.queue-group + .queue-group {
+  margin-block-start: 14px;
+}
+
+.queue-group h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.11em;
+  color: var(--faint);
+  font-weight: 650;
+  margin: 0 0 4px;
+}
+
+.queue-group h3::after {
+  content: "";
+  flex: 1;
+  block-size: 1px;
+  background: var(--line-soft);
+}
+
+#queue-now-group .job {
+  border: 1px solid color-mix(in srgb, var(--accent) 38%, transparent);
+  background: var(--tint-accent);
+  margin-inline: 0;
+}
+
 .queue-actions {
   display: flex;
   gap: 8px;
-  margin-block-start: 10px;
+  flex-wrap: wrap;
 }
+
+/* The pause, its cause and the two ways out of it on one line. The Resume button
+   used to live below the list it was holding, where a short queue put it off
+   screen entirely. */
+.queue-pause {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+/* ── dense tables ────────────────────────────────────────────────────────── */
 
 /* Wide content scrolls inside its own box; the page body never does. */
 .scroller {
@@ -241,7 +710,7 @@
   width: 100%;
   font-size: 13px;
   align-items: baseline;
-  column-gap: 14px;
+  column-gap: 16px;
 }
 
 .grid-head,
@@ -251,23 +720,38 @@
 }
 
 .grid-head > * {
-  color: var(--dim);
-  font-size: 11px;
+  color: var(--faint);
+  font-size: 10px;
+  font-weight: 650;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  padding-block: 4px;
+  letter-spacing: 0.1em;
+  padding-block: 6px;
   border-block-end: 1px solid var(--line);
 }
 
 .grid-row > * {
-  padding-block: 5px;
-  border-block-end: 1px solid var(--line);
+  padding-block: 7px;
+  border-block-end: 1px solid var(--line-soft);
   overflow-wrap: anywhere;
+  transition: background 0.12s ease;
+}
+
+/* `display: contents` leaves no row box to hover, so the row lights up cell by
+   cell — which is the same thing to the eye and costs no extra markup. */
+.grid-row:hover > * {
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
 }
 
 .grid code {
   font-family: var(--mono);
   font-size: 12px;
+}
+
+/* A row action inside a dense grid. */
+.grid button {
+  padding: 3px 12px;
+  font-size: 12px;
+  background: color-mix(in srgb, var(--raise) 80%, transparent);
 }
 
 .grid-findings {
@@ -282,10 +766,6 @@
   grid-template-columns: 1fr repeat(5, max-content);
 }
 
-.grid-tracks {
-  grid-template-columns: max-content 1fr 1fr max-content 1fr;
-}
-
 /* Two commands share the flexible width: the one that ran and, when they have
    drifted apart, the one `config.yaml` holds now. Everything else in the row
    is a word or a number. */
@@ -297,12 +777,15 @@
   grid-template-columns: 1fr repeat(8, max-content);
 }
 
+/* ── the config editor ───────────────────────────────────────────────────── */
+
 .config-editor {
   margin-block: 18px 24px;
-  padding: 16px;
+  padding: 18px 20px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  background: color-mix(in srgb, var(--panel) 82%, transparent);
+  background: linear-gradient(180deg, var(--panel-2), color-mix(in srgb, var(--panel) 88%, transparent));
+  box-shadow: var(--shadow-2);
 }
 
 .config-editor-head,
@@ -371,11 +854,212 @@
   min-height: 36px;
 }
 
-@media (max-width: 800px) {
-  .plans-workspace {
-    display: block;
-  }
+/* ── the structured specialist and track editors ─────────────────────────── */
 
+.rules {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-block-start: 10px;
+}
+
+.rule {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--bg) 45%, transparent);
+}
+
+.rule-name {
+  font-family: var(--mono);
+  font-size: 12px;
+  min-width: 10ch;
+}
+
+.rule-mode {
+  padding-block: 3px;
+  font-size: 12px;
+}
+
+/* What the chosen mode does, beside the choice rather than under it: this is
+   the sentence that stops `never` being set on an agent a track requires. */
+.rule-why {
+  color: var(--dim);
+  font-size: 12px;
+  flex: 1;
+}
+
+.rule-add {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-block-start: 10px;
+}
+
+.rule-add input {
+  flex: 1;
+  max-width: 260px;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.track-editors {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-block-start: 12px;
+}
+
+.track-editor {
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--bg) 40%, transparent);
+}
+
+.track-editor-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding-block-end: 10px;
+  border-block-end: 1px solid var(--line-soft);
+}
+
+.track-name {
+  font-family: var(--mono);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--accent);
+  flex: 1;
+}
+
+.track-cycles {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--dim);
+  font-size: 12px;
+}
+
+.track-cycles input {
+  width: 7ch;
+  padding-block: 4px;
+}
+
+.track-lists {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px;
+  margin-block-start: 12px;
+}
+
+.track-list-label {
+  display: block;
+  color: var(--faint);
+  font-size: 10px;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  margin-block-end: 6px;
+}
+
+.track-list-empty {
+  color: var(--faint);
+  font-size: 12px;
+}
+
+/* A chip is a name plus the button that removes it, so the two never separate
+   as the list wraps. */
+.chip-agent {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding-inline-end: 3px;
+}
+
+.chip-agent button {
+  padding: 0 5px;
+  font-size: 12px;
+  line-height: 1.3;
+  background: none;
+  border-color: transparent;
+  box-shadow: none;
+  color: var(--faint);
+}
+
+.chip-agent button:hover:not(:disabled) {
+  color: var(--bad);
+  background: none;
+  border-color: transparent;
+}
+
+.track-optional {
+  margin-block-start: 12px;
+  padding-block-start: 10px;
+  border-block-start: 1px solid var(--line-soft);
+}
+
+.track-gate,
+.track-map {
+  display: flex;
+  align-items: flex-start;
+  gap: 18px;
+  flex-wrap: wrap;
+  margin-block-start: 8px;
+  padding-inline-start: 26px;
+}
+
+.track-gate label,
+.track-map label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  color: var(--dim);
+  font-size: 12px;
+}
+
+.track-gate .track-list {
+  flex: 1;
+  min-width: 240px;
+}
+
+/* Why this track would be refused. Loud on purpose: the save button is disabled
+   while one of these is showing, and an operator must not have to guess which
+   card is holding it. */
+.track-problems {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.track-problems:empty {
+  display: none;
+}
+
+.track-problem {
+  margin-block-start: 10px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid color-mix(in srgb, var(--bad) 45%, transparent);
+  background: var(--tint-bad);
+  color: color-mix(in srgb, var(--bad) 25%, var(--text));
+  font-size: 12px;
+}
+
+.track-problem + .track-problem {
+  margin-block-start: 0;
+}
+
+/* ── narrow ──────────────────────────────────────────────────────────────── */
+
+@media (max-width: 800px) {
   .plans-workspace[data-detail-open="true"] .plans-master {
     display: none;
   }
@@ -389,6 +1073,10 @@
     display: inline-flex;
   }
 
+  .panel-side {
+    position: static;
+  }
+
   .config-editor-head {
     align-items: stretch;
     flex-direction: column;
@@ -398,6 +1086,8 @@
     justify-content: flex-end;
   }
 }
+
+/* ── state colours ───────────────────────────────────────────────────────── */
 
 .sev-high {
   color: var(--bad);
@@ -474,21 +1164,41 @@
   color: var(--dim);
 }
 
+.facets {
+  display: flex;
+  gap: 10px;
+  margin-block-end: 12px;
+  flex-wrap: wrap;
+}
+
+.facets input {
+  flex: 1;
+  min-inline-size: 12ch;
+}
+
+.facets input,
+.facets select {
+  padding-block: 8px;
+}
+
 /* A halt report or a gate excerpt: verbatim output, so it wraps rather than
    being reflowed, and it is never mirrored. */
 .excerpt {
   direction: ltr;
   font-family: var(--mono);
   font-size: 12px;
+  line-height: 1.6;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  background: var(--bg);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: 8px 10px;
-  margin: 6px 0 0;
+  color: color-mix(in srgb, var(--text) 88%, var(--dim));
+  background: var(--bg-deep);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  margin: 8px 0 0;
   max-height: 40vh;
   overflow-y: auto;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 3%);
 }
 
 .chip.landed-yes {
@@ -510,113 +1220,11 @@
   color: var(--warn);
 }
 
-.record {
-  color: var(--dim);
-  font-size: 12px;
-  margin: 0 0 10px;
-}
-
-.approve {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-block-end: 12px;
-}
-
-.approve input {
-  flex: 1;
-  min-width: 220px;
-}
-
-.story.detail {
-  flex-wrap: wrap;
-  align-items: baseline;
-}
-
-.acceptance {
-  flex-basis: 100%;
-  list-style: none;
-  margin: 4px 0 0;
-  padding: 0;
-  color: var(--dim);
-  font-size: 12px;
-}
-
-.acceptance li::before {
-  content: "· ";
-}
-
-.evidence {
-  flex-basis: 100%;
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--dim);
-}
-
-.anomaly {
-  color: var(--bad);
-}
-
-.chip.ready {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
 details summary {
   cursor: pointer;
   color: var(--dim);
   font-size: 12px;
   margin-block-start: 8px;
-}
-
-.tag.planstate-done {
-  color: var(--ok);
-}
-
-.tag.planstate-doing {
-  color: var(--accent);
-}
-
-.tag.planstate-blocked {
-  color: var(--bad);
-}
-
-.facets {
-  display: flex;
-  gap: 8px;
-  margin-block-end: 12px;
-}
-
-.facets input {
-  flex: 1;
-}
-
-.memories {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.memory {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 8px;
-  padding: 8px 0;
-  border-block-end: 1px solid var(--line);
-}
-
-.memory-id,
-.when {
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--dim);
-}
-
-.memory .excerpt {
-  flex-basis: 100%;
-  max-height: 12em;
 }
 
 .cycle-block {

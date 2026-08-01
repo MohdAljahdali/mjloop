@@ -19,6 +19,7 @@ const VALID = {
   findings: [],
   files_touched: ['src/Button.tsx'],
   next_hint: null,
+  skills_used: [],
 }
 
 describe('AgentResultSchema', () => {
@@ -29,6 +30,33 @@ describe('AgentResultSchema', () => {
   it('defaults next_hint to null when omitted', () => {
     const { next_hint, ...withoutHint } = VALID
     expect(AgentResultSchema.parse(withoutHint).next_hint).toBeNull()
+  })
+
+  it('defaults skills_used to an empty array when omitted', () => {
+    // Load-bearing for every result ever written before this field existed:
+    // without the default, re-parsing an old cycle-NN/<agent>.json (a strict
+    // schema) would refuse it outright rather than merely gain the field.
+    const { skills_used, ...withoutSkillsUsed } = VALID
+    expect(AgentResultSchema.parse(withoutSkillsUsed).skills_used).toEqual([])
+  })
+
+  it('accepts an agent naming the skills it actually followed', () => {
+    const parsed = AgentResultSchema.parse({ ...VALID, skills_used: ['flutter-widgets', 'security-auth-guard'] })
+    expect(parsed.skills_used).toEqual(['flutter-widgets', 'security-auth-guard'])
+  })
+
+  it('rejects a blank entry in skills_used', () => {
+    expect(AgentResultSchema.safeParse({ ...VALID, skills_used: [''] }).success).toBe(false)
+  })
+
+  it('constrains a skills_used entry to the id shape the manifest selects in', () => {
+    // `runLog` joins this list against the run's pinned `skill-selection.json`,
+    // whose `skillIds` are `IdSchema`. A free string could never match one, so
+    // an entry outside that shape is a claim that cannot be checked, dressed as
+    // one that can — and `../../etc/passwd` is what that looks like in practice.
+    expect(AgentResultSchema.safeParse({ ...VALID, skills_used: ['../../etc/passwd'] }).success).toBe(false)
+    expect(AgentResultSchema.safeParse({ ...VALID, skills_used: ['a skill with spaces'] }).success).toBe(false)
+    expect(AgentResultSchema.safeParse({ ...VALID, skills_used: ['eslint-strict'] }).success).toBe(true)
   })
 
   it('rejects an unknown status', () => {

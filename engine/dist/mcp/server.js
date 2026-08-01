@@ -1874,8 +1874,8 @@ var require_keyword = __commonJS({
       var _a3;
       const { gen, keyword, schema, parentSchema, $data, it } = cxt;
       checkAsyncKeyword(it, def);
-      const validate = !$data && def.compile ? def.compile.call(it.self, schema, parentSchema, it) : def.validate;
-      const validateRef = useKeyword(gen, keyword, validate);
+      const validate2 = !$data && def.compile ? def.compile.call(it.self, schema, parentSchema, it) : def.validate;
+      const validateRef = useKeyword(gen, keyword, validate2);
       const valid = gen.let("valid");
       cxt.block$data(valid, validateKeyword);
       cxt.ok((_a3 = def.valid) !== null && _a3 !== void 0 ? _a3 : valid);
@@ -2948,28 +2948,28 @@ var require_compile = __commonJS({
         if (this.opts.code.process)
           sourceCode = this.opts.code.process(sourceCode, sch);
         const makeValidate = new Function(`${names_1.default.self}`, `${names_1.default.scope}`, sourceCode);
-        const validate = makeValidate(this, this.scope.get());
-        this.scope.value(validateName, { ref: validate });
-        validate.errors = null;
-        validate.schema = sch.schema;
-        validate.schemaEnv = sch;
+        const validate2 = makeValidate(this, this.scope.get());
+        this.scope.value(validateName, { ref: validate2 });
+        validate2.errors = null;
+        validate2.schema = sch.schema;
+        validate2.schemaEnv = sch;
         if (sch.$async)
-          validate.$async = true;
+          validate2.$async = true;
         if (this.opts.code.source === true) {
-          validate.source = { validateName, validateCode, scopeValues: gen._values };
+          validate2.source = { validateName, validateCode, scopeValues: gen._values };
         }
         if (this.opts.unevaluated) {
           const { props, items } = schemaCxt;
-          validate.evaluated = {
+          validate2.evaluated = {
             props: props instanceof codegen_1.Name ? void 0 : props,
             items: items instanceof codegen_1.Name ? void 0 : items,
             dynamicProps: props instanceof codegen_1.Name,
             dynamicItems: items instanceof codegen_1.Name
           };
-          if (validate.source)
-            validate.source.evaluated = (0, codegen_1.stringify)(validate.evaluated);
+          if (validate2.source)
+            validate2.source.evaluated = (0, codegen_1.stringify)(validate2.evaluated);
         }
-        sch.validate = validate;
+        sch.validate = validate2;
         return sch;
       } catch (e) {
         delete sch.validate;
@@ -3233,8 +3233,8 @@ var require_utils = __commonJS({
       }
       return ind;
     }
-    function removeDotSegments(path17) {
-      let input = path17;
+    function removeDotSegments(path23) {
+      let input = path23;
       const output = [];
       let nextSlash = -1;
       let len = 0;
@@ -3486,8 +3486,8 @@ var require_schemes = __commonJS({
         wsComponent.secure = void 0;
       }
       if (wsComponent.resourceName) {
-        const [path17, query] = wsComponent.resourceName.split("?");
-        wsComponent.path = path17 && path17 !== "/" ? path17 : void 0;
+        const [path23, query] = wsComponent.resourceName.split("?");
+        wsComponent.path = path23 && path23 !== "/" ? path23 : void 0;
         wsComponent.query = query;
         wsComponent.resourceName = void 0;
       }
@@ -3642,21 +3642,21 @@ var require_fast_uri = __commonJS({
         normalizeString(uri, options);
       } else if (typeof uri === "object") {
         uri = /** @type {T} */
-        parse5(serialize(uri, options), options);
+        parse6(serialize(uri, options), options);
       }
       return uri;
     }
     function resolve(baseURI, relativeURI, options) {
       const schemelessOptions = options ? Object.assign({ scheme: "null" }, options) : { scheme: "null" };
-      const resolved = resolveComponent(parse5(baseURI, schemelessOptions), parse5(relativeURI, schemelessOptions), schemelessOptions, true);
+      const resolved = resolveComponent(parse6(baseURI, schemelessOptions), parse6(relativeURI, schemelessOptions), schemelessOptions, true);
       schemelessOptions.skipEscape = true;
       return serialize(resolved, schemelessOptions);
     }
     function resolveComponent(base, relative, options, skipNormalization) {
       const target = {};
       if (!skipNormalization) {
-        base = parse5(serialize(base, options), options);
-        relative = parse5(serialize(relative, options), options);
+        base = parse6(serialize(base, options), options);
+        relative = parse6(serialize(relative, options), options);
       }
       options = options || {};
       if (!options.tolerant && relative.scheme) {
@@ -3885,7 +3885,7 @@ var require_fast_uri = __commonJS({
       }
       return { parsed, malformedAuthorityOrPort };
     }
-    function parse5(uri, opts) {
+    function parse6(uri, opts) {
       return parseWithStatus(uri, opts).parsed;
     }
     function normalizeString(uri, opts) {
@@ -3914,7 +3914,7 @@ var require_fast_uri = __commonJS({
       resolveComponent,
       equal,
       serialize,
-      parse: parse5
+      parse: parse6
     };
     module.exports = fastUri;
     module.exports.default = fastUri;
@@ -6287,11 +6287,11 @@ var require_discriminator = __commonJS({
         gen.if((0, codegen_1._)`typeof ${tag} == "string"`, () => validateMapping(), () => cxt.error(false, { discrError: types_1.DiscrError.Tag, tag, tagName }));
         cxt.ok(valid);
         function validateMapping() {
-          const mapping = getMapping();
+          const mapping2 = getMapping();
           gen.if(false);
-          for (const tagValue in mapping) {
+          for (const tagValue in mapping2) {
             gen.elseIf((0, codegen_1._)`${tag} === ${tagValue}`);
-            gen.assign(valid, applyTagSchema(mapping[tagValue]));
+            gen.assign(valid, applyTagSchema(mapping2[tagValue]));
           }
           gen.else();
           cxt.error(false, { discrError: types_1.DiscrError.Mapping, tag, tagName });
@@ -6588,8 +6588,8 @@ var require_formats = __commonJS({
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.formatNames = exports.fastFormats = exports.fullFormats = void 0;
-    function fmtDef(validate, compare) {
-      return { validate, compare };
+    function fmtDef(validate2, compare2) {
+      return { validate: validate2, compare: compare2 };
     }
     exports.fullFormats = {
       // date: http://tools.ietf.org/html/rfc3339#section-5.6
@@ -6886,12 +6886,12 @@ var require_dist = __commonJS({
         throw new Error(`Unknown format "${name}"`);
       return f;
     };
-    function addFormats(ajv, list, fs17, exportName) {
+    function addFormats(ajv, list, fs23, exportName) {
       var _a3;
       var _b;
       (_a3 = (_b = ajv.opts.code).formats) !== null && _a3 !== void 0 ? _a3 : _b.formats = (0, codegen_1._)`require("ajv-formats/dist/formats").${exportName}`;
       for (const f of list)
-        ajv.addFormat(f, fs17[f]);
+        ajv.addFormat(f, fs23[f]);
     }
     module.exports = exports = formatsPlugin;
     Object.defineProperty(exports, "__esModule", { value: true });
@@ -6976,17 +6976,17 @@ var require_visit = __commonJS({
     visit.BREAK = BREAK;
     visit.SKIP = SKIP;
     visit.REMOVE = REMOVE;
-    function visit_(key, node, visitor, path17) {
-      const ctrl = callVisitor(key, node, visitor, path17);
+    function visit_(key, node, visitor, path23) {
+      const ctrl = callVisitor(key, node, visitor, path23);
       if (identity.isNode(ctrl) || identity.isPair(ctrl)) {
-        replaceNode(key, path17, ctrl);
-        return visit_(key, ctrl, visitor, path17);
+        replaceNode(key, path23, ctrl);
+        return visit_(key, ctrl, visitor, path23);
       }
       if (typeof ctrl !== "symbol") {
         if (identity.isCollection(node)) {
-          path17 = Object.freeze(path17.concat(node));
+          path23 = Object.freeze(path23.concat(node));
           for (let i = 0; i < node.items.length; ++i) {
-            const ci = visit_(i, node.items[i], visitor, path17);
+            const ci = visit_(i, node.items[i], visitor, path23);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -6997,13 +6997,13 @@ var require_visit = __commonJS({
             }
           }
         } else if (identity.isPair(node)) {
-          path17 = Object.freeze(path17.concat(node));
-          const ck = visit_("key", node.key, visitor, path17);
+          path23 = Object.freeze(path23.concat(node));
+          const ck = visit_("key", node.key, visitor, path23);
           if (ck === BREAK)
             return BREAK;
           else if (ck === REMOVE)
             node.key = null;
-          const cv = visit_("value", node.value, visitor, path17);
+          const cv = visit_("value", node.value, visitor, path23);
           if (cv === BREAK)
             return BREAK;
           else if (cv === REMOVE)
@@ -7024,17 +7024,17 @@ var require_visit = __commonJS({
     visitAsync.BREAK = BREAK;
     visitAsync.SKIP = SKIP;
     visitAsync.REMOVE = REMOVE;
-    async function visitAsync_(key, node, visitor, path17) {
-      const ctrl = await callVisitor(key, node, visitor, path17);
+    async function visitAsync_(key, node, visitor, path23) {
+      const ctrl = await callVisitor(key, node, visitor, path23);
       if (identity.isNode(ctrl) || identity.isPair(ctrl)) {
-        replaceNode(key, path17, ctrl);
-        return visitAsync_(key, ctrl, visitor, path17);
+        replaceNode(key, path23, ctrl);
+        return visitAsync_(key, ctrl, visitor, path23);
       }
       if (typeof ctrl !== "symbol") {
         if (identity.isCollection(node)) {
-          path17 = Object.freeze(path17.concat(node));
+          path23 = Object.freeze(path23.concat(node));
           for (let i = 0; i < node.items.length; ++i) {
-            const ci = await visitAsync_(i, node.items[i], visitor, path17);
+            const ci = await visitAsync_(i, node.items[i], visitor, path23);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -7045,13 +7045,13 @@ var require_visit = __commonJS({
             }
           }
         } else if (identity.isPair(node)) {
-          path17 = Object.freeze(path17.concat(node));
-          const ck = await visitAsync_("key", node.key, visitor, path17);
+          path23 = Object.freeze(path23.concat(node));
+          const ck = await visitAsync_("key", node.key, visitor, path23);
           if (ck === BREAK)
             return BREAK;
           else if (ck === REMOVE)
             node.key = null;
-          const cv = await visitAsync_("value", node.value, visitor, path17);
+          const cv = await visitAsync_("value", node.value, visitor, path23);
           if (cv === BREAK)
             return BREAK;
           else if (cv === REMOVE)
@@ -7078,23 +7078,23 @@ var require_visit = __commonJS({
       }
       return visitor;
     }
-    function callVisitor(key, node, visitor, path17) {
+    function callVisitor(key, node, visitor, path23) {
       if (typeof visitor === "function")
-        return visitor(key, node, path17);
+        return visitor(key, node, path23);
       if (identity.isMap(node))
-        return visitor.Map?.(key, node, path17);
+        return visitor.Map?.(key, node, path23);
       if (identity.isSeq(node))
-        return visitor.Seq?.(key, node, path17);
+        return visitor.Seq?.(key, node, path23);
       if (identity.isPair(node))
-        return visitor.Pair?.(key, node, path17);
+        return visitor.Pair?.(key, node, path23);
       if (identity.isScalar(node))
-        return visitor.Scalar?.(key, node, path17);
+        return visitor.Scalar?.(key, node, path23);
       if (identity.isAlias(node))
-        return visitor.Alias?.(key, node, path17);
+        return visitor.Alias?.(key, node, path23);
       return void 0;
     }
-    function replaceNode(key, path17, node) {
-      const parent = path17[path17.length - 1];
+    function replaceNode(key, path23, node) {
+      const parent = path23[path23.length - 1];
       if (identity.isCollection(parent)) {
         parent.items[key] = node;
       } else if (identity.isPair(parent)) {
@@ -7704,10 +7704,10 @@ var require_Collection = __commonJS({
     var createNode = require_createNode();
     var identity = require_identity();
     var Node = require_Node();
-    function collectionFromPath(schema, path17, value) {
+    function collectionFromPath(schema, path23, value) {
       let v = value;
-      for (let i = path17.length - 1; i >= 0; --i) {
-        const k = path17[i];
+      for (let i = path23.length - 1; i >= 0; --i) {
+        const k = path23[i];
         if (typeof k === "number" && Number.isInteger(k) && k >= 0) {
           const a = [];
           a[k] = v;
@@ -7726,7 +7726,7 @@ var require_Collection = __commonJS({
         sourceObjects: /* @__PURE__ */ new Map()
       });
     }
-    var isEmptyPath = (path17) => path17 == null || typeof path17 === "object" && !!path17[Symbol.iterator]().next().done;
+    var isEmptyPath = (path23) => path23 == null || typeof path23 === "object" && !!path23[Symbol.iterator]().next().done;
     var Collection = class extends Node.NodeBase {
       constructor(type, schema) {
         super(type);
@@ -7756,11 +7756,11 @@ var require_Collection = __commonJS({
        * be a Pair instance or a `{ key, value }` object, which may not have a key
        * that already exists in the map.
        */
-      addIn(path17, value) {
-        if (isEmptyPath(path17))
+      addIn(path23, value) {
+        if (isEmptyPath(path23))
           this.add(value);
         else {
-          const [key, ...rest] = path17;
+          const [key, ...rest] = path23;
           const node = this.get(key, true);
           if (identity.isCollection(node))
             node.addIn(rest, value);
@@ -7774,8 +7774,8 @@ var require_Collection = __commonJS({
        * Removes a value from the collection.
        * @returns `true` if the item was found and removed.
        */
-      deleteIn(path17) {
-        const [key, ...rest] = path17;
+      deleteIn(path23) {
+        const [key, ...rest] = path23;
         if (rest.length === 0)
           return this.delete(key);
         const node = this.get(key, true);
@@ -7789,8 +7789,8 @@ var require_Collection = __commonJS({
        * scalar values from their surrounding node; to disable set `keepScalar` to
        * `true` (collections are always returned intact).
        */
-      getIn(path17, keepScalar) {
-        const [key, ...rest] = path17;
+      getIn(path23, keepScalar) {
+        const [key, ...rest] = path23;
         const node = this.get(key, true);
         if (rest.length === 0)
           return !keepScalar && identity.isScalar(node) ? node.value : node;
@@ -7808,8 +7808,8 @@ var require_Collection = __commonJS({
       /**
        * Checks if the collection includes a value with the key `key`.
        */
-      hasIn(path17) {
-        const [key, ...rest] = path17;
+      hasIn(path23) {
+        const [key, ...rest] = path23;
         if (rest.length === 0)
           return this.has(key);
         const node = this.get(key, true);
@@ -7819,8 +7819,8 @@ var require_Collection = __commonJS({
        * Sets a value in this collection. For `!!set`, `value` needs to be a
        * boolean to add/remove the item from the set.
        */
-      setIn(path17, value) {
-        const [key, ...rest] = path17;
+      setIn(path23, value) {
+        const [key, ...rest] = path23;
         if (rest.length === 0) {
           this.set(key, value);
         } else {
@@ -9550,8 +9550,8 @@ ${cn.comment}` : item.comment;
     }
     function createPairs(schema, iterable, ctx) {
       const { replacer } = ctx;
-      const pairs2 = new YAMLSeq.YAMLSeq(schema);
-      pairs2.tag = "tag:yaml.org,2002:pairs";
+      const pairs3 = new YAMLSeq.YAMLSeq(schema);
+      pairs3.tag = "tag:yaml.org,2002:pairs";
       let i = 0;
       if (iterable && Symbol.iterator in Object(iterable))
         for (let it of iterable) {
@@ -9575,11 +9575,11 @@ ${cn.comment}` : item.comment;
           } else {
             key = it;
           }
-          pairs2.items.push(Pair.createPair(key, value, ctx));
+          pairs3.items.push(Pair.createPair(key, value, ctx));
         }
-      return pairs2;
+      return pairs3;
     }
-    var pairs = {
+    var pairs2 = {
       collection: "seq",
       default: false,
       tag: "tag:yaml.org,2002:pairs",
@@ -9587,7 +9587,7 @@ ${cn.comment}` : item.comment;
       createNode: createPairs
     };
     exports.createPairs = createPairs;
-    exports.pairs = pairs;
+    exports.pairs = pairs2;
     exports.resolvePairs = resolvePairs;
   }
 });
@@ -9600,7 +9600,7 @@ var require_omap = __commonJS({
     var toJS = require_toJS();
     var YAMLMap = require_YAMLMap();
     var YAMLSeq = require_YAMLSeq();
-    var pairs = require_pairs();
+    var pairs2 = require_pairs();
     var YAMLOMap = class _YAMLOMap extends YAMLSeq.YAMLSeq {
       constructor() {
         super();
@@ -9636,7 +9636,7 @@ var require_omap = __commonJS({
         return map;
       }
       static from(schema, iterable, ctx) {
-        const pairs$1 = pairs.createPairs(schema, iterable, ctx);
+        const pairs$1 = pairs2.createPairs(schema, iterable, ctx);
         const omap2 = new this();
         omap2.items = pairs$1.items;
         return omap2;
@@ -9650,7 +9650,7 @@ var require_omap = __commonJS({
       default: false,
       tag: "tag:yaml.org,2002:omap",
       resolve(seq, onError) {
-        const pairs$1 = pairs.resolvePairs(seq, onError);
+        const pairs$1 = pairs2.resolvePairs(seq, onError);
         const seenKeys = [];
         for (const { key } of pairs$1.items) {
           if (identity.isScalar(key)) {
@@ -10021,7 +10021,7 @@ var require_schema3 = __commonJS({
     var int2 = require_int2();
     var merge2 = require_merge();
     var omap = require_omap();
-    var pairs = require_pairs();
+    var pairs2 = require_pairs();
     var set = require_set();
     var timestamp = require_timestamp();
     var schema = [
@@ -10041,7 +10041,7 @@ var require_schema3 = __commonJS({
       binary.binary,
       merge2.merge,
       omap.omap,
-      pairs.pairs,
+      pairs2.pairs,
       set.set,
       timestamp.intTime,
       timestamp.floatTime,
@@ -10067,7 +10067,7 @@ var require_tags = __commonJS({
     var binary = require_binary();
     var merge2 = require_merge();
     var omap = require_omap();
-    var pairs = require_pairs();
+    var pairs2 = require_pairs();
     var schema$2 = require_schema3();
     var set = require_set();
     var timestamp = require_timestamp();
@@ -10093,7 +10093,7 @@ var require_tags = __commonJS({
       merge: merge2.merge,
       null: _null4.nullTag,
       omap: omap.omap,
-      pairs: pairs.pairs,
+      pairs: pairs2.pairs,
       seq: seq.seq,
       set: set.set,
       timestamp: timestamp.timestamp
@@ -10102,7 +10102,7 @@ var require_tags = __commonJS({
       "tag:yaml.org,2002:binary": binary.binary,
       "tag:yaml.org,2002:merge": merge2.merge,
       "tag:yaml.org,2002:omap": omap.omap,
-      "tag:yaml.org,2002:pairs": pairs.pairs,
+      "tag:yaml.org,2002:pairs": pairs2.pairs,
       "tag:yaml.org,2002:set": set.set,
       "tag:yaml.org,2002:timestamp": timestamp.timestamp
     };
@@ -10335,9 +10335,9 @@ var require_Document = __commonJS({
           this.contents.add(value);
       }
       /** Adds a value to the document. */
-      addIn(path17, value) {
+      addIn(path23, value) {
         if (assertCollection(this.contents))
-          this.contents.addIn(path17, value);
+          this.contents.addIn(path23, value);
       }
       /**
        * Create a new `Alias` node, ensuring that the target `node` has the required anchor.
@@ -10412,14 +10412,14 @@ var require_Document = __commonJS({
        * Removes a value from the document.
        * @returns `true` if the item was found and removed.
        */
-      deleteIn(path17) {
-        if (Collection.isEmptyPath(path17)) {
+      deleteIn(path23) {
+        if (Collection.isEmptyPath(path23)) {
           if (this.contents == null)
             return false;
           this.contents = null;
           return true;
         }
-        return assertCollection(this.contents) ? this.contents.deleteIn(path17) : false;
+        return assertCollection(this.contents) ? this.contents.deleteIn(path23) : false;
       }
       /**
        * Returns item at `key`, or `undefined` if not found. By default unwraps
@@ -10434,10 +10434,10 @@ var require_Document = __commonJS({
        * scalar values from their surrounding node; to disable set `keepScalar` to
        * `true` (collections are always returned intact).
        */
-      getIn(path17, keepScalar) {
-        if (Collection.isEmptyPath(path17))
+      getIn(path23, keepScalar) {
+        if (Collection.isEmptyPath(path23))
           return !keepScalar && identity.isScalar(this.contents) ? this.contents.value : this.contents;
-        return identity.isCollection(this.contents) ? this.contents.getIn(path17, keepScalar) : void 0;
+        return identity.isCollection(this.contents) ? this.contents.getIn(path23, keepScalar) : void 0;
       }
       /**
        * Checks if the document includes a value with the key `key`.
@@ -10448,10 +10448,10 @@ var require_Document = __commonJS({
       /**
        * Checks if the document includes a value at `path`.
        */
-      hasIn(path17) {
-        if (Collection.isEmptyPath(path17))
+      hasIn(path23) {
+        if (Collection.isEmptyPath(path23))
           return this.contents !== void 0;
-        return identity.isCollection(this.contents) ? this.contents.hasIn(path17) : false;
+        return identity.isCollection(this.contents) ? this.contents.hasIn(path23) : false;
       }
       /**
        * Sets a value in this document. For `!!set`, `value` needs to be a
@@ -10468,13 +10468,13 @@ var require_Document = __commonJS({
        * Sets a value in this document. For `!!set`, `value` needs to be a
        * boolean to add/remove the item from the set.
        */
-      setIn(path17, value) {
-        if (Collection.isEmptyPath(path17)) {
+      setIn(path23, value) {
+        if (Collection.isEmptyPath(path23)) {
           this.contents = value;
         } else if (this.contents == null) {
-          this.contents = Collection.collectionFromPath(this.schema, Array.from(path17), value);
+          this.contents = Collection.collectionFromPath(this.schema, Array.from(path23), value);
         } else if (assertCollection(this.contents)) {
-          this.contents.setIn(path17, value);
+          this.contents.setIn(path23, value);
         }
       }
       /**
@@ -12434,9 +12434,9 @@ var require_cst_visit = __commonJS({
     visit.BREAK = BREAK;
     visit.SKIP = SKIP;
     visit.REMOVE = REMOVE;
-    visit.itemAtPath = (cst, path17) => {
+    visit.itemAtPath = (cst, path23) => {
       let item = cst;
-      for (const [field, index] of path17) {
+      for (const [field, index] of path23) {
         const tok = item?.[field];
         if (tok && "items" in tok) {
           item = tok.items[index];
@@ -12445,23 +12445,23 @@ var require_cst_visit = __commonJS({
       }
       return item;
     };
-    visit.parentCollection = (cst, path17) => {
-      const parent = visit.itemAtPath(cst, path17.slice(0, -1));
-      const field = path17[path17.length - 1][0];
+    visit.parentCollection = (cst, path23) => {
+      const parent = visit.itemAtPath(cst, path23.slice(0, -1));
+      const field = path23[path23.length - 1][0];
       const coll = parent?.[field];
       if (coll && "items" in coll)
         return coll;
       throw new Error("Parent collection not found");
     };
-    function _visit(path17, item, visitor) {
-      let ctrl = visitor(item, path17);
+    function _visit(path23, item, visitor) {
+      let ctrl = visitor(item, path23);
       if (typeof ctrl === "symbol")
         return ctrl;
       for (const field of ["key", "value"]) {
         const token = item[field];
         if (token && "items" in token) {
           for (let i = 0; i < token.items.length; ++i) {
-            const ci = _visit(Object.freeze(path17.concat([[field, i]])), token.items[i], visitor);
+            const ci = _visit(Object.freeze(path23.concat([[field, i]])), token.items[i], visitor);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -12472,10 +12472,10 @@ var require_cst_visit = __commonJS({
             }
           }
           if (typeof ctrl === "function" && field === "key")
-            ctrl = ctrl(item, path17);
+            ctrl = ctrl(item, path23);
         }
       }
-      return typeof ctrl === "function" ? ctrl(item, path17) : ctrl;
+      return typeof ctrl === "function" ? ctrl(item, path23) : ctrl;
     }
     exports.visit = visit;
   }
@@ -13777,14 +13777,14 @@ var require_parser = __commonJS({
             case "scalar":
             case "single-quoted-scalar":
             case "double-quoted-scalar": {
-              const fs17 = this.flowScalar(this.type);
+              const fs23 = this.flowScalar(this.type);
               if (atNextItem || it.value) {
-                map.items.push({ start, key: fs17, sep: [] });
+                map.items.push({ start, key: fs23, sep: [] });
                 this.onKeyLine = true;
               } else if (it.sep) {
-                this.stack.push(fs17);
+                this.stack.push(fs23);
               } else {
-                Object.assign(it, { key: fs17, sep: [] });
+                Object.assign(it, { key: fs23, sep: [] });
                 this.onKeyLine = true;
               }
               return;
@@ -13912,13 +13912,13 @@ var require_parser = __commonJS({
             case "scalar":
             case "single-quoted-scalar":
             case "double-quoted-scalar": {
-              const fs17 = this.flowScalar(this.type);
+              const fs23 = this.flowScalar(this.type);
               if (!it || it.value)
-                fc.items.push({ start: [], key: fs17, sep: [] });
+                fc.items.push({ start: [], key: fs23, sep: [] });
               else if (it.sep)
-                this.stack.push(fs17);
+                this.stack.push(fs23);
               else
-                Object.assign(it, { key: fs17, sep: [] });
+                Object.assign(it, { key: fs23, sep: [] });
               return;
             }
             case "flow-map-end":
@@ -14126,7 +14126,7 @@ var require_public_api = __commonJS({
       }
       return doc;
     }
-    function parse5(src, reviver, options) {
+    function parse6(src, reviver, options) {
       let _reviver = void 0;
       if (typeof reviver === "function") {
         _reviver = reviver;
@@ -14167,7 +14167,7 @@ var require_public_api = __commonJS({
         return value.toString(options);
       return new Document.Document(value, _replacer, options).toString(options);
     }
-    exports.parse = parse5;
+    exports.parse = parse6;
     exports.parseAllDocuments = parseAllDocuments;
     exports.parseDocument = parseDocument;
     exports.stringify = stringify3;
@@ -14585,8 +14585,8 @@ function getErrorMap() {
 
 // node_modules/zod/v3/helpers/parseUtil.js
 var makeIssue = (params) => {
-  const { data, path: path17, errorMaps, issueData } = params;
-  const fullPath = [...path17, ...issueData.path || []];
+  const { data, path: path23, errorMaps, issueData } = params;
+  const fullPath = [...path23, ...issueData.path || []];
   const fullIssue = {
     ...issueData,
     path: fullPath
@@ -14651,9 +14651,9 @@ var ParseStatus = class _ParseStatus {
     }
     return { status: status.value, value: arrayValue };
   }
-  static async mergeObjectAsync(status, pairs) {
+  static async mergeObjectAsync(status, pairs2) {
     const syncPairs = [];
-    for (const pair of pairs) {
+    for (const pair of pairs2) {
       const key = await pair.key;
       const value = await pair.value;
       syncPairs.push({
@@ -14663,9 +14663,9 @@ var ParseStatus = class _ParseStatus {
     }
     return _ParseStatus.mergeObjectSync(status, syncPairs);
   }
-  static mergeObjectSync(status, pairs) {
+  static mergeObjectSync(status, pairs2) {
     const finalObject = {};
-    for (const pair of pairs) {
+    for (const pair of pairs2) {
       const { key, value } = pair;
       if (key.status === "aborted")
         return INVALID;
@@ -14701,11 +14701,11 @@ var errorUtil;
 
 // node_modules/zod/v3/types.js
 var ParseInputLazyPath = class {
-  constructor(parent, value, path17, key) {
+  constructor(parent, value, path23, key) {
     this._cachedPath = [];
     this.parent = parent;
     this.data = value;
-    this._path = path17;
+    this._path = path23;
     this._key = key;
   }
   get path() {
@@ -16510,11 +16510,11 @@ var ZodObject = class _ZodObject extends ZodType {
         }
       }
     }
-    const pairs = [];
+    const pairs2 = [];
     for (const key of shapeKeys) {
       const keyValidator = shape[key];
       const value = ctx.data[key];
-      pairs.push({
+      pairs2.push({
         key: { status: "valid", value: key },
         value: keyValidator._parse(new ParseInputLazyPath(ctx, value, ctx.path, key)),
         alwaysSet: key in ctx.data
@@ -16524,7 +16524,7 @@ var ZodObject = class _ZodObject extends ZodType {
       const unknownKeys = this._def.unknownKeys;
       if (unknownKeys === "passthrough") {
         for (const key of extraKeys) {
-          pairs.push({
+          pairs2.push({
             key: { status: "valid", value: key },
             value: { status: "valid", value: ctx.data[key] }
           });
@@ -16545,7 +16545,7 @@ var ZodObject = class _ZodObject extends ZodType {
       const catchall = this._def.catchall;
       for (const key of extraKeys) {
         const value = ctx.data[key];
-        pairs.push({
+        pairs2.push({
           key: { status: "valid", value: key },
           value: catchall._parse(
             new ParseInputLazyPath(ctx, value, ctx.path, key)
@@ -16558,7 +16558,7 @@ var ZodObject = class _ZodObject extends ZodType {
     if (ctx.common.async) {
       return Promise.resolve().then(async () => {
         const syncPairs = [];
-        for (const pair of pairs) {
+        for (const pair of pairs2) {
           const key = await pair.key;
           const value = await pair.value;
           syncPairs.push({
@@ -16572,7 +16572,7 @@ var ZodObject = class _ZodObject extends ZodType {
         return ParseStatus.mergeObjectSync(status, syncPairs);
       });
     } else {
-      return ParseStatus.mergeObjectSync(status, pairs);
+      return ParseStatus.mergeObjectSync(status, pairs2);
     }
   }
   get shape() {
@@ -17185,20 +17185,20 @@ var ZodRecord = class _ZodRecord extends ZodType {
       });
       return INVALID;
     }
-    const pairs = [];
+    const pairs2 = [];
     const keyType = this._def.keyType;
     const valueType = this._def.valueType;
     for (const key in ctx.data) {
-      pairs.push({
+      pairs2.push({
         key: keyType._parse(new ParseInputLazyPath(ctx, key, ctx.path, key)),
         value: valueType._parse(new ParseInputLazyPath(ctx, ctx.data[key], ctx.path, key)),
         alwaysSet: key in ctx.data
       });
     }
     if (ctx.common.async) {
-      return ParseStatus.mergeObjectAsync(status, pairs);
+      return ParseStatus.mergeObjectAsync(status, pairs2);
     } else {
-      return ParseStatus.mergeObjectSync(status, pairs);
+      return ParseStatus.mergeObjectSync(status, pairs2);
     }
   }
   get element() {
@@ -17240,7 +17240,7 @@ var ZodMap = class extends ZodType {
     }
     const keyType = this._def.keyType;
     const valueType = this._def.valueType;
-    const pairs = [...ctx.data.entries()].map(([key, value], index) => {
+    const pairs2 = [...ctx.data.entries()].map(([key, value], index) => {
       return {
         key: keyType._parse(new ParseInputLazyPath(ctx, key, ctx.path, [index, "key"])),
         value: valueType._parse(new ParseInputLazyPath(ctx, value, ctx.path, [index, "value"]))
@@ -17249,7 +17249,7 @@ var ZodMap = class extends ZodType {
     if (ctx.common.async) {
       const finalMap = /* @__PURE__ */ new Map();
       return Promise.resolve().then(async () => {
-        for (const pair of pairs) {
+        for (const pair of pairs2) {
           const key = await pair.key;
           const value = await pair.value;
           if (key.status === "aborted" || value.status === "aborted") {
@@ -17264,7 +17264,7 @@ var ZodMap = class extends ZodType {
       });
     } else {
       const finalMap = /* @__PURE__ */ new Map();
-      for (const pair of pairs) {
+      for (const pair of pairs2) {
         const key = pair.key;
         const value = pair.value;
         if (key.status === "aborted" || value.status === "aborted") {
@@ -18344,10 +18344,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj, path17) {
-  if (!path17)
+function getElementAtPath(obj, path23) {
+  if (!path23)
     return obj;
-  return path17.reduce((acc, key) => acc?.[key], obj);
+  return path23.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -18756,11 +18756,11 @@ function explicitlyAborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path17, issues) {
+function prefixIssues(path23, issues) {
   return issues.map((iss) => {
     var _a3;
     (_a3 = iss).path ?? (_a3.path = []);
-    iss.path.unshift(path17);
+    iss.path.unshift(path23);
     return iss;
   });
 }
@@ -18907,16 +18907,16 @@ function flattenError(error2, mapper = (issue2) => issue2.message) {
 }
 function formatError(error2, mapper = (issue2) => issue2.message) {
   const fieldErrors = { _errors: [] };
-  const processError = (error3, path17 = []) => {
+  const processError = (error3, path23 = []) => {
     for (const issue2 of error3.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path17, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path23, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path17, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path23, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path17, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path23, ...issue2.path]);
       } else {
-        const fullpath = [...path17, ...issue2.path];
+        const fullpath = [...path23, ...issue2.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue2));
         } else {
@@ -18943,8 +18943,8 @@ function formatError(error2, mapper = (issue2) => issue2.message) {
 }
 function toDotPath(_path) {
   const segs = [];
-  const path17 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
-  for (const seg of path17) {
+  const path23 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
+  for (const seg of path23) {
     if (typeof seg === "number")
       segs.push(`[${seg}]`);
     else if (typeof seg === "symbol")
@@ -29369,7 +29369,28 @@ var AgentResultSchema = strictObject({
   evidence: array(EvidenceSchema),
   findings: array(FindingSchema),
   files_touched: array(string2().min(1)),
-  next_hint: string2().min(1).nullable().default(null)
+  next_hint: string2().min(1).nullable().default(null),
+  /**
+   * Which of this run's pinned skill guidance (`skill-selection.json`, see
+   * `ops/run.ts`) this agent actually followed — the dispatch-side half of
+   * dynamic skill selection: routing decides what an agent is *offered*, and
+   * this is the agent's own account of what it *used*, so the two can be
+   * compared rather than one merely trusted for the other.
+   *
+   * `IdSchema`, and not a free string, because `runLog` joins this list against
+   * that manifest's `skillIds` — which are `IdSchema` — and refuses an entry it
+   * did not select. A value outside that shape could never match one by
+   * construction, so accepting it would only ever record an uncheckable claim
+   * wearing the form of a checkable one; `../../etc/passwd` is what that looks
+   * like when a model writes it.
+   *
+   * Defaulted for the reason `next_hint` above is: `AgentResultSchema` is
+   * strict, so a result written before this field existed — every one on disk
+   * right now — would otherwise fail to parse on the next read. The same
+   * default is what lets an agent that this run handed no skills at all stay
+   * silent rather than write out an empty list to satisfy the schema.
+   */
+  skills_used: array(IdSchema).default([])
 });
 var RosterSchema = strictObject({
   cycle: number2().int().positive(),
@@ -29419,95 +29440,6 @@ function parseAgentResult(input) {
   if (parsed.success) return { ok: true, value: parsed.data };
   return { ok: false, error: prettifyError(parsed.error) };
 }
-
-// src/schemas/memory.ts
-var MemoryKindSchema = _enum(["decision", "lesson", "pattern"]);
-var MemoryIdSchema = string2().regex(/^M\d{3}$/, "a memory id looks like M001");
-var MAX_MEMORY_NUMBER = 999;
-var TITLE_MAX = 200;
-var TAG_MAX = 40;
-var TAGS_MAX = 10;
-var MemoryTitleSchema = string2().trim().min(1).max(TITLE_MAX, "a memory title is one line \u2014 put the detail in the body");
-var MemoryTagsSchema = array(string2().trim().min(1).max(TAG_MAX)).max(TAGS_MAX);
-var MEMORY_BODY_MAX = 2e4;
-var MemoryBodySchema = string2().trim().min(1).max(
-  MEMORY_BODY_MAX,
-  `a memory body runs to ${MEMORY_BODY_MAX} characters \u2014 record the conclusion, not the transcript`
-);
-var MemoryFrontmatterSchema = strictObject({
-  id: MemoryIdSchema,
-  kind: MemoryKindSchema,
-  title: MemoryTitleSchema,
-  at: iso_exports2.datetime(),
-  tags: MemoryTagsSchema.default([]),
-  /** The run that produced it, or null when a person wrote it directly. */
-  run: string2().min(1).nullable().default(null)
-});
-
-// src/schemas/plan.ts
-var StoryStatusSchema = _enum(["todo", "doing", "done", "blocked"]);
-var PlanIdSchema = string2().regex(/^P\d{3}$/, "a plan id looks like P001");
-var StoryIdSchema = string2().regex(/^P\d{3}-S\d{2}$/, "a story id looks like P001-S02");
-var ApprovalDecisionSchema = _enum(["approved", "rejected", "changes_requested"]);
-var ApprovalSchema = strictObject({
-  decision: ApprovalDecisionSchema,
-  /** Who decided. Free text: the engine cannot verify it, and pretending otherwise would be worse. */
-  by: string2().min(1),
-  at: iso_exports2.datetime(),
-  /** The approver's own words, kept so the approval is auditable rather than a bare flag. */
-  note: string2().min(1).nullable().default(null)
-});
-var PlanFrontmatterSchema = strictObject({
-  id: PlanIdSchema,
-  /** Also reaches the filesystem: the directory is `<id>-<slug>`. */
-  slug: IdSchema,
-  title: string2().min(1),
-  created_at: iso_exports2.datetime(),
-  /**
-   * The default is load-bearing, as it was for `last_fingerprint` and
-   * `reproduction`: the schema is strict, so without it every PLAN.md written
-   * before this field existed would fail validation on read.
-   */
-  approval: ApprovalSchema.nullable().default(null)
-});
-var StoryFrontmatterSchema = strictObject({
-  id: StoryIdSchema,
-  plan: PlanIdSchema,
-  /**
-   * Bounded because it reaches the filesystem: the story file is named
-   * `<id>-<slugified title>.md`. The slug is truncated as well, so this bound
-   * is about the caller getting a validation error naming the field rather
-   * than a title that quietly loses most of itself.
-   */
-  title: string2().min(1).max(200),
-  status: StoryStatusSchema,
-  /** Drives the conditional UI specialists in a later milestone. */
-  ui: boolean2().default(false),
-  depends_on: array(StoryIdSchema).default([]),
-  acceptance: array(string2().min(1)).default([]),
-  /** Run directory holding the proof this story is done. Null until it is. */
-  evidence: string2().min(1).nullable().default(null)
-}).refine((story) => story.id.startsWith(`${story.plan}-`), {
-  error: "a story id must begin with its plan id",
-  path: ["id"]
-});
-var ManifestEntrySchema = strictObject({
-  id: StoryIdSchema,
-  title: string2().min(1),
-  status: StoryStatusSchema,
-  ui: boolean2(),
-  depends_on: array(StoryIdSchema),
-  /** Relative to the plan directory. */
-  file: string2().min(1)
-});
-var ManifestSchema = strictObject({
-  schema: literal(1),
-  plan: PlanIdSchema,
-  slug: IdSchema,
-  title: string2().min(1),
-  generated_at: iso_exports2.datetime(),
-  stories: array(ManifestEntrySchema)
-});
 
 // src/schemas/config.ts
 var SpecialistModeSchema = _enum(["auto", "always", "never"]);
@@ -29605,6 +29537,73 @@ var VerifySchema = strictObject({
     build: array(string2().min(1)).default([])
   }).prefault({})
 });
+var FeatureDiscoveryModeSchema = _enum(["always", "ask", "off"]);
+var DiscoveryCompletionSchema = _enum(["auto-plan", "review", "save-only"]);
+var UncertainConcurrencySchema = _enum(["sequential", "ask", "parallel"]);
+var AfterPlanApprovalSchema = _enum(["auto", "manual"]);
+var SkillSourceSchema = _enum(["github", "registry", "web"]);
+var SkillUpdateModeSchema = _enum(["auto", "review", "pinned"]);
+var OrchestrationSchema = strictObject({
+  profile: strictObject({
+    /**
+     * May a scan activate a component map with nobody accepting it?
+     *
+     * Off by default. An accepted profile is what every later run routes on,
+     * so a project that gains one without a person looking has had its
+     * routing decided by a directory walk.
+     */
+    auto_accept: boolean2().default(false)
+  }).prefault({}),
+  discovery: strictObject({
+    /**
+     * Deliberately `off`.
+     *
+     * The compatibility rule this whole feature ships under is that an
+     * existing project's plan flow is unchanged by it landing. Any other
+     * default would silently change what `/mjloop:plan` does in every
+     * already-provisioned project the moment the engine is upgraded — the
+     * command would start asking questions nobody configured it to ask.
+     * Turning it on is a decision a project makes, once, in writing.
+     */
+    mode: FeatureDiscoveryModeSchema.default("off"),
+    /**
+     * A ceiling on questions, not a target. The bound is enforced here rather
+     * than at the caller because `config.yaml` is hand-edited: a `0` would
+     * make a mode of `always` ask nothing and look like a broken feature, and
+     * a `200` is an interview no person finishes.
+     */
+    question_budget: number2().int().min(1).max(20).default(8),
+    completion: DiscoveryCompletionSchema.default("review")
+  }).prefault({}),
+  execution: strictObject({
+    after_plan_approval: AfterPlanApprovalSchema.default("manual"),
+    uncertain_concurrency: UncertainConcurrencySchema.default("sequential"),
+    /**
+     * How many times a failed story may be re-attempted before the run stops
+     * and says so. `0` is a real setting — it means never repair — which is
+     * why the bound starts there rather than at 1.
+     */
+    repair_attempts: number2().int().min(0).max(5).default(1)
+  }).prefault({}),
+  quality: strictObject({
+    independent_plan_review: boolean2().default(false),
+    independent_verification: boolean2().default(false)
+  }).prefault({}),
+  skills: strictObject({
+    /**
+     * An empty list is meaningful and permitted: it is how a project says no
+     * skill may be discovered from outside it at all.
+     */
+    sources: array(SkillSourceSchema).default(["github"]),
+    /**
+     * A registry named here is a place this project will fetch executable
+     * instructions from, so plain `http://` is refused at the schema — the
+     * one place a hand-edited, repository-travelling file can be caught.
+     */
+    trusted_registries: array(string2().min(1).startsWith("https://", "a trusted registry must be an https:// URL")).default([]),
+    update_mode: SkillUpdateModeSchema.default("review")
+  }).prefault({})
+});
 var LEGACY_CONFIG_KEYS = ["custom_dirs"];
 var ConfigSchema = strictObject({
   version: literal(1),
@@ -29654,8 +29653,26 @@ var ConfigSchema = strictObject({
      * always proceeds is a prompt nobody reads.
      */
     preflight: _enum(["human", "auto"]).default("auto")
-  }).default({ plan_approval: "human", commit: "auto", preflight: "auto" })
+  }).default({ plan_approval: "human", commit: "auto", preflight: "auto" }),
+  /** `.prefault({})` for the reason `verify` above uses it, and because this
+   * key is absent from every config written before it existed. */
+  orchestration: OrchestrationSchema.prefault({})
 }).superRefine((config2, ctx) => {
+  const { discovery, skills } = config2.orchestration;
+  if (discovery.completion === "auto-plan" && discovery.mode === "off") {
+    ctx.addIssue({
+      code: "custom",
+      path: ["orchestration", "discovery", "completion"],
+      message: 'orchestration.discovery.completion is "auto-plan" but orchestration.discovery.mode is "off" \u2014 auto-plan names a start driven by an approved feature brief, and a project with discovery off never produces one, so planning would silently never begin the way this setting promises. Set discovery.mode to "ask" or "always", or choose a completion of "review" or "save-only".'
+    });
+  }
+  if (skills.sources.includes("registry") && skills.trusted_registries.length === 0) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["orchestration", "skills", "sources"],
+      message: `orchestration.skills.sources names "registry" but orchestration.skills.trusted_registries is empty \u2014 a source that names no registry admits nothing, so this project believes it enabled a source that can never return a skill. Add the registry's https:// URL to trusted_registries, or drop "registry" from sources.`
+    });
+  }
   const forbidden = new Set(
     Object.entries(config2.specialists).filter(([, mode]) => mode === "never").map(([name]) => name)
   );
@@ -29755,6 +29772,219 @@ function defaultConfig(verify) {
   return ConfigSchema.parse({ version: 1, verify, tracks: DEFAULT_TRACKS });
 }
 
+// src/schemas/feature.ts
+var FeatureIdSchema = string2().regex(/^F\d{3}$/, "a feature id looks like F001");
+var FeatureBriefStatusSchema = _enum(["draft", "approved", "superseded"]);
+var DecisionSchema = strictObject({
+  question: string2().min(1).max(2e3),
+  recommendation: string2().min(1).max(2e3).nullable(),
+  answer: string2().min(1).max(4e3).nullable(),
+  /** When it was asked. Stamped by the engine, never by the caller. */
+  at: iso_exports2.datetime()
+});
+var DiscoverySchema = strictObject({
+  mode: FeatureDiscoveryModeSchema,
+  /**
+   * Bounded here to the same 1..20 the project policy is bounded to. The two
+   * bounds are the same fact stated in the two places it can be violated: the
+   * config schema catches a hand-edited `question_budget`, and this one catches
+   * a per-feature override that never went through the config at all.
+   */
+  questionBudget: number2().int().min(1).max(20),
+  /** When the interview stopped asking. Null while it is still running. */
+  completedAt: iso_exports2.datetime().nullable()
+});
+var FeatureApprovalSchema = strictObject({
+  by: string2().min(1),
+  at: iso_exports2.datetime(),
+  /** The approver's own words, so the approval is auditable rather than a flag. */
+  note: string2().nullable()
+});
+var FeatureBriefSchema = strictObject({
+  schema: literal(1),
+  id: FeatureIdSchema,
+  revision: number2().int().positive(),
+  title: string2().min(1).max(200),
+  status: FeatureBriefStatusSchema,
+  problem: string2().min(1).max(2e4),
+  decisions: array(DecisionSchema),
+  acceptance: array(string2().min(1)),
+  affectedComponents: array(IdSchema),
+  /**
+   * What this brief declares itself to be about, beyond its component ids —
+   * joined against a component's `skillTags` by skill selection, for the
+   * case a component's technology cannot express: an authentication
+   * boundary is not a Flutter or a Next.js concern, it is a concern that
+   * cuts across whichever component happens to hold the login form.
+   *
+   * **Declared only, and never derived from `problem` or `acceptance`
+   * text.** A tag inferred by scanning prose for a word like
+   * "authentication" is exactly the free-form model claim skill selection
+   * is built to refuse — the interview names a tag during discovery because
+   * a person decided it belonged, or the tag is absent and no skill routes
+   * on it. Reading it back out of the words the person used to describe the
+   * problem would make that decision the model's to make after all.
+   *
+   * Defaulted for the reason every other default in this strict schema is:
+   * a brief written before this field existed would otherwise fail
+   * validation on read rather than gain the field on its next write.
+   */
+  tags: array(string2().min(1)).default([]),
+  discovery: DiscoverySchema,
+  approval: FeatureApprovalSchema.nullable(),
+  /** The revision this one replaces, or null for the first. */
+  supersedes: strictObject({ id: FeatureIdSchema, revision: number2().int().positive() }).nullable(),
+  createdAt: iso_exports2.datetime()
+}).superRefine((brief, ctx) => {
+  if (brief.status === "superseded") {
+    ctx.addIssue({
+      code: "custom",
+      path: ["status"],
+      message: 'a stored revision is only ever "draft" or "approved" \u2014 "superseded" is derived on read from the existence of a higher revision, because writing it would mean editing the immutable record it describes'
+    });
+  }
+  if (brief.status === "approved" && brief.acceptance.length === 0) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["acceptance"],
+      message: "an approved brief must carry at least one acceptance criterion \u2014 later stories plan against these, and a draft is where an empty list belongs"
+    });
+  }
+  if (brief.status === "approved" && brief.approval === null) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["approval"],
+      message: "an approved brief must record who approved it and when"
+    });
+  }
+  if (brief.status === "draft" && brief.approval !== null) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["approval"],
+      message: "a draft cannot carry an approval \u2014 approving is what makes a revision stop being a draft"
+    });
+  }
+  if (brief.revision === 1 && brief.supersedes !== null) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["supersedes"],
+      message: "the first revision of a feature supersedes nothing"
+    });
+  }
+  if (brief.revision > 1 && brief.supersedes === null) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["supersedes"],
+      message: `revision ${brief.revision} exists because it replaced an earlier one, and must name it`
+    });
+  }
+  if (brief.supersedes !== null) {
+    if (brief.supersedes.id !== brief.id) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["supersedes", "id"],
+        message: `revision ${brief.revision} of ${brief.id} cannot supersede ${brief.supersedes.id} \u2014 a successor replaces an earlier revision of its own feature`
+      });
+    }
+    if (brief.supersedes.revision >= brief.revision) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["supersedes", "revision"],
+        message: `revision ${brief.revision} cannot supersede revision ${brief.supersedes.revision} \u2014 a predecessor comes before its successor`
+      });
+    }
+  }
+});
+
+// src/schemas/memory.ts
+var MemoryKindSchema = _enum(["decision", "lesson", "pattern"]);
+var MemoryIdSchema = string2().regex(/^M\d{3}$/, "a memory id looks like M001");
+var MAX_MEMORY_NUMBER = 999;
+var TITLE_MAX = 200;
+var TAG_MAX = 40;
+var TAGS_MAX = 10;
+var MemoryTitleSchema = string2().trim().min(1).max(TITLE_MAX, "a memory title is one line \u2014 put the detail in the body");
+var MemoryTagsSchema = array(string2().trim().min(1).max(TAG_MAX)).max(TAGS_MAX);
+var MEMORY_BODY_MAX = 2e4;
+var MemoryBodySchema = string2().trim().min(1).max(
+  MEMORY_BODY_MAX,
+  `a memory body runs to ${MEMORY_BODY_MAX} characters \u2014 record the conclusion, not the transcript`
+);
+var MemoryFrontmatterSchema = strictObject({
+  id: MemoryIdSchema,
+  kind: MemoryKindSchema,
+  title: MemoryTitleSchema,
+  at: iso_exports2.datetime(),
+  tags: MemoryTagsSchema.default([]),
+  /** The run that produced it, or null when a person wrote it directly. */
+  run: string2().min(1).nullable().default(null)
+});
+
+// src/schemas/plan.ts
+var StoryStatusSchema = _enum(["todo", "doing", "done", "blocked"]);
+var PlanIdSchema = string2().regex(/^P\d{3}$/, "a plan id looks like P001");
+var StoryIdSchema = string2().regex(/^P\d{3}-S\d{2}$/, "a story id looks like P001-S02");
+var ApprovalDecisionSchema = _enum(["approved", "rejected", "changes_requested"]);
+var ApprovalSchema = strictObject({
+  decision: ApprovalDecisionSchema,
+  /** Who decided. Free text: the engine cannot verify it, and pretending otherwise would be worse. */
+  by: string2().min(1),
+  at: iso_exports2.datetime(),
+  /** The approver's own words, kept so the approval is auditable rather than a bare flag. */
+  note: string2().min(1).nullable().default(null)
+});
+var PlanFrontmatterSchema = strictObject({
+  id: PlanIdSchema,
+  /** Also reaches the filesystem: the directory is `<id>-<slug>`. */
+  slug: IdSchema,
+  title: string2().min(1),
+  created_at: iso_exports2.datetime(),
+  /**
+   * The default is load-bearing, as it was for `last_fingerprint` and
+   * `reproduction`: the schema is strict, so without it every PLAN.md written
+   * before this field existed would fail validation on read.
+   */
+  approval: ApprovalSchema.nullable().default(null)
+});
+var StoryFrontmatterSchema = strictObject({
+  id: StoryIdSchema,
+  plan: PlanIdSchema,
+  /**
+   * Bounded because it reaches the filesystem: the story file is named
+   * `<id>-<slugified title>.md`. The slug is truncated as well, so this bound
+   * is about the caller getting a validation error naming the field rather
+   * than a title that quietly loses most of itself.
+   */
+  title: string2().min(1).max(200),
+  status: StoryStatusSchema,
+  /** Drives the conditional UI specialists in a later milestone. */
+  ui: boolean2().default(false),
+  depends_on: array(StoryIdSchema).default([]),
+  acceptance: array(string2().min(1)).default([]),
+  /** Run directory holding the proof this story is done. Null until it is. */
+  evidence: string2().min(1).nullable().default(null)
+}).refine((story) => story.id.startsWith(`${story.plan}-`), {
+  error: "a story id must begin with its plan id",
+  path: ["id"]
+});
+var ManifestEntrySchema = strictObject({
+  id: StoryIdSchema,
+  title: string2().min(1),
+  status: StoryStatusSchema,
+  ui: boolean2(),
+  depends_on: array(StoryIdSchema),
+  /** Relative to the plan directory. */
+  file: string2().min(1)
+});
+var ManifestSchema = strictObject({
+  schema: literal(1),
+  plan: PlanIdSchema,
+  slug: IdSchema,
+  title: string2().min(1),
+  generated_at: iso_exports2.datetime(),
+  stories: array(ManifestEntrySchema)
+});
+
 // src/schemas/verify.ts
 var VerifySlotSchema = _enum(["test", "lint", "build"]);
 var VerifyPhaseSchema = _enum(["queued", "running", "complete"]);
@@ -29815,8 +30045,8 @@ var PinnedVerifySchema = strictObject({
 });
 
 // src/ops/init.ts
-import fs3 from "node:fs/promises";
-import path4 from "node:path";
+import fs6 from "node:fs/promises";
+import path6 from "node:path";
 
 // src/store/atomic.ts
 import { randomUUID } from "node:crypto";
@@ -29883,6 +30113,43 @@ function resolveLoopPaths(projectDir) {
     plans: path2.join(root, "plans"),
     runs: path2.join(root, "runs"),
     memory: path2.join(root, "memory"),
+    /**
+     * The project's component map: a mutable `proposed.json` a scan overwrites,
+     * and an `accepted/` directory of immutable numbered revisions.
+     *
+     * Only the directory is named here. What a revision file is called, and the
+     * fact that the accepted profile is simply the highest-numbered one rather
+     * than whatever a mutable pointer says, belong to
+     * `project-profile-store.ts` — this map is the place every path in
+     * `.mjloop/` is *rooted*, not the place any of them are interpreted.
+     */
+    profile: path2.join(root, "profile"),
+    /**
+     * The feature briefs: one directory per feature, `F001-<slug>/`, holding
+     * immutable numbered revisions of what a discovery interview decided.
+     *
+     * Named here and interpreted in `feature-store.ts`, for the reason the
+     * profile above is: this map is where every path in `.mjloop/` is *rooted*,
+     * not where any of them is given meaning. Which revision is current, and
+     * the fact that it is simply the highest-numbered one rather than whatever
+     * a mutable pointer claims, belong to the store.
+     */
+    features: path2.join(root, "features"),
+    /**
+     * This project's acceptances of packages from the shared, user-local
+     * skill library: one `<skillId>.json` per accepted skill, holding which
+     * digest this project pinned and never a path into the library itself —
+     * see `schemas/skill-acceptance.ts`. The library the digest resolves
+     * against lives under `resolveLibraryRoot` (`library-paths.ts`), which is
+     * deliberately *not* under `.mjloop/`: it is shared by every project on
+     * this machine, where this directory is this one project's own decision.
+     *
+     * Added to `PROTECTED_DIRECTORIES` below now that `mjloop-cli skills
+     * accept|disable|enable|remove` exists: that is the route back in the
+     * denial below names, and the reason the `satisfies` check on
+     * `PROTECTED_DIRECTORY_REASONS` in `cli/index.ts` was written to demand.
+     */
+    skills: path2.join(root, "skills"),
     lock: path2.join(root, ".lock"),
     /**
      * Mutual exclusion for verify *execution*, and never the same directory as
@@ -29943,87 +30210,90 @@ async function writeConfig(projectDir, config2) {
   await fs2.writeFile(file, YAML.stringify(config2, { lineWidth: 100 }), "utf8");
 }
 
-// src/ops/init.ts
-var CLAUDE_MD_SECTION = "## mjloop";
-var CLAUDE_MD_BLOCK = `${CLAUDE_MD_SECTION}
+// src/store/project-profile-store.ts
+import fs4 from "node:fs/promises";
+import path4 from "node:path";
 
-This project uses the \`mjloop\` plugin. Execution state lives in \`.mjloop/\`.
-
-- \`/mjloop:edit <request>\` \u2014 small, well-scoped change (one cycle)
-- \`/mjloop:plan <idea>\` \u2014 turn an idea into an approved plan broken into stories
-- \`/mjloop:build <what to build | P001-S02 | --next>\` \u2014 multi-cycle build, optionally against a story
-- \`/mjloop:fix <problem>\` \u2014 reproduce a defect, find the root cause, fix it
-- \`/mjloop:status\` \u2014 current track, cycle, and latest evidence
-- \`/mjloop:stop [reason]\` \u2014 halt the run and write a report
-- \`/mjloop:resume\` \u2014 continue a run that was interrupted
-- \`/mjloop:design-sync\` \u2014 extract the project's design system for the UI agents
-- \`/mjloop:web\` \u2014 dashboard: queue runs and watch each one in a terminal
-- \`/mjloop:add agent|skill|track <name>\` \u2014 scaffold a new element
-
-\`.mjloop/state.json\` is owned by the mjloop MCP server. Never edit it by hand.
-`;
-async function detectVerifyCommands(projectDir) {
-  const empty = { test: null, lint: null, build: null };
-  let scripts;
-  try {
-    const raw = await fs3.readFile(path4.join(projectDir, "package.json"), "utf8");
-    const parsed = JSON.parse(raw);
-    scripts = parsed.scripts ?? {};
-  } catch {
-    return empty;
+// src/schemas/project-profile.ts
+var ComponentTechnologySchema = _enum(["flutter", "nextjs", "python", "unknown"]);
+var ComponentRootSchema = string2().min(1).refine((root) => !root.includes("\\"), {
+  error: 'a component root is a POSIX path \u2014 "\\" is not a separator here'
+}).refine((root) => !root.startsWith("/") && !/^[A-Za-z]:/.test(root), {
+  error: "a component root is relative to the project root, never absolute"
+}).refine(
+  (root) => root === "." || root.split("/").every((segment) => segment !== "" && segment !== "." && segment !== ".."),
+  { error: 'a component root may not contain an empty, "." or ".." segment' }
+);
+var ComponentVerificationSchema = strictObject({
+  test: string2().min(1).nullable(),
+  lint: string2().min(1).nullable(),
+  build: string2().min(1).nullable()
+});
+var ProjectComponentSchema = strictObject({
+  /** Derived from `root` by the detector, and constrained by the schema every
+   * other id that reaches the filesystem goes through. */
+  id: IdSchema,
+  root: ComponentRootSchema,
+  technology: ComponentTechnologySchema,
+  verification: ComponentVerificationSchema,
+  /**
+   * The join later stories select skills on, derived from `technology`. The
+   * default is load-bearing for the reason every other default in these schemas
+   * is: the object is strict, so a record written before this field existed
+   * would fail validation on read rather than gain the field.
+   */
+  skillTags: array(string2().min(1)).default([])
+});
+var ComponentsSchema = array(ProjectComponentSchema).superRefine((components, ctx) => {
+  const seen = /* @__PURE__ */ new Set();
+  for (const [index, component] of components.entries()) {
+    if (seen.has(component.id)) {
+      ctx.addIssue({
+        code: "custom",
+        path: [index, "id"],
+        message: `two components claim the id "${component.id}" \u2014 it is what later stories join skills and verification on, so one of the two would silently never be selected`
+      });
+    }
+    seen.add(component.id);
+    const previous = components[index - 1];
+    if (previous !== void 0 && !(previous.id < component.id)) {
+      ctx.addIssue({
+        code: "custom",
+        path: [index, "id"],
+        message: `components must be sorted by id \u2014 "${component.id}" follows "${previous.id}"`
+      });
+    }
   }
-  return {
-    test: typeof scripts.test === "string" ? "npm test" : null,
-    lint: typeof scripts.lint === "string" ? "npm run lint" : null,
-    build: typeof scripts.build === "string" ? "npm run build" : null
-  };
-}
-async function initLoop(projectDir, now = () => /* @__PURE__ */ new Date()) {
-  const paths = resolveLoopPaths(projectDir);
-  const verify = await detectVerifyCommands(projectDir);
-  if (await exists(paths.state)) {
-    await ensureClaudeMdSection(projectDir);
-    return { created: [], verify, alreadyInitialised: true };
-  }
-  const created = [];
-  for (const dir of [paths.root, paths.plans, paths.runs, paths.memory]) {
-    await fs3.mkdir(dir, { recursive: true });
-    created.push(path4.relative(projectDir, dir));
-  }
-  await writeJsonAtomic(paths.state, initialState(now()));
-  created.push(path4.relative(projectDir, paths.state));
-  await writeConfig(projectDir, defaultConfig(verify));
-  created.push(path4.relative(projectDir, paths.config));
-  if (await ensureClaudeMdSection(projectDir)) created.push("CLAUDE.md");
-  return { created, verify, alreadyInitialised: false };
-}
-async function ensureClaudeMdSection(projectDir) {
-  const file = path4.join(projectDir, "CLAUDE.md");
-  let existing = "";
-  try {
-    existing = await fs3.readFile(file, "utf8");
-  } catch (error2) {
-    if (error2.code !== "ENOENT") throw error2;
-  }
-  if (existing.includes(CLAUDE_MD_SECTION)) return false;
-  const separator = existing.length === 0 ? "" : existing.endsWith("\n") ? "\n" : "\n\n";
-  await fs3.writeFile(file, `${existing}${separator}${CLAUDE_MD_BLOCK}`, "utf8");
-  return true;
-}
-async function exists(file) {
-  try {
-    await fs3.access(file);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-// src/ops/index-render.ts
-import fs6 from "node:fs/promises";
+});
+var ProposedProfileSchema = strictObject({
+  schema: literal(1),
+  generatedAt: iso_exports2.datetime(),
+  components: ComponentsSchema,
+  /**
+   * The manifest paths the detection rests on, project-relative. Recorded so a
+   * person reading a proposal can check the conclusion against the evidence
+   * rather than take the detector's word for it — including the corroborating
+   * files (a `next.config.*`, an `analysis_options.yaml`) that were consulted
+   * but were not on their own sufficient.
+   */
+  basis: array(string2().min(1))
+});
+var ProjectProfileSchema = strictObject({
+  schema: literal(1),
+  revision: number2().int().positive(),
+  /** When the scan behind these components ran, carried over from the proposal. */
+  generatedAt: iso_exports2.datetime(),
+  acceptedAt: iso_exports2.datetime(),
+  /** Who accepted it. Free text: the engine cannot verify it, and pretending
+   * otherwise would be worse — the same reason `ApprovalSchema.by` is. */
+  acceptedBy: string2().min(1),
+  components: ComponentsSchema,
+  /** The revision this one replaces, or null for the first. */
+  supersedes: number2().int().positive().nullable()
+});
 
 // src/store/lock.ts
-import fs4 from "node:fs/promises";
+import fs3 from "node:fs/promises";
 var LockTimeoutError = class extends Error {
   constructor(message) {
     super(message);
@@ -30037,7 +30307,7 @@ async function withLock(lockDir, fn, options = {}) {
   let ownedSnapshot = null;
   while (ownedSnapshot === null) {
     try {
-      await fs4.mkdir(lockDir, { recursive: false });
+      await fs3.mkdir(lockDir, { recursive: false });
       ownedSnapshot = await statSnapshot(lockDir);
     } catch (error2) {
       if (error2.code !== "EEXIST") throw error2;
@@ -30061,19 +30331,19 @@ async function withLock(lockDir, fn, options = {}) {
   } finally {
     const current = await statSnapshot(lockDir);
     if (current !== null && isSameInstance(current, ownedSnapshot)) {
-      await fs4.rm(lockDir, { recursive: true, force: true });
+      await fs3.rm(lockDir, { recursive: true, force: true });
     }
   }
 }
 async function reclaimIfSameInstance(lockDir, observed, pollMs, staleMs) {
   const reclaimMarker = `${lockDir}.reclaiming`;
   try {
-    await fs4.mkdir(reclaimMarker);
+    await fs3.mkdir(reclaimMarker);
   } catch (error2) {
     if (error2.code === "EEXIST") {
       const marker = await statSnapshot(reclaimMarker);
       if (marker !== null && marker.ageMs >= staleMs) {
-        await fs4.rm(reclaimMarker, { recursive: true, force: true });
+        await fs3.rm(reclaimMarker, { recursive: true, force: true });
       } else {
         await new Promise((resolve) => setTimeout(resolve, pollMs));
       }
@@ -30084,9 +30354,9 @@ async function reclaimIfSameInstance(lockDir, observed, pollMs, staleMs) {
   try {
     const current = await statSnapshot(lockDir);
     if (current === null || !isSameInstance(current, observed)) return;
-    await fs4.rm(lockDir, { recursive: true, force: true });
+    await fs3.rm(lockDir, { recursive: true, force: true });
   } finally {
-    await fs4.rm(reclaimMarker, { recursive: true, force: true });
+    await fs3.rm(reclaimMarker, { recursive: true, force: true });
   }
 }
 function isSameInstance(a, b) {
@@ -30094,19 +30364,489 @@ function isSameInstance(a, b) {
 }
 async function statSnapshot(lockDir) {
   try {
-    const stats = await fs4.stat(lockDir);
+    const stats = await fs3.stat(lockDir);
     return { dev: stats.dev, ino: stats.ino, birthtimeMs: stats.birthtimeMs, ageMs: Date.now() - stats.mtimeMs };
   } catch {
     return null;
   }
 }
 
-// src/store/plan-store.ts
+// src/store/precondition.ts
+var StalePreconditionError = class extends Error {
+  constructor(subject, id, actual) {
+    super(`${subject} ${id} has moved on \u2014 it is now ${actual ?? "unset"}`);
+    this.subject = subject;
+    this.id = id;
+    this.actual = actual;
+    this.name = "StalePreconditionError";
+  }
+};
+function expect(subject, id, actual, expected) {
+  if (expected === void 0) return;
+  if (actual === expected) return;
+  throw new StalePreconditionError(subject, id, actual === null || actual === void 0 ? null : String(actual));
+}
+
+// src/store/project-profile-store.ts
+var InvalidProfileRecordError = class extends Error {
+  constructor(file, detail) {
+    super(`${file} is not a valid project profile:
+${detail}`);
+    this.name = "InvalidProfileRecordError";
+  }
+};
+var ProfileRevisionExistsError = class extends Error {
+  constructor(file) {
+    super(`${file} already exists \u2014 an accepted profile revision is never rewritten`);
+    this.name = "ProfileRevisionExistsError";
+  }
+};
+var StaleProfileRevisionError = class extends StalePreconditionError {
+  constructor(actualRevision, expectedRevision) {
+    super("run", "profile revision", actualRevision === null ? null : String(actualRevision));
+    this.actualRevision = actualRevision;
+    this.expectedRevision = expectedRevision;
+    this.name = "StaleProfileRevisionError";
+    this.message = `the accepted profile revision has moved on \u2014 this acceptance was built on ${expectedRevision === null ? "no revision at all" : `revision ${expectedRevision}`}, and the project is now on ${actualRevision === null ? "no revision at all" : `revision ${actualRevision}`}`;
+  }
+};
+var RevisionSchema = number2().int().positive();
+function proposedProfileFile(projectDir) {
+  return path4.join(resolveLoopPaths(projectDir).profile, "proposed.json");
+}
+function acceptedDir(projectDir) {
+  return path4.join(resolveLoopPaths(projectDir).profile, "accepted");
+}
+function revisionFileName(revision) {
+  return `rev-${String(revision).padStart(3, "0")}.json`;
+}
+function acceptedRevisionFile(projectDir, revision) {
+  return path4.join(acceptedDir(projectDir), revisionFileName(RevisionSchema.parse(revision)));
+}
+async function writeProposedProfile(projectDir, proposed) {
+  const file = proposedProfileFile(projectDir);
+  const parsed = ProposedProfileSchema.safeParse(proposed);
+  if (!parsed.success) throw new InvalidProfileRecordError(file, prettifyError(parsed.error));
+  await writeJsonAtomic(file, parsed.data);
+}
+async function listAcceptedRevisions(projectDir) {
+  let entries;
+  try {
+    entries = await fs4.readdir(acceptedDir(projectDir), { withFileTypes: true });
+  } catch (error2) {
+    if (error2.code !== "ENOENT") throw error2;
+    return [];
+  }
+  const revisions = [];
+  for (const entry of entries) {
+    if (!entry.isFile()) continue;
+    const match = /^rev-(\d+)\.json$/.exec(entry.name);
+    if (match?.[1] === void 0) continue;
+    const revision = Number(match[1]);
+    if (!RevisionSchema.safeParse(revision).success) continue;
+    if (revisionFileName(revision) !== entry.name) continue;
+    revisions.push(revision);
+  }
+  return revisions.sort((a, b) => a - b);
+}
+async function readAcceptedRevision(projectDir, revision) {
+  const file = acceptedRevisionFile(projectDir, revision);
+  let raw;
+  try {
+    raw = await fs4.readFile(file, "utf8");
+  } catch (error2) {
+    if (error2.code === "ENOENT") return null;
+    throw error2;
+  }
+  const parsed = ProjectProfileSchema.safeParse(parseJson(raw));
+  if (!parsed.success) throw new InvalidProfileRecordError(file, prettifyError(parsed.error));
+  return parsed.data;
+}
+async function readAcceptedProfile(projectDir) {
+  const revisions = await listAcceptedRevisions(projectDir);
+  const highest = revisions.at(-1);
+  if (highest === void 0) return null;
+  return readAcceptedRevision(projectDir, highest);
+}
+async function acceptProfile(projectDir, input, now = () => /* @__PURE__ */ new Date()) {
+  const paths = resolveLoopPaths(projectDir);
+  await fs4.mkdir(paths.root, { recursive: true });
+  return withLock(paths.lock, async () => {
+    const revisions = await listAcceptedRevisions(projectDir);
+    const current = revisions.at(-1) ?? null;
+    if (current !== input.expectRevision) throw new StaleProfileRevisionError(current, input.expectRevision);
+    const next = (current ?? 0) + 1;
+    const file = acceptedRevisionFile(projectDir, next);
+    if (await exists(file)) throw new ProfileRevisionExistsError(file);
+    const parsed = ProjectProfileSchema.safeParse({
+      schema: 1,
+      revision: next,
+      generatedAt: input.generatedAt,
+      acceptedAt: now().toISOString(),
+      acceptedBy: input.by,
+      components: input.components,
+      supersedes: current
+    });
+    if (!parsed.success) throw new InvalidProfileRecordError(file, prettifyError(parsed.error));
+    await writeJsonAtomic(file, parsed.data, { backup: false });
+    return parsed.data;
+  });
+}
+function parseJson(raw) {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return void 0;
+  }
+}
+async function exists(file) {
+  try {
+    await fs4.lstat(file);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// src/ops/project-profile.ts
+var YAML2 = __toESM(require_dist2(), 1);
 import fs5 from "node:fs/promises";
 import path5 from "node:path";
+var MAX_DEPTH = 5;
+var IGNORED_DIRECTORIES = /* @__PURE__ */ new Set([
+  "node_modules",
+  ".git",
+  ".mjloop",
+  ".dart_tool",
+  "build",
+  "dist",
+  "out",
+  ".next",
+  ".venv",
+  "venv",
+  "__pycache__",
+  ".tox",
+  "coverage",
+  "Pods",
+  ".gradle"
+]);
+var MANIFESTS = ["pubspec.yaml", "package.json", "pyproject.toml", "setup.py", "setup.cfg"];
+async function detectComponents(projectDir, now = () => /* @__PURE__ */ new Date()) {
+  const candidates = await collectCandidates(projectDir);
+  candidates.sort((a, b) => a.root < b.root ? -1 : a.root > b.root ? 1 : 0);
+  const assigned = /* @__PURE__ */ new Set();
+  const components = [];
+  const basis = /* @__PURE__ */ new Set();
+  for (const candidate of candidates) {
+    const read = await readManifests(projectDir, candidate);
+    const technology = decideTechnology(read);
+    components.push({
+      id: allocateId(candidate.root, assigned),
+      root: candidate.root,
+      technology,
+      verification: deriveVerification(candidate.root, technology, read),
+      skillTags: technology === "unknown" ? [] : [technology]
+    });
+    for (const file of [...candidate.manifests, ...candidate.corroboration]) {
+      basis.add(joinRelative(candidate.root, file));
+    }
+  }
+  components.sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+  return ProposedProfileSchema.parse({
+    schema: 1,
+    generatedAt: now().toISOString(),
+    components,
+    basis: [...basis].sort()
+  });
+}
+async function collectCandidates(projectDir) {
+  const found = [];
+  await walk(projectDir, ".", 0, found);
+  return found;
+}
+async function walk(projectDir, relative, depth, found) {
+  const absolute = relative === "." ? projectDir : path5.join(projectDir, relative);
+  let entries;
+  try {
+    entries = await fs5.readdir(absolute, { withFileTypes: true });
+  } catch (error2) {
+    if (depth === 0) throw error2;
+    return;
+  }
+  const manifests = /* @__PURE__ */ new Set();
+  const corroboration = /* @__PURE__ */ new Set();
+  const directories = [];
+  for (const entry of entries) {
+    if (entry.isDirectory()) {
+      if (entry.name.startsWith(".") || IGNORED_DIRECTORIES.has(entry.name)) continue;
+      if (!ComponentRootSchema.safeParse(joinRelative(relative, entry.name)).success) continue;
+      directories.push(entry.name);
+      continue;
+    }
+    if (!entry.isFile()) continue;
+    if (isManifest(entry.name)) manifests.add(entry.name);
+    else if (isCorroborating(entry.name)) corroboration.add(entry.name);
+  }
+  if (manifests.size > 0) found.push({ root: relative, manifests, corroboration });
+  if (depth >= MAX_DEPTH) return;
+  for (const name of directories.sort()) {
+    await walk(projectDir, joinRelative(relative, name), depth + 1, found);
+  }
+}
+function isManifest(name) {
+  return MANIFESTS.includes(name);
+}
+function isCorroborating(name) {
+  return name === "analysis_options.yaml" || /^next\.config\.[cm]?[jt]s$/.test(name);
+}
+function joinRelative(root, name) {
+  return root === "." ? name : `${root}/${name}`;
+}
+async function readManifests(projectDir, candidate) {
+  const read = async (name) => {
+    if (!candidate.manifests.has(name)) return null;
+    try {
+      return await fs5.readFile(path5.join(projectDir, candidate.root, name), "utf8");
+    } catch {
+      return null;
+    }
+  };
+  const pubspecRaw = await read("pubspec.yaml");
+  const packageJsonRaw = await read("package.json");
+  const pyprojectRaw = await read("pyproject.toml");
+  return {
+    pubspec: pubspecRaw === null ? null : readPubspec(pubspecRaw),
+    packageJson: packageJsonRaw === null ? null : readPackageJson(packageJsonRaw),
+    pyproject: pyprojectRaw === null ? null : { tables: (table) => declaresTable(pyprojectRaw, table) },
+    setuptools: candidate.manifests.has("setup.py") || candidate.manifests.has("setup.cfg"),
+    analysisOptions: candidate.corroboration.has("analysis_options.yaml")
+  };
+}
+function readPubspec(raw) {
+  let document;
+  try {
+    document = YAML2.parse(raw);
+  } catch {
+    return { declaresFlutter: false, declaresFlutterTest: false };
+  }
+  const declaresFlutterTest = hasKey(mapping(document, "dev_dependencies"), "flutter_test");
+  return {
+    // Three independent markers because a Flutter package can carry any of
+    // them: an app declares `dependencies.flutter`, a test-only package
+    // declares `dev_dependencies.flutter_test`, and a plugin pins the SDK it
+    // needs under `environment.flutter`. A pubspec carrying none of them is a
+    // pure-Dart package, and calling that Flutter would put `flutter test` in
+    // front of a project that has no Flutter installed.
+    declaresFlutter: hasKey(mapping(document, "dependencies"), "flutter") || declaresFlutterTest || hasKey(mapping(document, "environment"), "flutter"),
+    declaresFlutterTest
+  };
+}
+function readPackageJson(raw) {
+  let document;
+  try {
+    document = JSON.parse(raw);
+  } catch {
+    return { declaresNext: false, scripts: /* @__PURE__ */ new Set() };
+  }
+  const scripts = mapping(document, "scripts");
+  return {
+    declaresNext: hasKey(mapping(document, "dependencies"), "next") || hasKey(mapping(document, "devDependencies"), "next"),
+    // Only string scripts count, for the reason `detectVerifyCommands` already
+    // encodes: `"test": null` in a package.json means the script was removed.
+    scripts: new Set(
+      scripts === null ? [] : Object.entries(scripts).filter(([, value]) => typeof value === "string").map(([key]) => key)
+    )
+  };
+}
+function mapping(document, key) {
+  if (typeof document !== "object" || document === null || Array.isArray(document)) return null;
+  const value = document[key];
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
+  return value;
+}
+function hasKey(map, key) {
+  return map !== null && Object.hasOwn(map, key);
+}
+function declaresTable(raw, table) {
+  const escaped = table.replace(/[.[\]]/g, "\\$&");
+  return new RegExp(String.raw`^[ \t]*\[${escaped}(\.[^\]]*)?\][ \t]*$`, "m").test(raw);
+}
+function decideTechnology(read) {
+  if (read.pubspec?.declaresFlutter === true) return "flutter";
+  if (read.packageJson?.declaresNext === true) return "nextjs";
+  if (read.pyproject !== null || read.setuptools) return "python";
+  return "unknown";
+}
+function deriveVerification(root, technology, read) {
+  const slots = { test: null, lint: null, build: null };
+  if (technology === "flutter") {
+    if (read.pubspec?.declaresFlutterTest === true) slots.test = "flutter test";
+    if (read.analysisOptions) slots.lint = "flutter analyze";
+  }
+  const scripts = read.packageJson?.scripts;
+  if (scripts !== void 0) {
+    if (slots.test === null && scripts.has("test")) slots.test = "npm test";
+    if (slots.lint === null && scripts.has("lint")) slots.lint = "npm run lint";
+    if (slots.build === null && scripts.has("build")) slots.build = "npm run build";
+  }
+  const pyproject = read.pyproject;
+  if (pyproject !== null) {
+    if (slots.test === null && pyproject.tables("tool.pytest.ini_options")) slots.test = "pytest";
+    if (slots.lint === null && pyproject.tables("tool.ruff")) slots.lint = "ruff check .";
+    if (slots.build === null && pyproject.tables("build-system")) slots.build = "python -m build";
+  }
+  if (root === ".") return slots;
+  const target = root.startsWith("-") ? `./${root}` : root;
+  const prefix = `cd ${quoteForShell(target)} && `;
+  return {
+    test: slots.test === null ? null : prefix + slots.test,
+    lint: slots.lint === null ? null : prefix + slots.lint,
+    build: slots.build === null ? null : prefix + slots.build
+  };
+}
+function quoteForShell(value) {
+  if (/^[A-Za-z0-9._\-/]+$/.test(value)) return value;
+  return `'${value.replaceAll("'", String.raw`'\''`)}'`;
+}
+function slugifyRoot(root) {
+  if (root === ".") return "root";
+  const slug = root.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  return slug === "" ? "component" : slug;
+}
+function allocateId(root, assigned) {
+  const base = slugifyRoot(root);
+  let id = base;
+  let suffix = 1;
+  while (assigned.has(id)) {
+    suffix += 1;
+    id = `${base}-${suffix}`;
+  }
+  assigned.add(id);
+  return id;
+}
+
+// src/ops/init.ts
+var CLAUDE_MD_SECTION = "## mjloop";
+var CLAUDE_MD_BLOCK = `${CLAUDE_MD_SECTION}
+
+This project uses the \`mjloop\` plugin. Execution state lives in \`.mjloop/\`.
+
+- \`/mjloop:edit <request>\` \u2014 small, well-scoped change (one cycle)
+- \`/mjloop:plan <idea>\` \u2014 turn an idea into an approved plan broken into stories
+- \`/mjloop:build <what to build | P001-S02 | --next>\` \u2014 multi-cycle build, optionally against a story
+- \`/mjloop:fix <problem>\` \u2014 reproduce a defect, find the root cause, fix it
+- \`/mjloop:status\` \u2014 current track, cycle, and latest evidence
+- \`/mjloop:stop [reason]\` \u2014 halt the run and write a report
+- \`/mjloop:resume\` \u2014 continue a run that was interrupted
+- \`/mjloop:design-sync\` \u2014 extract the project's design system for the UI agents
+- \`/mjloop:config [get | set <key> <value>]\` \u2014 read or change this project's orchestration settings
+- \`/mjloop:web\` \u2014 dashboard: queue runs and watch each one in a terminal
+- \`/mjloop:add agent|skill|track <name>\` \u2014 scaffold a new element
+
+\`.mjloop/state.json\` is owned by the mjloop MCP server. Never edit it by hand.
+`;
+async function detectVerifyCommands(projectDir) {
+  const empty = { test: null, lint: null, build: null };
+  let scripts;
+  try {
+    const raw = await fs6.readFile(path6.join(projectDir, "package.json"), "utf8");
+    const parsed = JSON.parse(raw);
+    scripts = parsed.scripts ?? {};
+  } catch {
+    return empty;
+  }
+  return {
+    test: typeof scripts.test === "string" ? "npm test" : null,
+    lint: typeof scripts.lint === "string" ? "npm run lint" : null,
+    build: typeof scripts.build === "string" ? "npm run build" : null
+  };
+}
+async function initLoop(projectDir, now = () => /* @__PURE__ */ new Date()) {
+  const paths = resolveLoopPaths(projectDir);
+  const verify = await detectVerifyCommands(projectDir);
+  if (await exists2(paths.state)) {
+    await ensureClaudeMdSection(projectDir);
+    return { created: [], verify, alreadyInitialised: true, profile: await proposeProfile(projectDir, now) };
+  }
+  const created = [];
+  for (const dir of [paths.root, paths.plans, paths.runs, paths.memory]) {
+    await fs6.mkdir(dir, { recursive: true });
+    created.push(path6.relative(projectDir, dir));
+  }
+  await writeJsonAtomic(paths.state, initialState(now()));
+  created.push(path6.relative(projectDir, paths.state));
+  await writeConfig(projectDir, defaultConfig(verify));
+  created.push(path6.relative(projectDir, paths.config));
+  if (await ensureClaudeMdSection(projectDir)) created.push("CLAUDE.md");
+  return { created, verify, alreadyInitialised: false, profile: await proposeProfile(projectDir, now) };
+}
+async function proposeProfile(projectDir, now) {
+  let proposedComponents = [];
+  let error2 = null;
+  try {
+    const proposed = await detectComponents(projectDir, now);
+    await writeProposedProfile(projectDir, proposed);
+    proposedComponents = proposed.components.map((component) => component.id);
+    await autoAcceptFirstRevision(projectDir, proposed, now);
+  } catch (thrown) {
+    error2 = thrown instanceof Error ? thrown.message : String(thrown);
+  }
+  let acceptedRevision = null;
+  try {
+    acceptedRevision = (await listAcceptedRevisions(projectDir)).at(-1) ?? null;
+  } catch {
+  }
+  return { proposedComponents, acceptedRevision, error: error2 };
+}
+async function autoAcceptFirstRevision(projectDir, proposed, now) {
+  const config2 = await loadConfig(projectDir);
+  if (!config2.orchestration.profile.auto_accept) return;
+  if ((await listAcceptedRevisions(projectDir)).length > 0) return;
+  await acceptProfile(
+    projectDir,
+    {
+      components: proposed.components,
+      // Named rather than left as "mjloop", because `acceptedBy` is the only
+      // record of *why* a revision exists, and "nobody looked at this, the
+      // config said it was fine" is the answer for these.
+      by: "mjloop init (orchestration.profile.auto_accept)",
+      generatedAt: proposed.generatedAt,
+      expectRevision: null
+    },
+    now
+  );
+}
+async function ensureClaudeMdSection(projectDir) {
+  const file = path6.join(projectDir, "CLAUDE.md");
+  let existing = "";
+  try {
+    existing = await fs6.readFile(file, "utf8");
+  } catch (error2) {
+    if (error2.code !== "ENOENT") throw error2;
+  }
+  if (existing.includes(CLAUDE_MD_SECTION)) return false;
+  const separator = existing.length === 0 ? "" : existing.endsWith("\n") ? "\n" : "\n\n";
+  await fs6.writeFile(file, `${existing}${separator}${CLAUDE_MD_BLOCK}`, "utf8");
+  return true;
+}
+async function exists2(file) {
+  try {
+    await fs6.access(file);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// src/ops/index-render.ts
+import fs8 from "node:fs/promises";
+
+// src/store/plan-store.ts
+import fs7 from "node:fs/promises";
+import path7 from "node:path";
 
 // src/store/frontmatter.ts
-var YAML2 = __toESM(require_dist2(), 1);
+var YAML3 = __toESM(require_dist2(), 1);
 var FrontmatterError = class extends Error {
   constructor(message) {
     super(message);
@@ -30126,14 +30866,14 @@ function parseFrontmatter(raw) {
   }
   let data;
   try {
-    data = YAML2.parse(split.yaml);
+    data = YAML3.parse(split.yaml);
   } catch (error2) {
     throw new FrontmatterError(`the frontmatter is not valid yaml: ${error2.message}`);
   }
   return { data, body: split.body };
 }
 function serialiseFrontmatter(data, body) {
-  const yaml = YAML2.stringify(data, { lineWidth: 100 }).trimEnd();
+  const yaml = YAML3.stringify(data, { lineWidth: 100 }).trimEnd();
   const trimmed = body.trim();
   return trimmed.length === 0 ? `---
 ${yaml}
@@ -30181,7 +30921,7 @@ function storyFileName(frontmatter) {
 }
 async function listPlanDirs(plansDir) {
   try {
-    const entries = await fs5.readdir(plansDir, { withFileTypes: true });
+    const entries = await fs7.readdir(plansDir, { withFileTypes: true });
     return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
   } catch (error2) {
     if (error2.code !== "ENOENT") throw error2;
@@ -30201,15 +30941,15 @@ async function findPlanDir(projectDir, planId) {
   const entries = await listPlanDirs(plansDir);
   const match = entries.find((entry) => entry.startsWith(`${planId}-`));
   if (match === void 0) throw new PlanNotFoundError(planId, plansDir);
-  return path5.join(plansDir, match);
+  return path7.join(plansDir, match);
 }
 async function readPlan(projectDir, planId) {
   const dir = await findPlanDir(projectDir, planId);
-  const file = path5.join(dir, "PLAN.md");
+  const file = path7.join(dir, "PLAN.md");
   let raw = "";
   let missing = false;
   try {
-    raw = await fs5.readFile(file, "utf8");
+    raw = await fs7.readFile(file, "utf8");
   } catch (error2) {
     const code = error2.code;
     if (code !== "ENOENT") throw new UnreadablePlanFileError(planId, file, code);
@@ -30234,14 +30974,14 @@ async function readPlan(projectDir, planId) {
     }
   }
   const frontmatter = await rebuildFrontmatter(dir, planId, salvage);
-  await fs5.writeFile(file, serialiseFrontmatter(frontmatter, body), "utf8");
+  await fs7.writeFile(file, serialiseFrontmatter(frontmatter, body), "utf8");
   return { frontmatter, body, dir, repaired: true };
 }
 function isMapping(data) {
   return typeof data === "object" && data !== null && !Array.isArray(data);
 }
 function derivedSlug(dir, planId) {
-  const remainder = path5.basename(dir).slice(planId.length + 1);
+  const remainder = path7.basename(dir).slice(planId.length + 1);
   if (IdSchema.safeParse(remainder).success) return remainder;
   const slug = remainder.replace(/[^A-Za-z0-9_-]+/g, "-").slice(0, SLUG_MAX).replace(/^-+|-+$/g, "");
   return slug.length === 0 ? planId : slug;
@@ -30254,7 +30994,7 @@ async function rebuildFrontmatter(dir, planId, salvage) {
   let title = salvagedTitle.success ? salvagedTitle.data : slug;
   let createdAt = salvagedCreatedAt.success ? salvagedCreatedAt.data : void 0;
   try {
-    const manifest = JSON.parse(await fs5.readFile(path5.join(dir, "manifest.json"), "utf8"));
+    const manifest = JSON.parse(await fs7.readFile(path7.join(dir, "manifest.json"), "utf8"));
     const manifestTitle = string2().min(1).safeParse(manifest.title);
     if (!salvagedTitle.success && manifestTitle.success) title = manifestTitle.data;
     const manifestCreatedAt = iso_exports2.datetime().safeParse(manifest.generated_at);
@@ -30262,7 +31002,7 @@ async function rebuildFrontmatter(dir, planId, salvage) {
   } catch {
   }
   if (createdAt === void 0) {
-    const stats = await fs5.stat(dir);
+    const stats = await fs7.stat(dir);
     createdAt = new Date(stats.birthtimeMs || stats.mtimeMs).toISOString();
   }
   const parsed = PlanFrontmatterSchema.safeParse({
@@ -30273,28 +31013,28 @@ async function rebuildFrontmatter(dir, planId, salvage) {
     approval: salvagedApproval.success ? salvagedApproval.data : null
   });
   if (!parsed.success) {
-    throw new InvalidPlanFileError(path5.join(dir, "PLAN.md"), prettifyError(parsed.error));
+    throw new InvalidPlanFileError(path7.join(dir, "PLAN.md"), prettifyError(parsed.error));
   }
   return parsed.data;
 }
-async function writePlan(projectDir, plan, dir = path5.join(resolveLoopPaths(projectDir).plans, `${plan.frontmatter.id}-${plan.frontmatter.slug}`)) {
-  await fs5.mkdir(path5.join(dir, "stories"), { recursive: true });
-  await fs5.writeFile(path5.join(dir, "PLAN.md"), serialiseFrontmatter(plan.frontmatter, plan.body), "utf8");
+async function writePlan(projectDir, plan, dir = path7.join(resolveLoopPaths(projectDir).plans, `${plan.frontmatter.id}-${plan.frontmatter.slug}`)) {
+  await fs7.mkdir(path7.join(dir, "stories"), { recursive: true });
+  await fs7.writeFile(path7.join(dir, "PLAN.md"), serialiseFrontmatter(plan.frontmatter, plan.body), "utf8");
   return dir;
 }
 async function listStories(projectDir, planId) {
-  const dir = path5.join(await findPlanDir(projectDir, planId), "stories");
+  const dir = path7.join(await findPlanDir(projectDir, planId), "stories");
   let entries = [];
   try {
-    entries = await fs5.readdir(dir);
+    entries = await fs7.readdir(dir);
   } catch (error2) {
     if (error2.code !== "ENOENT") throw error2;
   }
   const stories = [];
   for (const entry of entries.filter((name) => name.endsWith(".md"))) {
-    const file = path5.join(dir, entry);
+    const file = path7.join(dir, entry);
     try {
-      const { data, body } = parseFrontmatter(await fs5.readFile(file, "utf8"));
+      const { data, body } = parseFrontmatter(await fs7.readFile(file, "utf8"));
       const parsed = StoryFrontmatterSchema.safeParse(data);
       if (!parsed.success) continue;
       stories.push({ frontmatter: parsed.data, body, file });
@@ -30305,10 +31045,10 @@ async function listStories(projectDir, planId) {
   return stories.sort((a, b) => a.frontmatter.id.localeCompare(b.frontmatter.id));
 }
 async function usedStoryNumbers(projectDir, planId) {
-  const dir = path5.join(await findPlanDir(projectDir, planId), "stories");
+  const dir = path7.join(await findPlanDir(projectDir, planId), "stories");
   let entries = [];
   try {
-    entries = await fs5.readdir(dir);
+    entries = await fs7.readdir(dir);
   } catch (error2) {
     if (error2.code !== "ENOENT") throw error2;
   }
@@ -30328,22 +31068,22 @@ async function readStory(projectDir, storyId) {
   const stories = await listStories(projectDir, planId);
   const found = stories.find((story) => story.frontmatter.id === storyId);
   if (found === void 0) {
-    throw new StoryNotFoundError(storyId, path5.join(await findPlanDir(projectDir, planId), "stories"));
+    throw new StoryNotFoundError(storyId, path7.join(await findPlanDir(projectDir, planId), "stories"));
   }
   return found;
 }
 async function writeStory(projectDir, story) {
-  const dir = path5.join(await findPlanDir(projectDir, story.frontmatter.plan), "stories");
-  await fs5.mkdir(dir, { recursive: true });
-  const file = path5.join(dir, storyFileName(story.frontmatter));
-  await fs5.writeFile(file, serialiseFrontmatter(story.frontmatter, story.body), "utf8");
+  const dir = path7.join(await findPlanDir(projectDir, story.frontmatter.plan), "stories");
+  await fs7.mkdir(dir, { recursive: true });
+  const file = path7.join(dir, storyFileName(story.frontmatter));
+  await fs7.writeFile(file, serialiseFrontmatter(story.frontmatter, story.body), "utf8");
   return file;
 }
 
 // src/ops/manifest.ts
-import path6 from "node:path";
+import path8 from "node:path";
 function manifestPath(planDir) {
-  return path6.join(planDir, "manifest.json");
+  return path8.join(planDir, "manifest.json");
 }
 async function renderManifest(projectDir, planId, now = () => /* @__PURE__ */ new Date()) {
   const plan = await readPlan(projectDir, planId);
@@ -30360,7 +31100,7 @@ async function renderManifest(projectDir, planId, now = () => /* @__PURE__ */ ne
       status: story.frontmatter.status,
       ui: story.frontmatter.ui,
       depends_on: story.frontmatter.depends_on,
-      file: path6.relative(plan.dir, story.file)
+      file: path8.relative(plan.dir, story.file)
     }))
   });
   await writeJsonAtomic(manifestPath(plan.dir), manifest, { backup: false });
@@ -30388,7 +31128,7 @@ function approvalCell(decision) {
 }
 async function renderIndex(projectDir, now = () => /* @__PURE__ */ new Date()) {
   const paths = resolveLoopPaths(projectDir);
-  await fs6.mkdir(paths.root, { recursive: true });
+  await fs8.mkdir(paths.root, { recursive: true });
   return withLock(paths.lock, async () => {
     const planIds = await listPlanIds(projectDir);
     let markdown;
@@ -30416,14 +31156,114 @@ No plans yet.
         ""
       ].join("\n");
     }
-    await fs6.writeFile(paths.index, markdown, "utf8");
+    await fs8.writeFile(paths.index, markdown, "utf8");
     return markdown;
   });
 }
 
 // src/ops/log.ts
-import fs9 from "node:fs/promises";
-import path10 from "node:path";
+import fs15 from "node:fs/promises";
+import path16 from "node:path";
+
+// src/schemas/skill-selection.ts
+var AcceptedProjectSkillSchema = strictObject({
+  skillId: IdSchema,
+  /**
+   * Which immutable package version this project accepted. S06 owns the
+   * library and its content-addressed versions; a project record references
+   * a digest and never a path into it, so one project's acceptance can never
+   * be invalidated by another project's update, removal, or a library moved
+   * to a different machine.
+   */
+  packageDigest: string2().regex(/^[a-f0-9]{64}$/),
+  /** Component ids of *this* project the acceptance enables. Empty means none. */
+  components: array(IdSchema),
+  /**
+   * What the skill claims to be for. Joined against a component's
+   * `skillTags`, and against the brief's own declared `tags` for the
+   * cross-cutting case — an authentication boundary is not a component's
+   * technology, so the join has to be able to reach the brief as well as the
+   * component.
+   */
+  tags: array(string2().min(1)),
+  /** Which fixed roles may receive it. An unknown role name here selects nothing. */
+  agents: array(AgentNameSchema),
+  /**
+   * The bounded text a receiving agent is handed. Bounded because it is
+   * copied into a brief on every dispatch: an unbounded guidance string would
+   * make every run's brief as large as the largest skill a project has ever
+   * accepted, on every cycle, whether or not that skill was even selected.
+   */
+  guidance: string2().min(1).max(4e3),
+  status: _enum(["active", "disabled"]),
+  /**
+   * The per-project host compatibility result. An incompatible skill is
+   * never selected, however well its tags match — compatibility is a fact
+   * about whether the skill can run *here at all*, and a good match on a host
+   * that cannot run it is not a selectable skill.
+   */
+  compatible: boolean2()
+});
+var SkillSelectionSchema = strictObject({
+  component: IdSchema,
+  agent: AgentNameSchema,
+  skillIds: array(IdSchema),
+  reasons: array(string2().min(1)),
+  sourceBrief: strictObject({ id: FeatureIdSchema, revision: number2().int().positive() })
+}).superRefine((selection, ctx) => {
+  if (selection.skillIds.length !== selection.reasons.length) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["reasons"],
+      message: `${selection.skillIds.length} skill(s) selected for component "${selection.component}" / agent "${selection.agent}" but ${selection.reasons.length} reason(s) recorded \u2014 the two arrays are index-aligned by construction, and one reason per skill is what lets the evidence view attribute a routing decision to the tag that actually matched rather than to whichever skill happens to share its position.`
+    });
+  }
+});
+var ConcurrencyDecisionSchema = strictObject({
+  mode: _enum(["parallel", "sequential"]),
+  reason: string2().min(1)
+});
+var SkillManifestSchema = strictObject({
+  schema: literal(1),
+  generatedAt: iso_exports2.datetime(),
+  sourceBrief: strictObject({ id: FeatureIdSchema, revision: number2().int().positive() }),
+  profileRevision: number2().int().positive(),
+  selections: array(SkillSelectionSchema),
+  /**
+   * The bounded guidance text for every skill the selections above name,
+   * keyed by skill id — the half of the dispatch contract that makes the
+   * other half actionable. A selection carries an id and the reason it was
+   * chosen; neither tells a receiving agent what to *do*, and an agent
+   * instructed to "apply exactly the guidance it carries" against a file
+   * carrying none would be left inventing the skill's meaning, which is the
+   * free-form claim this whole record exists to replace.
+   *
+   * A map rather than a per-selection array because one skill routinely
+   * lands on several (component, agent) rows: `AcceptedProjectSkill.guidance`
+   * is capped at 4000 characters so that copying it is affordable, and
+   * repeating the same 4000 characters once per row would spend that budget
+   * as many times as the manifest has rows. The cap is restated here rather
+   * than inherited, because this record is read by agents that never see an
+   * acceptance record and its own bound has to hold on its own terms.
+   *
+   * Defaulted to `{}` for the reason every default in this codebase exists:
+   * no project has accepted a skill yet — S06 owns the library — so every
+   * manifest pinned today selects nothing and has nothing to render, and an
+   * empty map is that fact rather than a missing field.
+   */
+  guidance: record(IdSchema, string2().min(1).max(4e3)).default({}),
+  concurrency: ConcurrencyDecisionSchema
+}).superRefine((manifest, ctx) => {
+  const selected = [...new Set(manifest.selections.flatMap((selection) => selection.skillIds))];
+  const unguided = selected.filter((skillId) => manifest.guidance[skillId] === void 0);
+  if (unguided.length > 0) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["guidance"],
+      message: `${unguided.map((skillId) => `"${skillId}"`).join(", ")} is selected by this manifest but carries no guidance \u2014 an agent handed a skill id and no text to follow has been told which skill to apply and nothing about how, which leaves it deciding for itself what the skill meant.`
+    });
+  }
+});
 
 // src/store/git.ts
 import { spawn } from "node:child_process";
@@ -30543,7 +31383,7 @@ var StateStore = class {
 
 // src/ops/fingerprint.ts
 import { createHash as createHash2 } from "node:crypto";
-import path7 from "node:path";
+import path9 from "node:path";
 function cycleFingerprint(findings, result) {
   const sorted = findings.map(identify).sort(compareIdentities);
   const distinct = sorted.filter((identity, index) => {
@@ -30570,7 +31410,7 @@ function compareWork(a, b) {
   return a[0].localeCompare(b[0]) || a[1].localeCompare(b[1]) || a[2].localeCompare(b[2]) || a[3] - b[3];
 }
 function normaliseFile(file) {
-  return path7.posix.normalize(file.replaceAll("\\", "/"));
+  return path9.posix.normalize(file.replaceAll("\\", "/"));
 }
 function compareIdentities(a, b) {
   return a[0].localeCompare(b[0]) || a[1].localeCompare(b[1]) || a[2].localeCompare(b[2]);
@@ -30591,23 +31431,845 @@ function verifyFingerprint(command, worktree) {
 }
 
 // src/ops/run.ts
-import fs7 from "node:fs/promises";
-import path8 from "node:path";
+import fs13 from "node:fs/promises";
+import path14 from "node:path";
 
-// src/store/precondition.ts
-var StalePreconditionError = class extends Error {
-  constructor(subject, id, actual) {
-    super(`${subject} ${id} has moved on \u2014 it is now ${actual ?? "unset"}`);
-    this.subject = subject;
-    this.id = id;
-    this.actual = actual;
-    this.name = "StalePreconditionError";
+// src/store/feature-store.ts
+import crypto from "node:crypto";
+import fs9 from "node:fs/promises";
+import path10 from "node:path";
+var InvalidFeatureRecordError = class extends Error {
+  constructor(file, detail) {
+    super(`${file} is not a valid feature brief:
+${detail}`);
+    this.name = "InvalidFeatureRecordError";
   }
 };
-function expect(subject, id, actual, expected) {
-  if (expected === void 0) return;
-  if (actual === expected) return;
-  throw new StalePreconditionError(subject, id, actual === null || actual === void 0 ? null : String(actual));
+var FeatureNotFoundError = class extends Error {
+  constructor(featureId, dir) {
+    super(`no feature "${featureId}" under ${dir}`);
+    this.name = "FeatureNotFoundError";
+  }
+};
+var FeatureRevisionExistsError = class extends Error {
+  constructor(file) {
+    super(`${file} already exists \u2014 a feature revision is never written twice`);
+    this.name = "FeatureRevisionExistsError";
+  }
+};
+var ApprovedRevisionImmutableError = class extends Error {
+  constructor(featureId, revision) {
+    super(
+      `revision ${revision} of ${featureId} is approved and is never rewritten \u2014 a later plan may already rest on exactly these words. Supersede it: that creates the next revision as a draft, carrying this content forward, and leaves this one saying what it always said.`
+    );
+    this.name = "ApprovedRevisionImmutableError";
+  }
+};
+var AcceptanceRequiredError = class extends Error {
+  constructor(featureId, revision) {
+    super(
+      `revision ${revision} of ${featureId} has no acceptance criteria, so there is nothing in it to approve \u2014 a draft may have none while it is being assembled, but every later story plans against them. Record at least one before approving.`
+    );
+    this.name = "AcceptanceRequiredError";
+  }
+};
+var FeatureNotApprovedError = class extends Error {
+  constructor(featureId, revision) {
+    super(
+      `revision ${revision} of ${featureId} is still a draft, so there is nothing to supersede \u2014 edit it instead. Superseding exists to leave an approved revision untouched, and an unapproved one has nothing to protect.`
+    );
+    this.name = "FeatureNotApprovedError";
+  }
+};
+var UnknownComponentError = class extends Error {
+  constructor(unknown2, known) {
+    super(
+      known.length === 0 ? `this project has no accepted component map, so ${quoted(unknown2)} cannot name a component of it. Run \`mjloop-cli profile show\` and \`mjloop-cli profile accept\` first, or leave affectedComponents empty until the map exists.` : `${quoted(unknown2)} is not in this project's accepted component map, which names ${quoted(known)}. Skill selection joins on these ids, so a component nothing has accepted would route work nowhere.`
+    );
+    this.unknown = unknown2;
+    this.known = known;
+    this.name = "UnknownComponentError";
+  }
+};
+var StaleFeatureRevisionError = class extends StalePreconditionError {
+  constructor(featureId, actualRevision, expectedRevision) {
+    super("plan", featureId, actualRevision === null ? null : String(actualRevision));
+    this.actualRevision = actualRevision;
+    this.expectedRevision = expectedRevision;
+    this.name = "StaleFeatureRevisionError";
+    this.message = `${featureId} has moved on \u2014 this write was built on revision ${expectedRevision}, and the feature is now on ${actualRevision === null ? "no revision at all" : `revision ${actualRevision}`}`;
+  }
+};
+var StaleFeatureContentError = class extends StalePreconditionError {
+  constructor(featureId, revision, actualDigest, expectedDigest) {
+    super("plan", featureId, actualDigest);
+    this.actualDigest = actualDigest;
+    this.expectedDigest = expectedDigest;
+    this.name = "StaleFeatureContentError";
+    this.message = `${featureId} has moved on \u2014 revision ${revision} has been rewritten since this write read it, so approving now would freeze words nobody has read. Read the brief again and decide on what it says today.`;
+  }
+};
+var RevisionSchema2 = number2().int().positive();
+var SLUG_MAX2 = 60;
+function briefDigest(brief) {
+  return crypto.createHash("sha256").update(JSON.stringify(brief)).digest("hex");
+}
+function featureDirName(featureId, title) {
+  const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, SLUG_MAX2).replace(/^-+|-+$/g, "");
+  return `${FeatureIdSchema.parse(featureId)}-${slug.length === 0 ? "feature" : slug}`;
+}
+function featureRevisionFile(featureDir, revision) {
+  return path10.join(featureDir, `rev-${String(RevisionSchema2.parse(revision)).padStart(3, "0")}.json`);
+}
+async function listFeatureDirs(featuresDir) {
+  let entries;
+  try {
+    entries = await fs9.readdir(featuresDir, { withFileTypes: true });
+  } catch (error2) {
+    if (error2.code !== "ENOENT") throw error2;
+    return [];
+  }
+  return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort();
+}
+async function listFeatureIds(projectDir) {
+  const ids = /* @__PURE__ */ new Set();
+  for (const entry of await listFeatureDirs(resolveLoopPaths(projectDir).features)) {
+    const id = /^(F\d{3})-/.exec(entry)?.[1];
+    if (id !== void 0) ids.add(id);
+  }
+  return [...ids].sort();
+}
+async function locateFeatureDir(projectDir, featureId) {
+  const featuresDir = resolveLoopPaths(projectDir).features;
+  const id = FeatureIdSchema.parse(featureId);
+  const match = (await listFeatureDirs(featuresDir)).find((entry) => entry.startsWith(`${id}-`));
+  return match === void 0 ? null : path10.join(featuresDir, match);
+}
+async function findFeatureDir(projectDir, featureId) {
+  const dir = await locateFeatureDir(projectDir, featureId);
+  if (dir === null) throw new FeatureNotFoundError(featureId, resolveLoopPaths(projectDir).features);
+  return dir;
+}
+async function listRevisionsIn(featureDir) {
+  let entries;
+  try {
+    entries = await fs9.readdir(featureDir, { withFileTypes: true });
+  } catch (error2) {
+    if (error2.code !== "ENOENT") throw error2;
+    return [];
+  }
+  const revisions = [];
+  for (const entry of entries) {
+    if (!entry.isFile()) continue;
+    const match = /^rev-(\d+)\.json$/.exec(entry.name);
+    if (match?.[1] === void 0) continue;
+    const revision = Number(match[1]);
+    if (!RevisionSchema2.safeParse(revision).success) continue;
+    if (path10.basename(featureRevisionFile(featureDir, revision)) !== entry.name) continue;
+    revisions.push(revision);
+  }
+  return revisions.sort((a, b) => a - b);
+}
+async function listFeatureRevisions(projectDir, featureId) {
+  const dir = await locateFeatureDir(projectDir, featureId);
+  return dir === null ? [] : listRevisionsIn(dir);
+}
+async function readRevisionFile(file) {
+  let raw;
+  try {
+    raw = await fs9.readFile(file, "utf8");
+  } catch (error2) {
+    if (error2.code === "ENOENT") return null;
+    throw error2;
+  }
+  let data;
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    data = void 0;
+  }
+  const parsed = FeatureBriefSchema.safeParse(data);
+  if (!parsed.success) throw new InvalidFeatureRecordError(file, prettifyError(parsed.error));
+  return parsed.data;
+}
+async function readFeatureRevision(projectDir, featureId, revision) {
+  const dir = await locateFeatureDir(projectDir, featureId);
+  if (dir === null) return null;
+  const file = featureRevisionFile(dir, revision);
+  const brief = await readRevisionFile(file);
+  if (brief === null) return null;
+  const latest = (await listRevisionsIn(dir)).at(-1) ?? revision;
+  return { brief, status: derivedStatus(brief, latest), file, digest: briefDigest(brief) };
+}
+async function readFeatureBrief(projectDir, featureId) {
+  const dir = await locateFeatureDir(projectDir, featureId);
+  if (dir === null) return null;
+  const latest = (await listRevisionsIn(dir)).at(-1);
+  if (latest === void 0) return null;
+  const file = featureRevisionFile(dir, latest);
+  const brief = await readRevisionFile(file);
+  if (brief === null) return null;
+  return { brief, status: brief.status, file, digest: briefDigest(brief) };
+}
+function derivedStatus(brief, latestRevision) {
+  return brief.revision < latestRevision ? "superseded" : brief.status;
+}
+async function listFeatureSummaries(projectDir) {
+  const summaries = [];
+  for (const id of await listFeatureIds(projectDir)) {
+    const dir = await findFeatureDir(projectDir, id);
+    const revisions = await listRevisionsIn(dir);
+    const latestRevision = revisions.at(-1);
+    if (latestRevision === void 0) continue;
+    const latest = await readRevisionFile(featureRevisionFile(dir, latestRevision));
+    if (latest === null) continue;
+    const first = latestRevision === 1 ? latest : await readRevisionFile(featureRevisionFile(dir, revisions[0] ?? 1));
+    summaries.push({
+      id,
+      title: latest.title,
+      status: latest.status,
+      latestRevision,
+      approvedRevision: await highestApprovedRevision(dir, revisions),
+      revisions,
+      createdAt: (first ?? latest).createdAt
+    });
+  }
+  return summaries;
+}
+async function highestApprovedRevision(featureDir, revisions) {
+  for (const revision of [...revisions].reverse()) {
+    const brief = await readRevisionFile(featureRevisionFile(featureDir, revision));
+    if (brief?.status === "approved") return revision;
+  }
+  return null;
+}
+async function createFeatureBrief(projectDir, input, now = () => /* @__PURE__ */ new Date()) {
+  return locked(projectDir, async () => {
+    const existing = await listFeatureIds(projectDir);
+    const next = existing.length === 0 ? 1 : Math.max(...existing.map((id2) => Number(id2.slice(1)))) + 1;
+    const id = `F${String(next).padStart(3, "0")}`;
+    const brief = validate(path10.join(resolveLoopPaths(projectDir).features, id), {
+      schema: 1,
+      id,
+      revision: 1,
+      title: input.title,
+      status: "draft",
+      problem: input.problem,
+      decisions: [],
+      acceptance: input.acceptance ?? [],
+      affectedComponents: input.affectedComponents ?? [],
+      discovery: { ...input.discovery, completedAt: null },
+      approval: null,
+      supersedes: null,
+      createdAt: now().toISOString()
+    });
+    await assertKnownComponents(projectDir, brief.affectedComponents);
+    const file = featureRevisionFile(path10.join(resolveLoopPaths(projectDir).features, featureDirName(id, brief.title)), 1);
+    await writeNewRevision(file, brief);
+    return { brief, status: brief.status, file, digest: briefDigest(brief) };
+  });
+}
+async function updateFeatureDraft(projectDir, featureId, patch) {
+  return locked(projectDir, async () => {
+    const current = await loadLatestForWrite(projectDir, featureId);
+    const brief = validate(current.file, {
+      ...current.brief,
+      title: patch.title ?? current.brief.title,
+      problem: patch.problem ?? current.brief.problem,
+      acceptance: patch.acceptance ?? current.brief.acceptance,
+      affectedComponents: patch.affectedComponents ?? current.brief.affectedComponents,
+      tags: patch.tags ?? current.brief.tags,
+      discovery: {
+        ...current.brief.discovery,
+        mode: patch.discoveryMode ?? current.brief.discovery.mode,
+        questionBudget: patch.discoveryQuestionBudget ?? current.brief.discovery.questionBudget,
+        // Spelled out rather than folded into the `??` above, because null is a
+        // value this field takes: reopening an interview sets it back.
+        ...patch.discoveryCompletedAt === void 0 ? {} : { completedAt: patch.discoveryCompletedAt }
+      }
+    });
+    await assertKnownComponents(projectDir, brief.affectedComponents);
+    await writeDraftRevision(current.file, brief);
+    return { brief, status: brief.status, file: current.file, digest: briefDigest(brief) };
+  });
+}
+async function appendFeatureDecision(projectDir, featureId, decision, now = () => /* @__PURE__ */ new Date()) {
+  return locked(projectDir, async () => {
+    const current = await loadLatestForWrite(projectDir, featureId);
+    const brief = validate(current.file, {
+      ...current.brief,
+      decisions: [...current.brief.decisions, { ...decision, at: now().toISOString() }]
+    });
+    await writeDraftRevision(current.file, brief);
+    return { brief, status: brief.status, file: current.file, digest: briefDigest(brief) };
+  });
+}
+async function approveFeatureBrief(projectDir, input, now = () => /* @__PURE__ */ new Date()) {
+  return locked(projectDir, async () => {
+    const current = await loadLatestForWrite(projectDir, input.id, {
+      revision: input.expectRevision,
+      digest: input.expectDigest
+    });
+    if (current.brief.acceptance.length === 0) {
+      throw new AcceptanceRequiredError(current.brief.id, current.brief.revision);
+    }
+    await assertKnownComponents(projectDir, current.brief.affectedComponents);
+    const brief = validate(current.file, {
+      ...current.brief,
+      status: "approved",
+      approval: { by: input.by, at: now().toISOString(), note: input.note ?? null }
+    });
+    await writeDraftRevision(current.file, brief);
+    return { brief, status: brief.status, file: current.file, digest: briefDigest(brief) };
+  });
+}
+async function supersedeFeatureBrief(projectDir, input, now = () => /* @__PURE__ */ new Date()) {
+  return locked(projectDir, async () => {
+    const current = await loadLatest(projectDir, input.id);
+    if (current.brief.revision !== input.expectRevision) {
+      throw new StaleFeatureRevisionError(input.id, current.brief.revision, input.expectRevision);
+    }
+    if (current.brief.status !== "approved") {
+      throw new FeatureNotApprovedError(current.brief.id, current.brief.revision);
+    }
+    const revision = current.brief.revision + 1;
+    const file = featureRevisionFile(current.dir, revision);
+    const brief = validate(file, {
+      ...current.brief,
+      revision,
+      status: "draft",
+      approval: null,
+      supersedes: { id: current.brief.id, revision: current.brief.revision },
+      createdAt: now().toISOString()
+    });
+    await writeNewRevision(file, brief);
+    return { brief, status: brief.status, file, digest: briefDigest(brief) };
+  });
+}
+async function locked(projectDir, fn) {
+  const paths = resolveLoopPaths(projectDir);
+  await fs9.mkdir(paths.root, { recursive: true });
+  return withLock(paths.lock, fn);
+}
+async function loadLatest(projectDir, featureId) {
+  const dir = await findFeatureDir(projectDir, featureId);
+  const revision = (await listRevisionsIn(dir)).at(-1);
+  if (revision === void 0) throw new FeatureNotFoundError(featureId, dir);
+  const file = featureRevisionFile(dir, revision);
+  const brief = await readRevisionFile(file);
+  if (brief === null) throw new FeatureNotFoundError(featureId, dir);
+  return { dir, file, brief };
+}
+async function loadLatestForWrite(projectDir, featureId, expect2) {
+  const current = await loadLatest(projectDir, featureId);
+  if (expect2 !== void 0 && current.brief.revision !== expect2.revision) {
+    throw new StaleFeatureRevisionError(featureId, current.brief.revision, expect2.revision);
+  }
+  if (expect2 !== void 0) {
+    const digest = briefDigest(current.brief);
+    if (digest !== expect2.digest) {
+      throw new StaleFeatureContentError(featureId, current.brief.revision, digest, expect2.digest);
+    }
+  }
+  if (current.brief.status === "approved") {
+    throw new ApprovedRevisionImmutableError(current.brief.id, current.brief.revision);
+  }
+  return current;
+}
+function validate(file, candidate) {
+  const parsed = FeatureBriefSchema.safeParse(candidate);
+  if (!parsed.success) throw new InvalidFeatureRecordError(file, prettifyError(parsed.error));
+  return parsed.data;
+}
+async function assertKnownComponents(projectDir, ids) {
+  if (ids.length === 0) return;
+  const profile = await readAcceptedProfile(projectDir);
+  const known = (profile?.components ?? []).map((component) => component.id);
+  const unknown2 = ids.filter((id) => !known.includes(id));
+  if (unknown2.length > 0) throw new UnknownComponentError(unknown2, known);
+}
+async function writeDraftRevision(file, brief) {
+  const onDisk = await readRevisionFile(file);
+  if (onDisk !== null && onDisk.status === "approved") {
+    throw new ApprovedRevisionImmutableError(onDisk.id, onDisk.revision);
+  }
+  await writeJsonAtomic(file, brief, { backup: false });
+}
+async function writeNewRevision(file, brief) {
+  if (await exists3(file)) throw new FeatureRevisionExistsError(file);
+  await writeJsonAtomic(file, brief, { backup: false });
+}
+async function exists3(file) {
+  try {
+    await fs9.lstat(file);
+    return true;
+  } catch {
+    return false;
+  }
+}
+function quoted(ids) {
+  return ids.map((id) => `"${id}"`).join(", ");
+}
+
+// src/store/skill-acceptance-store.ts
+import fs12 from "node:fs/promises";
+import path13 from "node:path";
+
+// src/schemas/skill-library.ts
+var DigestSchema = string2().regex(/^[a-f0-9]{64}$/, "a digest is 64 lower-case hex characters");
+var SkillPackageSchema = strictObject({
+  schema: literal(1),
+  /**
+   * Stable across revisions of one source. Two imports of the same GitHub
+   * repository at two different pinned revisions share a `packageId` and
+   * differ in `digest` — `packageId` is "which skill", `digest` is "which
+   * bytes of it".
+   */
+  packageId: IdSchema,
+  /** Of the content; also the directory name under the library root. */
+  digest: DigestSchema,
+  source: strictObject({
+    kind: SkillSourceSchema,
+    url: string2().url().startsWith("https://"),
+    /**
+     * A pinned commit or tag, never a moving ref such as a branch name. A
+     * branch would let the *same recorded revision* resolve to different
+     * bytes over time, which is precisely what content-addressing by digest
+     * is here to make impossible — the revision has to hold that promise on
+     * its own terms, not merely happen to agree with the digest today.
+     */
+    revision: string2().min(1)
+  }),
+  license: strictObject({
+    spdx: string2().min(1).nullable(),
+    file: string2().min(1).nullable()
+  }),
+  skillName: string2().min(1).max(200),
+  description: string2().min(1).max(1e3),
+  tags: array(string2().min(1)),
+  dependencies: strictObject({
+    /** An inventory of what the package declares — never a resolution. */
+    executables: array(string2().min(1)),
+    /** Likewise: named, not installed. */
+    packages: array(string2().min(1))
+  }),
+  audit: strictObject({
+    state: _enum(["pending", "passed", "failed"]),
+    findings: array(string2().min(1)),
+    at: iso_exports2.datetime().nullable()
+  }),
+  /**
+   * The bounded text S05 hands an agent. Capped at the same 4000 characters
+   * `AcceptedProjectSkill.guidance` is, for the same reason stated there: it
+   * is copied into a brief on every dispatch, so an unbounded string here
+   * would make every dispatch as large as the largest guidance any package
+   * in the library has ever carried.
+   */
+  guidance: string2().min(1).max(4e3),
+  importedAt: iso_exports2.datetime()
+});
+
+// src/schemas/skill-acceptance.ts
+var ProjectSkillAcceptanceSchema = strictObject({
+  schema: literal(1),
+  skillId: IdSchema,
+  /** Stable across revisions of one source — see `SkillPackageSchema.packageId`. */
+  packageId: IdSchema,
+  /**
+   * A digest, never a path. The stop condition is explicit: no global-library
+   * path may be stored in a project record, because the library moves per
+   * machine and this record is committed.
+   */
+  digest: DigestSchema,
+  components: array(IdSchema),
+  agents: array(AgentNameSchema),
+  tags: array(string2().min(1)),
+  /**
+   * No global fallback of any kind. `orchestration.skills.update_mode` is
+   * only ever a *default offered* at acceptance time by whichever caller
+   * assembles this input — never consulted afterwards — because a global
+   * policy could otherwise silently change what a project's already-accepted
+   * skill does on its next run without that project ever having decided so.
+   */
+  updatePolicy: SkillUpdateModeSchema,
+  status: _enum(["active", "disabled"]),
+  /**
+   * The per-project host compatibility result.
+   *
+   * Nothing in this story determines host compatibility — no field on
+   * `SkillPackage` records what a host needs, and checking `dependencies.
+   * executables` against the machine that will run an agent is squarely the
+   * sandboxed problem S07 owns. `acceptSkill` accepts this as an explicit
+   * input rather than computing it, and defaults it to `true` when the
+   * caller does not know better yet: today nothing here can prove a package
+   * is *incompatible*, so recording an unearned `false` would be a claim as
+   * ungrounded as an unearned `true` — the honest default is the one that
+   * matches what this story can actually establish. A later story that can
+   * compute this for real overwrites it rather than reads a fabricated one.
+   */
+  compatible: boolean2(),
+  /** Who accepted it. Free text; the engine cannot verify it. */
+  acceptedBy: string2().min(1),
+  acceptedAt: iso_exports2.datetime()
+});
+
+// src/store/skill-library-store.ts
+import fs11 from "node:fs/promises";
+import path12 from "node:path";
+
+// src/store/library-paths.ts
+import fs10 from "node:fs";
+import path11 from "node:path";
+import os from "node:os";
+var LibraryRootCollisionError = class extends Error {
+  constructor(root, projectDir) {
+    super(
+      `the resolved skill library root "${root}" is inside the project directory "${projectDir}" or inside a ".mjloop" directory \u2014 the library is shared across every project on this machine and must never live inside one project's checkout or its .mjloop state`
+    );
+    this.name = "LibraryRootCollisionError";
+  }
+};
+function resolveLibraryRoot(projectDir) {
+  const root = pickRoot();
+  const resolvedRoot = path11.resolve(root);
+  const resolvedProject = path11.resolve(projectDir);
+  const canonicalRoot = canonicalize(resolvedRoot);
+  const canonicalProject = canonicalize(resolvedProject);
+  const insideProject = canonicalRoot === canonicalProject || canonicalRoot.startsWith(canonicalProject + path11.sep);
+  const insideDotMjloop = canonicalRoot.split(path11.sep).some((segment) => segment === ".mjloop");
+  if (insideProject || insideDotMjloop) throw new LibraryRootCollisionError(resolvedRoot, resolvedProject);
+  return resolvedRoot;
+}
+function canonicalize(target) {
+  const trailing = [];
+  let existing = target;
+  for (; ; ) {
+    try {
+      return path11.join(fs10.realpathSync(existing), ...trailing);
+    } catch {
+      const parent = path11.dirname(existing);
+      if (parent === existing) return target;
+      trailing.unshift(path11.basename(existing));
+      existing = parent;
+    }
+  }
+}
+function pickRoot() {
+  const dataHome = process.env.MJLOOP_DATA_HOME;
+  if (dataHome !== void 0 && dataHome !== "" && path11.isAbsolute(dataHome)) return dataHome;
+  const xdgDataHome = process.env.XDG_DATA_HOME;
+  if (xdgDataHome !== void 0 && xdgDataHome !== "" && path11.isAbsolute(xdgDataHome)) {
+    return path11.join(xdgDataHome, "mjloop");
+  }
+  return path11.join(os.homedir(), ".local", "share", "mjloop");
+}
+function packagesDir(projectDir) {
+  return path11.join(resolveLibraryRoot(projectDir), "packages");
+}
+
+// src/store/skill-library-store.ts
+var InvalidSkillPackageError = class extends Error {
+  constructor(file, detail) {
+    super(`${file} is not a valid skill package:
+${detail}`);
+    this.name = "InvalidSkillPackageError";
+  }
+};
+var InvalidDigestError = class extends Error {
+  constructor(digest) {
+    super(`"${digest}" is not a valid package digest \u2014 a digest is 64 lower-case hex characters`);
+    this.name = "InvalidDigestError";
+  }
+};
+function validateDigest(digest) {
+  const parsed = DigestSchema.safeParse(digest);
+  if (!parsed.success) throw new InvalidDigestError(digest);
+  return parsed.data;
+}
+function packageDirFor(projectDir, digest) {
+  return path12.join(packagesDir(projectDir), validateDigest(digest));
+}
+function packageRecordFileFor(projectDir, digest) {
+  return path12.join(packageDirFor(projectDir, digest), "package.json");
+}
+async function listPackages(projectDir) {
+  let entries;
+  try {
+    entries = await fs11.readdir(packagesDir(projectDir));
+  } catch (error2) {
+    if (error2.code !== "ENOENT") throw error2;
+    return { packages: [], unreadable: [] };
+  }
+  const packages = [];
+  const unreadable = [];
+  for (const entry of entries.sort()) {
+    if (!DigestSchema.safeParse(entry).success) continue;
+    try {
+      const record2 = await readPackage(projectDir, entry);
+      if (record2 !== null) packages.push(record2);
+    } catch (error2) {
+      unreadable.push({ digest: entry, reason: error2 instanceof Error ? error2.message : String(error2) });
+    }
+  }
+  return { packages, unreadable };
+}
+async function readPackage(projectDir, digest) {
+  const file = packageRecordFileFor(projectDir, digest);
+  let raw;
+  try {
+    raw = await fs11.readFile(file, "utf8");
+  } catch (error2) {
+    const code = error2.code;
+    if (code === "ENOENT" || code === "ENOTDIR") return null;
+    throw error2;
+  }
+  const parsed = SkillPackageSchema.safeParse(parseJson2(raw));
+  if (!parsed.success) throw new InvalidSkillPackageError(file, prettifyError(parsed.error));
+  return parsed.data;
+}
+function parseJson2(raw) {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return void 0;
+  }
+}
+
+// src/store/skill-acceptance-store.ts
+var InvalidSkillIdError = class extends Error {
+  constructor(skillId) {
+    super(`"${skillId}" is not a valid skill id \u2014 a skill id is letters, digits, "-" and "_" only`);
+    this.name = "InvalidSkillIdError";
+  }
+};
+var InvalidSkillAcceptanceRecordError = class extends Error {
+  constructor(file, detail) {
+    super(`${file} is not a valid skill acceptance:
+${detail}`);
+    this.name = "InvalidSkillAcceptanceRecordError";
+  }
+};
+function validateSkillId(skillId) {
+  const parsed = IdSchema.safeParse(skillId);
+  if (!parsed.success) throw new InvalidSkillIdError(skillId);
+  return parsed.data;
+}
+function acceptanceFile(projectDir, skillId) {
+  return path13.join(resolveLoopPaths(projectDir).skills, `${validateSkillId(skillId)}.json`);
+}
+async function listAcceptances(projectDir) {
+  let entries;
+  try {
+    entries = await fs12.readdir(resolveLoopPaths(projectDir).skills, { withFileTypes: true });
+  } catch (error2) {
+    if (error2.code !== "ENOENT") throw error2;
+    return [];
+  }
+  const acceptances = [];
+  for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+    if (!entry.isFile() || !entry.name.endsWith(".json")) continue;
+    const skillId = entry.name.slice(0, -".json".length);
+    if (!IdSchema.safeParse(skillId).success) continue;
+    const record2 = await readAcceptance(projectDir, skillId);
+    if (record2 !== null) acceptances.push(record2);
+  }
+  return acceptances;
+}
+async function readAcceptance(projectDir, skillId) {
+  const file = acceptanceFile(projectDir, skillId);
+  let raw;
+  try {
+    raw = await fs12.readFile(file, "utf8");
+  } catch (error2) {
+    if (error2.code === "ENOENT") return null;
+    throw error2;
+  }
+  const parsed = ProjectSkillAcceptanceSchema.safeParse(parseJson3(raw));
+  if (!parsed.success) throw new InvalidSkillAcceptanceRecordError(file, prettifyError(parsed.error));
+  return parsed.data;
+}
+function parseJson3(raw) {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return void 0;
+  }
+}
+
+// src/ops/skill-library.ts
+async function readAcceptedProjectSkills(projectDir) {
+  const acceptances = await listAcceptances(projectDir);
+  const skills = [];
+  const skippedSkillIds = [];
+  for (const acceptance of acceptances) {
+    const pkg = await readPackage(projectDir, acceptance.digest);
+    if (pkg === null) {
+      skippedSkillIds.push(acceptance.skillId);
+      continue;
+    }
+    skills.push(
+      AcceptedProjectSkillSchema.parse({
+        skillId: acceptance.skillId,
+        packageDigest: acceptance.digest,
+        components: acceptance.components,
+        tags: acceptance.tags,
+        agents: acceptance.agents,
+        guidance: pkg.guidance,
+        status: acceptance.status,
+        compatible: acceptance.compatible
+      })
+    );
+  }
+  return { skills, skippedSkillIds };
+}
+
+// src/ops/skill-selection.ts
+var BriefNotApprovedError = class extends Error {
+  constructor(featureId, status) {
+    super(`skill selection needs an approved brief, and ${featureId} is "${status}"`);
+    this.name = "BriefNotApprovedError";
+  }
+};
+var UnresolvedComponentError = class extends Error {
+  constructor(unresolved, known) {
+    super(
+      `${quoted2(unresolved)} is not in the accepted profile this selection was given, which names ${quoted2(known)} \u2014 the profile moved under this brief after it was approved, and continuing would silently drop the work for that component.`
+    );
+    this.unresolved = unresolved;
+    this.known = known;
+    this.name = "UnresolvedComponentError";
+  }
+};
+function selectSkills(input) {
+  const { brief, profile, acceptedSkills, agent } = input;
+  if (brief.status !== "approved") {
+    throw new BriefNotApprovedError(brief.id, brief.status);
+  }
+  const resolved = resolveComponents(brief, profile);
+  const selections = resolved.map(({ id, component }) => {
+    const matches = acceptedSkills.filter((skill) => skill.status === "active").filter((skill) => skill.compatible).filter((skill) => skill.components.includes(id)).filter((skill) => skill.agents.includes(agent)).map((skill) => matchOnTag(skill, component, brief)).filter((match) => match !== null).sort((a, b) => compare(a.skillId, b.skillId));
+    return {
+      component: id,
+      agent,
+      skillIds: matches.map((match) => match.skillId),
+      reasons: matches.map((match) => match.reason),
+      sourceBrief: { id: brief.id, revision: brief.revision }
+    };
+  });
+  selections.sort((a, b) => compare(a.component, b.component) || compare(a.agent, b.agent));
+  return selections.map((selection) => SkillSelectionSchema.parse(selection));
+}
+function matchOnTag(skill, component, brief) {
+  const componentTag = skill.tags.find((tag) => component.skillTags.includes(tag));
+  if (componentTag !== void 0) {
+    return {
+      skillId: skill.skillId,
+      reason: `"${skill.skillId}" matches component "${component.id}"'s skillTag "${componentTag}"`
+    };
+  }
+  const briefTag = skill.tags.find((tag) => brief.tags.includes(tag));
+  if (briefTag !== void 0) {
+    return {
+      skillId: skill.skillId,
+      reason: `"${skill.skillId}" matches the brief's declared tag "${briefTag}"`
+    };
+  }
+  return null;
+}
+function analyseConcurrency(brief, profile, orchestration) {
+  const resolved = resolveComponents(brief, profile);
+  if (resolved.length < 2) {
+    return decide({
+      mode: "sequential",
+      reason: "fewer than two affected components \u2014 there is nothing to run in parallel, so this serialises regardless of policy"
+    });
+  }
+  const components = resolved.map(({ component }) => component);
+  for (const [a, b] of pairs(components)) {
+    if (rootsOverlap(a.root, b.root)) {
+      return unproven(
+        orchestration,
+        `component "${a.id}"'s root "${a.root}" and component "${b.id}"'s root "${b.root}" are not proven independent \u2014 one names, or is a path prefix of, the other (the project root "." counts as a prefix of everything), so their work cannot be shown to touch disjoint trees`
+      );
+    }
+  }
+  for (const [a, b] of pairs(components)) {
+    const shared = sharedVerifyCommand(a, b);
+    if (shared !== null) {
+      return unproven(
+        orchestration,
+        `component "${a.id}" and component "${b.id}" share the verify command "${shared}" \u2014 one suite already covers both, and two agents running it at once would contend for the project verify lock`
+      );
+    }
+  }
+  return decide({
+    mode: "parallel",
+    reason: "component roots are disjoint and no verify command is shared between them, so these components are proven independent from the accepted profile alone"
+  });
+}
+function unproven(orchestration, rule) {
+  const policy = orchestration.execution.uncertain_concurrency;
+  if (policy === "parallel") {
+    return decide({
+      mode: "parallel",
+      reason: `${rule}, and orchestration.execution.uncertain_concurrency is "parallel"`
+    });
+  }
+  if (policy === "ask") {
+    return decide({
+      mode: "sequential",
+      reason: `${rule}, and orchestration.execution.uncertain_concurrency is "ask" \u2014 a pure analyser cannot put a question to a person, so this serialises and the leader should offer the choice`
+    });
+  }
+  return decide({
+    mode: "sequential",
+    reason: `${rule}, and orchestration.execution.uncertain_concurrency is "sequential", the default that cannot corrupt a worktree by itself`
+  });
+}
+function decide(candidate) {
+  return ConcurrencyDecisionSchema.parse(candidate);
+}
+function resolveComponents(brief, profile) {
+  const byId = new Map(profile.components.map((component) => [component.id, component]));
+  const ids = [...new Set(brief.affectedComponents)];
+  const resolved = [];
+  const unresolved = [];
+  for (const id of ids) {
+    const component = byId.get(id);
+    if (component === void 0) unresolved.push(id);
+    else resolved.push({ id, component });
+  }
+  if (unresolved.length > 0) throw new UnresolvedComponentError(unresolved, [...byId.keys()]);
+  return resolved;
+}
+function rootsOverlap(a, b) {
+  if (a === "." || b === ".") return true;
+  if (a === b) return true;
+  return a.startsWith(`${b}/`) || b.startsWith(`${a}/`);
+}
+function sharedVerifyCommand(a, b) {
+  const bCommands = new Set(verifyCommands(b));
+  return verifyCommands(a).find((command) => bCommands.has(command)) ?? null;
+}
+function verifyCommands(component) {
+  return [component.verification.test, component.verification.lint, component.verification.build].filter(
+    (command) => command !== null
+  );
+}
+function pairs(items) {
+  const found = [];
+  for (const [i, a] of items.entries()) {
+    for (const b of items.slice(i + 1)) {
+      found.push([a, b]);
+    }
+  }
+  return found;
+}
+function compare(a, b) {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+function quoted2(ids) {
+  return ids.map((id) => `"${id}"`).join(", ");
 }
 
 // src/ops/run.ts
@@ -30628,10 +32290,10 @@ function runDirName(state) {
   return `${state.run_id}--${state.current.story ?? "adhoc"}--${state.track}`;
 }
 function runDirPath(projectDir, state) {
-  return path8.join(resolveLoopPaths(projectDir).runs, runDirName(state));
+  return path14.join(resolveLoopPaths(projectDir).runs, runDirName(state));
 }
 function cycleDirPath(projectDir, state, cycle = state.cycle) {
-  return path8.join(runDirPath(projectDir, state), cycleDirName(cycle));
+  return path14.join(runDirPath(projectDir, state), cycleDirName(cycle));
 }
 function cycleDirName(cycle) {
   return `cycle-${String(cycle).padStart(2, "0")}`;
@@ -30642,6 +32304,7 @@ async function runStart(projectDir, input, now = () => /* @__PURE__ */ new Date(
     throw new UnknownTrackError(input.track, Object.keys(config2.tracks));
   }
   if (input.story !== void 0 && input.story !== null) await readStory(projectDir, input.story);
+  const manifest = await resolveSkillManifest(projectDir, config2, input.feature, now);
   const state = await new StateStore(projectDir, now).update(async (draft) => {
     draft.run_id = await nextRunId(projectDir, now(), draft.run_id);
     draft.track = input.track;
@@ -30663,8 +32326,9 @@ async function runStart(projectDir, input, now = () => /* @__PURE__ */ new Date(
     draft.reproduction = null;
     draft.halt_reason = null;
   });
-  await fs7.mkdir(runDirPath(projectDir, state), { recursive: true });
+  await fs13.mkdir(runDirPath(projectDir, state), { recursive: true });
   await pinVerifyBlock(projectDir, state, config2, now);
+  await writeSkillManifest(projectDir, state, manifest);
   return state;
 }
 var VERIFY_PIN_FILE = "verify-pinned.json";
@@ -30675,7 +32339,7 @@ async function pinVerifyBlock(projectDir, state, config2, now) {
     verify: config2.verify
   });
   try {
-    await fs7.writeFile(path8.join(runDirPath(projectDir, state), VERIFY_PIN_FILE), `${JSON.stringify(pin, null, 2)}
+    await fs13.writeFile(path14.join(runDirPath(projectDir, state), VERIFY_PIN_FILE), `${JSON.stringify(pin, null, 2)}
 `, {
       encoding: "utf8",
       flag: "wx"
@@ -30683,6 +32347,53 @@ async function pinVerifyBlock(projectDir, state, config2, now) {
   } catch (error2) {
     if (error2.code !== "EEXIST") throw error2;
   }
+}
+var SKILL_SELECTION_AGENTS = ["planner", "builder", "critic", "verifier"];
+var SKILL_MANIFEST_FILE = "skill-selection.json";
+async function resolveSkillManifest(projectDir, config2, feature, now) {
+  if (feature === void 0 || feature === null) return null;
+  const record2 = await readFeatureBrief(projectDir, feature);
+  if (record2 === null || record2.brief.status !== "approved") return null;
+  const profile = await readAcceptedProfile(projectDir);
+  if (profile === null) return null;
+  const { skills: acceptedSkills } = await readAcceptedProjectSkills(projectDir);
+  const selections = SKILL_SELECTION_AGENTS.flatMap(
+    (agent) => selectSkills({ brief: record2.brief, profile, acceptedSkills, agent })
+  ).sort(compareSelections);
+  return SkillManifestSchema.parse({
+    schema: 1,
+    generatedAt: now().toISOString(),
+    sourceBrief: { id: record2.brief.id, revision: record2.brief.revision },
+    profileRevision: profile.revision,
+    selections,
+    guidance: renderGuidance(selections, acceptedSkills),
+    concurrency: analyseConcurrency(record2.brief, profile, config2.orchestration)
+  });
+}
+function renderGuidance(selections, acceptedSkills) {
+  const selected = new Set(selections.flatMap((selection) => selection.skillIds));
+  const guidance = {};
+  for (const skill of acceptedSkills) {
+    if (selected.has(skill.skillId)) guidance[skill.skillId] = skill.guidance;
+  }
+  return guidance;
+}
+async function writeSkillManifest(projectDir, state, manifest) {
+  if (manifest === null) return;
+  try {
+    await fs13.writeFile(
+      path14.join(runDirPath(projectDir, state), SKILL_MANIFEST_FILE),
+      `${JSON.stringify(manifest, null, 2)}
+`,
+      { encoding: "utf8", flag: "wx" }
+    );
+  } catch (error2) {
+    if (error2.code !== "EEXIST") throw error2;
+  }
+}
+function compareSelections(a, b) {
+  if (a.component !== b.component) return a.component < b.component ? -1 : 1;
+  return a.agent < b.agent ? -1 : a.agent > b.agent ? 1 : 0;
 }
 async function cycleAdvance(projectDir, input, now = () => /* @__PURE__ */ new Date()) {
   const store = new StateStore(projectDir, now);
@@ -30702,7 +32413,7 @@ async function cycleAdvance(projectDir, input, now = () => /* @__PURE__ */ new D
     errors = [...draft.cycle_errors].sort();
     closedCycle = draft.cycle;
     maxCycles = track.max_cycles;
-    const ref = path8.join(".mjloop", "runs", runDirName(draft));
+    const ref = path14.join(".mjloop", "runs", runDirName(draft));
     draft.history.push({
       cycle: draft.cycle,
       agents: input.agents,
@@ -30773,8 +32484,8 @@ function refOf(signature) {
 }
 async function archiveFindings(projectDir, state, cycle, findings) {
   const dir = cycleDirPath(projectDir, state, cycle);
-  await fs7.mkdir(dir, { recursive: true });
-  await fs7.writeFile(path8.join(dir, "findings.json"), `${JSON.stringify(findings, null, 2)}
+  await fs13.mkdir(dir, { recursive: true });
+  await fs13.writeFile(path14.join(dir, "findings.json"), `${JSON.stringify(findings, null, 2)}
 `, "utf8");
 }
 var HANDOFF_MAX_BYTES = 6e3;
@@ -30782,13 +32493,15 @@ var HANDOFF_SUMMARY_MAX = 200;
 var HANDOFF_FINDINGS_MAX = 20;
 var HANDOFF_FILES_MAX = 30;
 var HANDOFF_ERRORS_MAX = 10;
+var HANDOFF_SKILLS_MAX = 20;
 var SEVERITY_ORDER = { high: 0, medium: 1, low: 2 };
 async function writeHandoff(projectDir, state, cycle, result, agents, carried, errors, maxCycles) {
   const dir = cycleDirPath(projectDir, state, cycle);
   const cycleRef = cycleDirName(cycle);
   const reports = await readAgentReports(dir);
-  const roster = await readOptionalJson(path8.join(dir, "roster.json"), RosterSchema);
-  const ledger = await readOptionalJson(path8.join(dir, "verify", "index.json"), LedgerSchema);
+  const roster = await readOptionalJson(path14.join(dir, "roster.json"), RosterSchema);
+  const ledger = await readOptionalJson(path14.join(dir, "verify", "index.json"), LedgerSchema);
+  const skills = await readOptionalJson(path14.join(runDirPath(projectDir, state), SKILL_MANIFEST_FILE), SkillManifestSchema);
   const document = bound(
     [
       `# Handoff \u2014 cycle ${cycle} of ${state.run_id}`,
@@ -30815,13 +32528,19 @@ async function writeHandoff(projectDir, state, cycle, result, agents, carried, e
       "## Failures that could recur",
       "",
       ...errorsSection(errors),
-      ""
+      "",
+      // No heading at all — not even an empty one — when this run pinned no
+      // manifest. `writeHandoff` existed for every run before dynamic skill
+      // selection did, and a run that still names no feature must render
+      // byte-for-byte what it always has: an empty section a reader cannot
+      // tell apart from "nothing was selected" is worse than no section.
+      ...skills === null ? [] : ["## Skills", "", ...skillsSection(skills), ""]
     ].join("\n"),
     cycleRef
   );
-  await fs7.mkdir(dir, { recursive: true });
-  await fs7.writeFile(path8.join(dir, "handoff.md"), document, "utf8");
-  return path8.join(".mjloop", "runs", runDirName(state), cycleRef, "handoff.md");
+  await fs13.mkdir(dir, { recursive: true });
+  await fs13.writeFile(path14.join(dir, "handoff.md"), document, "utf8");
+  return path14.join(".mjloop", "runs", runDirName(state), cycleRef, "handoff.md");
 }
 function resultLine(state, result, maxCycles) {
   if (state.status === "done") return `**Result:** ${result} \u2014 the run is done.`;
@@ -30888,6 +32607,17 @@ function errorsSection(errors) {
     (rest) => `*${rest} more*`
   );
 }
+function skillsSection(manifest) {
+  const verdict = `- **Concurrency:** \`${manifest.concurrency.mode}\` \u2014 ${oneLine(manifest.concurrency.reason)}`;
+  const lines = manifest.selections.flatMap(
+    (selection) => selection.skillIds.map((skillId, index) => {
+      const reason = selection.reasons[index] ?? "";
+      return `- \`${selection.component}\` / \`${selection.agent}\`: \`${skillId}\` \u2014 ${oneLine(reason)}`;
+    })
+  );
+  if (lines.length === 0) return [verdict, "", "_no skill selected_"];
+  return [verdict, "", ...elide(lines, HANDOFF_SKILLS_MAX, (rest) => `*${rest} more in ${SKILL_MANIFEST_FILE}*`)];
+}
 function elide(lines, max, marker) {
   if (lines.length <= max) return lines;
   return [...lines.slice(0, max), "", marker(lines.length - max)];
@@ -30904,12 +32634,12 @@ function bound(document, cycleRef) {
   return kept + marker;
 }
 async function readAgentReports(dir) {
-  const entries = await fs7.readdir(dir, { withFileTypes: true }).catch(() => []);
+  const entries = await fs13.readdir(dir, { withFileTypes: true }).catch(() => []);
   const reports = [];
   for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
     if (!entry.isFile() || !entry.name.endsWith(".json")) continue;
     if (entry.name === "roster.json" || entry.name === "findings.json") continue;
-    const result = await readOptionalJson(path8.join(dir, entry.name), AgentResultSchema);
+    const result = await readOptionalJson(path14.join(dir, entry.name), AgentResultSchema);
     if (result === null) continue;
     const basename = entry.name.slice(0, -".json".length);
     reports.push({ basename, agent: basename.split("--")[0] ?? basename, result });
@@ -30918,7 +32648,7 @@ async function readAgentReports(dir) {
 }
 async function readOptionalJson(file, schema) {
   try {
-    const parsed = schema.safeParse(JSON.parse(await fs7.readFile(file, "utf8")));
+    const parsed = schema.safeParse(JSON.parse(await fs13.readFile(file, "utf8")));
     return parsed.success ? parsed.data : null;
   } catch {
     return null;
@@ -30950,7 +32680,7 @@ async function nextRunId(projectDir, now, previousRunId) {
   const runsDir = resolveLoopPaths(projectDir).runs;
   let entries = [];
   try {
-    entries = await fs7.readdir(runsDir);
+    entries = await fs13.readdir(runsDir);
   } catch (error2) {
     if (error2.code !== "ENOENT") throw error2;
   }
@@ -30975,7 +32705,7 @@ run.`,
 };
 async function writeHaltReport(projectDir, state, cause, open) {
   const dir = runDirPath(projectDir, state);
-  await fs7.mkdir(dir, { recursive: true });
+  await fs13.mkdir(dir, { recursive: true });
   const cycles = state.history.map((entry) => `| ${entry.cycle} | ${entry.agents.join(", ")} | ${entry.result} |`).join("\n");
   const findings = open.length === 0 ? "_none recorded_" : open.map((f) => `- **${f.severity}** ${f.file}:${f.line} \u2014 ${f.claim}`).join("\n");
   const report = `# Halt report \u2014 ${state.run_id}
@@ -31001,14 +32731,14 @@ Review the per-agent output in this directory.
 
 ${NEXT_STEP[cause]}
 `;
-  await fs7.writeFile(path8.join(dir, "HALT.md"), report, "utf8");
+  await fs13.writeFile(path14.join(dir, "HALT.md"), report, "utf8");
 }
 
 // src/ops/verify.ts
 import { spawn as spawn2 } from "node:child_process";
 import { createHash as createHash3 } from "node:crypto";
-import fs8 from "node:fs/promises";
-import path9 from "node:path";
+import fs14 from "node:fs/promises";
+import path15 from "node:path";
 var FAILURES_MAX = 20;
 var HEADLINE_MAX = 240;
 var DEFAULT_WAIT_MS = 45e3;
@@ -31063,10 +32793,10 @@ ${detail}`);
 };
 var inFlight = /* @__PURE__ */ new Map();
 function verifyLedgerPath(cycleDir) {
-  return path9.join(cycleDir, "verify", "index.json");
+  return path15.join(cycleDir, "verify", "index.json");
 }
 async function readVerifyLedger(cycleDir) {
-  const raw = await fs8.readFile(verifyLedgerPath(cycleDir), "utf8").catch(() => null);
+  const raw = await fs14.readFile(verifyLedgerPath(cycleDir), "utf8").catch(() => null);
   if (raw === null) return [];
   try {
     const parsed = LedgerSchema.safeParse(JSON.parse(raw));
@@ -31132,7 +32862,7 @@ async function amendLedgerEntry(cycleDir, at, log, patch) {
   });
 }
 async function readCache(runDir) {
-  const raw = await fs8.readFile(path9.join(runDir, "verify-cache.json"), "utf8").catch(() => null);
+  const raw = await fs14.readFile(path15.join(runDir, "verify-cache.json"), "utf8").catch(() => null);
   if (raw === null) return [];
   try {
     const parsed = CacheSchema.safeParse(JSON.parse(raw));
@@ -31142,7 +32872,7 @@ async function readCache(runDir) {
   }
 }
 async function appendCacheEntry(runDir, entry) {
-  const file = path9.join(runDir, "verify-cache.json");
+  const file = path15.join(runDir, "verify-cache.json");
   await serialise(file, async () => {
     const entries = await readCache(runDir);
     entries.push(entry);
@@ -31150,7 +32880,7 @@ async function appendCacheEntry(runDir, entry) {
   });
 }
 function workDirectory(projectDir, state) {
-  if (state.status === "done") return path9.join(runDirPath(projectDir, state), "closing");
+  if (state.status === "done") return path15.join(runDirPath(projectDir, state), "closing");
   return cycleDirPath(projectDir, state);
 }
 async function verifyRun(projectDir, input, now = () => /* @__PURE__ */ new Date(), waitSignal) {
@@ -31169,10 +32899,10 @@ async function verifyRun(projectDir, input, now = () => /* @__PURE__ */ new Date
   }
   const runDir = runDirPath(projectDir, state);
   const workDir = workDirectory(projectDir, state);
-  const verifyDir = path9.join(workDir, "verify");
+  const verifyDir = path15.join(workDir, "verify");
   const logName = label === null ? slot : `${slot}--${label}`;
-  const logFile = path9.join(verifyDir, `${logName}.log`);
-  const pinFile = path9.join(runDir, "verify-pinned.json");
+  const logFile = path15.join(verifyDir, `${logName}.log`);
+  const pinFile = path15.join(runDir, "verify-pinned.json");
   const pinned = await readPin(pinFile);
   if (pinned === null && state.started_at !== null) throw new PinnedVerifyMissingError(pinFile);
   let verify;
@@ -31270,13 +33000,13 @@ async function interimDigest(progress, plan) {
       duration_ms: duration3
     };
   }
-  const text = await fs8.readFile(progress.logFile, "utf8").catch(() => "");
+  const text = await fs14.readFile(progress.logFile, "utf8").catch(() => "");
   const extracted = extract(text, plan.patterns, plan.patternNotice);
   return {
     ...emptyDigest(plan),
     ...extracted,
     phase: "running",
-    log: path9.relative(plan.projectDir, progress.logFile),
+    log: path15.relative(plan.projectDir, progress.logFile),
     headline: extracted.headline === "" ? "the command is still running \u2014 call again for the exit code" : extracted.headline,
     duration_ms: duration3
   };
@@ -31349,7 +33079,7 @@ async function findCacheHit(runDir, fingerprint) {
   const entries = await readCache(runDir);
   for (const entry of [...entries].reverse()) {
     if (entry.fingerprint !== fingerprint) continue;
-    const raw = await fs8.readFile(path9.join(runDir, entry.log)).catch(() => null);
+    const raw = await fs14.readFile(path15.join(runDir, entry.log)).catch(() => null);
     if (raw === null) continue;
     if (raw.byteLength !== entry.bytes || logIdentity(raw) !== entry.sha256) continue;
     return { entry, text: raw.toString("utf8") };
@@ -31360,7 +33090,7 @@ function logIdentity(raw) {
   return createHash3("sha256").update(raw).digest("hex");
 }
 async function reuse(plan, hit, fingerprint, at) {
-  const original = path9.join(plan.runDir, hit.entry.log);
+  const original = path15.join(plan.runDir, hit.entry.log);
   const extracted = extract(hit.text, plan.patterns, plan.patternNotice);
   await appendLedgerEntry(plan.workDir, {
     slot: plan.slot,
@@ -31383,7 +33113,7 @@ async function reuse(plan, hit, fingerprint, at) {
     ...emptyDigest(plan),
     ...extracted,
     phase: "complete",
-    log: path9.relative(plan.projectDir, original),
+    log: path15.relative(plan.projectDir, original),
     exit_code: 0,
     cached: true,
     cached_from_cycle: hit.entry.cycle,
@@ -31391,11 +33121,11 @@ async function reuse(plan, hit, fingerprint, at) {
   };
 }
 async function spawnAndDigest(plan, progress, at) {
-  await fs8.mkdir(plan.verifyDir, { recursive: true });
+  await fs14.mkdir(plan.verifyDir, { recursive: true });
   const before = plan.cacheOn ? await worktreeDigest(plan.projectDir) : null;
   const fingerprint = before === null ? null : verifyFingerprint(plan.command, before);
   const started = Date.now();
-  const handle = await fs8.open(plan.logFile, "w");
+  const handle = await fs14.open(plan.logFile, "w");
   let open = true;
   let writes = Promise.resolve();
   const sink = (chunk) => {
@@ -31449,7 +33179,7 @@ async function spawnAndDigest(plan, progress, at) {
   await handle.close();
   const duration3 = Date.now() - started;
   const after = plan.cacheOn ? await worktreeDigest(plan.projectDir) : null;
-  const raw = await fs8.readFile(plan.logFile).catch(() => Buffer.alloc(0));
+  const raw = await fs14.readFile(plan.logFile).catch(() => Buffer.alloc(0));
   const text = raw.toString("utf8");
   const extracted = extract(text, plan.patterns, plan.patternNotice);
   const exitCode = outcome.timedOut ? null : outcome.code;
@@ -31459,7 +33189,7 @@ async function spawnAndDigest(plan, progress, at) {
       slot: plan.slot,
       command: plan.command,
       cycle: plan.state.cycle,
-      log: path9.relative(plan.runDir, plan.logFile),
+      log: path15.relative(plan.runDir, plan.logFile),
       // The log is not immutable — the next invocation of this slot in this
       // cycle truncates it — so the entry carries what it looked like green.
       bytes: raw.byteLength,
@@ -31478,7 +33208,7 @@ async function spawnAndDigest(plan, progress, at) {
     ...emptyDigest(plan),
     ...extracted,
     phase: "complete",
-    log: path9.relative(plan.projectDir, plan.logFile),
+    log: path15.relative(plan.projectDir, plan.logFile),
     exit_code: exitCode,
     timed_out: outcome.timedOut,
     duration_ms: duration3,
@@ -31498,7 +33228,7 @@ function killTree(child, signal) {
   }
 }
 async function readPin(file) {
-  const raw = await fs8.readFile(file, "utf8").catch((error2) => {
+  const raw = await fs14.readFile(file, "utf8").catch((error2) => {
     if (error2.code === "ENOENT") return null;
     throw error2;
   });
@@ -31608,6 +33338,17 @@ var RunReplacedError = class extends Error {
     this.name = "RunReplacedError";
   }
 };
+var UnselectedSkillError = class extends Error {
+  constructor(agent, claimed, offered) {
+    super(
+      `"${agent}" reported using ${quoted3(claimed)}, which this run's pinned skill manifest did not select for it. ` + (offered.length === 0 ? 'Nothing was selected for this agent on this run, so "skills_used" must be [].' : `It was offered ${quoted3(offered)}; "skills_used" may name only those, and [] when none was followed.`) + " No agent may add a skill the validated selection did not produce, however well one seems to fit."
+    );
+    this.name = "UnselectedSkillError";
+  }
+};
+function quoted3(ids) {
+  return ids.map((id) => `"${id}"`).join(", ");
+}
 var GateClosedError = class extends Error {
   constructor(agent, provenBy) {
     super(
@@ -31647,17 +33388,18 @@ async function runLog(projectDir, input, now = () => /* @__PURE__ */ new Date())
   if (input.run_id !== void 0 && input.run_id !== null && input.run_id !== state.run_id) {
     throw new RunReplacedError(agent.data, input.run_id, state.run_id);
   }
+  await refuseUnselectedSkills(projectDir, state, agent.data, parsed.value);
   if (state.status === "done" && state.track !== null) {
     const config3 = await loadConfig(projectDir);
     const track2 = findTrack(config3, state.track);
     if (track2 !== void 0 && track2.closing.includes(agent.data)) {
-      const dir = path10.join(runDirPath(projectDir, state), "closing");
+      const dir = path16.join(runDirPath(projectDir, state), "closing");
       const closingLedger = await readVerifyLedger(dir);
       refuseContradicted(projectDir, dir, agent.data, parsed.value, closingLedger, track2.gate?.proven_by);
-      await fs9.mkdir(dir, { recursive: true });
+      await fs15.mkdir(dir, { recursive: true });
       const capped2 = await capAndSpill(projectDir, dir, basename, parsed.value, closingLedger);
-      const file2 = path10.join(dir, `${basename}.json`);
-      await fs9.writeFile(file2, `${JSON.stringify(capped2, null, 2)}
+      const file2 = path16.join(dir, `${basename}.json`);
+      await fs15.writeFile(file2, `${JSON.stringify(capped2, null, 2)}
 `, "utf8");
       return { path: file2, findingsAdded: 0, gateOpened: false };
     }
@@ -31681,9 +33423,9 @@ async function runLog(projectDir, input, now = () => /* @__PURE__ */ new Date())
   const capped = await capAndSpill(projectDir, cycleDir, basename, parsed.value, ledger);
   const proof = gate !== void 0 && agent.data === gate.proven_by && capped.status === "pass" ? capped.evidence.find((entry) => entry.kind === "command" || entry.kind === "test") : void 0;
   const signatures = errorSignature(capped.evidence, capped.status);
-  await fs9.mkdir(cycleDir, { recursive: true });
-  const file = path10.join(cycleDir, `${basename}.json`);
-  await fs9.writeFile(file, `${JSON.stringify(capped, null, 2)}
+  await fs15.mkdir(cycleDir, { recursive: true });
+  const file = path16.join(cycleDir, `${basename}.json`);
+  await fs15.writeFile(file, `${JSON.stringify(capped, null, 2)}
 `, "utf8");
   if (track.map !== void 0 && agent.data === track.map.drafted_by && capped.status === "pass") {
     try {
@@ -31709,12 +33451,37 @@ async function runLog(projectDir, input, now = () => /* @__PURE__ */ new Date())
   }
   return { path: file, findingsAdded: capped.findings.length, gateOpened: proof !== void 0 };
 }
+async function refuseUnselectedSkills(projectDir, state, agent, result) {
+  if (result.skills_used.length === 0) return;
+  const offered = await selectedSkillsFor(projectDir, state, agent);
+  const claimed = result.skills_used.filter((skillId) => !offered.has(skillId));
+  if (claimed.length > 0) throw new UnselectedSkillError(agent, claimed, [...offered].sort());
+}
+async function selectedSkillsFor(projectDir, state, agent) {
+  if (state.run_id === null || state.track === null) return /* @__PURE__ */ new Set();
+  const file = path16.join(runDirPath(projectDir, state), SKILL_MANIFEST_FILE);
+  const raw = await fs15.readFile(file, "utf8").catch(() => null);
+  if (raw === null) return /* @__PURE__ */ new Set();
+  const parsed = safeJson(raw);
+  if (parsed === null) return /* @__PURE__ */ new Set();
+  return new Set(
+    parsed.selections.filter((selection) => selection.agent === agent).flatMap((selection) => selection.skillIds)
+  );
+}
+function safeJson(raw) {
+  try {
+    const parsed = SkillManifestSchema.safeParse(JSON.parse(raw));
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
+}
 function refuseContradicted(projectDir, workDir, agent, result, ledger, provenBy) {
   if (result.status !== "pass" || provenBy === agent) return;
   for (const entry of result.evidence) {
     const recorded = latestEntry(ledger, entry.ref);
     if (recorded === null || exitedZero(recorded)) continue;
-    const log = recorded.log === "" ? null : path10.relative(projectDir, ledgerLogFile(workDir, recorded));
+    const log = recorded.log === "" ? null : path16.relative(projectDir, ledgerLogFile(workDir, recorded));
     throw new ContradictedEvidenceError(agent, recorded, log);
   }
 }
@@ -31731,31 +33498,31 @@ function exitedZero(entry) {
   return entry.exit_code === 0;
 }
 function ledgerLogFile(workDir, entry) {
-  return path10.dirname(entry.log) === "." ? path10.join(workDir, "verify", entry.log) : path10.join(workDir, "..", entry.log);
+  return path16.dirname(entry.log) === "." ? path16.join(workDir, "verify", entry.log) : path16.join(workDir, "..", entry.log);
 }
 async function capAndSpill(projectDir, workDir, basename, result, ledger) {
-  const evidenceDir = path10.join(workDir, "evidence");
+  const evidenceDir = path16.join(workDir, "evidence");
   const engineLog = /* @__PURE__ */ new Map();
   result.evidence.forEach((entry, index) => {
     const recorded = latestEntry(ledger, entry.ref);
     if (recorded === null || recorded.log === "") return;
-    engineLog.set(index, path10.relative(projectDir, ledgerLogFile(workDir, recorded)));
+    engineLog.set(index, path16.relative(projectDir, ledgerLogFile(workDir, recorded)));
   });
   const { result: capped, spills } = capEvidence(
     result,
-    (index) => engineLog.get(index) ?? path10.relative(projectDir, spillFile(evidenceDir, basename, index))
+    (index) => engineLog.get(index) ?? path16.relative(projectDir, spillFile(evidenceDir, basename, index))
   );
   const fresh = spills.filter((spill) => !engineLog.has(spill.index));
   if (fresh.length > 0) {
-    await fs9.mkdir(evidenceDir, { recursive: true });
+    await fs15.mkdir(evidenceDir, { recursive: true });
     for (const spill of fresh) {
-      await fs9.writeFile(spillFile(evidenceDir, basename, spill.index), spill.text, "utf8");
+      await fs15.writeFile(spillFile(evidenceDir, basename, spill.index), spill.text, "utf8");
     }
   }
   return capped;
 }
 function spillFile(evidenceDir, basename, index) {
-  return path10.join(evidenceDir, `${basename}--${index}.txt`);
+  return path16.join(evidenceDir, `${basename}--${index}.txt`);
 }
 var MAP_FILE = "map.md";
 var MAP_MAX_BYTES = 8e3;
@@ -31765,8 +33532,8 @@ var SECTION_HEADING = /^## Cycle (\d+) — (\S+) \(HEAD (.+)\)$/;
 var SECTION_FILE = /^- `(.+)`$/;
 var NO_GIT = "no git";
 async function writeRunMap(projectDir, state, agent, result) {
-  const file = path10.join(runDirPath(projectDir, state), MAP_FILE);
-  const existing = await fs9.readFile(file, "utf8").catch(() => null);
+  const file = path16.join(runDirPath(projectDir, state), MAP_FILE);
+  const existing = await fs15.readFile(file, "utf8").catch(() => null);
   const sections = existing === null ? [] : parseSections(existing);
   const files = mappedFiles(result);
   sections.push({
@@ -31776,7 +33543,7 @@ async function writeRunMap(projectDir, state, agent, result) {
     body: renderBody(result.summary, files, supersededBy(sections, files), resultRef(state.cycle, agent)),
     files
   });
-  await fs9.writeFile(file, render(state, sections, agent), "utf8");
+  await fs15.writeFile(file, render(state, sections, agent), "utf8");
 }
 function mappedFiles(result) {
   const refs = result.evidence.filter((entry) => entry.kind === "file").map((entry) => entry.ref);
@@ -31891,25 +33658,25 @@ function parseSections(text) {
 }
 
 // src/ops/memory.ts
-import fs11 from "node:fs/promises";
+import fs17 from "node:fs/promises";
 
 // src/store/memory-store.ts
-import fs10 from "node:fs/promises";
-import path11 from "node:path";
+import fs16 from "node:fs/promises";
+import path17 from "node:path";
 var MemoryNotFoundError = class extends Error {
   constructor(id, dir) {
     super(`no memory "${id}" under ${dir}`);
     this.name = "MemoryNotFoundError";
   }
 };
-var SLUG_MAX2 = 60;
+var SLUG_MAX3 = 60;
 function memoryFileName(frontmatter) {
-  const slug = frontmatter.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, SLUG_MAX2).replace(/^-+|-+$/g, "");
+  const slug = frontmatter.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, SLUG_MAX3).replace(/^-+|-+$/g, "");
   return `${frontmatter.id}-${slug === "" ? frontmatter.kind : slug}.md`;
 }
 async function listFiles(dir) {
   try {
-    return await fs10.readdir(dir);
+    return await fs16.readdir(dir);
   } catch (error2) {
     if (error2.code !== "ENOENT") throw error2;
     return [];
@@ -31920,9 +33687,9 @@ async function listMemories(projectDir) {
   const entries = await listFiles(dir);
   const memories = [];
   for (const name of entries.filter((entry) => entry.endsWith(".md"))) {
-    const file = path11.join(dir, name);
+    const file = path17.join(dir, name);
     try {
-      const { data, body } = parseFrontmatter(await fs10.readFile(file, "utf8"));
+      const { data, body } = parseFrontmatter(await fs16.readFile(file, "utf8"));
       const parsed = MemoryFrontmatterSchema.safeParse(data);
       if (!parsed.success) continue;
       memories.push({ frontmatter: parsed.data, body, file });
@@ -31950,9 +33717,9 @@ async function readMemory(projectDir, id) {
 }
 async function writeMemory(projectDir, memory) {
   const dir = resolveLoopPaths(projectDir).memory;
-  await fs10.mkdir(dir, { recursive: true });
-  const file = path11.join(dir, memoryFileName(memory.frontmatter));
-  await fs10.writeFile(file, serialiseFrontmatter(memory.frontmatter, memory.body), { encoding: "utf8", flag: "wx" });
+  await fs16.mkdir(dir, { recursive: true });
+  const file = path17.join(dir, memoryFileName(memory.frontmatter));
+  await fs16.writeFile(file, serialiseFrontmatter(memory.frontmatter, memory.body), { encoding: "utf8", flag: "wx" });
   return file;
 }
 
@@ -31965,7 +33732,7 @@ var InvalidMemoryInputError = class extends Error {
 };
 async function memoryAdd(projectDir, input, now = () => /* @__PURE__ */ new Date()) {
   const paths = resolveLoopPaths(projectDir);
-  await fs11.mkdir(paths.root, { recursive: true });
+  await fs17.mkdir(paths.root, { recursive: true });
   return withLock(paths.lock, async () => {
     const used = await usedMemoryNumbers(projectDir);
     const next = used.length === 0 ? 1 : Math.max(...used) + 1;
@@ -32049,8 +33816,8 @@ function score(memory, terms) {
 }
 
 // src/ops/plan.ts
-import fs12 from "node:fs/promises";
-import path12 from "node:path";
+import fs18 from "node:fs/promises";
+import path18 from "node:path";
 var InvalidPlanInputError = class extends Error {
   constructor(detail) {
     super(detail);
@@ -32059,7 +33826,7 @@ var InvalidPlanInputError = class extends Error {
 };
 async function planCreate(projectDir, input, now = () => /* @__PURE__ */ new Date()) {
   const paths = resolveLoopPaths(projectDir);
-  await fs12.mkdir(paths.root, { recursive: true });
+  await fs18.mkdir(paths.root, { recursive: true });
   return withLock(paths.lock, async () => {
     const existing = await listPlanIds(projectDir);
     const next = existing.length === 0 ? 1 : Math.max(...existing.map((id2) => Number(id2.slice(1)))) + 1;
@@ -32191,8 +33958,8 @@ async function storyUpdate(projectDir, storyId, patch, now = () => /* @__PURE__ 
       );
       assertDependenciesResolve(siblings, merged.data);
     }
-    const renamed = path12.join(path12.dirname(current.file), storyFileName(merged.data));
-    if (renamed !== current.file) await fs12.rename(current.file, renamed);
+    const renamed = path18.join(path18.dirname(current.file), storyFileName(merged.data));
+    if (renamed !== current.file) await fs18.rename(current.file, renamed);
     const file = await writeStory(projectDir, { frontmatter: merged.data, body: current.body });
     const manifest = await renderManifest(projectDir, planId, now);
     return { id: storyId, file, manifest };
@@ -32228,14 +33995,14 @@ async function storyNext(projectDir, planId) {
 }
 
 // src/ops/history.ts
-import fs13 from "node:fs/promises";
-import path13 from "node:path";
+import fs19 from "node:fs/promises";
+import path19 from "node:path";
 var HISTORY_DEFAULT_LIMIT = 50;
 async function readRunHistory(projectDir, options = {}) {
   const limit = options.limit ?? HISTORY_DEFAULT_LIMIT;
   if (limit <= 0) return [];
   const runsDir = resolveLoopPaths(projectDir).runs;
-  const entries = await fs13.readdir(runsDir, { withFileTypes: true }).catch(() => []);
+  const entries = await fs19.readdir(runsDir, { withFileTypes: true }).catch(() => []);
   const names = entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort().reverse();
   const live = await readLiveRun(projectDir);
   const runs = [];
@@ -32245,7 +34012,7 @@ async function readRunHistory(projectDir, options = {}) {
     const [runId, story, track] = parts;
     if (options.track !== void 0 && track !== options.track) continue;
     runs.push(
-      await readRun(path13.join(runsDir, name), {
+      await readRun(path19.join(runsDir, name), {
         id: name,
         run_id: runId,
         track,
@@ -32270,12 +34037,12 @@ async function readLiveRun(projectDir) {
   };
 }
 async function readRun(dir, identity) {
-  const inside = await fs13.readdir(dir, { withFileTypes: true }).catch(() => []);
+  const inside = await fs19.readdir(dir, { withFileTypes: true }).catch(() => []);
   const timing = identity.live !== null && identity.live.dir === identity.id ? identity.live : null;
   const cycleDirs = inside.filter((entry) => entry.isDirectory() && /^cycle-\d+$/.test(entry.name)).map((entry) => ({ name: entry.name, cycle: Number(entry.name.slice("cycle-".length)) })).sort((a, b) => a.cycle - b.cycle);
   const cycles = [];
   for (const { name, cycle } of cycleDirs) {
-    cycles.push(await readCycle(path13.join(dir, name), cycle, timing?.closedAt.get(cycle) ?? null));
+    cycles.push(await readCycle(path19.join(dir, name), cycle, timing?.closedAt.get(cycle) ?? null));
   }
   const hasClosing = inside.some((entry) => entry.isDirectory() && entry.name === "closing");
   return {
@@ -32289,17 +34056,17 @@ async function readRun(dir, identity) {
     cycles,
     // The closing pass has no cycle number and `state.history` has no entry for
     // it: it happens after the run's last cycle closed.
-    closing: hasClosing ? await readCycle(path13.join(dir, "closing"), 0, null) : null
+    closing: hasClosing ? await readCycle(path19.join(dir, "closing"), 0, null) : null
   };
 }
 async function readCycle(dir, cycle, at) {
-  const inside = await fs13.readdir(dir).catch(() => []);
-  const roster = await readJson(path13.join(dir, "roster.json"), RosterFields);
-  const verify = await readJson(path13.join(dir, "verify", "index.json"), LedgerSchema);
+  const inside = await fs19.readdir(dir).catch(() => []);
+  const roster = await readJson(path19.join(dir, "roster.json"), RosterFields);
+  const verify = await readJson(path19.join(dir, "verify", "index.json"), LedgerSchema);
   const agents = [];
   for (const entry of inside.filter((name) => name.endsWith(".json")).sort()) {
     if (entry === "roster.json" || entry === "findings.json") continue;
-    const result = await readJson(path13.join(dir, entry), ResultFields);
+    const result = await readJson(path19.join(dir, entry), ResultFields);
     if (result === null) continue;
     const [name, instance] = splitInstance(entry.slice(0, -".json".length));
     agents.push({
@@ -32338,7 +34105,7 @@ var ResultFields = object2({
 });
 async function readJson(file, schema) {
   try {
-    const parsed = schema.safeParse(JSON.parse(await fs13.readFile(file, "utf8")));
+    const parsed = schema.safeParse(JSON.parse(await fs19.readFile(file, "utf8")));
     return parsed.success ? parsed.data : null;
   } catch {
     return null;
@@ -32430,8 +34197,8 @@ function round(value, decimals) {
 }
 
 // src/ops/roster.ts
-import fs14 from "node:fs/promises";
-import path14 from "node:path";
+import fs20 from "node:fs/promises";
+import path20 from "node:path";
 var RosterViolationError = class extends Error {
   constructor(violations) {
     super(`roster rejected:
@@ -32514,7 +34281,7 @@ async function cycleRosterSet(projectDir, parsed) {
     }
   }
   if (violations.length > 0) throw new RosterViolationError(violations);
-  return write(path14.join(cycleDirPath(projectDir, state), "roster.json"), parsed);
+  return write(path20.join(cycleDirPath(projectDir, state), "roster.json"), parsed);
 }
 async function closingRosterSet(projectDir, parsed) {
   const state = await new StateStore(projectDir).get();
@@ -32550,7 +34317,7 @@ async function closingRosterSet(projectDir, parsed) {
     }
   }
   if (violations.length > 0) throw new RosterViolationError(violations);
-  return write(path14.join(runDirPath(projectDir, state), "closing", "roster.json"), parsed);
+  return write(path20.join(runDirPath(projectDir, state), "closing", "roster.json"), parsed);
 }
 function contradictions(selected, skipped) {
   return Object.keys(skipped).filter((agent) => selected.has(agent)).map((agent) => `"${agent}" is both drafted and skipped \u2014 a roster must say one or the other`);
@@ -32562,20 +34329,20 @@ async function loadTrack(projectDir, name) {
   return { config: config2, track };
 }
 async function write(file, roster) {
-  await fs14.mkdir(path14.dirname(file), { recursive: true });
-  await fs14.writeFile(file, `${JSON.stringify(roster, null, 2)}
+  await fs20.mkdir(path20.dirname(file), { recursive: true });
+  await fs20.writeFile(file, `${JSON.stringify(roster, null, 2)}
 `, "utf8");
   return { path: file };
 }
 
 // src/ops/summary.ts
-import fs15 from "node:fs/promises";
-import path15 from "node:path";
+import fs21 from "node:fs/promises";
+import path21 from "node:path";
 var NO_FINDINGS = { high: 0, medium: 0, low: 0 };
 var MAP_FILE2 = "map.md";
 async function hasDesignSystem(projectDir) {
   try {
-    return (await fs15.stat(resolveLoopPaths(projectDir).designSystem)).isFile();
+    return (await fs21.stat(resolveLoopPaths(projectDir).designSystem)).isFile();
   } catch {
     return false;
   }
@@ -32583,11 +34350,11 @@ async function hasDesignSystem(projectDir) {
 async function runMap(projectDir, state) {
   if (state.run_id === null || state.track === null) return null;
   try {
-    if (!(await fs15.stat(path15.join(runDirPath(projectDir, state), MAP_FILE2))).isFile()) return null;
+    if (!(await fs21.stat(path21.join(runDirPath(projectDir, state), MAP_FILE2))).isFile()) return null;
   } catch {
     return null;
   }
-  return path15.join(".mjloop", "runs", runDirName(state), MAP_FILE2);
+  return path21.join(".mjloop", "runs", runDirName(state), MAP_FILE2);
 }
 async function stateSummary(projectDir) {
   let config2 = null;
@@ -32735,15 +34502,15 @@ function byDraftedThenName(a, b) {
 }
 
 // src/util/entrypoint.ts
-import fs16 from "node:fs/promises";
-import path16 from "node:path";
+import fs22 from "node:fs/promises";
+import path22 from "node:path";
 import { pathToFileURL } from "node:url";
 async function isEntrypoint(moduleUrl) {
   const argv1 = process.argv[1];
   if (argv1 === void 0) return false;
-  let resolved = path16.resolve(argv1);
+  let resolved = path22.resolve(argv1);
   try {
-    resolved = await fs16.realpath(resolved);
+    resolved = await fs22.realpath(resolved);
   } catch {
   }
   return moduleUrl === pathToFileURL(resolved).href;
@@ -32801,16 +34568,24 @@ function buildServer() {
         track: IdSchema.describe("Track name as defined in .mjloop/config.yaml"),
         goal: string2().min(1).describe("What this run must achieve"),
         plan: IdSchema.nullish().describe("Plan id, e.g. P001"),
-        story: IdSchema.nullish().describe("Story id, e.g. P001-S02")
+        story: IdSchema.nullish().describe("Story id, e.g. P001-S02"),
+        feature: FeatureIdSchema.nullish().describe(
+          "Approved feature brief id, e.g. F001. Pins this run's skill manifest from that brief and the accepted component map. Omit it and the run behaves exactly as it always has."
+        )
       }
     },
-    async ({ project_dir, track, goal, plan, story }) => guard(
+    async ({ project_dir, track, goal, plan, story, feature }) => guard(
       async () => ok(
         await runStart(resolveProjectDir(project_dir), {
           track,
           goal,
           plan: plan ?? null,
-          story: story ?? null
+          story: story ?? null,
+          // Validated by `FeatureIdSchema` on the way in rather than left to
+          // `readFeatureBrief` to reject: this is the only surface that opens
+          // a run, so a shape refused here is refused before anything is
+          // read, and the caller is told which argument it got wrong.
+          feature: feature ?? null
         })
       )
     )
@@ -32929,6 +34704,191 @@ function buildServer() {
       inputSchema: { project_dir: projectDirArg, reason: string2().min(1) }
     },
     async ({ project_dir, reason }) => guard(async () => ok(await halt(resolveProjectDir(project_dir), reason)))
+  );
+  server.registerTool(
+    "mjloop_feature_create",
+    {
+      title: "Open a feature brief",
+      description: "Mint a draft feature brief \u2014 what discovery decided, written down so a plan is built on a record rather than on chat scrollback. Returns its id and revision; fill it in with mjloop_feature_update and record the decision with mjloop_feature_approve. With supersedes it instead opens the next revision of an existing feature as a draft, carrying the approved content forward: that is the only way to change an approved brief, and it leaves the approved revision saying exactly what it always said.",
+      inputSchema: {
+        project_dir: projectDirArg,
+        title: string2().min(1).max(200).optional().describe("One line naming the feature. Omitted only with supersedes"),
+        problem: string2().min(1).max(2e4).optional().describe("What is wrong today and for whom, in the words of the person who asked. Omitted only with supersedes"),
+        // Recorded rather than read off `.mjloop/config.yaml` here, because the
+        // record must say which policy this interview ran under and the live
+        // config answers a question about the present. A per-feature override
+        // is exactly the case that would otherwise be lost.
+        discovery_mode: FeatureDiscoveryModeSchema.optional().describe(
+          "The discovery policy this brief was produced under \u2014 orchestration.discovery.mode, or the per-feature choice that overrode it"
+        ),
+        question_budget: number2().int().min(1).max(20).optional().describe("The question ceiling the interview ran under, from orchestration.discovery.question_budget or its override"),
+        acceptance: array(string2().min(1)).optional().describe("Checkable conditions. May be empty on a draft; approval refuses a brief that still has none"),
+        affected_components: array(IdSchema).optional().describe("Component ids from the accepted map in .mjloop/profile/accepted/. Empty is legal; an unknown id is refused"),
+        supersedes: FeatureIdSchema.optional().describe("Feature id whose approved revision this one replaces, e.g. F001"),
+        expect_revision: number2().int().positive().optional().describe("With supersedes: the approved revision you read. Refused if the feature has moved on since")
+      }
+    },
+    async ({ project_dir, title, problem, discovery_mode, question_budget, acceptance, affected_components, supersedes, expect_revision }) => guard(async () => {
+      const dir = resolveProjectDir(project_dir);
+      if (supersedes !== void 0) {
+        if (expect_revision === void 0) {
+          throw new Error(
+            "superseding is compare-and-swap: name expect_revision, the approved revision you read. Without it this would replace whatever happens to be there now, which may be a revision somebody else approved while you were reading"
+          );
+        }
+        const carried = { title, problem, discovery_mode, question_budget, acceptance, affected_components };
+        const named = Object.entries(carried).filter(([, value]) => value !== void 0).map(([key]) => key);
+        if (named.length > 0) {
+          throw new Error(
+            `a successor carries its predecessor's content forward, so it takes none of its own \u2014 drop ${named.join(", ")} and change the draft this returns with mjloop_feature_update`
+          );
+        }
+        return ok(await supersedeFeatureBrief(dir, { id: supersedes, expectRevision: expect_revision }));
+      }
+      if (expect_revision !== void 0) {
+        throw new Error("expect_revision belongs to supersedes \u2014 a first revision replaces nothing, so there is no revision to swap on");
+      }
+      if (title === void 0 || problem === void 0) {
+        throw new Error("a new brief needs a title and a problem, or a supersedes naming the feature whose next revision this is");
+      }
+      if (discovery_mode === void 0 || question_budget === void 0) {
+        throw new Error(
+          "a brief records the policy it was produced under \u2014 give discovery_mode and question_budget, reading orchestration.discovery.mode and orchestration.discovery.question_budget from .mjloop/config.yaml unless this feature was given its own"
+        );
+      }
+      return ok(
+        await createFeatureBrief(dir, {
+          title,
+          problem,
+          discovery: { mode: discovery_mode, questionBudget: question_budget },
+          ...acceptance === void 0 ? {} : { acceptance },
+          ...affected_components === void 0 ? {} : { affectedComponents: affected_components }
+        })
+      );
+    })
+  );
+  server.registerTool(
+    "mjloop_feature_get",
+    {
+      title: "Read a feature brief",
+      description: "Read the latest revision of one feature, or with revision the exact one a plan was built on, or with no feature at all a summary of every feature this project has raised. A single read also returns the revision list and a digest of the record, which are what an expect_revision and an expect_digest are taken from. status is superseded when a higher revision exists \u2014 it is derived here and never stored.",
+      inputSchema: {
+        project_dir: projectDirArg,
+        feature: FeatureIdSchema.optional().describe("Feature id, e.g. F001. Omit to list every feature"),
+        revision: number2().int().positive().optional().describe("Read this exact revision instead of the latest")
+      }
+    },
+    async ({ project_dir, feature, revision }) => guard(async () => {
+      const dir = resolveProjectDir(project_dir);
+      if (feature === void 0) {
+        if (revision !== void 0) throw new Error("a revision belongs to a feature \u2014 name one, or drop revision to list every feature");
+        return ok({ features: await listFeatureSummaries(dir) });
+      }
+      const revisions = await listFeatureRevisions(dir, feature);
+      if (revisions.length === 0) {
+        throw new Error(`no feature ${feature} in this project \u2014 call mjloop_feature_get with no feature to see which exist`);
+      }
+      const record2 = revision === void 0 ? await readFeatureBrief(dir, feature) : await readFeatureRevision(dir, feature, revision);
+      if (record2 === null) {
+        throw new Error(`${feature} has no revision ${String(revision)} \u2014 it has ${revisions.join(", ")}`);
+      }
+      return ok({ ...record2, revisions });
+    })
+  );
+  server.registerTool(
+    "mjloop_feature_update",
+    {
+      title: "Update a feature draft",
+      description: "Record what the interview just learned: a question with the recommendation you made and the answer that came back, and the acceptance criteria, components, title or problem that answer settled. A question with no answer is a real record \u2014 it is the decision the budget ran out on, and dropping it would make the brief look more settled than it is. Draft only: an approved revision is never rewritten, and mjloop_feature_create with supersedes is the way to change one.",
+      inputSchema: {
+        project_dir: projectDirArg,
+        feature: FeatureIdSchema.describe("Feature id, e.g. F001"),
+        question: string2().min(1).max(2e3).optional().describe("A decision question the interview asked"),
+        recommendation: string2().min(1).max(2e3).nullish().describe("What you recommended, and why, when you asked it"),
+        answer: string2().min(1).max(4e3).nullish().describe("The answer in the user's own words. Omit for a question the budget ran out on"),
+        title: string2().min(1).max(200).optional(),
+        problem: string2().min(1).max(2e4).optional(),
+        acceptance: array(string2().min(1)).optional().describe("Replaces the list; approval refuses a brief with none"),
+        affected_components: array(IdSchema).optional().describe("Replaces the list. Every id must be in the accepted component map"),
+        tags: array(string2().min(1)).optional().describe(
+          "Replaces the list. What the brief declares itself to be about, beyond its component ids \u2014 joined against a component's skillTags by skill selection, for a cross-cutting concern like an authentication boundary. Name a tag only because a person decided it belonged during discovery; never infer one from problem or acceptance text"
+        ),
+        // A successor inherits its predecessor's discovery block along with the
+        // rest of its content, and the interview behind revision 2 is not the
+        // interview behind revision 1: it may run under a mode the project has
+        // since moved to, or under an override stated for this request alone.
+        // `mjloop_feature_create` refuses these alongside `supersedes` and names
+        // this tool as where they belong, so they have to be reachable here or
+        // that refusal points at nothing.
+        discovery_mode: FeatureDiscoveryModeSchema.optional().describe(
+          "The discovery policy this revision's own interview ran under, when it is not the one carried forward"
+        ),
+        question_budget: number2().int().min(1).max(20).optional().describe("The question ceiling this revision's own interview ran under"),
+        discovery_complete: boolean2().optional().describe("true when the interview has stopped asking, false to reopen it. The engine stamps the time")
+      }
+    },
+    async ({ project_dir, feature, question, recommendation, answer, title, problem, acceptance, affected_components, tags, discovery_mode, question_budget, discovery_complete }) => guard(async () => {
+      const dir = resolveProjectDir(project_dir);
+      if (question === void 0 && (recommendation !== void 0 || answer !== void 0)) {
+        throw new Error("a recommendation and an answer belong to a question \u2014 name the question this decision answers");
+      }
+      const patch = {
+        ...title === void 0 ? {} : { title },
+        ...problem === void 0 ? {} : { problem },
+        ...acceptance === void 0 ? {} : { acceptance },
+        ...affected_components === void 0 ? {} : { affectedComponents: affected_components },
+        ...tags === void 0 ? {} : { tags },
+        ...discovery_mode === void 0 ? {} : { discoveryMode: discovery_mode },
+        ...question_budget === void 0 ? {} : { discoveryQuestionBudget: question_budget },
+        // The timestamp is the engine's, exactly as a decision's `at` is. A
+        // caller asked for an ISO string invents one, and a brief's only
+        // claim about when its interview ended would then be a guess.
+        ...discovery_complete === void 0 ? {} : { discoveryCompletedAt: discovery_complete ? (/* @__PURE__ */ new Date()).toISOString() : null }
+      };
+      const patched = Object.keys(patch).length === 0 ? null : await updateFeatureDraft(dir, feature, patch);
+      if (question === void 0) {
+        if (patched === null) throw new Error("nothing to change \u2014 pass a question to record a decision, or a field to set");
+        return ok(patched);
+      }
+      return ok(
+        await appendFeatureDecision(dir, feature, {
+          question,
+          recommendation: recommendation ?? null,
+          answer: answer ?? null
+        })
+      );
+    })
+  );
+  server.registerTool(
+    "mjloop_feature_approve",
+    {
+      title: "Record a decision about a feature brief",
+      description: "Approve a draft brief, which is what lets a plan be built on it and is the last write that revision ever takes. Ask the user and record their answer, including their own words in note. Never record an approval nobody gave. Refused unless expect_revision and expect_digest are the revision and the digest of the brief you actually showed them, so a brief that was changed while you were waiting is refused rather than approved unread, and refused if the brief still has no acceptance criteria.",
+      inputSchema: {
+        project_dir: projectDirArg,
+        feature: FeatureIdSchema.describe("Feature id, e.g. F001"),
+        expect_revision: number2().int().positive().describe("The revision you read and showed the user. Refused if the brief has moved on since"),
+        // The revision number alone is not a precondition on a draft: it does
+        // not move while the record is editable, which is the whole of the
+        // window an approval waits in. The digest does, so it is required
+        // rather than optional — an approval that could omit it would be an
+        // approval that could be built on a brief nobody read.
+        expect_digest: string2().regex(/^[a-f0-9]{64}$/).describe("The digest returned beside the brief you showed the user. Refused if a word of it has changed since"),
+        by: string2().min(1).describe("Who decided. Use the user name or identifier, not the agent"),
+        note: string2().min(1).nullish().describe("The approver's own words")
+      }
+    },
+    async ({ project_dir, feature, expect_revision, expect_digest, by, note }) => guard(
+      async () => ok(
+        await approveFeatureBrief(resolveProjectDir(project_dir), {
+          id: feature,
+          expectRevision: expect_revision,
+          expectDigest: expect_digest,
+          by,
+          ...note === void 0 ? {} : { note }
+        })
+      )
+    )
   );
   server.registerTool(
     "mjloop_plan_create",
@@ -33117,10 +35077,10 @@ function buildServer() {
     "mjloop_report_get",
     {
       title: "Read a report over past runs",
-      description: "Two projections of one bounded walk over past runs. telemetry: what every specialist this project drafted actually returned, so a mode or an available list can be pruned on evidence \u2014 a report, never a rule. preflight: the shape of a run on a track before it starts \u2014 roster, dispatches per cycle, ceiling, and what comparable past runs took. Neither is folded into routine output; ask for it.",
+      description: "Three projections of one bounded read, each cheaper folded into this tool than declared beside it \u2014 see this file's header for what a fourth declaration costs on every turn. telemetry: what every specialist this project drafted actually returned, so a mode or an available list can be pruned on evidence \u2014 a report, never a rule. preflight: the shape of a run on a track before it starts \u2014 roster, dispatches per cycle, ceiling, and what comparable past runs took. skills: this machine's skill library (source, revision, license, audit) beside this project's acceptances of it (digest, components, agents, policy, status) \u2014 a read of what mjloop-cli skills already decided, never a way to decide it. None is folded into routine output; ask for it.",
       inputSchema: {
         project_dir: projectDirArg,
-        report: _enum(["telemetry", "preflight"]),
+        report: _enum(["telemetry", "preflight", "skills"]),
         track: IdSchema.optional().describe("preflight only, and required for it. Track name as in .mjloop/config.yaml"),
         story: IdSchema.nullish().describe("preflight only. Compares story-bound runs against story-bound runs"),
         limit: number2().int().positive().max(200).optional().describe("telemetry only: past runs to walk. Default 50")
@@ -33131,6 +35091,10 @@ function buildServer() {
       if (report === "preflight") {
         if (track === void 0) throw new Error("preflight needs a track \u2014 the estimate is per track, and is asked before a run exists");
         return ok(await preflightEstimate(dir, { track, story: story ?? null }));
+      }
+      if (report === "skills") {
+        const [library, acceptances] = await Promise.all([listPackages(dir), listAcceptances(dir)]);
+        return ok({ packages: library.packages, unreadable: library.unreadable, acceptances });
       }
       return ok(await readTelemetry(dir, limit === void 0 ? {} : { limit }));
     })

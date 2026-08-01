@@ -3,13 +3,14 @@ import path from 'node:path'
 import * as z from 'zod'
 import { findTrack, forbiddenSpecialists, permittedAgents } from '../schemas/config.js'
 import { AgentNameSchema, capEvidence, parseAgentResult, type AgentResult } from '../schemas/contract.js'
+import { SkillManifestSchema, type SkillManifest } from '../schemas/skill-selection.js'
 import type { State } from '../schemas/state.js'
 import type { LedgerEntry } from '../schemas/verify.js'
 import { loadConfig } from '../store/config-store.js'
 import { headSha } from '../store/git.js'
 import { StateStore, type Clock } from '../store/state-store.js'
 import { errorSignature } from './fingerprint.js'
-import { NoActiveRunError, UnknownTrackError, cycleDirPath, runDirPath } from './run.js'
+import { NoActiveRunError, SKILL_MANIFEST_FILE, UnknownTrackError, cycleDirPath, runDirPath } from './run.js'
 import { readVerifyLedger } from './verify.js'
 
 export class InvalidAgentNameError extends Error {
@@ -95,6 +96,45 @@ export class RunReplacedError extends Error {
     )
     this.name = 'RunReplacedError'
   }
+}
+
+/**
+ * A `skills_used` naming a skill this run's pinned manifest never selected for
+ * this agent.
+ *
+ * The counter-evidence `ContradictedEvidenceError` is for a claimed pass, and
+ * it exists for the same stated reason: until the engine had a record of its
+ * own, "there was nothing to check it against". Here there is — the manifest is
+ * written once at run start, protected from edits by `PROTECTED_BASENAMES`, and
+ * names exactly which skills each role was offered — so a `skills_used` that
+ * nothing joins against it would be a claim with its own witness standing
+ * unasked in the run directory. Dynamic skill selection's whole point is that
+ * routing is decided from records rather than asserted by a model, and a report
+ * of what was *followed* is worth no more than the selection it can be checked
+ * against.
+ *
+ * The refusal names both sides, because the recoverable action differs: an
+ * agent that mistyped an id it really was offered needs the list, and one that
+ * invented a skill outright needs to be told the honest answer is `[]`. A run
+ * that pinned no manifest, or a role the manifest holds no row for, offers
+ * nothing at all — that is not an error state, it is most runs, and `[]` is the
+ * correct report for it.
+ */
+export class UnselectedSkillError extends Error {
+  constructor(agent: string, claimed: readonly string[], offered: readonly string[]) {
+    super(
+      `"${agent}" reported using ${quoted(claimed)}, which this run's pinned skill manifest did not select for it. ` +
+        (offered.length === 0
+          ? 'Nothing was selected for this agent on this run, so "skills_used" must be [].'
+          : `It was offered ${quoted(offered)}; "skills_used" may name only those, and [] when none was followed.`) +
+        ' No agent may add a skill the validated selection did not produce, however well one seems to fit.',
+    )
+    this.name = 'UnselectedSkillError'
+  }
+}
+
+function quoted(ids: readonly string[]): string {
+  return ids.map((id) => `"${id}"`).join(', ')
 }
 
 /**
@@ -222,6 +262,20 @@ export async function runLog(
   if (input.run_id !== undefined && input.run_id !== null && input.run_id !== state.run_id) {
     throw new RunReplacedError(agent.data, input.run_id, state.run_id)
   }
+
+  /* 2b — the claimed skills, against the ones this run actually selected. */
+
+  // Placed above the closing branch rather than beside the contradiction check
+  // below, and that position is load-bearing for the same reason `run_id`'s is:
+  // a closing agent returns through the branch that follows and never reaches
+  // the ordinary path, so a join placed there would leave the one result a
+  // commit rests on as the only one able to carry an unbacked claim.
+  //
+  // Reads nothing when the agent claimed nothing, which is every result written
+  // before this field existed and every agent this run handed no skills — the
+  // manifest is not even opened for them, so the unchanged-by-default path
+  // stays exactly as unchanged as it was.
+  await refuseUnselectedSkills(projectDir, state, agent.data, parsed.value)
 
   /* 3 — the closing branch, which must precede the refusal below. */
 
@@ -400,6 +454,72 @@ export async function runLog(
   }
 
   return { path: file, findingsAdded: capped.findings.length, gateOpened: proof !== undefined }
+}
+
+/* ── the pinned skill manifest, read rather than written ──────────────────── */
+
+/**
+ * Refuse a result claiming a skill this run never selected for this agent.
+ *
+ * Returns immediately when the agent claimed nothing, and that early return is
+ * what keeps every result the engine has ever written on exactly the path it
+ * was already on: `skills_used` defaults to `[]`, so the file below is not even
+ * opened for a run that pinned no manifest and an agent that named no skill —
+ * which is every run today and most runs forever.
+ *
+ * A manifest that is absent, unreadable, or will not parse offers nothing,
+ * rather than excusing the claim. That direction is deliberate and it is the
+ * one that fails safe: an unreadable pin is exactly the circumstance in which
+ * an unverifiable claim would otherwise slip through, and the correct report
+ * against a selection nobody can read is `[]`. It is also the same tolerance
+ * the handoff applies to the same file, read the other way round — a document
+ * that cannot be assembled must not fail a cycle, and a claim that cannot be
+ * checked must not be recorded as checked.
+ *
+ * The manifest's rows cover the four fixed roles skill selection routes for;
+ * every other agent a track defines — `editor`, `fixer`, `scout`, `docs` — has
+ * no row and is therefore offered nothing, which is the correct answer under
+ * this story's model rather than an oversight of it: those roles are dispatched
+ * without a per-component routing decision, so there is no selection for them
+ * to have followed.
+ */
+async function refuseUnselectedSkills(
+  projectDir: string,
+  state: State,
+  agent: string,
+  result: AgentResult,
+): Promise<void> {
+  if (result.skills_used.length === 0) return
+
+  const offered = await selectedSkillsFor(projectDir, state, agent)
+  const claimed = result.skills_used.filter((skillId) => !offered.has(skillId))
+  if (claimed.length > 0) throw new UnselectedSkillError(agent, claimed, [...offered].sort())
+}
+
+/** Every skill id this run's pinned manifest selected for one agent, in any component. */
+async function selectedSkillsFor(projectDir: string, state: State, agent: string): Promise<Set<string>> {
+  if (state.run_id === null || state.track === null) return new Set()
+
+  const file = path.join(runDirPath(projectDir, state), SKILL_MANIFEST_FILE)
+  const raw = await fs.readFile(file, 'utf8').catch(() => null)
+  if (raw === null) return new Set()
+
+  const parsed = safeJson(raw)
+  if (parsed === null) return new Set()
+
+  return new Set(
+    parsed.selections.filter((selection) => selection.agent === agent).flatMap((selection) => selection.skillIds),
+  )
+}
+
+/** The manifest, or `null` for anything that will not read back as one. */
+function safeJson(raw: string): SkillManifest | null {
+  try {
+    const parsed = SkillManifestSchema.safeParse(JSON.parse(raw) as unknown)
+    return parsed.success ? parsed.data : null
+  } catch {
+    return null
+  }
 }
 
 /* ── the ledger, read rather than written ─────────────────────────────────── */

@@ -151,6 +151,23 @@ function template(key) {
 }
 
 /**
+ * Whether this page actually has a word for a key.
+ *
+ * `template()` falls back to the key itself, which is right for user-authored
+ * names — an agent or a track called `scout` should render as `scout` rather
+ * than as a blank. But it is wrong for a closed enum the page *does* translate:
+ * a value the dictionary has not caught up with would render as the dotted key.
+ * So a caller that wants "translate it if we have a word, otherwise show the
+ * value as it came" asks here first.
+ *
+ * @param {string} key
+ * @returns {boolean}
+ */
+export function known(key) {
+  return key in strings || key in fallbackStrings
+}
+
+/**
  * A translated string. **For attributes only** — content goes through `tx()`,
  * which wraps each hole in `<bdi>` so an English id inside an Arabic sentence
  * cannot drag the punctuation around it to the wrong end.

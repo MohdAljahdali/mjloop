@@ -11,6 +11,7 @@
  * that looked editable would be lying.
  */
 import { clone, flag, phrase, verbatim } from '../ui/dom.js'
+import { known, localeEpoch } from '../lib/i18n.js'
 import { feed } from '../lib/api.js'
 import { stamp } from '../lib/fmt.js'
 import { read as prefs, write as remember } from '../lib/local.js'
@@ -72,7 +73,16 @@ export function mountMemory() {
     onChange: () => draw(),
   })
 
-  /** The kinds actually present, so the picker never offers an empty filter. */
+  /**
+   * The kinds actually present, so the picker never offers an empty filter —
+   * and the locale they were last written in.
+   *
+   * The epoch belongs in this signature because the options are built *outside*
+   * a row's `update()`, where nothing else would repaint them: switching to
+   * Arabic left a picker still reading "Every kind" until a memory of a new kind
+   * happened to arrive. This is rule 1 from `ui/dom.js` — no memoisation above
+   * the leaf — applied to a guard that had quietly become one.
+   */
   let offered = ''
 
   register({
@@ -83,9 +93,10 @@ export function mountMemory() {
       const all = memories.value() ?? []
 
       const kinds = [...new Set(all.map((memory) => memory.kind))].sort()
-      if (kinds.join(',') !== offered) {
-        offered = kinds.join(',')
-        kind.replaceChildren(option('', 'memory.allKinds'), ...kinds.map((name) => option(name, null)))
+      const signature = `${kinds.join(',')} ${localeEpoch()}`
+      if (signature !== offered) {
+        offered = signature
+        kind.replaceChildren(option('', 'memory.allKinds'), ...kinds.map((name) => option(name, kindKey(name))))
         kind.value = kindFilter
       }
 
@@ -107,10 +118,15 @@ export function mountMemory() {
       update(memory) {
         const id = slots['id']
         if (id !== undefined) verbatim(id, memory.id)
-        // A kind comes from the engine's own enum, but the page does not own a
-        // word for each — the memory schema is the engine's to grow.
+        // A kind comes from the engine's own enum, and the page has a word for
+        // the ones it knows. The schema is still the engine's to grow, so a
+        // kind this dictionary has never heard of renders as it arrived rather
+        // than as a dotted key. A row is keyed by memory id and a memory's kind
+        // does not change, so a node never has to cross between the two forms.
         const kindSlot = slots['kind']
-        if (kindSlot !== undefined) verbatim(kindSlot, memory.kind)
+        const kindWord = kindKey(memory.kind)
+        if (kindSlot !== undefined && kindWord !== null) phrase(kindSlot, kindWord)
+        else if (kindSlot !== undefined) verbatim(kindSlot, memory.kind)
         const title = slots['title']
         if (title !== undefined) verbatim(title, memory.title)
         const at = slots['at']
@@ -148,4 +164,17 @@ function option(value, key) {
   if (key === null) node.textContent = value
   else phrase(node, key)
   return node
+}
+
+/**
+ * The locale key for a memory kind, or `null` when this page has no word for
+ * it. The filter and the row badge both ask, so the two can never disagree
+ * about whether a kind is a translated noun or a raw token.
+ *
+ * @param {string} kind
+ * @returns {string | null}
+ */
+function kindKey(kind) {
+  const key = `memory.kind.${kind}`
+  return known(key) ? key : null
 }

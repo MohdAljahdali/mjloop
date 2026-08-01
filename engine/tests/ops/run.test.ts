@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises'
+import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { NoActiveRunError, UnknownTrackError, cycleAdvance, halt, runDirName, runDirPath, runStart } from '../../src/ops/run.js'
@@ -6,9 +7,17 @@ import { initLoop } from '../../src/ops/init.js'
 import { runLog } from '../../src/ops/log.js'
 import { gateSet, planCreate, storyAdd } from '../../src/ops/plan.js'
 import { rosterSet } from '../../src/ops/roster.js'
+import { UnresolvedComponentError } from '../../src/ops/skill-selection.js'
+import type { ProjectComponent } from '../../src/schemas/project-profile.js'
+import type { SkillPackage } from '../../src/schemas/skill-library.js'
+import { acceptSkill } from '../../src/store/skill-acceptance-store.js'
+import { writePackage } from '../../src/store/skill-library-store.js'
+import { SkillManifestSchema } from '../../src/schemas/skill-selection.js'
 import { InvalidStateError, StateStore } from '../../src/store/state-store.js'
 import { loadConfig, writeConfig } from '../../src/store/config-store.js'
+import { approveFeatureBrief, createFeatureBrief, updateFeatureDraft } from '../../src/store/feature-store.js'
 import { resolveLoopPaths } from '../../src/store/paths.js'
+import { acceptProfile } from '../../src/store/project-profile-store.js'
 import { makeTmpProject, type TmpProject } from '../helpers/tmp-project.js'
 
 const NOW = new Date('2026-07-26T10:36:00.000Z')
@@ -842,6 +851,362 @@ describe('the run verify pin', () => {
   })
 })
 
+describe('the run skill manifest', () => {
+  const MANIFEST = 'skill-selection.json'
+  const DIGEST = 'a'.repeat(64)
+
+  // The shared library this project's acceptances join against. Pointed at a
+  // throwaway directory so nothing here can reach the machine's real one.
+  let dataHome: string
+  let contentDir: string
+
+  beforeEach(async () => {
+    dataHome = await fs.mkdtemp(path.join(os.tmpdir(), 'loop-library-'))
+    process.env.MJLOOP_DATA_HOME = dataHome
+    contentDir = await fs.mkdtemp(path.join(os.tmpdir(), 'loop-content-'))
+    await fs.writeFile(path.join(contentDir, 'SKILL.md'), '# Flutter Widgets\n', 'utf8')
+  })
+
+  afterEach(async () => {
+    delete process.env.MJLOOP_DATA_HOME
+    await fs.rm(dataHome, { recursive: true, force: true })
+    await fs.rm(contentDir, { recursive: true, force: true })
+  })
+
+  /** A library package this project can accept — audited, since acceptance refuses anything else. */
+  function auditedPackage(): SkillPackage {
+    return {
+      schema: 1,
+      packageId: 'flutter-widgets',
+      digest: DIGEST,
+      source: { kind: 'github', url: 'https://github.com/example/flutter-widgets', revision: 'a1b2c3d' },
+      license: { spdx: 'MIT', file: 'LICENSE' },
+      skillName: 'Flutter Widgets',
+      description: 'Shared widget kit conventions for the mobile component.',
+      tags: ['flutter'],
+      dependencies: { executables: [], packages: [] },
+      audit: { state: 'passed', findings: [], at: NOW.toISOString() },
+      guidance: 'Use the shared widget kit under lib/widgets.',
+      importedAt: NOW.toISOString(),
+    }
+  }
+
+  async function readManifest(state: Awaited<ReturnType<typeof runStart>>): Promise<Record<string, any>> {
+    return JSON.parse(await fs.readFile(path.join(runDirPath(project.dir, state), MANIFEST), 'utf8'))
+  }
+
+  async function manifestExists(state: Awaited<ReturnType<typeof runStart>>): Promise<boolean> {
+    return fs
+      .stat(path.join(runDirPath(project.dir, state), MANIFEST))
+      .then(() => true)
+      .catch(() => false)
+  }
+
+  function component(id: string, extra: Partial<ProjectComponent> = {}): ProjectComponent {
+    return { id, root: id, technology: 'unknown', verification: { test: null, lint: null, build: null }, skillTags: [], ...extra }
+  }
+
+  /** Sorted by id, as `ProjectProfileSchema` requires every accepted revision to be. */
+  async function acceptComponents(components: ProjectComponent[], expectRevision: number | null = null) {
+    return acceptProfile(
+      project.dir,
+      { components: [...components].sort((a, b) => (a.id < b.id ? -1 : 1)), by: 'test', generatedAt: NOW.toISOString(), expectRevision },
+      clock,
+    )
+  }
+
+  /** A draft feature brief, approved, carrying whichever affected components and tags a test needs. */
+  async function approvedFeature(input: { affectedComponents?: string[]; tags?: string[] } = {}) {
+    let record = await createFeatureBrief(
+      project.dir,
+      {
+        title: 'Passwordless sign-in',
+        problem: 'Members forget passwords and support carries the cost of every reset.',
+        discovery: { mode: 'off', questionBudget: 1 },
+        acceptance: ['A member with no password can sign in from a link'],
+        affectedComponents: input.affectedComponents ?? [],
+      },
+      clock,
+    )
+    if (input.tags !== undefined) record = await updateFeatureDraft(project.dir, record.brief.id, { tags: input.tags })
+    const approved = await approveFeatureBrief(
+      project.dir,
+      { id: record.brief.id, expectRevision: record.brief.revision, expectDigest: record.digest, by: 'test' },
+      clock,
+    )
+    return { id: approved.brief.id, revision: approved.brief.revision }
+  }
+
+  it('pins nothing for a run that names no feature — the load-bearing, unchanged-by-default case', async () => {
+    const state = await runStart(project.dir, { track: 'edit', goal: 'Rename' }, clock)
+    expect(await manifestExists(state)).toBe(false)
+    // Not merely "no manifest": the directory holds exactly what it held
+    // before this story existed, and nothing else.
+    expect((await fs.readdir(runDirPath(project.dir, state))).sort()).toEqual(['verify-pinned.json'])
+  })
+
+  it('pins nothing when the named feature does not exist', async () => {
+    const state = await runStart(project.dir, { track: 'edit', goal: 'Rename', feature: 'F001' }, clock)
+    expect(await manifestExists(state)).toBe(false)
+  })
+
+  it("pins nothing when the named feature's latest revision is still a draft", async () => {
+    // The accepted map is what makes this test about the draft at all. Without
+    // it the profile guard below returns first and the assertion holds however
+    // the status guard is written — this case would be a second copy of "no
+    // component map" wearing a different name, and deleting the status check
+    // outright would leave it green. With a map accepted, removing that check
+    // reaches `selectSkills`, which refuses a draft outright, and the run stops
+    // starting at all — which is the behaviour this guard exists to prevent,
+    // since a feature still being interviewed must not refuse a run.
+    await acceptComponents([component('mobile')])
+    const draft = await createFeatureBrief(
+      project.dir,
+      {
+        title: 'Passwordless sign-in',
+        problem: 'Members forget passwords.',
+        discovery: { mode: 'off', questionBudget: 1 },
+        affectedComponents: ['mobile'],
+      },
+      clock,
+    )
+    const state = await runStart(project.dir, { track: 'edit', goal: 'Rename', feature: draft.brief.id }, clock)
+    expect(await manifestExists(state)).toBe(false)
+  })
+
+  it('pins nothing when the project has accepted no component map at all', async () => {
+    const feature = await approvedFeature()
+    const state = await runStart(project.dir, { track: 'edit', goal: 'Rename', feature: feature.id }, clock)
+    expect(await manifestExists(state)).toBe(false)
+  })
+
+  it('pins a manifest for every fixed agent role when the brief and profile are both there', async () => {
+    await acceptComponents([component('mobile', { technology: 'flutter', skillTags: ['flutter'] })])
+    const feature = await approvedFeature({ affectedComponents: ['mobile'] })
+
+    const state = await runStart(project.dir, { track: 'edit', goal: 'Add link login', feature: feature.id }, clock)
+    const manifest = await readManifest(state)
+
+    expect(manifest.schema).toBe(1)
+    expect(manifest.generatedAt).toBe(NOW.toISOString())
+    expect(manifest.sourceBrief).toEqual({ id: feature.id, revision: feature.revision })
+    expect(manifest.profileRevision).toBe(1)
+
+    // No skill has ever been accepted by this project, so every fixed role
+    // still gets a selection recorded, each naming no skill at all — the
+    // additive guarantee: a project that accepts nothing pins exactly what it
+    // pinned before a library existed.
+    expect(manifest.selections).toHaveLength(4)
+    expect(manifest.selections.map((s: any) => s.agent)).toEqual(['builder', 'critic', 'planner', 'verifier'])
+    for (const selection of manifest.selections) {
+      expect(selection.component).toBe('mobile')
+      expect(selection.skillIds).toEqual([])
+      expect(selection.reasons).toEqual([])
+      expect(selection.sourceBrief).toEqual({ id: feature.id, revision: feature.revision })
+    }
+    expect(manifest.concurrency).toEqual({
+      mode: 'sequential',
+      reason: expect.stringMatching(/fewer than two/),
+    })
+  })
+
+  it('pins the skills this project actually accepted, with their guidance', async () => {
+    // The one seam this whole capability rests on: `resolveSkillManifest` must
+    // read *this project's* acceptances rather than an empty list. Every other
+    // test in this block asserts the empty case, which stays green whether the
+    // seam is wired or not — this is the one that dies if it is reverted.
+    await acceptComponents([component('mobile', { technology: 'flutter', skillTags: ['flutter'] })])
+    await writePackage(project.dir, auditedPackage(), contentDir)
+    await acceptSkill(
+      project.dir,
+      { packageDigest: DIGEST, components: ['mobile'], agents: ['builder'], updatePolicy: 'pinned', acceptedBy: 'test' },
+      clock,
+    )
+    const feature = await approvedFeature({ affectedComponents: ['mobile'] })
+
+    const state = await runStart(project.dir, { track: 'edit', goal: 'Add link login', feature: feature.id }, clock)
+    const manifest = await readManifest(state)
+
+    const builder = manifest.selections.find((s: any) => s.agent === 'builder')
+    expect(builder.skillIds).toEqual(['flutter-widgets'])
+    // The guidance travels with the pin: an id alone tells a dispatched agent
+    // nothing it can follow.
+    expect(manifest.guidance['flutter-widgets']).toContain('shared widget kit')
+    // And only the agent the acceptance named — accepting a skill for the
+    // builder must not quietly route it to every role.
+    const critic = manifest.selections.find((s: any) => s.agent === 'critic')
+    expect(critic.skillIds).toEqual([])
+  })
+
+  it('pins nothing for an acceptance whose package this machine does not hold', async () => {
+    // A teammate's acceptance record travels in the repository; the library
+    // does not. The run must still start.
+    await acceptComponents([component('mobile', { technology: 'flutter', skillTags: ['flutter'] })])
+    await writePackage(project.dir, auditedPackage(), contentDir)
+    await acceptSkill(
+      project.dir,
+      { packageDigest: DIGEST, components: ['mobile'], agents: ['builder'], updatePolicy: 'pinned', acceptedBy: 'test' },
+      clock,
+    )
+    await fs.rm(path.join(dataHome, 'packages', DIGEST), { recursive: true, force: true })
+    const feature = await approvedFeature({ affectedComponents: ['mobile'] })
+
+    const state = await runStart(project.dir, { track: 'edit', goal: 'Add link login', feature: feature.id }, clock)
+    const manifest = await readManifest(state)
+    expect(manifest.selections.every((s: any) => s.skillIds.length === 0)).toBe(true)
+    expect(manifest.guidance).toEqual({})
+  })
+
+  it('sorts selections by component id and then by agent across independent components', async () => {
+    await acceptComponents([
+      component('mobile', { technology: 'flutter', verification: { test: 'flutter test', lint: null, build: null } }),
+      component('admin', { technology: 'nextjs', verification: { test: 'npm test --scope admin', lint: null, build: null } }),
+    ])
+    const feature = await approvedFeature({ affectedComponents: ['admin', 'mobile'] })
+    const state = await runStart(project.dir, { track: 'edit', goal: 'Add link login', feature: feature.id }, clock)
+    const manifest = await readManifest(state)
+
+    expect(manifest.selections.map((s: any) => `${s.component}:${s.agent}`)).toEqual([
+      'admin:builder',
+      'admin:critic',
+      'admin:planner',
+      'admin:verifier',
+      'mobile:builder',
+      'mobile:critic',
+      'mobile:planner',
+      'mobile:verifier',
+    ])
+    // Independence is provable here — disjoint roots, no shared verify command
+    // — so the pinned decision is parallel on an untouched `config.yaml`.
+    // Asserted on the default deliberately: `uncertain_concurrency` governs
+    // work that cannot be proven independent, and a `parallel` verdict only a
+    // non-default setting could produce would be one no real project reaches.
+    expect(manifest.concurrency.mode).toBe('parallel')
+  })
+
+  it('pins the project policy when independence could not be proven', async () => {
+    // A shared verify command, on the default `sequential` policy: the pin has
+    // to carry both halves — the rule that failed to prove independence, and
+    // the setting that decided what to do about it.
+    await acceptComponents([
+      component('mobile', { verification: { test: 'npm test', lint: null, build: null } }),
+      component('admin', { verification: { test: 'npm test', lint: null, build: null } }),
+    ])
+    const feature = await approvedFeature({ affectedComponents: ['admin', 'mobile'] })
+    const state = await runStart(project.dir, { track: 'edit', goal: 'x', feature: feature.id }, clock)
+    const manifest = await readManifest(state)
+    expect(manifest.concurrency.mode).toBe('sequential')
+    expect(manifest.concurrency.reason).toMatch(/share the verify command/)
+    expect(manifest.concurrency.reason).toMatch(/uncertain_concurrency is "sequential"/)
+  })
+
+  it('honours a project that asked for parallel where independence could not be proven', async () => {
+    await acceptComponents([
+      component('mobile', { root: 'apps' }),
+      component('admin', { root: 'apps/admin' }),
+    ])
+    const config = await loadConfig(project.dir)
+    config.orchestration.execution.uncertain_concurrency = 'parallel'
+    await writeConfig(project.dir, config)
+
+    const feature = await approvedFeature({ affectedComponents: ['admin', 'mobile'] })
+    const state = await runStart(project.dir, { track: 'edit', goal: 'x', feature: feature.id }, clock)
+    const manifest = await readManifest(state)
+    expect(manifest.concurrency.mode).toBe('parallel')
+    expect(manifest.concurrency.reason).toMatch(/uncertain_concurrency is "parallel"/)
+  })
+
+  it('lets the run fail rather than silently drop work when the accepted profile has moved out from under an approved brief', async () => {
+    const rev1 = await acceptComponents([component('ghost')])
+    const feature = await approvedFeature({ affectedComponents: ['ghost'] })
+    // The map moves on after approval: a later scan proposes, and somebody
+    // accepts, a smaller component set that no longer names "ghost".
+    await acceptComponents([], rev1.revision)
+
+    await expect(
+      runStart(project.dir, { track: 'edit', goal: 'x', feature: feature.id }, clock),
+    ).rejects.toBeInstanceOf(UnresolvedComponentError)
+
+    // And the run genuinely did not start. The refusal exists so an operator
+    // sees the drift "rather than have this run start anyway against a brief
+    // nothing on disk still supports" — which is only true if the state was
+    // never written: a run recorded as `running` that the caller was told
+    // failed is an orphan nothing will ever close, and the caller's natural
+    // retry allocates `-002` over the top of it. This is the guarantee
+    // `readStory` already gives an unknown story id, asserted below.
+    const state = await new StateStore(project.dir).get()
+    expect(state.status).toBe('idle')
+    expect(state.run_id).toBeNull()
+    expect(await fs.readdir(resolveLoopPaths(project.dir).runs)).toEqual([])
+  })
+
+  it('refuses a malformed feature id before the run is recorded as started', async () => {
+    // The other input that throws out of manifest resolution. Same property,
+    // reached by a different route: a caller that mistypes an id must be able
+    // to fix it and call again, not discover that the run it was told failed
+    // is the one holding `-001`.
+    await expect(
+      runStart(project.dir, { track: 'edit', goal: 'x', feature: 'not a feature id' }, clock),
+    ).rejects.toThrow()
+
+    const state = await new StateStore(project.dir).get()
+    expect(state.status).toBe('idle')
+    expect(state.run_id).toBeNull()
+    expect(await fs.readdir(resolveLoopPaths(project.dir).runs)).toEqual([])
+  })
+
+  it('leaves an existing manifest untouched — the same resume-shaped collision the verify pin already refuses to redo', async () => {
+    await acceptComponents([component('mobile')])
+    const feature = await approvedFeature({ affectedComponents: ['mobile'] })
+
+    const earlier = `${JSON.stringify(
+      {
+        schema: 1,
+        generatedAt: '2026-07-01T00:00:00.000Z',
+        sourceBrief: { id: feature.id, revision: feature.revision },
+        profileRevision: 1,
+        selections: [],
+        concurrency: { mode: 'sequential', reason: 'an earlier pin' },
+      },
+      null,
+      2,
+    )}\n`
+
+    const realMkdir = fs.mkdir.bind(fs)
+    const spy = vi.spyOn(fs, 'mkdir').mockImplementation(async (target: any, options: any) => {
+      const created = await realMkdir(target, options)
+      if (String(target).endsWith('--adhoc--edit')) {
+        await fs.writeFile(path.join(String(target), MANIFEST), earlier, 'utf8')
+      }
+      return created
+    })
+
+    try {
+      const state = await runStart(project.dir, { track: 'edit', goal: 'Rename', feature: feature.id }, clock)
+      expect(await fs.readFile(path.join(runDirPath(project.dir, state), MANIFEST), 'utf8')).toBe(earlier)
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
+  it('pins a manifest for a run that also names a story, independently of the story/plan fields', async () => {
+    await planCreate(project.dir, { slug: 'user-auth', title: 'User authentication' }, clock)
+    await gateSet(project.dir, { plan: 'P001', decision: 'approved', by: 'test' }, clock)
+    await storyAdd(project.dir, { plan: 'P001', title: 'Login form' }, clock)
+    await acceptComponents([component('mobile')])
+    const feature = await approvedFeature({ affectedComponents: ['mobile'] })
+
+    const state = await runStart(
+      project.dir,
+      { track: 'edit', goal: 'Add link login', plan: 'P001', story: 'P001-S01', feature: feature.id },
+      clock,
+    )
+    expect(state.current.story).toBe('P001-S01')
+    const manifest = await readManifest(state)
+    expect(manifest.sourceBrief.id).toBe(feature.id)
+  })
+})
+
 describe('the run timestamps', () => {
   it('stamps the run with its start time', async () => {
     const state = await runStart(project.dir, { track: 'build', goal: 'Add the endpoint' }, clock)
@@ -1227,6 +1592,168 @@ describe('the cycle handoff', () => {
     const doc = await handoffFor(started)
     expect(doc).toContain('| builder | pass | Added the route and its test. |')
     expect(doc).toContain('# Handoff — cycle 1')
+  })
+
+  /**
+   * `runStart` pins this file itself, through `resolveSkillManifest`, only for
+   * a run that names an approved feature — and it always passes an empty
+   * `acceptedSkills`, since S06's library does not exist yet, so a manifest
+   * `runStart` produces today never carries a matched skill. Written by hand
+   * here instead, exactly as `writeLedger` above writes what `verifyRun` would
+   * have, so these cases can exercise a manifest that actually matched
+   * something.
+   *
+   * Guidance is derived from whatever selections a case declares rather than
+   * spelled out per case: the schema refuses a manifest naming a skill it
+   * carries no guidance for, and restating that pairing in every case would
+   * make each one about the invariant instead of about the rendering it exists
+   * to check.
+   */
+  async function writeSkillManifest(
+    state: Awaited<ReturnType<typeof runStart>>,
+    overrides: Record<string, unknown> = {},
+  ): Promise<void> {
+    const selections = (overrides.selections ?? []) as Array<{ skillIds: string[] }>
+    const guidance = Object.fromEntries(
+      selections.flatMap((selection) => selection.skillIds).map((skillId) => [skillId, `follow ${skillId}`]),
+    )
+    const manifest = SkillManifestSchema.parse({
+      schema: 1,
+      generatedAt: NOW.toISOString(),
+      sourceBrief: { id: 'F001', revision: 1 },
+      profileRevision: 1,
+      selections: [],
+      guidance,
+      concurrency: {
+        mode: 'sequential',
+        reason: 'fewer than two affected components — there is nothing to run in parallel, so this serialises regardless of policy',
+      },
+      ...overrides,
+    })
+    await fs.writeFile(
+      path.join(runDirPath(project.dir, state), 'skill-selection.json'),
+      `${JSON.stringify(manifest, null, 2)}\n`,
+      'utf8',
+    )
+  }
+
+  it('renders exactly the unchanged handoff when the run pinned no skill manifest', async () => {
+    // The load-bearing case the story names explicitly: every run before this
+    // section existed named no feature, so none of them ever pinned a
+    // manifest, and this is what must stay byte-for-byte the same for them —
+    // not an empty "## Skills" section, no heading at all.
+    await narrowBuildTrack()
+    const started = await runStart(project.dir, { track: 'build', goal: 'Add the endpoint' }, clock)
+    await close()
+
+    const doc = await handoffFor(started)
+    expect(doc).not.toContain('## Skills')
+    expect(doc).not.toContain('skill-selection.json')
+  })
+
+  it('names each matched skill and the reason it was selected', async () => {
+    await narrowBuildTrack()
+    const started = await runStart(project.dir, { track: 'build', goal: 'Add the endpoint' }, clock)
+    await writeSkillManifest(started, {
+      selections: [
+        {
+          component: 'web',
+          agent: 'builder',
+          skillIds: ['eslint-strict'],
+          reasons: ['"eslint-strict" matches component "web"\'s skillTag "nextjs"'],
+          sourceBrief: { id: 'F001', revision: 1 },
+        },
+      ],
+    })
+    await close()
+
+    const doc = await handoffFor(started)
+    expect(doc).toContain('## Skills')
+    expect(doc).toContain('- `web` / `builder`: `eslint-strict` — "eslint-strict" matches component "web"\'s skillTag "nextjs"')
+  })
+
+  it('names the concurrency verdict this run pinned and the rule that decided it', async () => {
+    // Requirement 5 produces a mode and a reason, and until they are rendered
+    // somewhere a person reads, nothing in the system is any different for
+    // having computed them: the analyser's own `ask` branch says "the leader
+    // should offer the choice", which the leader cannot do about a verdict it
+    // is never shown. The handoff is where the rest of a cycle's decisions are
+    // already recorded, and one line is bounded in a way a per-selection row
+    // is not.
+    await narrowBuildTrack()
+    const started = await runStart(project.dir, { track: 'build', goal: 'Add the endpoint' }, clock)
+    await writeSkillManifest(started, {
+      concurrency: { mode: 'parallel', reason: 'component roots are disjoint and no verify command is shared' },
+    })
+    await close()
+
+    const doc = await handoffFor(started)
+    const skills = doc.slice(doc.indexOf('## Skills'))
+    expect(skills).toContain('**Concurrency:** `parallel`')
+    expect(skills).toContain('component roots are disjoint and no verify command is shared')
+  })
+
+  it('renders a different handoff for a parallel pin than for a sequential one', async () => {
+    // The property the finding turned on: before this, the two documents were
+    // byte-identical, which is the definition of a decision nothing consumes.
+    await narrowBuildTrack()
+    const started = await runStart(project.dir, { track: 'build', goal: 'Add the endpoint' }, clock)
+    await writeSkillManifest(started, { concurrency: { mode: 'sequential', reason: 'a shared verify command' } })
+    await close()
+    const sequential = await handoffFor(started)
+
+    const second = await runStart(project.dir, { track: 'build', goal: 'Add the endpoint' }, clock)
+    await writeSkillManifest(second, { concurrency: { mode: 'parallel', reason: 'a shared verify command' } })
+    await close()
+    const parallel = await handoffFor(second)
+
+    // Compared section by section rather than whole-document: the run id is in
+    // the heading and differs between the two by construction, so a
+    // whole-document inequality would pass without the mode ever being
+    // rendered at all.
+    expect(parallel.slice(parallel.indexOf('## Skills'))).not.toBe(sequential.slice(sequential.indexOf('## Skills')))
+  })
+
+  it('says no skill was selected when the manifest matched none anywhere', async () => {
+    // The manifest itself still carries the empty selection — that is what
+    // lets "considered, nothing matched" stay distinguishable from "never
+    // considered" — but repeating that verdict once per component and agent
+    // in a document every agent of the next cycle reads would be exactly the
+    // unbounded cost this file's other sections were built to avoid. The
+    // concurrency line still renders: a run whose components serialise has
+    // made a decision whether or not any skill attached to it.
+    await narrowBuildTrack()
+    const started = await runStart(project.dir, { track: 'build', goal: 'Add the endpoint' }, clock)
+    await writeSkillManifest(started, {
+      selections: [
+        { component: 'web', agent: 'builder', skillIds: [], reasons: [], sourceBrief: { id: 'F001', revision: 1 } },
+      ],
+    })
+    await close()
+
+    const doc = await handoffFor(started)
+    expect(doc).toContain('## Skills')
+    expect(doc.slice(doc.indexOf('## Skills'))).toContain('_no skill selected_')
+    expect(doc.slice(doc.indexOf('## Skills'))).toContain('**Concurrency:** `sequential`')
+  })
+
+  it('names where the elided skill matches went', async () => {
+    await narrowBuildTrack()
+    const started = await runStart(project.dir, { track: 'build', goal: 'Add the endpoint' }, clock)
+    await writeSkillManifest(started, {
+      selections: [
+        {
+          component: 'web',
+          agent: 'builder',
+          skillIds: Array.from({ length: 25 }, (_, index) => `skill-${index}`),
+          reasons: Array.from({ length: 25 }, (_, index) => `matches tag ${index}`),
+          sourceBrief: { id: 'F001', revision: 1 },
+        },
+      ],
+    })
+    await close()
+
+    expect(await handoffFor(started)).toContain('*5 more in skill-selection.json*')
   })
 })
 

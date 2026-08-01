@@ -4,7 +4,18 @@ import * as YAML from 'yaml'
 import * as z from 'zod'
 import { AgentNameSchema } from '../schemas/contract.js'
 import { IdSchema } from '../schemas/state.js'
-import { ConfigSchema, LEGACY_CONFIG_KEYS, SpecialistModeSchema, TrackSchema } from '../schemas/config.js'
+import {
+  AfterPlanApprovalSchema,
+  ConfigSchema,
+  DiscoveryCompletionSchema,
+  FeatureDiscoveryModeSchema,
+  LEGACY_CONFIG_KEYS,
+  SkillSourceSchema,
+  SkillUpdateModeSchema,
+  SpecialistModeSchema,
+  TrackSchema,
+  UncertainConcurrencySchema,
+} from '../schemas/config.js'
 import { writeTextAtomic } from './atomic.js'
 import { withLock } from './lock.js'
 import { resolveLoopPaths } from './paths.js'
@@ -51,6 +62,61 @@ export const ConfigChangeSchema = z.discriminatedUnion('kind', [
     kind: z.literal('track'),
     track: IdSchema,
     value: TrackSchema.nullable(),
+  }),
+  // One variant per orchestration leaf, rather than one `orchestration` kind
+  // carrying a section and a key. The discriminant is what makes each value
+  // schema exact — a single kind would have to widen `value` to the union of
+  // every leaf's type, and a boolean would then be accepted for
+  // `question_budget` at the wire and only caught by the post-apply re-parse.
+  // Restating the bounds here is deliberate duplication: this is the door the
+  // browser and the CLI push values through, and it must be exactly as strict
+  // as the schema those values are finally validated against.
+  z.strictObject({
+    kind: z.literal('orchestration.profile.auto_accept'),
+    value: z.boolean(),
+  }),
+  z.strictObject({
+    kind: z.literal('orchestration.discovery.mode'),
+    value: FeatureDiscoveryModeSchema,
+  }),
+  z.strictObject({
+    kind: z.literal('orchestration.discovery.question_budget'),
+    value: z.number().int().min(1).max(20),
+  }),
+  z.strictObject({
+    kind: z.literal('orchestration.discovery.completion'),
+    value: DiscoveryCompletionSchema,
+  }),
+  z.strictObject({
+    kind: z.literal('orchestration.execution.after_plan_approval'),
+    value: AfterPlanApprovalSchema,
+  }),
+  z.strictObject({
+    kind: z.literal('orchestration.execution.uncertain_concurrency'),
+    value: UncertainConcurrencySchema,
+  }),
+  z.strictObject({
+    kind: z.literal('orchestration.execution.repair_attempts'),
+    value: z.number().int().min(0).max(5),
+  }),
+  // The one section whose leaves share a type, so one kind with a `key` costs
+  // nothing in strictness — the same shape `gate` and `limit` already use.
+  z.strictObject({
+    kind: z.literal('orchestration.quality'),
+    key: z.enum(['independent_plan_review', 'independent_verification']),
+    value: z.boolean(),
+  }),
+  z.strictObject({
+    kind: z.literal('orchestration.skills.sources'),
+    value: z.array(SkillSourceSchema),
+  }),
+  z.strictObject({
+    kind: z.literal('orchestration.skills.trusted_registries'),
+    value: z.array(z.string().min(1).startsWith('https://', 'a trusted registry must be an https:// URL')),
+  }),
+  z.strictObject({
+    kind: z.literal('orchestration.skills.update_mode'),
+    value: SkillUpdateModeSchema,
   }),
 ])
 
@@ -154,5 +220,44 @@ function applyChange(document: YAML.Document, change: ConfigChange): void {
     case 'track':
       if (change.value === null) document.deleteIn(['tracks', change.track])
       else document.setIn(['tracks', change.track], change.value)
+      return
+    // `setIn` builds the intermediate maps it needs, which is what lets the
+    // very first orchestration setting land in a config.yaml written before
+    // the block existed — the common case on every already-provisioned
+    // project. Only the named leaf is written; every sibling arrives on read
+    // from the schema's prefaults, so one changed setting never rewrites
+    // twelve lines of somebody's hand-edited file.
+    case 'orchestration.profile.auto_accept':
+      document.setIn(['orchestration', 'profile', 'auto_accept'], change.value)
+      return
+    case 'orchestration.discovery.mode':
+      document.setIn(['orchestration', 'discovery', 'mode'], change.value)
+      return
+    case 'orchestration.discovery.question_budget':
+      document.setIn(['orchestration', 'discovery', 'question_budget'], change.value)
+      return
+    case 'orchestration.discovery.completion':
+      document.setIn(['orchestration', 'discovery', 'completion'], change.value)
+      return
+    case 'orchestration.execution.after_plan_approval':
+      document.setIn(['orchestration', 'execution', 'after_plan_approval'], change.value)
+      return
+    case 'orchestration.execution.uncertain_concurrency':
+      document.setIn(['orchestration', 'execution', 'uncertain_concurrency'], change.value)
+      return
+    case 'orchestration.execution.repair_attempts':
+      document.setIn(['orchestration', 'execution', 'repair_attempts'], change.value)
+      return
+    case 'orchestration.quality':
+      document.setIn(['orchestration', 'quality', change.key], change.value)
+      return
+    case 'orchestration.skills.sources':
+      document.setIn(['orchestration', 'skills', 'sources'], change.value)
+      return
+    case 'orchestration.skills.trusted_registries':
+      document.setIn(['orchestration', 'skills', 'trusted_registries'], change.value)
+      return
+    case 'orchestration.skills.update_mode':
+      document.setIn(['orchestration', 'skills', 'update_mode'], change.value)
   }
 }

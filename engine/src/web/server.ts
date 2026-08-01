@@ -46,6 +46,7 @@ const OK_CODES = {
   'story.status': 'write.ok.story',
   halt: 'write.ok.halt',
   'config.patch': 'write.ok.config',
+  'feature.approve': 'write.ok.feature',
 } as const
 
 /**

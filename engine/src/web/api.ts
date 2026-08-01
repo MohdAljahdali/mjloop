@@ -1,18 +1,24 @@
 import crypto from 'node:crypto'
 import type http from 'node:http'
 import type { WebCode } from './codes.js'
+import { FeatureIdSchema } from '../schemas/feature.js'
 import { PlanIdSchema, StoryIdSchema } from '../schemas/plan.js'
 import { IdSchema } from '../schemas/state.js'
 import {
   NotFoundError,
   readConfigView,
   readCycleDetail,
+  readFeatureDetail,
+  readFeatures,
   readMemories,
   readMemoryEntry,
   readPlanDetail,
   readPreflightEstimate,
+  readProfileView,
   readRunDetail,
   readRuns,
+  readSkillManifest,
+  readSkillsView,
   readState,
   readStoryDetail,
   readTelemetryReport,
@@ -109,6 +115,11 @@ async function route(projectDir: string, segments: readonly string[]): Promise<A
       if (segments.length === 1) return ok(await readRuns(projectDir))
       if (first === undefined || !RUN_ID.test(first)) return fail(400, 'error.badRequest')
       if (segments.length === 2) return ok(await readRunDetail(projectDir, first))
+      // The pinned skill manifest, read-only: the page reports the routing
+      // decision a run started with and offers no way to set one — a route
+      // that took anything beyond the run id would be the first half of one
+      // that let the browser select a skill for it.
+      if (segments.length === 3 && second === 'skills') return ok(await readSkillManifest(projectDir, first))
       if (segments.length === 3) {
         const cycle = Number(second)
         if (!Number.isInteger(cycle) || cycle < 1 || cycle > 999) return fail(400, 'error.badRequest')
@@ -132,11 +143,47 @@ async function route(projectDir: string, segments: readonly string[]): Promise<A
       if (!IdSchema.safeParse(first).success) return fail(400, 'error.badRequest')
       return ok(await readPreflightEstimate(projectDir, first))
 
+    case 'profile':
+      // No parameter, and none a later story should add: the accepted profile
+      // is whichever revision file is highest and every revision is immutable,
+      // so there is nothing here to select between. It is also the one document
+      // on this wire whose *write* the browser is permanently denied —
+      // accepting a component map activates routing for every later run — and a
+      // route that took a revision would be the first half of one that set it.
+      if (segments.length !== 1) break
+      return ok(await readProfileView(projectDir))
+
+    case 'features':
+      if (segments.length === 1) return ok(await readFeatures(projectDir))
+      if (segments.length !== 2 || first === undefined) break
+      // `FeatureIdSchema` rather than a retyped `^F\d{3}$`, for the reason this
+      // file's header gives about plan and story ids: the id shape *is* the
+      // traversal guard, and a copy of it here is a copy that can be relaxed
+      // without the schema noticing. `.` is outside the class, so `..` cannot
+      // match.
+      if (!FeatureIdSchema.safeParse(first).success) return fail(400, 'error.badRequest')
+      // No revision segment, and none a later story should add. This serves the
+      // latest revision and the history beside it; a route that selected a
+      // revision would be the first half of one that *set* the selected
+      // revision, and reselection is precisely how a brief is rolled back.
+      return ok(await readFeatureDetail(projectDir, first))
+
     case 'memory':
       if (segments.length === 1) return ok(await readMemories(projectDir))
       if (segments.length !== 2 || first === undefined) break
       if (!MEMORY_ID.test(first)) return fail(400, 'error.badRequest')
       return ok(await readMemoryEntry(projectDir, first))
+
+    case 'skills':
+      // No parameter, and none a later story should add: activation is a
+      // decision that changes what every later run is told, and this route
+      // exists precisely so the cockpit can report the library and this
+      // project's acceptances without offering a way to set either — the
+      // class of write `web/writes.ts`'s header permanently denies the
+      // browser. `mjloop-cli skills accept|disable|enable|remove` is where
+      // that decision is made.
+      if (segments.length !== 1) break
+      return ok(await readSkillsView(projectDir))
   }
 
   return fail(404, 'error.notFound')

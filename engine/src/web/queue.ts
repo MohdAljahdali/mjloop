@@ -80,8 +80,13 @@ export class JobQueue {
    * Set when a job fails. The queue stops rather than running the rest, because
    * a person who returns to fifteen repetitions of one failure has been given
    * less than a person who returns to one.
+   *
+   * It is lifted again the moment there is nothing left for it to hold — see
+   * `settle`. A pause that outlives the jobs it was protecting is indistinct
+   * from a broken Run button.
    */
   private blocked = false
+  private pausedBy: 'failure' | 'stopped' | null = null
 
   constructor(options: QueueOptions) {
     this.options = options
@@ -104,23 +109,44 @@ export class JobQueue {
     return job
   }
 
-  /** Drop a queued job. A running one is stopped instead — see `stop`. */
+  /**
+   * Cancel a job by id, whichever half of the queue it is in.
+   *
+   * The running job is stopped rather than refused. One `×` on one row means
+   * one thing to the person clicking it, and a control that quietly does
+   * nothing on the only row that is actually doing something is the version of
+   * this that shipped.
+   */
   cancel(jobId: string): void {
+    if (this.active?.job.id === jobId) {
+      this.stop()
+      return
+    }
     const index = this.pending.findIndex((job) => job.id === jobId)
     if (index === -1) return
     const [job] = this.pending.splice(index, 1)
     if (job === undefined) return
     job.status = 'cancelled'
     job.endedAt = this.clock().toISOString()
+    job.reason = { code: 'job.cancelled.cleared' }
     this.finished.push(job)
+    this.settle()
     this.options.onChange()
   }
 
-  /** Stop the running job. The queue stays blocked until `resume`. */
+  /**
+   * Stop the running job. Anything queued behind it holds until `resume`.
+   *
+   * A second press while the ladder is already running is not an escalation:
+   * `beginShutdown` is what owns the timings, and re-arming it here would reset
+   * them and make Stop take longer the more often it is pressed.
+   */
   stop(): void {
-    if (this.active === null) return
+    const active = this.active
+    if (active === null || active.shutdown !== null) return
     this.blocked = true
-    this.beginShutdown(this.active, { status: 'cancelled', reason: { code: 'job.cancelled.stopped' } })
+    this.pausedBy = 'stopped'
+    this.beginShutdown(active, { status: 'cancelled', reason: { code: 'job.cancelled.stopped' } })
   }
 
   clear(): void {
@@ -132,14 +158,32 @@ export class JobQueue {
       job.reason = { code: 'job.cancelled.cleared' }
       this.finished.push(job)
     }
+    // Emptying the queue is also the answer to "why is nothing starting": there
+    // is no longer a held job for the pause to be protecting.
+    this.settle()
     this.options.onChange()
   }
 
   /** Start the head again after a failure or a stop. */
   resume(): void {
     this.blocked = false
+    this.pausedBy = null
     this.pump()
     this.options.onChange()
+  }
+
+  /**
+   * Lift a pause that has nothing left to hold.
+   *
+   * The pause exists to stop the *rest* of the queue running into the same
+   * wall. With nothing pending there is no rest, and leaving the flag set made
+   * the next command the user typed sit at `queued` with no banner, no Resume
+   * button and no explanation — the single worst behaviour this page had.
+   */
+  private settle(): void {
+    if (this.pending.length > 0) return
+    this.blocked = false
+    this.pausedBy = null
   }
 
   write(data: string): void {
@@ -171,7 +215,9 @@ export class JobQueue {
   session(): SessionView {
     return {
       jobId: this.active?.job.id ?? null,
-      blocked: this.blocked && this.pending.length > 0,
+      blocked: this.blocked,
+      pausedBy: this.blocked ? this.pausedBy : null,
+      closing: this.active?.shutdown !== null && this.active !== null,
       stalledSince: this.stalledSince,
     }
   }
@@ -325,7 +371,17 @@ export class JobQueue {
 
     if (job.status === 'failed') {
       this.blocked = true
-      this.options.onNotice({ code: 'queue.blocked', params: { job: job.command } })
+      this.pausedBy = 'failure'
+    }
+    // Said after `settle`, because which sentence is true depends on whether
+    // the pause survived: "the rest of the queue is holding" with nothing
+    // behind it sends the user looking for a queue that is not there.
+    this.settle()
+    if (job.status === 'failed') {
+      this.options.onNotice({
+        code: this.blocked ? 'queue.blocked' : 'queue.failed',
+        params: { job: job.command },
+      })
     }
 
     this.pump()

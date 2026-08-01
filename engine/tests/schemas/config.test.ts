@@ -4,6 +4,15 @@ import { ConfigSchema, DEFAULT_TRACKS, defaultConfig, permittedAgents, pinnedAge
 
 const VERIFY = { test: 'npm test', lint: 'npm run lint', build: null }
 
+/** The whole orchestration tree as the schema supplies it when nobody names a key. */
+const DEFAULT_ORCHESTRATION = {
+  profile: { auto_accept: false },
+  discovery: { mode: 'off', question_budget: 8, completion: 'review' },
+  execution: { after_plan_approval: 'manual', uncertain_concurrency: 'sequential', repair_attempts: 1 },
+  quality: { independent_plan_review: false, independent_verification: false },
+  skills: { sources: ['github'], trusted_registries: [], update_mode: 'review' },
+}
+
 describe('defaultConfig', () => {
   it('is schema-valid and defines only the edit track', () => {
     const config = defaultConfig(VERIFY)
@@ -503,6 +512,172 @@ describe('ConfigSchema', () => {
       tracks: { mine: { required: ['builder'], max_cycles: 3, map: { drafted_by: 'builder', extra: 1 } } },
     }
     expect(ConfigSchema.safeParse(bad).success).toBe(false)
+  })
+})
+
+describe('orchestration', () => {
+  it('gives a document that names no orchestration block the whole defaulted tree', () => {
+    // The compatibility rule this feature ships under: an already-provisioned
+    // .mjloop/config.yaml has no `orchestration:` key at all, and must keep
+    // parsing, keep everything it did declare, and gain the whole tree.
+    const parsed = ConfigSchema.parse({
+      version: 1,
+      verify: { test: 'npm test', timeout_ms: 60_000 },
+      tracks: { edit: { required: ['editor', 'verifier'], available: ['critic'], max_cycles: 1 } },
+      specialists: { critic: 'always' },
+      gates: { plan_approval: 'auto' },
+    })
+    expect(parsed.orchestration).toEqual(DEFAULT_ORCHESTRATION)
+    // Nothing the document did declare moved.
+    expect(parsed.verify.test).toBe('npm test')
+    expect(parsed.verify.timeout_ms).toBe(60_000)
+    expect(parsed.tracks.edit?.available).toEqual(['critic'])
+    expect(parsed.specialists).toEqual({ critic: 'always' })
+    expect(parsed.gates).toEqual({ plan_approval: 'auto', commit: 'auto', preflight: 'auto' })
+  })
+
+  it('fills every sibling sub-block when the document names only one setting', () => {
+    // What `.prefault({})` on each sub-object buys and a `.default({...})`
+    // literal would not: naming `discovery.mode` must not cost a project the
+    // defaults for `profile`, `execution`, `quality` and `skills`, nor the two
+    // discovery keys it did not name.
+    const parsed = ConfigSchema.parse({
+      version: 1,
+      tracks: { edit: { required: ['editor'], max_cycles: 1 } },
+      orchestration: { discovery: { mode: 'always' } },
+    })
+    expect(parsed.orchestration).toEqual({
+      ...DEFAULT_ORCHESTRATION,
+      discovery: { mode: 'always', question_budget: 8, completion: 'review' },
+    })
+  })
+
+  it('leaves discovery off, so this feature landing changes no existing plan flow', () => {
+    // Any other default would silently change what /mjloop:plan does in every
+    // project that was provisioned before this key existed.
+    expect(defaultConfig(VERIFY).orchestration.discovery.mode).toBe('off')
+  })
+
+  it('rejects a question budget outside 1..20', () => {
+    for (const question_budget of [0, 21, 8.5]) {
+      const bad = {
+        version: 1,
+        tracks: { edit: { required: ['editor'], max_cycles: 1 } },
+        orchestration: { discovery: { question_budget } },
+      }
+      expect(ConfigSchema.safeParse(bad).success, `question_budget ${question_budget}`).toBe(false)
+    }
+    expect(
+      ConfigSchema.safeParse({
+        version: 1,
+        tracks: { edit: { required: ['editor'], max_cycles: 1 } },
+        orchestration: { discovery: { question_budget: 20 } },
+      }).success,
+    ).toBe(true)
+  })
+
+  it('rejects a repair attempt count outside 0..5', () => {
+    for (const repair_attempts of [-1, 6]) {
+      const bad = {
+        version: 1,
+        tracks: { edit: { required: ['editor'], max_cycles: 1 } },
+        orchestration: { execution: { repair_attempts } },
+      }
+      expect(ConfigSchema.safeParse(bad).success, `repair_attempts ${repair_attempts}`).toBe(false)
+    }
+    // Zero is a real setting — it means "never repair", not "unset".
+    expect(
+      ConfigSchema.safeParse({
+        version: 1,
+        tracks: { edit: { required: ['editor'], max_cycles: 1 } },
+        orchestration: { execution: { repair_attempts: 0 } },
+      }).success,
+    ).toBe(true)
+  })
+
+  it('rejects a trusted registry that is not https', () => {
+    const bad = {
+      version: 1,
+      tracks: { edit: { required: ['editor'], max_cycles: 1 } },
+      orchestration: { skills: { sources: ['registry'], trusted_registries: ['http://skills.example.com'] } },
+    }
+    const parsed = ConfigSchema.safeParse(bad)
+    expect(parsed.success).toBe(false)
+    if (!parsed.success) expect(z.prettifyError(parsed.error)).toContain('https://')
+  })
+
+  it('rejects an unknown key inside the orchestration block', () => {
+    const bad = {
+      version: 1,
+      tracks: { edit: { required: ['editor'], max_cycles: 1 } },
+      orchestration: { discovery: { mode: 'ask', budget: 3 } },
+    }
+    expect(ConfigSchema.safeParse(bad).success).toBe(false)
+  })
+
+  it('rejects auto-plan completion while discovery is off', () => {
+    const bad = {
+      version: 1,
+      tracks: { edit: { required: ['editor'], max_cycles: 1 } },
+      orchestration: { discovery: { mode: 'off', completion: 'auto-plan' } },
+    }
+    const parsed = ConfigSchema.safeParse(bad)
+    expect(parsed.success).toBe(false)
+    if (!parsed.success) {
+      expect(parsed.error.issues[0]?.path).toEqual(['orchestration', 'discovery', 'completion'])
+      const message = z.prettifyError(parsed.error)
+      expect(message).toContain('auto-plan')
+      expect(message).toContain('orchestration.discovery.mode')
+    }
+  })
+
+  it('accepts auto-plan completion once discovery can actually run', () => {
+    for (const mode of ['ask', 'always']) {
+      const good = {
+        version: 1,
+        tracks: { edit: { required: ['editor'], max_cycles: 1 } },
+        orchestration: { discovery: { mode, completion: 'auto-plan' } },
+      }
+      expect(ConfigSchema.safeParse(good).success, mode).toBe(true)
+    }
+  })
+
+  it('rejects the registry source while no registry is trusted', () => {
+    const bad = {
+      version: 1,
+      tracks: { edit: { required: ['editor'], max_cycles: 1 } },
+      orchestration: { skills: { sources: ['github', 'registry'] } },
+    }
+    const parsed = ConfigSchema.safeParse(bad)
+    expect(parsed.success).toBe(false)
+    if (!parsed.success) {
+      expect(parsed.error.issues[0]?.path).toEqual(['orchestration', 'skills', 'sources'])
+      const message = z.prettifyError(parsed.error)
+      expect(message).toContain('registry')
+      expect(message).toContain('orchestration.skills.trusted_registries')
+    }
+  })
+
+  it('accepts the registry source once a registry is trusted', () => {
+    const good = {
+      version: 1,
+      tracks: { edit: { required: ['editor'], max_cycles: 1 } },
+      orchestration: {
+        skills: { sources: ['registry'], trusted_registries: ['https://skills.example.com'] },
+      },
+    }
+    expect(ConfigSchema.safeParse(good).success).toBe(true)
+  })
+
+  it('accepts an empty source list, which is how a project turns external discovery off', () => {
+    const good = {
+      version: 1,
+      tracks: { edit: { required: ['editor'], max_cycles: 1 } },
+      orchestration: { skills: { sources: [] } },
+    }
+    const parsed = ConfigSchema.safeParse(good)
+    expect(parsed.success).toBe(true)
+    if (parsed.success) expect(parsed.data.orchestration.skills.sources).toEqual([])
   })
 })
 

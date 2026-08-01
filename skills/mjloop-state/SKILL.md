@@ -17,6 +17,9 @@ description: Use when reading or changing loop state - explains the .mjloop dire
 │   ├── cycle-NN/    roster.json, <agent>.json, findings.json, handoff.md,
 │   │                evidence/ spilled excerpts, verify/ logs and index.json
 │   └── closing/     roster.json, <agent>.json, verify/ — the run-closing pass
+├── profile/         the project's component map — engine-owned, never hand-edited
+│   ├── proposed.json  what the last scan found — overwritten by the next one
+│   └── accepted/      rev-001.json, rev-002.json … immutable numbered revisions
 ├── plans/<plan>/    one directory per plan
 │   ├── PLAN.md      the plan itself — prose, authored
 │   ├── REVIEW.md    plan-critic's objections — prose, authored
@@ -91,6 +94,16 @@ This is not ceremony: a model corrupting that JSON loses the entire run, and it 
 common way agent loops fail in practice. The pin is on that list for a second reason — it
 is the string the engine hands to a shell, so a run that could rewrite its own pin could
 choose what the engine runs on its behalf.
+
+Everything under `profile/` is denied the same way, by directory rather than by basename:
+`rev-NNN.json` is a family of names and no list of them could cover the revision a project
+has not written yet. An accepted revision is immutable because a run may have been routed
+by it, and `proposed.json` is protected for a different reason — it is what an ordinary
+acceptance reads, so a hand-edited proposal puts a component map nobody scanned in front
+of the person accepting it. Both records are read by an acceptance and neither may be
+reached by hand: `profile accept` takes the proposal, and `profile accept --from <revision>`
+takes an accepted revision instead. Use `mjloop-cli profile show`, then `profile accept` or
+`profile reject`.
 
 `config.yaml` is the opposite — it is yours. Edit it freely to change a track's cap,
 force a specialist, or set verify commands. Only the timing is worth remembering: a change

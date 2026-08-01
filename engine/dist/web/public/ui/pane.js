@@ -58,6 +58,8 @@ export function mountPane() {
   const terminal = /** @type {HTMLElement} */ (document.getElementById('terminal'))
   const stop = /** @type {HTMLElement} */ (document.getElementById('pane-stop'))
   const viewing = /** @type {HTMLElement} */ (document.getElementById('job-viewing'))
+  const paused = /** @type {HTMLElement} */ (document.getElementById('pane-paused'))
+  const closing = /** @type {HTMLElement} */ (document.getElementById('pane-closing'))
 
   setPane(prefs().pane)
   applyView()
@@ -91,8 +93,16 @@ export function mountPane() {
     update(snapshot) {
       const running = snapshot.session.jobId
       flag(stop, 'hidden', running === null)
+      // Pressing Stop a second time cannot make the ladder shorter, and a
+      // control that answers a press with nothing is read as a broken one.
+      flag(stop, 'disabled', snapshot.session.closing)
       flag(empty, 'hidden', shown !== null)
       flag(terminal, 'hidden', shown === null)
+
+      // Both of these change what the buttons on this head will do, and both
+      // used to be visible only after switching to the queue view.
+      flag(paused, 'hidden', !snapshot.session.blocked)
+      flag(closing, 'hidden', !snapshot.session.closing)
 
       // The queue's count lives on the pane head, not inside the queue panel:
       // that panel is hidden whenever the session view is up, and `render`
@@ -111,18 +121,39 @@ export function mountPane() {
     },
   })
 
+  /**
+   * Whether the reader has set the pane's height themselves since the page
+   * loaded. Once they have, nothing here moves it again.
+   */
+  let chosen = false
+
   return {
     setView,
     /** @returns {'session' | 'queue'} */
     view: () => view,
     /** Collapsed → docked → fullscreen → collapsed. */
     cycle() {
+      chosen = true
       const order = /** @type {const} */ (['collapsed', 'docked', 'full'])
       const at = order.indexOf(pane())
       setPane(order[(at + 1) % order.length] ?? 'docked')
     },
     toggleFull() {
+      chosen = true
       setPane(pane() === 'full' ? 'docked' : 'full')
+    },
+    /**
+     * A job just started and the pane is shut, so open it far enough to watch.
+     *
+     * The pane is 38% of the window and it used to hold that whether or not
+     * anything was running — which is a lot of screen to spend on an idle
+     * terminal. Collapsing it is now useful precisely because work re-opens it.
+     * Called once per job, and never after the reader has chosen a height.
+     */
+    follow() {
+      if (chosen || pane() !== 'collapsed') return
+      setPane('docked')
+      refit()
     },
   }
 }

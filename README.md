@@ -36,6 +36,117 @@ cannot see which model an agent runs on.
 
 See `docs/superpowers/specs/2026-07-28-mjloop-milestone-8-token-economy-design.md`.
 
+Newest — **the project maps itself, and its orchestration policy is a guarded setting.**
+`/mjloop:init` now walks the tree and proposes one component per declared manifest —
+`pubspec.yaml`, `package.json`, `pyproject.toml`, `setup.py`, `setup.cfg` — carrying the
+technology and the verify commands that manifest itself declares, never one inferred from a
+directory name. A proposal activates nothing on its own: the accepted map is an immutable
+numbered revision, and returning to an earlier one means accepting it as a new revision
+rather than rewriting a record a run may have pinned. `mjloop-cli profile show`, `accept`
+and `reject` are where that decision is made — with `--expect` carrying the revision you
+read, so an acceptance built on a screen that has since moved is refused, and
+`accept --from <revision>` reselecting an earlier revision's map without reading the
+proposal at all, which is what makes the rollback reachable rather than merely modelled.
+Never the browser: accepting a map activates routing for every later run, which is the
+class of write the cockpit is permanently denied. Beside it, an `orchestration:` block
+in `.mjloop/config.yaml` carries this project's policy, read and changed through
+`/mjloop:config` and `mjloop-cli config get/set` — a write that compare-and-swaps on the
+file's sha256 revision and re-parses the whole document, neither of which a hand edit does.
+Every key is defaulted and `discovery.mode` defaults to `off`, so an already-provisioned
+project's plan flow is unchanged by any of it. The cockpit's Config tab edits the block and
+shows the accepted component map read-only.
+
+Newer still — **a feature request can be interviewed before it is planned.** With
+`orchestration.discovery.mode` set to `always` — or to `ask`, which puts the choice to the
+user once and honours a no — `/mjloop:plan` runs the `mjloop-feature-discovery` skill first:
+it reads the accepted component map, the config, and the project's own documentation for
+itself rather than asking, then puts one decision at a time to the user — each with a
+recommended answer — up to `discovery.question_budget` questions, marking whatever the budget
+left unresolved as unresolved instead of guessing it. It stops at a draft brief for a person
+to approve, and plans against the brief they approved. It plans nothing, routes nothing, and
+starts nothing itself: the fit-check and the human approval gate still stand behind it,
+against the plan. The brief it writes is a record on disk rather than a paragraph in a chat —
+see below — and the mode defaults to `off`, so `/mjloop:plan` in an existing project is
+unchanged.
+
+Then — **an approved brief is evidence, and it is immutable.** A feature brief lives in
+`.mjloop/features/F###-<slug>/` as numbered revision files. A draft is written into place
+as the interview goes, so an interrupted interview resumes instead of being re-asked;
+approval freezes that revision, and the store refuses every later write to it rather than
+trusting the caller. Approving is compare-and-swap on the revision the approver was shown —
+a brief that moved in the meantime is refused outright — and it records who approved, when,
+and their own words if they gave any, with the cockpit's approver taken from the machine's
+own account rather than from anything the page can type. It refuses a brief with no
+acceptance criteria, because that is what every later story is judged against. Changing
+an approved brief mints a successor draft carrying its content forward, and rollback is
+approving an earlier revision's content as a new one, so no record a run may have pinned is
+rewritten or deleted. `superseded` is derived when a record is read — a revision is
+superseded once a higher one exists — and never stored, since storing it would mean writing
+to the file the rule exists to protect. `.mjloop/features/` is engine-owned like
+`.mjloop/profile/`: `Write` and `Edit` are denied inside it, and briefs are created, read,
+updated and approved through the four `mjloop_feature_*` operations. Once a brief is
+approved, `orchestration.discovery.completion` decides what follows — `auto-plan` opens the
+plan track against it, `review` records it and stops, `save-only` treats the brief itself as
+the deliverable. The cockpit may read a brief with its revision history and approve the
+revision it read; it may not create, edit, supersede, route, or execute one.
+
+Latest — **an approved brief can also tell the loop which skills to bring, without inventing a
+new agent to hold them.** A run built against one routes each of `planner`, `builder`, `critic`,
+and `verifier` to the project's own accepted skills — never to a permanent per-technology
+variant: there is no `flutter-builder`, and there never will be, because a role is fixed and only
+the guidance it receives for one task changes. Selection joins the brief's affected component ids
+against a skill's tags, matching either the component's own technology-derived tags or a tag the
+brief declares for itself — declared by a person during discovery, never inferred from the
+brief's prose, which is exactly the free-form guess this design refuses to make on anyone's
+behalf. The whole routing decision, and a proof-or-fallback verdict on whether this run's
+components can run in parallel at all, is computed once and pinned into `skill-selection.json`
+beside `verify-pinned.json`, so a later change to the project's skill library cannot rewrite what
+a task already in flight was told; a cycle's handoff renders the selections and the reasons
+behind them beside everything else it already records. Independence is only ever proven from
+disjoint component roots and no shared verify command — never guessed — and anything short of
+that falls to `orchestration.execution.uncertain_concurrency`, sequential by default. No skill
+library exists yet, so every selection this manifest can produce today is empty; that is the
+next story.
+
+Latest — **the skill library now exists, per machine, shared by every project on it.** It
+lives outside any checkout — `~/.local/share/mjloop` by default, `MJLOOP_DATA_HOME` to point
+it elsewhere — because a library nested in a project would eventually get committed, and a
+package two projects share would then live inside one of them. A package is stored
+content-addressed by the sha-256 digest of its content, so importing one source at two
+revisions is two packages, never one overwriting the other. A project accepts a **digest**,
+never a path: the acceptance record in `.mjloop/skills/<skillId>.json` travels in the repo,
+the package itself stays on the machine that fetched it, and a teammate whose library lacks
+it is skipped by name rather than failing the run. Acceptance is per project, and removing
+one project's acceptance touches nothing else — not the package, not another project's
+record. `mjloop-cli skills list|accept|disable|enable|remove` is the one route in; the
+cockpit's `/api/skills` only ever reports the library and this project's acceptances and
+never activates one. `skills accept` refuses any package whose audit has not passed —
+discovery, static audit, and the sandbox below are what finally lets one earn that state.
+
+Latest — **a discovered package can now earn a passed audit, or be told exactly why not.**
+The whole pipeline is a sequence of refusals. `mjloop-cli skills search <query> [--source
+github|registry|web]` returns metadata-only candidates — where a package claims to live, not
+its content — from `orchestration.skills.sources` (`[github]` by default); a source the
+project has not enabled is refused before a single request goes out, naming the setting and
+`mjloop-cli config set orchestration.skills.sources ...` as the fix. General web search stays
+off until a project opts in itself. `mjloop-cli skills inspect <url>` pins the candidate's ref
+to an immutable commit sha through the API before fetching a single byte, then fetches its
+tree under hard caps — entry count, per-file and total bytes, path depth — each an outright
+refusal naming the cap, never a silent truncation; refuses a traversing or absolute path the
+moment its name first appears; requires `SKILL.md` to parse into a name and description; and
+blocks on a missing license exactly as it blocks on a missing `SKILL.md`. Executable content —
+a shebang, an executable extension, a `package.json` with `scripts` — is classified by reading
+it, never by running it, and can only earn `'passed'` by running its own declared
+`mjloop.smoke` checks inside a real isolation backend this machine can detect, `sandbox-exec`
+on darwin or `bwrap` on linux; **a bare scrubbed child process is not that backend**, and with
+neither tool present the package is `'unavailable'` and refused outright, never run
+unsandboxed to find out. `mjloop-cli skills import <url>` writes a passed package into the
+library — it still does not accept it into the project, which stays `skills accept
+<digest>`'s job — and `mjloop-cli skills check-updates` reports an upstream change as a new
+candidate, never moving an already-accepted digest and never importing or accepting it on its
+own. A failed candidate offers exactly one thing to do next: a user-initiated search for a
+different one.
+
 ## Install
 
 ```bash
@@ -56,6 +167,7 @@ Then add this repository as a plugin marketplace or local plugin in Claude Code.
 /mjloop:stop [reason]                      halt the run and write a report
 /mjloop:resume                             continue an interrupted run
 /mjloop:design-sync                        extract the design system the UI agents read
+/mjloop:config [get | set <key> <value>]   read or change this project's orchestration settings
 /mjloop:web                                cockpit: drive and read a run in a browser
 /mjloop:add agent|skill|track <name>       scaffold a new element
 /mjloop:release [major|minor|patch]        bump, tag, and publish a plugin release

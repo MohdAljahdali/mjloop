@@ -176,10 +176,93 @@ describe('JobQueue', () => {
     queue.stop()
 
     expect(sessions.last().written).toEqual(['/exit\r'])
+    // Reported while the ladder runs, so the page can say "closing" instead of
+    // showing a job as running behind a button that now does nothing.
+    expect(queue.session().closing).toBe(true)
     sessions.last().end(0)
 
     expect(queue.jobs()[0]?.status).toBe('cancelled')
     expect(sessions.sessions).toHaveLength(1)
+    expect(queue.session()).toMatchObject({ blocked: true, pausedBy: 'stopped', closing: false })
+  })
+
+  it('does not stay paused after a stop with nothing left to hold', () => {
+    // The wedge this fixes: stopping the only job left the queue blocked with no
+    // banner and no Resume button, so the next command the user typed sat at
+    // `queued` forever and the page looked broken.
+    queue.enqueue('/mjloop:build P001-S01')
+    queue.observe(running())
+    queue.stop()
+    sessions.last().end(0)
+
+    expect(queue.session().blocked).toBe(false)
+    queue.enqueue('/mjloop:build P001-S02')
+    expect(sessions.sessions).toHaveLength(2)
+    expect(queue.jobs().at(-1)?.status).toBe('running')
+  })
+
+  it('does not pause after a failure with nothing left to hold, and says so differently', () => {
+    queue.enqueue('/mjloop:build P001-S01')
+    queue.observe(running())
+    sessions.last().end(1)
+
+    expect(queue.jobs()[0]?.status).toBe('failed')
+    expect(queue.session().blocked).toBe(false)
+    // "the rest of the queue is holding" would send the user looking for a queue
+    // that is not there.
+    expect(notices.map((notice) => notice.code)).toEqual(['queue.failed'])
+  })
+
+  it('ignores a second stop rather than restarting the shutdown ladder', () => {
+    queue.enqueue('/mjloop:build P001-S01')
+    queue.observe(running())
+    queue.stop()
+    clock.advance(9_000)
+    queue.stop()
+
+    // Re-arming would push SIGTERM out by another ten seconds, which makes Stop
+    // slower the more often it is pressed.
+    clock.advance(1_000)
+    queue.observe(running())
+    expect(sessions.last().killed).toEqual(['SIGTERM'])
+    expect(sessions.last().written).toEqual(['/exit\r'])
+  })
+
+  it('stops the running job when its own row is cancelled', () => {
+    // One `cancel` with a job id, whichever half of the queue that job is in:
+    // the × on the running row used to do nothing at all.
+    queue.enqueue('/mjloop:build P001-S01')
+    queue.observe(running())
+    const [live] = queue.jobs()
+    queue.cancel(live?.id ?? '')
+
+    expect(sessions.last().written).toEqual(['/exit\r'])
+    sessions.last().end(0)
+    expect(queue.jobs()[0]?.status).toBe('cancelled')
+  })
+
+  it('lifts the pause when the queue it was holding is cleared', () => {
+    queue.enqueue('/mjloop:build P001-S01')
+    queue.enqueue('/mjloop:build P001-S02')
+    queue.observe(running())
+    sessions.last().end(1)
+    expect(queue.session().blocked).toBe(true)
+
+    queue.clear()
+    expect(queue.session().blocked).toBe(false)
+    queue.enqueue('/mjloop:build P001-S03')
+    expect(sessions.last().options.command).toBe('/mjloop:build P001-S03')
+  })
+
+  it('reports a failure pause with the cause named', () => {
+    queue.enqueue('/mjloop:build P001-S01')
+    queue.enqueue('/mjloop:build P001-S02')
+    queue.observe(running())
+    sessions.last().end(1)
+    expect(queue.session()).toMatchObject({ blocked: true, pausedBy: 'failure' })
+
+    queue.resume()
+    expect(queue.session()).toMatchObject({ blocked: false, pausedBy: null })
   })
 
   it('reports a running session that has gone quiet', () => {

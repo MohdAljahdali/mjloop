@@ -67,9 +67,20 @@
       </div>
     </header>
 
+    <!-- Navigation that carries the two numbers worth switching a view for: how
+         many stories could be built right now, and how many commands are waiting
+         to run. Both used to be visible only after arriving. The label span is
+         separate from the anchor so the count can sit outside the translated
+         text in either writing direction. -->
     <nav class="tabs" data-i18n-label="tabs.label">
-      <a id="tab-run" href="#run" aria-controls="panel-run" data-i18n="tabs.run"></a>
-      <a id="tab-plans" href="#plans" aria-controls="panel-plans" data-i18n="tabs.plans"></a>
+      <a id="tab-run" href="#run" aria-controls="panel-run">
+        <span data-i18n="tabs.run"></span>
+        <span class="nav-count warnish" data-rail="navGuard" aria-hidden="true" hidden></span>
+      </a>
+      <a id="tab-plans" href="#plans" aria-controls="panel-plans">
+        <span data-i18n="tabs.plans"></span>
+        <span class="nav-count" data-rail="navReady" aria-hidden="true" hidden></span>
+      </a>
       <a id="tab-evidence" href="#evidence" aria-controls="panel-evidence" data-i18n="tabs.evidence"></a>
       <a id="tab-memory" href="#memory" aria-controls="panel-memory" data-i18n="tabs.memory"></a>
       <a id="tab-config" href="#config" aria-controls="panel-config" data-i18n="tabs.config"></a>
@@ -102,27 +113,21 @@
           <dl class="facts" id="preflight-past"></dl>
         </section>
 
-        <div id="run-body" hidden>
-          <dl class="facts">
-            <div class="fact"><dt data-i18n="run.goal"></dt><dd id="run-goal"></dd></div>
-            <div class="fact" id="run-story-fact"><dt data-i18n="run.story"></dt><dd id="run-story"></dd></div>
-            <div class="fact" id="run-plan-fact"><dt data-i18n="run.plan"></dt><dd id="run-plan"></dd></div>
-            <div class="fact" id="run-runid-fact"><dt data-i18n="run.runId"></dt><dd id="run-runid"></dd></div>
-            <div class="fact"><dt data-i18n="run.findings"></dt><dd id="run-findings"></dd></div>
-            <div class="fact" id="run-gate-fact"><dt data-i18n="run.gate"></dt><dd id="run-gate"></dd></div>
-            <div class="fact" id="run-halt-fact"><dt data-i18n="run.halted"></dt><dd id="run-halt"></dd></div>
-          </dl>
-
-          <section class="block" id="run-roster" hidden>
-            <h2 data-i18n="run.roster"></h2>
-            <ul class="chips" id="run-roster-agents"></ul>
-          </section>
-
-          <section class="block" id="run-guards" hidden>
-            <h2 data-i18n="run.guards"></h2>
-            <p id="run-strikes"></p>
-            <ul class="chips" id="run-cycle-errors"></ul>
-          </section>
+        <!-- What the run *is* down the main column; what is happening to it right
+             now — this cycle's roster, the guards, how the last cycle ended — in
+             the aside. Stacked, the small blocks pushed the findings table and
+             the cycle history off the bottom of the screen. -->
+        <div id="run-body" class="panel-grid" hidden>
+          <div class="panel-main">
+            <dl class="facts">
+              <div class="fact"><dt data-i18n="run.goal"></dt><dd id="run-goal"></dd></div>
+              <div class="fact" id="run-story-fact"><dt data-i18n="run.story"></dt><dd id="run-story"></dd></div>
+              <div class="fact" id="run-plan-fact"><dt data-i18n="run.plan"></dt><dd id="run-plan"></dd></div>
+              <div class="fact" id="run-runid-fact"><dt data-i18n="run.runId"></dt><dd id="run-runid"></dd></div>
+              <div class="fact"><dt data-i18n="run.findings"></dt><dd id="run-findings"></dd></div>
+              <div class="fact" id="run-gate-fact"><dt data-i18n="run.gate"></dt><dd id="run-gate"></dd></div>
+              <div class="fact" id="run-halt-fact"><dt data-i18n="run.halted"></dt><dd id="run-halt"></dd></div>
+            </dl>
 
           <section class="block" id="run-findings-block" hidden>
             <h2 data-i18n="run.findingsTitle"></h2>
@@ -145,12 +150,6 @@
             <pre class="excerpt" id="run-gate-excerpt"></pre>
           </section>
 
-          <section class="block" id="run-last" hidden>
-            <h2 data-i18n="run.lastCycle"></h2>
-            <p><span id="run-last-result"></span></p>
-            <ul class="chips" id="run-last-agents"></ul>
-          </section>
-
           <section class="block" id="run-timeline" hidden>
             <h2 data-i18n="run.timeline"></h2>
             <div class="scroller">
@@ -166,10 +165,30 @@
             </div>
           </section>
 
-          <section class="block" id="run-haltreport" hidden>
-            <h2 data-i18n="run.haltReport"></h2>
-            <pre class="excerpt" id="run-halt-report"></pre>
-          </section>
+            <section class="block" id="run-haltreport" hidden>
+              <h2 data-i18n="run.haltReport"></h2>
+              <pre class="excerpt" id="run-halt-report"></pre>
+            </section>
+          </div>
+
+          <aside class="panel-side">
+            <section class="block" id="run-roster" hidden>
+              <h2 data-i18n="run.roster"></h2>
+              <ul class="chips" id="run-roster-agents"></ul>
+            </section>
+
+            <section class="block" id="run-last" hidden>
+              <h2 data-i18n="run.lastCycle"></h2>
+              <p><span id="run-last-result"></span></p>
+              <ul class="chips" id="run-last-agents"></ul>
+            </section>
+
+            <section class="block" id="run-guards" hidden>
+              <h2 data-i18n="run.guards"></h2>
+              <p id="run-strikes"></p>
+              <ul class="chips" id="run-cycle-errors"></ul>
+            </section>
+          </aside>
         </div>
       </section>
 
@@ -182,71 +201,119 @@
         </header>
         <p class="empty" id="plans-empty"></p>
 
-        <section class="block" id="plans-ready" hidden>
-          <h2 data-i18n="plans.readyNext"></h2>
-          <ul class="chips" id="plans-ready-list"></ul>
-        </section>
+        <!-- Two columns on a wide window: the work in the main one, and the
+             things that are *about* the work — a tally, a create box — in the
+             aside. One stack of full-width sections is what left a five-number
+             tally stretched across 1300px and the create form below the fold. -->
+        <div class="panel-grid">
+          <div class="panel-main">
+            <!-- The one thing this tab exists to answer: what can I start right
+                 now. A row with the story's own title on it, not an id chip whose
+                 meaning is somewhere else on the page. -->
+            <section class="block start" id="plans-ready" hidden>
+              <h2 data-i18n="plans.next"></h2>
+              <ul class="ready" id="plans-ready-list"></ul>
+              <p class="more" id="plans-ready-more" hidden></p>
+            </section>
 
-        <div class="plans-workspace" id="plans-workspace" data-detail-open="false">
-          <div class="plans-master">
-            <div class="plans" id="plans-list"></div>
-            <p class="more" id="plans-more" hidden></p>
+            <div class="plans-workspace" id="plans-workspace" data-detail-open="false">
+              <div class="plans-master">
+                <div class="plans" id="plans-list"></div>
+                <p class="more" id="plans-more" hidden></p>
+              </div>
+
+              <section class="plan-detail block" id="plan-detail" hidden>
+                <header class="plan-detail-head">
+                  <button type="button" class="plan-back" data-act="close-plan" data-i18n="plans.back"></button>
+                  <h2 id="plan-detail-title" tabindex="-1"></h2>
+                </header>
+                <p class="record" id="plan-approval-record"></p>
+
+                <!-- The note is uncontrolled and written once at mount. A
+                     renderer that assigned to it would eat what is being typed
+                     on the next 800ms tick. -->
+                <div class="approve">
+                  <input
+                    id="approve-note"
+                    name="note"
+                    maxlength="2000"
+                    dir="auto"
+                    autocomplete="off"
+                    data-i18n-placeholder="plans.notePlaceholder"
+                    data-i18n-label="plans.noteLabel"
+                  />
+                  <button type="button" data-act="approve" data-i18n="plans.approve"></button>
+                  <button type="button" data-act="request-changes" data-i18n="plans.requestChanges"></button>
+                  <button type="button" class="danger" data-act="reject" data-i18n="plans.reject"></button>
+                </div>
+
+                <details id="plan-body-details">
+                  <summary data-i18n="plans.readPlan"></summary>
+                  <pre class="excerpt" id="plan-body"></pre>
+                </details>
+                <details id="plan-review-details" hidden>
+                  <summary data-i18n="plans.readReview"></summary>
+                  <pre class="excerpt" id="plan-review"></pre>
+                </details>
+
+                <!-- The stories live here and nowhere else. They used to be
+                     drawn twice — inline under every plan row and again in this
+                     panel — which is why a plan with twenty-two of them read as
+                     a wall with no way in. One list, and a filter over it. -->
+                <section class="stories-block">
+                  <h3 data-i18n="plans.storiesTitle"></h3>
+                  <div class="facets">
+                    <input
+                      id="story-query"
+                      name="story-q"
+                      dir="auto"
+                      autocomplete="off"
+                      data-i18n-placeholder="plans.searchHint"
+                      data-i18n-label="plans.searchLabel"
+                    />
+                    <select id="story-filter" name="story-filter" data-i18n-label="plans.filterLabel"></select>
+                  </div>
+                  <p class="empty" id="plan-stories-empty" hidden></p>
+                  <ul class="stories detail" id="plan-detail-stories"></ul>
+                  <p class="more" id="plan-stories-more" hidden></p>
+                </section>
+              </section>
+            </div>
           </div>
 
-          <section class="plan-detail block" id="plan-detail" hidden>
-            <header class="plan-detail-head">
-              <button type="button" class="plan-back" data-act="close-plan" data-i18n="plans.back"></button>
-              <h2 id="plan-detail-title" tabindex="-1"></h2>
-            </header>
-            <p class="record" id="plan-approval-record"></p>
+          <aside class="panel-side">
+            <!-- What the twenty-two rows beside it used to make you count by
+                 hand. Five numbers, and the only two that are ever a decision —
+                 ready and blocked — carry a colour. -->
+            <section class="block" id="plans-tally-block" hidden>
+              <h2 data-i18n="plans.tallyTitle"></h2>
+              <ul class="tally" id="plans-tally">
+                <li><span class="k" data-i18n="plans.count.plans"></span><span class="v" id="tally-plans"></span></li>
+                <li><span class="k" data-i18n="plans.count.ready"></span><span class="v tally-ready" id="tally-ready"></span></li>
+                <li><span class="k" data-i18n="plans.count.doing"></span><span class="v" id="tally-doing"></span></li>
+                <li><span class="k" data-i18n="plans.count.blocked"></span><span class="v tally-blocked" id="tally-blocked"></span></li>
+                <li><span class="k" data-i18n="plans.count.done"></span><span class="v" id="tally-done"></span></li>
+              </ul>
+            </section>
 
-            <!-- The note is uncontrolled and written once at mount. A renderer
-                 that assigned to it would eat what is being typed on the next
-                 800ms tick. -->
-            <div class="approve">
-              <input
-                id="approve-note"
-                name="note"
-                maxlength="2000"
-                dir="auto"
-                autocomplete="off"
-                data-i18n-placeholder="plans.notePlaceholder"
-                data-i18n-label="plans.noteLabel"
-              />
-              <button type="button" data-act="approve" data-i18n="plans.approve"></button>
-              <button type="button" data-act="request-changes" data-i18n="plans.requestChanges"></button>
-              <button type="button" class="danger" data-act="reject" data-i18n="plans.reject"></button>
-            </div>
-
-            <details id="plan-body-details">
-              <summary data-i18n="plans.readPlan"></summary>
-              <pre class="excerpt" id="plan-body"></pre>
-            </details>
-            <details id="plan-review-details" hidden>
-              <summary data-i18n="plans.readReview"></summary>
-              <pre class="excerpt" id="plan-review"></pre>
-            </details>
-
-            <ul class="stories detail" id="plan-detail-stories"></ul>
-          </section>
+            <section class="block">
+              <h2 data-i18n="plans.create"></h2>
+              <!-- Both compose a loop command and enqueue it. Structured fields,
+                   one execution path: there is no second, weaker way to start work. -->
+              <form class="command stacked" data-act="new-plan">
+                <input
+                  id="new-plan"
+                  name="idea"
+                  dir="auto"
+                  autocomplete="off"
+                  data-i18n-placeholder="plans.newPlanHint"
+                  data-i18n-label="plans.newPlanLabel"
+                />
+                <button type="submit" data-i18n="plans.newPlan"></button>
+              </form>
+            </section>
+          </aside>
         </div>
-
-        <section class="block">
-          <h2 data-i18n="plans.create"></h2>
-          <!-- Both compose a loop command and enqueue it. Structured fields,
-               one execution path: there is no second, weaker way to start work. -->
-          <form class="command" data-act="new-plan">
-            <input
-              id="new-plan"
-              name="idea"
-              dir="auto"
-              autocomplete="off"
-              data-i18n-placeholder="plans.newPlanHint"
-              data-i18n-label="plans.newPlanLabel"
-            />
-            <button type="submit" data-i18n="plans.newPlan"></button>
-          </form>
-        </section>
       </section>
 
       <section class="panel" id="panel-evidence" aria-labelledby="panel-evidence-title" hidden>
@@ -320,6 +387,22 @@
           <div class="fact"><dt data-i18n="config.project"></dt><dd id="config-project"></dd></div>
         </dl>
 
+        <!-- The component map this project is routed by, and a read in the
+             strongest sense: accepting a map activates routing for every later
+             run, which is the class of write `web/writes.ts` denies the browser
+             permanently — the same reason `runStart` and `cycleAdvance` are
+             denied. So this block reports what was accepted, says out loud when
+             a newer scan disagrees, and offers nothing to press. Resolving the
+             disagreement is a command, and commands go through the queue. -->
+        <section class="block" id="config-profile-block">
+          <h2 data-i18n="config.profile"></h2>
+          <p class="hint" data-i18n="config.profileWhy"></p>
+          <p class="record" id="config-profile-record" hidden></p>
+          <p class="banner warn" id="config-profile-drift" hidden></p>
+          <p class="empty" id="config-profile-empty" hidden></p>
+          <div id="config-profile-list"></div>
+        </section>
+
         <form class="config-editor" id="config-editor" data-act="config-save">
           <div class="config-editor-head">
             <div>
@@ -355,25 +438,124 @@
               <label>
                 <span data-i18n="config.planApproval"></span>
                 <select id="config-plan-gate-input" name="plan_approval" data-i18n-label="config.planApproval">
-                  <option value="human">human</option>
-                  <option value="auto">auto</option>
+                  <option value="human" data-i18n="config.gateValue.human"></option>
+                  <option value="auto" data-i18n="config.gateValue.auto"></option>
                 </select>
               </label>
               <label>
                 <span data-i18n="config.commitGate"></span>
                 <select id="config-commit-gate-input" name="commit" data-i18n-label="config.commitGate">
-                  <option value="human">human</option>
-                  <option value="auto">auto</option>
+                  <option value="human" data-i18n="config.gateValue.human"></option>
+                  <option value="auto" data-i18n="config.gateValue.auto"></option>
                 </select>
               </label>
               <label>
                 <span data-i18n="config.preflightGate"></span>
                 <select id="config-preflight-gate-input" name="preflight" data-i18n-label="config.preflightGate">
-                  <option value="human">human</option>
-                  <option value="auto">auto</option>
+                  <option value="human" data-i18n="config.gateValue.human"></option>
+                  <option value="auto" data-i18n="config.gateValue.auto"></option>
                 </select>
               </label>
             </div>
+          </fieldset>
+
+          <!-- Orchestration: how much of a feature this project wants the loop
+               to work out on its own, and how much it wants to be asked. Every
+               control writes exactly one leaf through `config.patch`, the same
+               guarded door the rest of this form uses — the browser never sends
+               a YAML path or a replacement document, and the engine re-validates
+               the whole result under the project lock.
+
+               Two of these settings are only meaningful in pairs, and the
+               engine refuses the halves rather than silently accepting a
+               setting that could never take effect: a completion of `auto-plan`
+               under a discovery mode of `off` names a start nothing ever
+               produces, and a `registry` source with no trusted registry behind
+               it admits no skill at all. A save carrying one half is refused
+               whole, which is why they sit next to each other here. -->
+          <fieldset>
+            <legend data-i18n="config.orchestration"></legend>
+            <p class="hint" data-i18n="config.orchestrationWhy"></p>
+            <div class="config-fields">
+              <label class="check-field">
+                <input id="config-auto-accept-input" name="orch_profile_auto_accept" type="checkbox" data-i18n-label="config.autoAccept" />
+                <span data-i18n="config.autoAccept"></span>
+              </label>
+              <label>
+                <span data-i18n="config.discoveryMode"></span>
+                <select id="config-discovery-mode-input" name="orch_discovery_mode" data-i18n-label="config.discoveryMode">
+                  <option value="off" data-i18n="config.discoveryValue.off"></option>
+                  <option value="ask" data-i18n="config.discoveryValue.ask"></option>
+                  <option value="always" data-i18n="config.discoveryValue.always"></option>
+                </select>
+              </label>
+              <label>
+                <span data-i18n="config.questionBudget"></span>
+                <input id="config-question-budget-input" name="orch_discovery_question_budget" type="number" min="1" max="20" step="1" required data-i18n-label="config.questionBudget" />
+              </label>
+              <label>
+                <span data-i18n="config.discoveryCompletion"></span>
+                <select id="config-discovery-completion-input" name="orch_discovery_completion" data-i18n-label="config.discoveryCompletion">
+                  <option value="auto-plan" data-i18n="config.completionValue.autoPlan"></option>
+                  <option value="review" data-i18n="config.completionValue.review"></option>
+                  <option value="save-only" data-i18n="config.completionValue.saveOnly"></option>
+                </select>
+              </label>
+              <label>
+                <span data-i18n="config.afterPlanApproval"></span>
+                <select id="config-after-approval-input" name="orch_execution_after_plan_approval" data-i18n-label="config.afterPlanApproval">
+                  <option value="manual" data-i18n="config.afterApprovalValue.manual"></option>
+                  <option value="auto" data-i18n="config.afterApprovalValue.auto"></option>
+                </select>
+              </label>
+              <label>
+                <span data-i18n="config.uncertainConcurrency"></span>
+                <select id="config-concurrency-input" name="orch_execution_uncertain_concurrency" data-i18n-label="config.uncertainConcurrency">
+                  <option value="sequential" data-i18n="config.concurrencyValue.sequential"></option>
+                  <option value="ask" data-i18n="config.concurrencyValue.ask"></option>
+                  <option value="parallel" data-i18n="config.concurrencyValue.parallel"></option>
+                </select>
+              </label>
+              <label>
+                <span data-i18n="config.repairAttempts"></span>
+                <input id="config-repair-attempts-input" name="orch_execution_repair_attempts" type="number" min="0" max="5" step="1" required data-i18n-label="config.repairAttempts" />
+              </label>
+              <label class="check-field">
+                <input id="config-plan-review-input" name="orch_quality_independent_plan_review" type="checkbox" data-i18n-label="config.independentPlanReview" />
+                <span data-i18n="config.independentPlanReview"></span>
+              </label>
+              <label class="check-field">
+                <input id="config-independent-verify-input" name="orch_quality_independent_verification" type="checkbox" data-i18n-label="config.independentVerification" />
+                <span data-i18n="config.independentVerification"></span>
+              </label>
+              <label class="check-field">
+                <input id="config-source-github-input" name="orch_skills_sources_github" type="checkbox" data-i18n-label="config.skillSource.github" />
+                <span data-i18n="config.skillSource.github"></span>
+              </label>
+              <label class="check-field">
+                <input id="config-source-registry-input" name="orch_skills_sources_registry" type="checkbox" data-i18n-label="config.skillSource.registry" />
+                <span data-i18n="config.skillSource.registry"></span>
+              </label>
+              <label class="check-field">
+                <input id="config-source-web-input" name="orch_skills_sources_web" type="checkbox" data-i18n-label="config.skillSource.web" />
+                <span data-i18n="config.skillSource.web"></span>
+              </label>
+              <label>
+                <span data-i18n="config.skillUpdateMode"></span>
+                <select id="config-update-mode-input" name="orch_skills_update_mode" data-i18n-label="config.skillUpdateMode">
+                  <option value="review" data-i18n="config.updateModeValue.review"></option>
+                  <option value="auto" data-i18n="config.updateModeValue.auto"></option>
+                  <option value="pinned" data-i18n="config.updateModeValue.pinned"></option>
+                </select>
+              </label>
+            </div>
+            <div class="config-fields config-fields-wide">
+              <label>
+                <span data-i18n="config.trustedRegistries"></span>
+                <textarea id="config-registries-input" name="orch_skills_trusted_registries" rows="3" dir="ltr" data-i18n-label="config.trustedRegistries"></textarea>
+              </label>
+            </div>
+            <p class="hint" data-i18n="config.trustedRegistriesHelp"></p>
           </fieldset>
 
           <fieldset>
@@ -422,20 +604,40 @@
             </div>
           </fieldset>
 
+          <!-- The two maps that used to be raw JSON. They are edited through
+               structured controls now, and the JSON they produce lives in a
+               hidden field so the diff into the server's closed change
+               vocabulary — `collectConfigChanges` — is untouched by the change
+               of surface. -->
           <fieldset>
-            <legend data-i18n="config.advancedTitle"></legend>
-            <p class="hint" data-i18n="config.advancedHelp"></p>
-            <div class="config-fields config-fields-wide">
-              <label>
-                <span>specialists</span>
-                <textarea id="config-specialists-input" name="specialists_json" rows="8" dir="ltr" spellcheck="false" data-i18n-label="config.specialistsLabel"></textarea>
-              </label>
-              <label>
-                <span>tracks</span>
-                <textarea id="config-tracks-input" name="tracks_json" rows="12" dir="ltr" spellcheck="false" data-i18n-label="config.tracksLabel"></textarea>
-              </label>
+            <legend data-i18n="config.specialists"></legend>
+            <p class="hint" data-i18n="config.specialistsHelp"></p>
+            <p class="empty" id="config-specialists-empty" data-i18n="config.specialistsEmpty" hidden></p>
+            <div class="rules" id="config-specialist-rules"></div>
+            <div class="rule-add">
+              <input id="config-specialist-new" name="specialist_new" list="config-agent-names" dir="ltr" autocomplete="off" spellcheck="false" data-i18n-placeholder="config.agentName" data-i18n-label="config.agentName" />
+              <button type="button" data-act="specialist-add" data-i18n="config.add"></button>
             </div>
+            <input type="hidden" id="config-specialists-input" name="specialists_json" data-i18n-label="config.specialistsLabel" />
           </fieldset>
+
+          <fieldset>
+            <legend data-i18n="config.tracks"></legend>
+            <p class="hint" data-i18n="config.tracksHelp"></p>
+            <div class="track-editors" id="config-track-editors"></div>
+            <div class="rule-add">
+              <input id="config-track-new" name="track_new" dir="ltr" autocomplete="off" spellcheck="false" data-i18n-placeholder="config.trackName" data-i18n-label="config.trackName" />
+              <button type="button" data-act="track-add" data-i18n="config.add"></button>
+            </div>
+            <p class="hint" data-i18n="config.trackNewWarning"></p>
+            <input type="hidden" id="config-tracks-input" name="tracks_json" data-i18n-label="config.tracksLabel" />
+          </fieldset>
+
+          <!-- Every agent name this project has already named, offered as
+               suggestions and never as a closed list: the engine deliberately
+               never reads the agents directory, and an agent scaffolded a
+               minute ago has to be typeable the same minute. -->
+          <datalist id="config-agent-names"></datalist>
         </form>
 
         <section class="block">
@@ -453,22 +655,6 @@
           <h2 data-i18n="config.verifyPolicy"></h2>
           <p class="hint" data-i18n="config.verifyPolicyWhy"></p>
           <dl class="facts" id="config-verify-policy"></dl>
-        </section>
-
-        <section class="block">
-          <h2 data-i18n="config.tracks"></h2>
-          <div class="scroller">
-            <div class="grid grid-tracks" role="table">
-              <div class="grid-head" role="row">
-                <span role="columnheader" data-i18n="config.track"></span>
-                <span role="columnheader" data-i18n="config.required"></span>
-                <span role="columnheader" data-i18n="config.available"></span>
-                <span role="columnheader" data-i18n="config.maxCycles"></span>
-                <span role="columnheader" data-i18n="config.gate"></span>
-              </div>
-              <div id="config-tracks" role="rowgroup" class="grid-body"></div>
-            </div>
-          </div>
         </section>
 
         <!-- What the specialists this project configures actually returned,
@@ -515,6 +701,12 @@
         <button type="button" class="view-tab" id="view-queue" data-act="view-queue"></button>
         <span class="job-label" id="job-label"></span>
         <span class="viewing" id="job-viewing" hidden></span>
+        <!-- Two states that used to be visible only after opening the queue
+             view: that the queue is holding, and that the job on screen is
+             already being closed. Both change what pressing Run or Stop will
+             do, so both belong on the head that is never hidden. -->
+        <span class="pill warnish" id="pane-paused" hidden data-i18n="queue.paused"></span>
+        <span class="pill" id="pane-closing" hidden data-i18n="queue.closing"></span>
         <button type="button" class="icon" data-act="pane-full" data-i18n-label="pane.fullscreen">⤢</button>
         <button type="button" class="danger" data-act="stop" id="pane-stop" hidden data-i18n="controls.stop"></button>
       </div>
@@ -528,14 +720,39 @@
         </div>
 
         <div class="view" id="panel-queue" hidden>
-          <p class="banner warn" id="queue-blocked" hidden data-i18n="queue.blockedBanner"></p>
-          <p class="empty" id="queue-empty" data-i18n="queue.empty"></p>
-          <ul class="jobs" id="queue-list"></ul>
-          <p class="more" id="queue-more" hidden></p>
-          <div class="queue-actions">
-            <button type="button" id="queue-resume" data-act="resume" hidden data-i18n="queue.resume"></button>
-            <button type="button" id="queue-clear" data-act="clear" hidden data-i18n="queue.clear"></button>
+          <!-- The pause, its cause, and the two ways out of it — in one place
+               and never further away than the jobs it is holding. A paused queue
+               with its Resume button hidden is indistinguishable from a broken
+               Run button, and that is exactly how this used to read. -->
+          <div class="banner warn queue-pause" id="queue-blocked" hidden>
+            <span id="queue-pause-text"></span>
+            <span class="queue-actions">
+              <button type="button" class="primary" id="queue-resume" data-act="resume" data-i18n="queue.resume"></button>
+              <button type="button" id="queue-clear" data-act="clear" hidden data-i18n="queue.clear"></button>
+            </span>
           </div>
+
+          <p class="empty" id="queue-empty" data-i18n="queue.empty"></p>
+
+          <!-- Three groups rather than one reversed list. "Running", "waiting"
+               and "finished" are three different questions, and a single stream
+               made the user work out which row was which by reading its status
+               word. -->
+          <section class="queue-group" id="queue-now-group" hidden>
+            <h3 data-i18n="queue.running"></h3>
+            <ul class="jobs" id="queue-now"></ul>
+          </section>
+
+          <section class="queue-group" id="queue-waiting-group" hidden>
+            <h3 id="queue-waiting-title"></h3>
+            <ul class="jobs" id="queue-waiting"></ul>
+            <p class="more" id="queue-more" hidden></p>
+          </section>
+
+          <section class="queue-group" id="queue-history-group" hidden>
+            <h3 data-i18n="queue.history"></h3>
+            <ul class="jobs" id="queue-history"></ul>
+          </section>
         </div>
       </div>
 
@@ -595,6 +812,9 @@
       <li class="chip"><span data-slot="text"></span></li>
     </template>
 
+    <!-- A plan reads as one line of prose and one bar. Its stories are not here:
+         they were drawn both here and in the detail panel, and two copies of
+         twenty-two rows is the whole reason this tab was hard to read. -->
     <template id="tpl-plan">
       <article class="plan">
         <header class="plan-head">
@@ -602,34 +822,35 @@
           <strong class="plan-title" data-slot="title"></strong>
           <span class="tag" data-slot="state"></span>
           <span class="tag" data-slot="approval"></span>
-          <span class="count" data-slot="count"></span>
           <button type="button" data-act="open-plan" data-slot="open"></button>
         </header>
-        <p class="empty" data-slot="empty" hidden></p>
-        <ul class="stories" data-slot="stories"></ul>
+        <div class="progress" data-slot="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100">
+          <span class="bar" data-slot="bar"></span>
+        </div>
+        <p class="plan-meta">
+          <span class="count" data-slot="count"></span>
+          <span class="ready-note" data-slot="ready" hidden></span>
+          <span class="waits" data-slot="blocked" hidden></span>
+          <span class="empty" data-slot="empty" hidden></span>
+        </p>
       </article>
-    </template>
-
-    <template id="tpl-story">
-      <li class="story">
-        <span class="dot" data-slot="dot"></span>
-        <span class="story-id" data-slot="id"></span>
-        <span class="story-title" data-slot="title"></span>
-        <span class="tag ui" data-slot="ui" hidden></span>
-        <span class="story-status" data-slot="status"></span>
-        <span class="waits" data-slot="waits" hidden></span>
-        <button type="button" class="icon" data-act="build" data-slot="build">+</button>
-      </li>
     </template>
 
     <template id="tpl-job">
       <li class="job">
+        <span class="pos" data-slot="position" hidden></span>
         <span class="cmd" data-slot="command"></span>
         <span class="st" data-slot="status"></span>
         <span class="dur" data-slot="duration"></span>
+        <span class="row-actions">
+          <!-- The same action as the row below it, deliberately: one `cancel`
+               with a job id, and the queue decides whether that means dropping a
+               queued command or closing the session running it. -->
+          <button type="button" class="danger" data-act="job-cancel" data-slot="stop" hidden></button>
+          <button type="button" data-act="job-cancel" data-slot="cancel" hidden></button>
+          <button type="button" data-act="job-attach" data-slot="attach" hidden></button>
+        </span>
         <span class="reason" data-slot="reason" hidden></span>
-        <button type="button" class="icon" data-act="job-cancel" data-slot="cancel" hidden>×</button>
-        <button type="button" class="icon" data-act="job-attach" data-slot="attach" hidden>↗</button>
       </li>
     </template>
 
@@ -735,6 +956,25 @@
       <div class="fact"><dt data-slot="label"></dt><dd data-slot="value"></dd></div>
     </template>
 
+    <!-- One accepted component. A readings list rather than a grid row on
+         purpose: the three verification slots are commands, and a command that
+         has to share a table column with two others is a command nobody reads.
+         The three labels are the record's own field paths and stay identifiers
+         in every language, exactly as `verify.test` does above the editor. -->
+    <template id="tpl-component">
+      <div class="component">
+        <h3 data-slot="id"></h3>
+        <dl class="facts">
+          <div class="fact"><dt data-i18n="config.componentRoot"></dt><dd data-slot="root"></dd></div>
+          <div class="fact"><dt data-i18n="config.componentTechnology"></dt><dd data-slot="technology"></dd></div>
+          <div class="fact"><dt>verification.test</dt><dd data-slot="test"></dd></div>
+          <div class="fact"><dt>verification.lint</dt><dd data-slot="lint"></dd></div>
+          <div class="fact"><dt>verification.build</dt><dd data-slot="build"></dd></div>
+          <div class="fact"><dt data-i18n="config.componentTags"></dt><dd data-slot="tags"></dd></div>
+        </dl>
+      </div>
+    </template>
+
     <template id="tpl-specialist">
       <div class="grid-row" role="row">
         <span role="cell"><code data-slot="agent"></code></span>
@@ -749,14 +989,97 @@
       </div>
     </template>
 
-    <template id="tpl-track">
-      <div class="grid-row" role="row">
-        <span role="cell"><code data-slot="name"></code></span>
-        <span role="cell" data-slot="required"></span>
-        <span role="cell" data-slot="available"></span>
-        <span role="cell" data-slot="max"></span>
-        <span role="cell" data-slot="gate"></span>
+    <!-- One rule out of `specialists:`. The mode is a closed picker rather than
+         a free field because the schema's enum is closed, and the sentence
+         under it says what the chosen mode actually does to a cycle. -->
+    <template id="tpl-specialist-rule">
+      <div class="rule">
+        <code class="rule-name" data-slot="agent"></code>
+        <select class="rule-mode" data-field="specialist-mode" data-slot="mode" data-i18n-label="config.modeLabel">
+          <option value="auto" data-i18n="config.mode.auto"></option>
+          <option value="always" data-i18n="config.mode.always"></option>
+          <option value="never" data-i18n="config.mode.never"></option>
+        </select>
+        <span class="rule-why" data-slot="why"></span>
+        <button type="button" class="icon danger" data-act="specialist-remove" data-slot="remove" data-i18n-label="config.remove">×</button>
       </div>
+    </template>
+
+    <!-- A track, as a card. Every list on it is the same shape — chips plus a
+         combobox — so `required`, `available`, `closing` and a gate's `blocks`
+         are one template and one pair of actions rather than four of each. -->
+    <template id="tpl-track-editor">
+      <section class="track-editor">
+        <header class="track-editor-head">
+          <code class="track-name" data-slot="name"></code>
+          <label class="track-cycles">
+            <span data-i18n="config.maxCycles"></span>
+            <input type="number" min="1" step="1" required data-field="max-cycles" data-slot="cycles" data-i18n-label="config.maxCycles" />
+          </label>
+          <button type="button" data-act="track-duplicate" data-slot="duplicate" data-i18n="config.duplicate"></button>
+          <button type="button" class="danger" data-act="track-remove" data-slot="remove" data-i18n="config.delete"></button>
+        </header>
+
+        <div class="track-lists">
+          <div class="track-list" data-slot="requiredList"></div>
+          <div class="track-list" data-slot="availableList"></div>
+          <div class="track-list" data-slot="closingList"></div>
+        </div>
+
+        <div class="track-optional">
+          <label class="check-field">
+            <input type="checkbox" data-field="gate-enabled" data-slot="gateEnabled" data-i18n-label="config.gate" />
+            <span data-i18n="config.gate"></span>
+          </label>
+          <div class="track-gate" data-slot="gateBody" hidden>
+            <label>
+              <span data-i18n="config.gateProvenBy"></span>
+              <select data-field="gate-proven" data-slot="gateProven" data-i18n-label="config.gateProvenBy"></select>
+            </label>
+            <div class="track-list" data-slot="blocksList"></div>
+          </div>
+        </div>
+
+        <div class="track-optional">
+          <label class="check-field">
+            <input type="checkbox" data-field="map-enabled" data-slot="mapEnabled" data-i18n-label="config.map" />
+            <span data-i18n="config.map"></span>
+          </label>
+          <div class="track-map" data-slot="mapBody" hidden>
+            <label>
+              <span data-i18n="config.mapDraftedBy"></span>
+              <select data-field="map-drafted" data-slot="mapDrafted" data-i18n-label="config.mapDraftedBy"></select>
+            </label>
+          </div>
+        </div>
+
+        <ul class="track-problems" data-slot="problems"></ul>
+      </section>
+    </template>
+
+    <!-- One of a track's four agent lists. `data-list` is what makes the pair
+         of actions below list-agnostic. -->
+    <template id="tpl-track-list">
+      <div class="track-list-body">
+        <span class="track-list-label" data-slot="label"></span>
+        <ul class="chips" data-slot="chips"></ul>
+        <span class="track-list-empty" data-slot="empty" hidden data-i18n="config.noAgents"></span>
+        <div class="rule-add">
+          <input list="config-agent-names" dir="ltr" autocomplete="off" spellcheck="false" data-slot="entry" data-i18n-placeholder="config.agentName" data-i18n-label="config.agentName" />
+          <button type="button" class="icon" data-act="agent-add" data-slot="add" data-i18n-label="config.add">+</button>
+        </div>
+      </div>
+    </template>
+
+    <template id="tpl-agent-chip">
+      <li class="chip chip-agent">
+        <bdi data-slot="name"></bdi>
+        <button type="button" class="icon" data-act="agent-remove" data-slot="remove" data-i18n-label="config.remove">×</button>
+      </li>
+    </template>
+
+    <template id="tpl-track-problem">
+      <li class="track-problem" data-slot="text"></li>
     </template>
 
     <template id="tpl-roster-agent">
@@ -780,21 +1103,37 @@
       </div>
     </template>
 
+    <!-- A buildable story, with the title and the plan it belongs to on the same
+         row as the button. The chip this replaced said `P001-S11` and nothing
+         else, which asked the user to hold an id in their head and go looking
+         for it. -->
     <template id="tpl-ready">
-      <li class="chip ready">
-        <span data-slot="id"></span>
-        <button type="button" class="icon" data-act="build" data-slot="build">+</button>
+      <li class="ready-row">
+        <span class="tag next" data-slot="next" hidden></span>
+        <span class="story-id" data-slot="id"></span>
+        <span class="story-title" data-slot="title"></span>
+        <span class="chip" data-slot="plan"></span>
+        <button type="button" class="primary" data-act="build" data-slot="build"></button>
       </li>
     </template>
 
     <template id="tpl-story-detail">
       <li class="story detail">
+        <span class="dot" data-slot="dot"></span>
         <span class="story-id" data-slot="id"></span>
         <span class="story-title" data-slot="title"></span>
+        <span class="tag ui" data-slot="ui" hidden></span>
         <span class="story-status" data-slot="status"></span>
+        <span class="waits" data-slot="waits" hidden></span>
         <span class="waits anomaly" data-slot="anomaly" hidden></span>
-        <button type="button" data-act="requeue" data-slot="requeue" hidden></button>
-        <ul class="acceptance" data-slot="acceptance"></ul>
+        <span class="row-actions">
+          <button type="button" class="primary" data-act="build" data-slot="build"></button>
+          <button type="button" data-act="requeue" data-slot="requeue" hidden></button>
+        </span>
+        <details data-slot="acceptDetails" hidden>
+          <summary data-slot="acceptSummary"></summary>
+          <ul class="acceptance" data-slot="acceptance"></ul>
+        </details>
         <code class="evidence" data-slot="evidence" hidden></code>
       </li>
     </template>

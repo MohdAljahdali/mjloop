@@ -14,8 +14,18 @@
  * @property {string} memoryQuery
  */
 
-/** @type {Prefs} */
-const DEFAULTS = { lang: null, pane: 'docked', memoryQuery: '' }
+/**
+ * Collapsed on a first visit, not docked.
+ *
+ * The pane is 38% of the window, and on arrival there is nothing in it: the run
+ * a person came to read is in `main`, above the fold, and the terminal used to
+ * take more than a third of the screen to say "nothing running". It opens itself
+ * the moment a job starts — `mountPane().follow()` — and once the reader has set
+ * a height, that choice is what is remembered.
+ *
+ * @type {Prefs}
+ */
+const DEFAULTS = { lang: null, pane: 'collapsed', memoryQuery: '' }
 const PANES = ['collapsed', 'docked', 'full']
 const KEY = 'mjloop.prefs'
 

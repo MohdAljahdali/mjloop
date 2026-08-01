@@ -94,9 +94,23 @@ describe('phrase', () => {
 
 describe('templates', () => {
   it('clones a shipped row and indexes its slots', () => {
-    const { root, slots } = clone('tpl-story')
+    const { root, slots } = clone('tpl-story-detail')
     expect(root.classList.contains('story')).toBe(true)
-    expect(Object.keys(slots).sort()).toEqual(['build', 'dot', 'id', 'status', 'title', 'ui', 'waits'])
+    expect(Object.keys(slots).sort()).toEqual([
+      'acceptDetails',
+      'acceptSummary',
+      'acceptance',
+      'anomaly',
+      'build',
+      'dot',
+      'evidence',
+      'id',
+      'requeue',
+      'status',
+      'title',
+      'ui',
+      'waits',
+    ])
   })
 
   it('refuses a template that does not exist', () => {

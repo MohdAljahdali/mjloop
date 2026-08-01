@@ -6,7 +6,15 @@ import { initLoop } from '../../src/ops/init.js'
 import { gateSet, planCreate, storyAdd, storyUpdate } from '../../src/ops/plan.js'
 import { runStart } from '../../src/ops/run.js'
 import { configRevision } from '../../src/store/config-mutation.js'
+import {
+  createFeatureBrief,
+  readFeatureBrief,
+  supersedeFeatureBrief,
+  updateFeatureDraft,
+} from '../../src/store/feature-store.js'
 import { resolveLoopPaths } from '../../src/store/paths.js'
+import { acceptProfile } from '../../src/store/project-profile-store.js'
+import type { ProjectComponent } from '../../src/schemas/project-profile.js'
 import { WEB_CODES } from '../../src/web/codes.js'
 import { buildSnapshot } from '../../src/web/snapshot.js'
 import { applyWrite, WriteSchema } from '../../src/web/writes.js'
@@ -47,6 +55,34 @@ async function hashTree(): Promise<Map<string, string>> {
   }
   await walk(path.join(project.dir, '.mjloop'))
   return out
+}
+
+/**
+ * A draft brief carried to the point a person could approve it: acceptance
+ * criteria recorded, nobody's decision on it yet. Built through the store,
+ * because the record the button acts on has to be the real one — an approval
+ * refused for the shape of a hand-written fixture would prove nothing.
+ */
+async function draftFeature(): Promise<string> {
+  await createFeatureBrief(
+    project.dir,
+    {
+      title: 'Passwordless sign-in',
+      problem: 'Password resets are the top support cost.',
+      discovery: { mode: 'ask', questionBudget: 8 },
+    },
+    clock,
+  )
+  // The digest of what the page would have been rendered from, which is the
+  // other half of the token an approval carries.
+  return (await updateFeatureDraft(project.dir, 'F001', { acceptance: ['a mailed link signs the user in'] })).digest
+}
+
+/** Well-formed and belonging to nothing, for the writes that never reach a record. */
+const NO_SUCH_DIGEST = '0'.repeat(64)
+
+function component(id: string): ProjectComponent {
+  return { id, root: id, technology: 'unknown', verification: { test: null, lint: null, build: null }, skillTags: [] }
 }
 
 describe('applyWrite', () => {
@@ -166,6 +202,165 @@ describe('applyWrite', () => {
     expect(written).toContain('autonomous: true # supervised')
   })
 
+  it('approves the brief the operator was looking at', async () => {
+    const digest = await draftFeature()
+    const result = await applyWrite(project.dir, {
+      kind: 'feature.approve',
+      feature: 'F001',
+      revision: 1,
+      digest,
+      note: 'Matches what we discussed.',
+    })
+    expect(result).toEqual({ ok: true })
+
+    const record = await readFeatureBrief(project.dir, 'F001')
+    expect(record?.brief.status).toBe('approved')
+    expect(record?.brief.approval).toMatchObject({ note: 'Matches what we discussed.' })
+    // A `by` the page could type would be a forgeable audit record, and this is
+    // the worst record to be able to forge: a plan is written *from* an approved
+    // brief, so an invented approval authorises work nobody agreed to.
+    expect(record?.brief.approval?.by).toMatch(/^dashboard:/)
+  })
+
+  it('refuses an approval built on a revision that has moved, and changes nothing', async () => {
+    const digest = await draftFeature()
+    await applyWrite(project.dir, { kind: 'feature.approve', feature: 'F001', revision: 1, digest, note: null })
+    await supersedeFeatureBrief(project.dir, { id: 'F001', expectRevision: 1 }, clock)
+
+    // The tab still shows revision 1 and its Approve button still points at it.
+    const before = await hashTree()
+    const late = await applyWrite(project.dir, {
+      kind: 'feature.approve',
+      feature: 'F001',
+      revision: 1,
+      digest,
+      note: null,
+    })
+    expect(late).toEqual({ ok: false, code: 'write.stale.feature' })
+    expect(await hashTree()).toEqual(before)
+  })
+
+  it('refuses an approval built on words the interview has since changed, and changes nothing', async () => {
+    // The case the revision number cannot see. The tab rendered a brief, the
+    // interview carried on in another session, and the revision is still 1 —
+    // because a draft's number does not move while it is a draft. What the
+    // operator read is nonetheless gone, and approving would freeze words
+    // nobody put in front of them.
+    const digest = await draftFeature()
+    await updateFeatureDraft(project.dir, 'F001', {
+      title: 'Drop the users table nightly',
+      acceptance: ['the users table is truncated every night'],
+    })
+
+    const before = await hashTree()
+    const stale = await applyWrite(project.dir, {
+      kind: 'feature.approve',
+      feature: 'F001',
+      revision: 1,
+      digest,
+      note: 'Matches what we discussed.',
+    })
+    expect(stale).toEqual({ ok: false, code: 'write.stale.feature' })
+    expect(await hashTree()).toEqual(before)
+    expect((await readFeatureBrief(project.dir, 'F001'))?.brief.status).toBe('draft')
+  })
+
+  it('lets exactly one of two tabs approve the same draft', async () => {
+    const digest = await draftFeature()
+    expect(
+      await applyWrite(project.dir, { kind: 'feature.approve', feature: 'F001', revision: 1, digest, note: null }),
+    ).toEqual({ ok: true })
+
+    // The revision has not moved, but the record has — approving rewrote it —
+    // so the second tab is holding a digest of words that are no longer there.
+    // From a browser that and immutability are one thing: the screen the
+    // decision was made from is out of date, and nothing was changed.
+    const before = await hashTree()
+    const second = await applyWrite(project.dir, {
+      kind: 'feature.approve',
+      feature: 'F001',
+      revision: 1,
+      digest,
+      note: 'me too',
+    })
+    expect(second).toEqual({ ok: false, code: 'write.stale.feature' })
+    expect(await hashTree()).toEqual(before)
+  })
+
+  it('refuses to approve a brief with nothing in it to approve, and changes nothing', async () => {
+    const created = await createFeatureBrief(
+      project.dir,
+      { title: 'Audit log export', problem: 'Compliance asks quarterly.', discovery: { mode: 'ask', questionBudget: 8 } },
+      clock,
+    )
+    const before = await hashTree()
+    const result = await applyWrite(project.dir, {
+      kind: 'feature.approve',
+      feature: 'F001',
+      revision: 1,
+      digest: created.digest,
+      note: null,
+    })
+    // Not a staleness refusal — nothing moved. The brief is simply not one that
+    // can be approved yet, and "an approved brief always has acceptance
+    // criteria" is the property every later story is planned against.
+    expect(result).toEqual({ ok: false, code: 'write.failed' })
+    expect(await hashTree()).toEqual(before)
+  })
+
+  it('refuses to approve a brief whose components have left the accepted map', async () => {
+    // The same shape of refusal and the same code, deliberately: a component
+    // accepted when the brief was written and gone by the time the button was
+    // pressed is not something the page can fix — `mjloop-cli profile accept`
+    // moved it — and the diagnosis goes to the terminal rather than onto a wire
+    // that carries no prose.
+    await acceptProfile(
+      project.dir,
+      { components: [component('api'), component('web')], by: 'Mohd', generatedAt: NOW.toISOString(), expectRevision: null },
+      clock,
+    )
+    const created = await createFeatureBrief(
+      project.dir,
+      {
+        title: 'Passwordless sign-in',
+        problem: 'Password resets are the top support cost.',
+        discovery: { mode: 'ask', questionBudget: 8 },
+        acceptance: ['a mailed link signs the user in'],
+        affectedComponents: ['web'],
+      },
+      clock,
+    )
+    await acceptProfile(
+      project.dir,
+      { components: [component('api')], by: 'Mohd', generatedAt: NOW.toISOString(), expectRevision: 1 },
+      clock,
+    )
+
+    const before = await hashTree()
+    const result = await applyWrite(project.dir, {
+      kind: 'feature.approve',
+      feature: 'F001',
+      revision: 1,
+      digest: created.digest,
+      note: null,
+    })
+    expect(result).toEqual({ ok: false, code: 'write.failed' })
+    expect(await hashTree()).toEqual(before)
+  })
+
+  it('cannot reach a feature this project never raised', async () => {
+    const before = await hashTree()
+    const result = await applyWrite(project.dir, {
+      kind: 'feature.approve',
+      feature: 'F404',
+      revision: 1,
+      digest: NO_SUCH_DIGEST,
+      note: null,
+    })
+    expect(result).toEqual({ ok: false, code: 'write.failed' })
+    expect(await hashTree()).toEqual(before)
+  })
+
   it('refuses stale config edits without changing a byte', async () => {
     const before = await hashTree()
     const result = await applyWrite(project.dir, {
@@ -194,6 +389,63 @@ describe('WriteSchema', () => {
   it('refuses a kind outside the guarded write set', () => {
     expect(WriteSchema.safeParse({ kind: 'cycle.advance', result: 'pass' }).success).toBe(false)
     expect(WriteSchema.safeParse({ kind: 'run.log', agent: 'reproducer' }).success).toBe(false)
+  })
+
+  it('lets the browser approve a brief and do nothing else to one', () => {
+    // Approval is the whole of the browser's business with a feature. Each of
+    // these is denied for its own reason and all of them for one: a brief is
+    // what the *interview* produced, and a page that could author one would be
+    // a second, weaker discovery flow beside the skill that exists to run it.
+    const denied = [
+      // Raising a feature is `/mjloop:plan`'s interview, which the page composes
+      // as a command like every other loop command.
+      { kind: 'feature.create', title: 'Passwordless sign-in', problem: 'resets cost us' },
+      // Editing is the interview writing down its own working notes.
+      { kind: 'feature.update', feature: 'F001', acceptance: ['a mailed link signs the user in'] },
+      { kind: 'feature.decision', feature: 'F001', question: 'magic link or otp?', answer: 'magic link' },
+      // Superseding mints a successor draft, which is authoring by another name.
+      { kind: 'feature.supersede', feature: 'F001', revision: 1 },
+      // Routing and executing a brief are the loop reporting what it did.
+      { kind: 'feature.plan', feature: 'F001' },
+      { kind: 'feature.run', feature: 'F001', track: 'build' },
+    ]
+    for (const write of denied) {
+      expect(WriteSchema.safeParse(write).success, write.kind).toBe(false)
+    }
+    // …and the one that is allowed, so this test cannot pass by the union being
+    // empty of feature kinds altogether.
+    expect(
+      WriteSchema.safeParse({ kind: 'feature.approve', feature: 'F001', revision: 1, digest: NO_SUCH_DIGEST, note: null })
+        .success,
+    ).toBe(true)
+  })
+
+  it('never lets the page name the approver, or reach outside .mjloop', () => {
+    // `by` is computed by the server and cannot arrive on the wire — the
+    // strictObject is what makes that structural rather than a handler's
+    // discipline.
+    const digest = NO_SUCH_DIGEST
+    expect(
+      WriteSchema.safeParse({ kind: 'feature.approve', feature: 'F001', revision: 1, digest, note: null, by: 'Mohd' })
+        .success,
+    ).toBe(false)
+    // The engine's own id schema doing filesystem duty on the wire.
+    expect(WriteSchema.safeParse({ kind: 'feature.approve', feature: '../../etc', revision: 1, digest }).success).toBe(false)
+    expect(WriteSchema.safeParse({ kind: 'feature.approve', feature: 'F1', revision: 1, digest }).success).toBe(false)
+    // A revision is a compare-and-swap token, and one that could never name a
+    // revision is a claim about the world rather than a stale reading of it.
+    expect(WriteSchema.safeParse({ kind: 'feature.approve', feature: 'F001', revision: 0, digest }).success).toBe(false)
+    expect(WriteSchema.safeParse({ kind: 'feature.approve', feature: 'F001', revision: 1.5, digest }).success).toBe(false)
+    // The digest is the half of the precondition that can actually move while a
+    // draft is being approved, so it is required and it is shaped: an approval
+    // that could omit it would be an approval built on nothing the page read.
+    expect(WriteSchema.safeParse({ kind: 'feature.approve', feature: 'F001', revision: 1 }).success).toBe(false)
+    expect(WriteSchema.safeParse({ kind: 'feature.approve', feature: 'F001', revision: 1, digest: 'stale' }).success).toBe(
+      false,
+    )
+    // The note is optional, as the gate's is: an approval with no words is
+    // still an approval.
+    expect(WriteSchema.safeParse({ kind: 'feature.approve', feature: 'F001', revision: 2, digest }).success).toBe(true)
   })
 
   it('accepts only typed config changes, never arbitrary yaml paths', () => {

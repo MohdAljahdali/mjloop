@@ -6,6 +6,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { buildServer } from '../../src/mcp/server.js'
 import { DEFAULT_TRACKS } from '../../src/schemas/config.js'
+import { ComponentTechnologySchema } from '../../src/schemas/project-profile.js'
 
 /**
  * The plugin's agent frontmatter, asserted against the engine it calls.
@@ -70,6 +71,32 @@ describe('the plugin agents', () => {
     // outside the closing pass would be judging its own work.
     const holders = [...tools].filter(([, granted]) => granted.includes(VERIFY_TOOL)).map(([name]) => name)
     expect(holders.sort()).toEqual(['docs', 'verifier'])
+  })
+
+  it('names no agent for a technology', () => {
+    // S05's hard stop condition: dynamic skill selection changes what guidance
+    // a fixed role receives, never the role itself. A `flutter-builder` or
+    // `nextjs-builder` file is the one thing that could quietly undo that —
+    // and nothing else would notice, because a technology-named agent is a
+    // perfectly valid agent file on its own. Derived from
+    // `ComponentTechnologySchema` rather than a hand-typed list here, so a
+    // technology the schema gains later is covered without editing this test,
+    // and one that never becomes real never manufactures a false failure.
+    //
+    // Matched as a *token* of the name rather than as a leading prefix, because
+    // the stop condition forbids the duplicate agent and not one spelling of
+    // it: `flutter-builder` is the obvious form, but `flutter_builder` and
+    // `builder-flutter` are the same file under a different separator and the
+    // same violation, and a guard that only saw the prefix would wave both
+    // through. Splitting on the three separators an agent filename can carry
+    // costs no false positive — no shipped role holds a technology name as a
+    // token — while closing every rearrangement of one.
+    for (const technology of ComponentTechnologySchema.options) {
+      for (const agent of tools.keys()) {
+        const named = agent.split(/[-_.]/).includes(technology)
+        expect(named, `${agent} is named for the "${technology}" technology`).toBe(false)
+      }
+    }
   })
 
   it("names every MCP tool under the plugin's own server id", async () => {

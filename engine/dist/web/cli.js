@@ -3722,17 +3722,17 @@ var require_visit = __commonJS({
     visit.BREAK = BREAK;
     visit.SKIP = SKIP;
     visit.REMOVE = REMOVE;
-    function visit_(key, node, visitor, path18) {
-      const ctrl = callVisitor(key, node, visitor, path18);
+    function visit_(key, node, visitor, path23) {
+      const ctrl = callVisitor(key, node, visitor, path23);
       if (identity.isNode(ctrl) || identity.isPair(ctrl)) {
-        replaceNode(key, path18, ctrl);
-        return visit_(key, ctrl, visitor, path18);
+        replaceNode(key, path23, ctrl);
+        return visit_(key, ctrl, visitor, path23);
       }
       if (typeof ctrl !== "symbol") {
         if (identity.isCollection(node)) {
-          path18 = Object.freeze(path18.concat(node));
+          path23 = Object.freeze(path23.concat(node));
           for (let i = 0; i < node.items.length; ++i) {
-            const ci = visit_(i, node.items[i], visitor, path18);
+            const ci = visit_(i, node.items[i], visitor, path23);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -3743,13 +3743,13 @@ var require_visit = __commonJS({
             }
           }
         } else if (identity.isPair(node)) {
-          path18 = Object.freeze(path18.concat(node));
-          const ck = visit_("key", node.key, visitor, path18);
+          path23 = Object.freeze(path23.concat(node));
+          const ck = visit_("key", node.key, visitor, path23);
           if (ck === BREAK)
             return BREAK;
           else if (ck === REMOVE)
             node.key = null;
-          const cv = visit_("value", node.value, visitor, path18);
+          const cv = visit_("value", node.value, visitor, path23);
           if (cv === BREAK)
             return BREAK;
           else if (cv === REMOVE)
@@ -3770,17 +3770,17 @@ var require_visit = __commonJS({
     visitAsync.BREAK = BREAK;
     visitAsync.SKIP = SKIP;
     visitAsync.REMOVE = REMOVE;
-    async function visitAsync_(key, node, visitor, path18) {
-      const ctrl = await callVisitor(key, node, visitor, path18);
+    async function visitAsync_(key, node, visitor, path23) {
+      const ctrl = await callVisitor(key, node, visitor, path23);
       if (identity.isNode(ctrl) || identity.isPair(ctrl)) {
-        replaceNode(key, path18, ctrl);
-        return visitAsync_(key, ctrl, visitor, path18);
+        replaceNode(key, path23, ctrl);
+        return visitAsync_(key, ctrl, visitor, path23);
       }
       if (typeof ctrl !== "symbol") {
         if (identity.isCollection(node)) {
-          path18 = Object.freeze(path18.concat(node));
+          path23 = Object.freeze(path23.concat(node));
           for (let i = 0; i < node.items.length; ++i) {
-            const ci = await visitAsync_(i, node.items[i], visitor, path18);
+            const ci = await visitAsync_(i, node.items[i], visitor, path23);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -3791,13 +3791,13 @@ var require_visit = __commonJS({
             }
           }
         } else if (identity.isPair(node)) {
-          path18 = Object.freeze(path18.concat(node));
-          const ck = await visitAsync_("key", node.key, visitor, path18);
+          path23 = Object.freeze(path23.concat(node));
+          const ck = await visitAsync_("key", node.key, visitor, path23);
           if (ck === BREAK)
             return BREAK;
           else if (ck === REMOVE)
             node.key = null;
-          const cv = await visitAsync_("value", node.value, visitor, path18);
+          const cv = await visitAsync_("value", node.value, visitor, path23);
           if (cv === BREAK)
             return BREAK;
           else if (cv === REMOVE)
@@ -3824,23 +3824,23 @@ var require_visit = __commonJS({
       }
       return visitor;
     }
-    function callVisitor(key, node, visitor, path18) {
+    function callVisitor(key, node, visitor, path23) {
       if (typeof visitor === "function")
-        return visitor(key, node, path18);
+        return visitor(key, node, path23);
       if (identity.isMap(node))
-        return visitor.Map?.(key, node, path18);
+        return visitor.Map?.(key, node, path23);
       if (identity.isSeq(node))
-        return visitor.Seq?.(key, node, path18);
+        return visitor.Seq?.(key, node, path23);
       if (identity.isPair(node))
-        return visitor.Pair?.(key, node, path18);
+        return visitor.Pair?.(key, node, path23);
       if (identity.isScalar(node))
-        return visitor.Scalar?.(key, node, path18);
+        return visitor.Scalar?.(key, node, path23);
       if (identity.isAlias(node))
-        return visitor.Alias?.(key, node, path18);
+        return visitor.Alias?.(key, node, path23);
       return void 0;
     }
-    function replaceNode(key, path18, node) {
-      const parent = path18[path18.length - 1];
+    function replaceNode(key, path23, node) {
+      const parent = path23[path23.length - 1];
       if (identity.isCollection(parent)) {
         parent.items[key] = node;
       } else if (identity.isPair(parent)) {
@@ -4450,10 +4450,10 @@ var require_Collection = __commonJS({
     var createNode = require_createNode();
     var identity = require_identity();
     var Node = require_Node();
-    function collectionFromPath(schema, path18, value) {
+    function collectionFromPath(schema, path23, value) {
       let v = value;
-      for (let i = path18.length - 1; i >= 0; --i) {
-        const k = path18[i];
+      for (let i = path23.length - 1; i >= 0; --i) {
+        const k = path23[i];
         if (typeof k === "number" && Number.isInteger(k) && k >= 0) {
           const a = [];
           a[k] = v;
@@ -4472,7 +4472,7 @@ var require_Collection = __commonJS({
         sourceObjects: /* @__PURE__ */ new Map()
       });
     }
-    var isEmptyPath = (path18) => path18 == null || typeof path18 === "object" && !!path18[Symbol.iterator]().next().done;
+    var isEmptyPath = (path23) => path23 == null || typeof path23 === "object" && !!path23[Symbol.iterator]().next().done;
     var Collection = class extends Node.NodeBase {
       constructor(type, schema) {
         super(type);
@@ -4502,11 +4502,11 @@ var require_Collection = __commonJS({
        * be a Pair instance or a `{ key, value }` object, which may not have a key
        * that already exists in the map.
        */
-      addIn(path18, value) {
-        if (isEmptyPath(path18))
+      addIn(path23, value) {
+        if (isEmptyPath(path23))
           this.add(value);
         else {
-          const [key, ...rest] = path18;
+          const [key, ...rest] = path23;
           const node = this.get(key, true);
           if (identity.isCollection(node))
             node.addIn(rest, value);
@@ -4520,8 +4520,8 @@ var require_Collection = __commonJS({
        * Removes a value from the collection.
        * @returns `true` if the item was found and removed.
        */
-      deleteIn(path18) {
-        const [key, ...rest] = path18;
+      deleteIn(path23) {
+        const [key, ...rest] = path23;
         if (rest.length === 0)
           return this.delete(key);
         const node = this.get(key, true);
@@ -4535,8 +4535,8 @@ var require_Collection = __commonJS({
        * scalar values from their surrounding node; to disable set `keepScalar` to
        * `true` (collections are always returned intact).
        */
-      getIn(path18, keepScalar) {
-        const [key, ...rest] = path18;
+      getIn(path23, keepScalar) {
+        const [key, ...rest] = path23;
         const node = this.get(key, true);
         if (rest.length === 0)
           return !keepScalar && identity.isScalar(node) ? node.value : node;
@@ -4554,8 +4554,8 @@ var require_Collection = __commonJS({
       /**
        * Checks if the collection includes a value with the key `key`.
        */
-      hasIn(path18) {
-        const [key, ...rest] = path18;
+      hasIn(path23) {
+        const [key, ...rest] = path23;
         if (rest.length === 0)
           return this.has(key);
         const node = this.get(key, true);
@@ -4565,8 +4565,8 @@ var require_Collection = __commonJS({
        * Sets a value in this collection. For `!!set`, `value` needs to be a
        * boolean to add/remove the item from the set.
        */
-      setIn(path18, value) {
-        const [key, ...rest] = path18;
+      setIn(path23, value) {
+        const [key, ...rest] = path23;
         if (rest.length === 0) {
           this.set(key, value);
         } else {
@@ -7081,9 +7081,9 @@ var require_Document = __commonJS({
           this.contents.add(value);
       }
       /** Adds a value to the document. */
-      addIn(path18, value) {
+      addIn(path23, value) {
         if (assertCollection(this.contents))
-          this.contents.addIn(path18, value);
+          this.contents.addIn(path23, value);
       }
       /**
        * Create a new `Alias` node, ensuring that the target `node` has the required anchor.
@@ -7158,14 +7158,14 @@ var require_Document = __commonJS({
        * Removes a value from the document.
        * @returns `true` if the item was found and removed.
        */
-      deleteIn(path18) {
-        if (Collection.isEmptyPath(path18)) {
+      deleteIn(path23) {
+        if (Collection.isEmptyPath(path23)) {
           if (this.contents == null)
             return false;
           this.contents = null;
           return true;
         }
-        return assertCollection(this.contents) ? this.contents.deleteIn(path18) : false;
+        return assertCollection(this.contents) ? this.contents.deleteIn(path23) : false;
       }
       /**
        * Returns item at `key`, or `undefined` if not found. By default unwraps
@@ -7180,10 +7180,10 @@ var require_Document = __commonJS({
        * scalar values from their surrounding node; to disable set `keepScalar` to
        * `true` (collections are always returned intact).
        */
-      getIn(path18, keepScalar) {
-        if (Collection.isEmptyPath(path18))
+      getIn(path23, keepScalar) {
+        if (Collection.isEmptyPath(path23))
           return !keepScalar && identity.isScalar(this.contents) ? this.contents.value : this.contents;
-        return identity.isCollection(this.contents) ? this.contents.getIn(path18, keepScalar) : void 0;
+        return identity.isCollection(this.contents) ? this.contents.getIn(path23, keepScalar) : void 0;
       }
       /**
        * Checks if the document includes a value with the key `key`.
@@ -7194,10 +7194,10 @@ var require_Document = __commonJS({
       /**
        * Checks if the document includes a value at `path`.
        */
-      hasIn(path18) {
-        if (Collection.isEmptyPath(path18))
+      hasIn(path23) {
+        if (Collection.isEmptyPath(path23))
           return this.contents !== void 0;
-        return identity.isCollection(this.contents) ? this.contents.hasIn(path18) : false;
+        return identity.isCollection(this.contents) ? this.contents.hasIn(path23) : false;
       }
       /**
        * Sets a value in this document. For `!!set`, `value` needs to be a
@@ -7214,13 +7214,13 @@ var require_Document = __commonJS({
        * Sets a value in this document. For `!!set`, `value` needs to be a
        * boolean to add/remove the item from the set.
        */
-      setIn(path18, value) {
-        if (Collection.isEmptyPath(path18)) {
+      setIn(path23, value) {
+        if (Collection.isEmptyPath(path23)) {
           this.contents = value;
         } else if (this.contents == null) {
-          this.contents = Collection.collectionFromPath(this.schema, Array.from(path18), value);
+          this.contents = Collection.collectionFromPath(this.schema, Array.from(path23), value);
         } else if (assertCollection(this.contents)) {
-          this.contents.setIn(path18, value);
+          this.contents.setIn(path23, value);
         }
       }
       /**
@@ -9180,9 +9180,9 @@ var require_cst_visit = __commonJS({
     visit.BREAK = BREAK;
     visit.SKIP = SKIP;
     visit.REMOVE = REMOVE;
-    visit.itemAtPath = (cst, path18) => {
+    visit.itemAtPath = (cst, path23) => {
       let item = cst;
-      for (const [field, index] of path18) {
+      for (const [field, index] of path23) {
         const tok = item?.[field];
         if (tok && "items" in tok) {
           item = tok.items[index];
@@ -9191,23 +9191,23 @@ var require_cst_visit = __commonJS({
       }
       return item;
     };
-    visit.parentCollection = (cst, path18) => {
-      const parent = visit.itemAtPath(cst, path18.slice(0, -1));
-      const field = path18[path18.length - 1][0];
+    visit.parentCollection = (cst, path23) => {
+      const parent = visit.itemAtPath(cst, path23.slice(0, -1));
+      const field = path23[path23.length - 1][0];
       const coll = parent?.[field];
       if (coll && "items" in coll)
         return coll;
       throw new Error("Parent collection not found");
     };
-    function _visit(path18, item, visitor) {
-      let ctrl = visitor(item, path18);
+    function _visit(path23, item, visitor) {
+      let ctrl = visitor(item, path23);
       if (typeof ctrl === "symbol")
         return ctrl;
       for (const field of ["key", "value"]) {
         const token = item[field];
         if (token && "items" in token) {
           for (let i = 0; i < token.items.length; ++i) {
-            const ci = _visit(Object.freeze(path18.concat([[field, i]])), token.items[i], visitor);
+            const ci = _visit(Object.freeze(path23.concat([[field, i]])), token.items[i], visitor);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -9218,10 +9218,10 @@ var require_cst_visit = __commonJS({
             }
           }
           if (typeof ctrl === "function" && field === "key")
-            ctrl = ctrl(item, path18);
+            ctrl = ctrl(item, path23);
         }
       }
-      return typeof ctrl === "function" ? ctrl(item, path18) : ctrl;
+      return typeof ctrl === "function" ? ctrl(item, path23) : ctrl;
     }
     exports.visit = visit;
   }
@@ -10523,14 +10523,14 @@ var require_parser = __commonJS({
             case "scalar":
             case "single-quoted-scalar":
             case "double-quoted-scalar": {
-              const fs18 = this.flowScalar(this.type);
+              const fs23 = this.flowScalar(this.type);
               if (atNextItem || it.value) {
-                map.items.push({ start, key: fs18, sep: [] });
+                map.items.push({ start, key: fs23, sep: [] });
                 this.onKeyLine = true;
               } else if (it.sep) {
-                this.stack.push(fs18);
+                this.stack.push(fs23);
               } else {
-                Object.assign(it, { key: fs18, sep: [] });
+                Object.assign(it, { key: fs23, sep: [] });
                 this.onKeyLine = true;
               }
               return;
@@ -10658,13 +10658,13 @@ var require_parser = __commonJS({
             case "scalar":
             case "single-quoted-scalar":
             case "double-quoted-scalar": {
-              const fs18 = this.flowScalar(this.type);
+              const fs23 = this.flowScalar(this.type);
               if (!it || it.value)
-                fc.items.push({ start: [], key: fs18, sep: [] });
+                fc.items.push({ start: [], key: fs23, sep: [] });
               else if (it.sep)
-                this.stack.push(fs18);
+                this.stack.push(fs23);
               else
-                Object.assign(it, { key: fs18, sep: [] });
+                Object.assign(it, { key: fs23, sep: [] });
               return;
             }
             case "flow-map-end":
@@ -10974,8 +10974,8 @@ var require_dist = __commonJS({
 
 // src/web/cli.ts
 import { spawn } from "node:child_process";
-import fs17 from "node:fs/promises";
-import path17 from "node:path";
+import fs22 from "node:fs/promises";
+import path22 from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 
 // src/store/paths.ts
@@ -10991,6 +10991,43 @@ function resolveLoopPaths(projectDir) {
     plans: path.join(root, "plans"),
     runs: path.join(root, "runs"),
     memory: path.join(root, "memory"),
+    /**
+     * The project's component map: a mutable `proposed.json` a scan overwrites,
+     * and an `accepted/` directory of immutable numbered revisions.
+     *
+     * Only the directory is named here. What a revision file is called, and the
+     * fact that the accepted profile is simply the highest-numbered one rather
+     * than whatever a mutable pointer says, belong to
+     * `project-profile-store.ts` — this map is the place every path in
+     * `.mjloop/` is *rooted*, not the place any of them are interpreted.
+     */
+    profile: path.join(root, "profile"),
+    /**
+     * The feature briefs: one directory per feature, `F001-<slug>/`, holding
+     * immutable numbered revisions of what a discovery interview decided.
+     *
+     * Named here and interpreted in `feature-store.ts`, for the reason the
+     * profile above is: this map is where every path in `.mjloop/` is *rooted*,
+     * not where any of them is given meaning. Which revision is current, and
+     * the fact that it is simply the highest-numbered one rather than whatever
+     * a mutable pointer claims, belong to the store.
+     */
+    features: path.join(root, "features"),
+    /**
+     * This project's acceptances of packages from the shared, user-local
+     * skill library: one `<skillId>.json` per accepted skill, holding which
+     * digest this project pinned and never a path into the library itself —
+     * see `schemas/skill-acceptance.ts`. The library the digest resolves
+     * against lives under `resolveLibraryRoot` (`library-paths.ts`), which is
+     * deliberately *not* under `.mjloop/`: it is shared by every project on
+     * this machine, where this directory is this one project's own decision.
+     *
+     * Added to `PROTECTED_DIRECTORIES` below now that `mjloop-cli skills
+     * accept|disable|enable|remove` exists: that is the route back in the
+     * denial below names, and the reason the `satisfies` check on
+     * `PROTECTED_DIRECTORY_REASONS` in `cli/index.ts` was written to demand.
+     */
+    skills: path.join(root, "skills"),
     lock: path.join(root, ".lock"),
     /**
      * Mutual exclusion for verify *execution*, and never the same directory as
@@ -11028,10 +11065,10 @@ async function isEntrypoint(moduleUrl) {
 }
 
 // src/web/server.ts
-import crypto3 from "node:crypto";
-import fs16 from "node:fs/promises";
+import crypto4 from "node:crypto";
+import fs21 from "node:fs/promises";
 import http from "node:http";
-import path16 from "node:path";
+import path21 from "node:path";
 import { fileURLToPath } from "node:url";
 
 // node_modules/ws/wrapper.mjs
@@ -11042,7 +11079,7 @@ var import_websocket = __toESM(require_websocket(), 1);
 var import_websocket_server = __toESM(require_websocket_server(), 1);
 
 // src/web/api.ts
-import crypto2 from "node:crypto";
+import crypto3 from "node:crypto";
 
 // node_modules/zod/v4/core/core.js
 var _a;
@@ -11285,10 +11322,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj, path18) {
-  if (!path18)
+function getElementAtPath(obj, path23) {
+  if (!path23)
     return obj;
-  return path18.reduce((acc, key) => acc?.[key], obj);
+  return path23.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -11697,11 +11734,11 @@ function explicitlyAborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path18, issues) {
+function prefixIssues(path23, issues) {
   return issues.map((iss) => {
     var _a3;
     (_a3 = iss).path ?? (_a3.path = []);
-    iss.path.unshift(path18);
+    iss.path.unshift(path23);
     return iss;
   });
 }
@@ -11848,16 +11885,16 @@ function flattenError(error2, mapper = (issue2) => issue2.message) {
 }
 function formatError(error2, mapper = (issue2) => issue2.message) {
   const fieldErrors = { _errors: [] };
-  const processError = (error3, path18 = []) => {
+  const processError = (error3, path23 = []) => {
     for (const issue2 of error3.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path18, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path23, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path18, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path23, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path18, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path23, ...issue2.path]);
       } else {
-        const fullpath = [...path18, ...issue2.path];
+        const fullpath = [...path23, ...issue2.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue2));
         } else {
@@ -11884,8 +11921,8 @@ function formatError(error2, mapper = (issue2) => issue2.message) {
 }
 function toDotPath(_path) {
   const segs = [];
-  const path18 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
-  for (const seg of path18) {
+  const path23 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
+  for (const seg of path23) {
     if (typeof seg === "number")
       segs.push(`[${seg}]`);
     else if (typeof seg === "symbol")
@@ -16307,79 +16344,6 @@ var StateSchema = strictObject({
   updated_at: iso_exports.datetime()
 });
 
-// src/schemas/plan.ts
-var StoryStatusSchema = _enum(["todo", "doing", "done", "blocked"]);
-var PlanIdSchema = string2().regex(/^P\d{3}$/, "a plan id looks like P001");
-var StoryIdSchema = string2().regex(/^P\d{3}-S\d{2}$/, "a story id looks like P001-S02");
-var ApprovalDecisionSchema = _enum(["approved", "rejected", "changes_requested"]);
-var ApprovalSchema = strictObject({
-  decision: ApprovalDecisionSchema,
-  /** Who decided. Free text: the engine cannot verify it, and pretending otherwise would be worse. */
-  by: string2().min(1),
-  at: iso_exports.datetime(),
-  /** The approver's own words, kept so the approval is auditable rather than a bare flag. */
-  note: string2().min(1).nullable().default(null)
-});
-var PlanFrontmatterSchema = strictObject({
-  id: PlanIdSchema,
-  /** Also reaches the filesystem: the directory is `<id>-<slug>`. */
-  slug: IdSchema,
-  title: string2().min(1),
-  created_at: iso_exports.datetime(),
-  /**
-   * The default is load-bearing, as it was for `last_fingerprint` and
-   * `reproduction`: the schema is strict, so without it every PLAN.md written
-   * before this field existed would fail validation on read.
-   */
-  approval: ApprovalSchema.nullable().default(null)
-});
-var StoryFrontmatterSchema = strictObject({
-  id: StoryIdSchema,
-  plan: PlanIdSchema,
-  /**
-   * Bounded because it reaches the filesystem: the story file is named
-   * `<id>-<slugified title>.md`. The slug is truncated as well, so this bound
-   * is about the caller getting a validation error naming the field rather
-   * than a title that quietly loses most of itself.
-   */
-  title: string2().min(1).max(200),
-  status: StoryStatusSchema,
-  /** Drives the conditional UI specialists in a later milestone. */
-  ui: boolean2().default(false),
-  depends_on: array(StoryIdSchema).default([]),
-  acceptance: array(string2().min(1)).default([]),
-  /** Run directory holding the proof this story is done. Null until it is. */
-  evidence: string2().min(1).nullable().default(null)
-}).refine((story) => story.id.startsWith(`${story.plan}-`), {
-  error: "a story id must begin with its plan id",
-  path: ["id"]
-});
-var ManifestEntrySchema = strictObject({
-  id: StoryIdSchema,
-  title: string2().min(1),
-  status: StoryStatusSchema,
-  ui: boolean2(),
-  depends_on: array(StoryIdSchema),
-  /** Relative to the plan directory. */
-  file: string2().min(1)
-});
-var ManifestSchema = strictObject({
-  schema: literal(1),
-  plan: PlanIdSchema,
-  slug: IdSchema,
-  title: string2().min(1),
-  generated_at: iso_exports.datetime(),
-  stories: array(ManifestEntrySchema)
-});
-
-// src/web/read.ts
-import fs11 from "node:fs/promises";
-import path10 from "node:path";
-
-// src/ops/history.ts
-import fs7 from "node:fs/promises";
-import path7 from "node:path";
-
 // src/schemas/contract.ts
 var RESERVED_AGENT_NAMES = ["findings", "roster", "verify", "evidence", "handoff", "map"];
 var AgentNameSchema = string2().regex(/^[A-Za-z0-9_-]+$/, 'only letters, digits, "-" and "_" are allowed').refine((name) => !name.includes("--"), '"--" is reserved: it separates an agent from its instance in the cycle file name').refine((name) => !RESERVED_AGENT_NAMES.includes(name), `reserved by the cycle directory: ${RESERVED_AGENT_NAMES.join(", ")}`);
@@ -16394,7 +16358,28 @@ var AgentResultSchema = strictObject({
   evidence: array(EvidenceSchema),
   findings: array(FindingSchema),
   files_touched: array(string2().min(1)),
-  next_hint: string2().min(1).nullable().default(null)
+  next_hint: string2().min(1).nullable().default(null),
+  /**
+   * Which of this run's pinned skill guidance (`skill-selection.json`, see
+   * `ops/run.ts`) this agent actually followed — the dispatch-side half of
+   * dynamic skill selection: routing decides what an agent is *offered*, and
+   * this is the agent's own account of what it *used*, so the two can be
+   * compared rather than one merely trusted for the other.
+   *
+   * `IdSchema`, and not a free string, because `runLog` joins this list against
+   * that manifest's `skillIds` — which are `IdSchema` — and refuses an entry it
+   * did not select. A value outside that shape could never match one by
+   * construction, so accepting it would only ever record an uncheckable claim
+   * wearing the form of a checkable one; `../../etc/passwd` is what that looks
+   * like when a model writes it.
+   *
+   * Defaulted for the reason `next_hint` above is: `AgentResultSchema` is
+   * strict, so a result written before this field existed — every one on disk
+   * right now — would otherwise fail to parse on the next read. The same
+   * default is what lets an agent that this run handed no skills at all stay
+   * silent rather than write out an empty list to satisfy the schema.
+   */
+  skills_used: array(IdSchema).default([])
 });
 var RosterSchema = strictObject({
   cycle: number2().int().positive(),
@@ -16499,6 +16484,73 @@ var VerifySchema = strictObject({
     build: array(string2().min(1)).default([])
   }).prefault({})
 });
+var FeatureDiscoveryModeSchema = _enum(["always", "ask", "off"]);
+var DiscoveryCompletionSchema = _enum(["auto-plan", "review", "save-only"]);
+var UncertainConcurrencySchema = _enum(["sequential", "ask", "parallel"]);
+var AfterPlanApprovalSchema = _enum(["auto", "manual"]);
+var SkillSourceSchema = _enum(["github", "registry", "web"]);
+var SkillUpdateModeSchema = _enum(["auto", "review", "pinned"]);
+var OrchestrationSchema = strictObject({
+  profile: strictObject({
+    /**
+     * May a scan activate a component map with nobody accepting it?
+     *
+     * Off by default. An accepted profile is what every later run routes on,
+     * so a project that gains one without a person looking has had its
+     * routing decided by a directory walk.
+     */
+    auto_accept: boolean2().default(false)
+  }).prefault({}),
+  discovery: strictObject({
+    /**
+     * Deliberately `off`.
+     *
+     * The compatibility rule this whole feature ships under is that an
+     * existing project's plan flow is unchanged by it landing. Any other
+     * default would silently change what `/mjloop:plan` does in every
+     * already-provisioned project the moment the engine is upgraded — the
+     * command would start asking questions nobody configured it to ask.
+     * Turning it on is a decision a project makes, once, in writing.
+     */
+    mode: FeatureDiscoveryModeSchema.default("off"),
+    /**
+     * A ceiling on questions, not a target. The bound is enforced here rather
+     * than at the caller because `config.yaml` is hand-edited: a `0` would
+     * make a mode of `always` ask nothing and look like a broken feature, and
+     * a `200` is an interview no person finishes.
+     */
+    question_budget: number2().int().min(1).max(20).default(8),
+    completion: DiscoveryCompletionSchema.default("review")
+  }).prefault({}),
+  execution: strictObject({
+    after_plan_approval: AfterPlanApprovalSchema.default("manual"),
+    uncertain_concurrency: UncertainConcurrencySchema.default("sequential"),
+    /**
+     * How many times a failed story may be re-attempted before the run stops
+     * and says so. `0` is a real setting — it means never repair — which is
+     * why the bound starts there rather than at 1.
+     */
+    repair_attempts: number2().int().min(0).max(5).default(1)
+  }).prefault({}),
+  quality: strictObject({
+    independent_plan_review: boolean2().default(false),
+    independent_verification: boolean2().default(false)
+  }).prefault({}),
+  skills: strictObject({
+    /**
+     * An empty list is meaningful and permitted: it is how a project says no
+     * skill may be discovered from outside it at all.
+     */
+    sources: array(SkillSourceSchema).default(["github"]),
+    /**
+     * A registry named here is a place this project will fetch executable
+     * instructions from, so plain `http://` is refused at the schema — the
+     * one place a hand-edited, repository-travelling file can be caught.
+     */
+    trusted_registries: array(string2().min(1).startsWith("https://", "a trusted registry must be an https:// URL")).default([]),
+    update_mode: SkillUpdateModeSchema.default("review")
+  }).prefault({})
+});
 var LEGACY_CONFIG_KEYS = ["custom_dirs"];
 var ConfigSchema = strictObject({
   version: literal(1),
@@ -16548,8 +16600,26 @@ var ConfigSchema = strictObject({
      * always proceeds is a prompt nobody reads.
      */
     preflight: _enum(["human", "auto"]).default("auto")
-  }).default({ plan_approval: "human", commit: "auto", preflight: "auto" })
+  }).default({ plan_approval: "human", commit: "auto", preflight: "auto" }),
+  /** `.prefault({})` for the reason `verify` above uses it, and because this
+   * key is absent from every config written before it existed. */
+  orchestration: OrchestrationSchema.prefault({})
 }).superRefine((config2, ctx) => {
+  const { discovery, skills } = config2.orchestration;
+  if (discovery.completion === "auto-plan" && discovery.mode === "off") {
+    ctx.addIssue({
+      code: "custom",
+      path: ["orchestration", "discovery", "completion"],
+      message: 'orchestration.discovery.completion is "auto-plan" but orchestration.discovery.mode is "off" \u2014 auto-plan names a start driven by an approved feature brief, and a project with discovery off never produces one, so planning would silently never begin the way this setting promises. Set discovery.mode to "ask" or "always", or choose a completion of "review" or "save-only".'
+    });
+  }
+  if (skills.sources.includes("registry") && skills.trusted_registries.length === 0) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["orchestration", "skills", "sources"],
+      message: `orchestration.skills.sources names "registry" but orchestration.skills.trusted_registries is empty \u2014 a source that names no registry admits nothing, so this project believes it enabled a source that can never return a skill. Add the registry's https:// URL to trusted_registries, or drop "registry" from sources.`
+    });
+  }
   const forbidden = new Set(
     Object.entries(config2.specialists).filter(([, mode]) => mode === "never").map(([name]) => name)
   );
@@ -16603,6 +16673,203 @@ function pinnedAgents(track) {
   if (track.gate !== void 0) pinned.push(track.gate.proven_by);
   return pinned;
 }
+
+// src/schemas/feature.ts
+var FeatureIdSchema = string2().regex(/^F\d{3}$/, "a feature id looks like F001");
+var FeatureBriefStatusSchema = _enum(["draft", "approved", "superseded"]);
+var DecisionSchema = strictObject({
+  question: string2().min(1).max(2e3),
+  recommendation: string2().min(1).max(2e3).nullable(),
+  answer: string2().min(1).max(4e3).nullable(),
+  /** When it was asked. Stamped by the engine, never by the caller. */
+  at: iso_exports.datetime()
+});
+var DiscoverySchema = strictObject({
+  mode: FeatureDiscoveryModeSchema,
+  /**
+   * Bounded here to the same 1..20 the project policy is bounded to. The two
+   * bounds are the same fact stated in the two places it can be violated: the
+   * config schema catches a hand-edited `question_budget`, and this one catches
+   * a per-feature override that never went through the config at all.
+   */
+  questionBudget: number2().int().min(1).max(20),
+  /** When the interview stopped asking. Null while it is still running. */
+  completedAt: iso_exports.datetime().nullable()
+});
+var FeatureApprovalSchema = strictObject({
+  by: string2().min(1),
+  at: iso_exports.datetime(),
+  /** The approver's own words, so the approval is auditable rather than a flag. */
+  note: string2().nullable()
+});
+var FeatureBriefSchema = strictObject({
+  schema: literal(1),
+  id: FeatureIdSchema,
+  revision: number2().int().positive(),
+  title: string2().min(1).max(200),
+  status: FeatureBriefStatusSchema,
+  problem: string2().min(1).max(2e4),
+  decisions: array(DecisionSchema),
+  acceptance: array(string2().min(1)),
+  affectedComponents: array(IdSchema),
+  /**
+   * What this brief declares itself to be about, beyond its component ids —
+   * joined against a component's `skillTags` by skill selection, for the
+   * case a component's technology cannot express: an authentication
+   * boundary is not a Flutter or a Next.js concern, it is a concern that
+   * cuts across whichever component happens to hold the login form.
+   *
+   * **Declared only, and never derived from `problem` or `acceptance`
+   * text.** A tag inferred by scanning prose for a word like
+   * "authentication" is exactly the free-form model claim skill selection
+   * is built to refuse — the interview names a tag during discovery because
+   * a person decided it belonged, or the tag is absent and no skill routes
+   * on it. Reading it back out of the words the person used to describe the
+   * problem would make that decision the model's to make after all.
+   *
+   * Defaulted for the reason every other default in this strict schema is:
+   * a brief written before this field existed would otherwise fail
+   * validation on read rather than gain the field on its next write.
+   */
+  tags: array(string2().min(1)).default([]),
+  discovery: DiscoverySchema,
+  approval: FeatureApprovalSchema.nullable(),
+  /** The revision this one replaces, or null for the first. */
+  supersedes: strictObject({ id: FeatureIdSchema, revision: number2().int().positive() }).nullable(),
+  createdAt: iso_exports.datetime()
+}).superRefine((brief, ctx) => {
+  if (brief.status === "superseded") {
+    ctx.addIssue({
+      code: "custom",
+      path: ["status"],
+      message: 'a stored revision is only ever "draft" or "approved" \u2014 "superseded" is derived on read from the existence of a higher revision, because writing it would mean editing the immutable record it describes'
+    });
+  }
+  if (brief.status === "approved" && brief.acceptance.length === 0) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["acceptance"],
+      message: "an approved brief must carry at least one acceptance criterion \u2014 later stories plan against these, and a draft is where an empty list belongs"
+    });
+  }
+  if (brief.status === "approved" && brief.approval === null) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["approval"],
+      message: "an approved brief must record who approved it and when"
+    });
+  }
+  if (brief.status === "draft" && brief.approval !== null) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["approval"],
+      message: "a draft cannot carry an approval \u2014 approving is what makes a revision stop being a draft"
+    });
+  }
+  if (brief.revision === 1 && brief.supersedes !== null) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["supersedes"],
+      message: "the first revision of a feature supersedes nothing"
+    });
+  }
+  if (brief.revision > 1 && brief.supersedes === null) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["supersedes"],
+      message: `revision ${brief.revision} exists because it replaced an earlier one, and must name it`
+    });
+  }
+  if (brief.supersedes !== null) {
+    if (brief.supersedes.id !== brief.id) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["supersedes", "id"],
+        message: `revision ${brief.revision} of ${brief.id} cannot supersede ${brief.supersedes.id} \u2014 a successor replaces an earlier revision of its own feature`
+      });
+    }
+    if (brief.supersedes.revision >= brief.revision) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["supersedes", "revision"],
+        message: `revision ${brief.revision} cannot supersede revision ${brief.supersedes.revision} \u2014 a predecessor comes before its successor`
+      });
+    }
+  }
+});
+
+// src/schemas/plan.ts
+var StoryStatusSchema = _enum(["todo", "doing", "done", "blocked"]);
+var PlanIdSchema = string2().regex(/^P\d{3}$/, "a plan id looks like P001");
+var StoryIdSchema = string2().regex(/^P\d{3}-S\d{2}$/, "a story id looks like P001-S02");
+var ApprovalDecisionSchema = _enum(["approved", "rejected", "changes_requested"]);
+var ApprovalSchema = strictObject({
+  decision: ApprovalDecisionSchema,
+  /** Who decided. Free text: the engine cannot verify it, and pretending otherwise would be worse. */
+  by: string2().min(1),
+  at: iso_exports.datetime(),
+  /** The approver's own words, kept so the approval is auditable rather than a bare flag. */
+  note: string2().min(1).nullable().default(null)
+});
+var PlanFrontmatterSchema = strictObject({
+  id: PlanIdSchema,
+  /** Also reaches the filesystem: the directory is `<id>-<slug>`. */
+  slug: IdSchema,
+  title: string2().min(1),
+  created_at: iso_exports.datetime(),
+  /**
+   * The default is load-bearing, as it was for `last_fingerprint` and
+   * `reproduction`: the schema is strict, so without it every PLAN.md written
+   * before this field existed would fail validation on read.
+   */
+  approval: ApprovalSchema.nullable().default(null)
+});
+var StoryFrontmatterSchema = strictObject({
+  id: StoryIdSchema,
+  plan: PlanIdSchema,
+  /**
+   * Bounded because it reaches the filesystem: the story file is named
+   * `<id>-<slugified title>.md`. The slug is truncated as well, so this bound
+   * is about the caller getting a validation error naming the field rather
+   * than a title that quietly loses most of itself.
+   */
+  title: string2().min(1).max(200),
+  status: StoryStatusSchema,
+  /** Drives the conditional UI specialists in a later milestone. */
+  ui: boolean2().default(false),
+  depends_on: array(StoryIdSchema).default([]),
+  acceptance: array(string2().min(1)).default([]),
+  /** Run directory holding the proof this story is done. Null until it is. */
+  evidence: string2().min(1).nullable().default(null)
+}).refine((story) => story.id.startsWith(`${story.plan}-`), {
+  error: "a story id must begin with its plan id",
+  path: ["id"]
+});
+var ManifestEntrySchema = strictObject({
+  id: StoryIdSchema,
+  title: string2().min(1),
+  status: StoryStatusSchema,
+  ui: boolean2(),
+  depends_on: array(StoryIdSchema),
+  /** Relative to the plan directory. */
+  file: string2().min(1)
+});
+var ManifestSchema = strictObject({
+  schema: literal(1),
+  plan: PlanIdSchema,
+  slug: IdSchema,
+  title: string2().min(1),
+  generated_at: iso_exports.datetime(),
+  stories: array(ManifestEntrySchema)
+});
+
+// src/web/read.ts
+import fs16 from "node:fs/promises";
+import path15 from "node:path";
+
+// src/ops/history.ts
+import fs12 from "node:fs/promises";
+import path12 from "node:path";
 
 // src/schemas/verify.ts
 var VerifySlotSchema = _enum(["test", "lint", "build"]);
@@ -16849,8 +17116,108 @@ var StateStore = class {
 };
 
 // src/ops/run.ts
-import fs6 from "node:fs/promises";
-import path6 from "node:path";
+import fs11 from "node:fs/promises";
+import path11 from "node:path";
+
+// src/schemas/skill-selection.ts
+var AcceptedProjectSkillSchema = strictObject({
+  skillId: IdSchema,
+  /**
+   * Which immutable package version this project accepted. S06 owns the
+   * library and its content-addressed versions; a project record references
+   * a digest and never a path into it, so one project's acceptance can never
+   * be invalidated by another project's update, removal, or a library moved
+   * to a different machine.
+   */
+  packageDigest: string2().regex(/^[a-f0-9]{64}$/),
+  /** Component ids of *this* project the acceptance enables. Empty means none. */
+  components: array(IdSchema),
+  /**
+   * What the skill claims to be for. Joined against a component's
+   * `skillTags`, and against the brief's own declared `tags` for the
+   * cross-cutting case — an authentication boundary is not a component's
+   * technology, so the join has to be able to reach the brief as well as the
+   * component.
+   */
+  tags: array(string2().min(1)),
+  /** Which fixed roles may receive it. An unknown role name here selects nothing. */
+  agents: array(AgentNameSchema),
+  /**
+   * The bounded text a receiving agent is handed. Bounded because it is
+   * copied into a brief on every dispatch: an unbounded guidance string would
+   * make every run's brief as large as the largest skill a project has ever
+   * accepted, on every cycle, whether or not that skill was even selected.
+   */
+  guidance: string2().min(1).max(4e3),
+  status: _enum(["active", "disabled"]),
+  /**
+   * The per-project host compatibility result. An incompatible skill is
+   * never selected, however well its tags match — compatibility is a fact
+   * about whether the skill can run *here at all*, and a good match on a host
+   * that cannot run it is not a selectable skill.
+   */
+  compatible: boolean2()
+});
+var SkillSelectionSchema = strictObject({
+  component: IdSchema,
+  agent: AgentNameSchema,
+  skillIds: array(IdSchema),
+  reasons: array(string2().min(1)),
+  sourceBrief: strictObject({ id: FeatureIdSchema, revision: number2().int().positive() })
+}).superRefine((selection, ctx) => {
+  if (selection.skillIds.length !== selection.reasons.length) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["reasons"],
+      message: `${selection.skillIds.length} skill(s) selected for component "${selection.component}" / agent "${selection.agent}" but ${selection.reasons.length} reason(s) recorded \u2014 the two arrays are index-aligned by construction, and one reason per skill is what lets the evidence view attribute a routing decision to the tag that actually matched rather than to whichever skill happens to share its position.`
+    });
+  }
+});
+var ConcurrencyDecisionSchema = strictObject({
+  mode: _enum(["parallel", "sequential"]),
+  reason: string2().min(1)
+});
+var SkillManifestSchema = strictObject({
+  schema: literal(1),
+  generatedAt: iso_exports.datetime(),
+  sourceBrief: strictObject({ id: FeatureIdSchema, revision: number2().int().positive() }),
+  profileRevision: number2().int().positive(),
+  selections: array(SkillSelectionSchema),
+  /**
+   * The bounded guidance text for every skill the selections above name,
+   * keyed by skill id — the half of the dispatch contract that makes the
+   * other half actionable. A selection carries an id and the reason it was
+   * chosen; neither tells a receiving agent what to *do*, and an agent
+   * instructed to "apply exactly the guidance it carries" against a file
+   * carrying none would be left inventing the skill's meaning, which is the
+   * free-form claim this whole record exists to replace.
+   *
+   * A map rather than a per-selection array because one skill routinely
+   * lands on several (component, agent) rows: `AcceptedProjectSkill.guidance`
+   * is capped at 4000 characters so that copying it is affordable, and
+   * repeating the same 4000 characters once per row would spend that budget
+   * as many times as the manifest has rows. The cap is restated here rather
+   * than inherited, because this record is read by agents that never see an
+   * acceptance record and its own bound has to hold on its own terms.
+   *
+   * Defaulted to `{}` for the reason every default in this codebase exists:
+   * no project has accepted a skill yet — S06 owns the library — so every
+   * manifest pinned today selects nothing and has nothing to render, and an
+   * empty map is that fact rather than a missing field.
+   */
+  guidance: record(IdSchema, string2().min(1).max(4e3)).default({}),
+  concurrency: ConcurrencyDecisionSchema
+}).superRefine((manifest, ctx) => {
+  const selected = [...new Set(manifest.selections.flatMap((selection) => selection.skillIds))];
+  const unguided = selected.filter((skillId) => manifest.guidance[skillId] === void 0);
+  if (unguided.length > 0) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["guidance"],
+      message: `${unguided.map((skillId) => `"${skillId}"`).join(", ")} is selected by this manifest but carries no guidance \u2014 an agent handed a skill id and no text to follow has been told which skill to apply and nothing about how, which leaves it deciding for itself what the skill meant.`
+    });
+  }
+});
 
 // src/store/config-store.ts
 import fs4 from "node:fs/promises";
@@ -16888,9 +17255,441 @@ ${prettifyError(parsed.error)}`);
   return parsed.data;
 }
 
-// src/store/plan-store.ts
+// src/store/feature-store.ts
+import crypto from "node:crypto";
+import fs6 from "node:fs/promises";
+import path5 from "node:path";
+
+// src/store/precondition.ts
+var StalePreconditionError = class extends Error {
+  constructor(subject, id, actual) {
+    super(`${subject} ${id} has moved on \u2014 it is now ${actual ?? "unset"}`);
+    this.subject = subject;
+    this.id = id;
+    this.actual = actual;
+    this.name = "StalePreconditionError";
+  }
+};
+function expect(subject, id, actual, expected) {
+  if (expected === void 0) return;
+  if (actual === expected) return;
+  throw new StalePreconditionError(subject, id, actual === null || actual === void 0 ? null : String(actual));
+}
+
+// src/store/project-profile-store.ts
 import fs5 from "node:fs/promises";
 import path4 from "node:path";
+
+// src/schemas/project-profile.ts
+var ComponentTechnologySchema = _enum(["flutter", "nextjs", "python", "unknown"]);
+var ComponentRootSchema = string2().min(1).refine((root) => !root.includes("\\"), {
+  error: 'a component root is a POSIX path \u2014 "\\" is not a separator here'
+}).refine((root) => !root.startsWith("/") && !/^[A-Za-z]:/.test(root), {
+  error: "a component root is relative to the project root, never absolute"
+}).refine(
+  (root) => root === "." || root.split("/").every((segment) => segment !== "" && segment !== "." && segment !== ".."),
+  { error: 'a component root may not contain an empty, "." or ".." segment' }
+);
+var ComponentVerificationSchema = strictObject({
+  test: string2().min(1).nullable(),
+  lint: string2().min(1).nullable(),
+  build: string2().min(1).nullable()
+});
+var ProjectComponentSchema = strictObject({
+  /** Derived from `root` by the detector, and constrained by the schema every
+   * other id that reaches the filesystem goes through. */
+  id: IdSchema,
+  root: ComponentRootSchema,
+  technology: ComponentTechnologySchema,
+  verification: ComponentVerificationSchema,
+  /**
+   * The join later stories select skills on, derived from `technology`. The
+   * default is load-bearing for the reason every other default in these schemas
+   * is: the object is strict, so a record written before this field existed
+   * would fail validation on read rather than gain the field.
+   */
+  skillTags: array(string2().min(1)).default([])
+});
+var ComponentsSchema = array(ProjectComponentSchema).superRefine((components, ctx) => {
+  const seen = /* @__PURE__ */ new Set();
+  for (const [index, component] of components.entries()) {
+    if (seen.has(component.id)) {
+      ctx.addIssue({
+        code: "custom",
+        path: [index, "id"],
+        message: `two components claim the id "${component.id}" \u2014 it is what later stories join skills and verification on, so one of the two would silently never be selected`
+      });
+    }
+    seen.add(component.id);
+    const previous = components[index - 1];
+    if (previous !== void 0 && !(previous.id < component.id)) {
+      ctx.addIssue({
+        code: "custom",
+        path: [index, "id"],
+        message: `components must be sorted by id \u2014 "${component.id}" follows "${previous.id}"`
+      });
+    }
+  }
+});
+var ProposedProfileSchema = strictObject({
+  schema: literal(1),
+  generatedAt: iso_exports.datetime(),
+  components: ComponentsSchema,
+  /**
+   * The manifest paths the detection rests on, project-relative. Recorded so a
+   * person reading a proposal can check the conclusion against the evidence
+   * rather than take the detector's word for it — including the corroborating
+   * files (a `next.config.*`, an `analysis_options.yaml`) that were consulted
+   * but were not on their own sufficient.
+   */
+  basis: array(string2().min(1))
+});
+var ProjectProfileSchema = strictObject({
+  schema: literal(1),
+  revision: number2().int().positive(),
+  /** When the scan behind these components ran, carried over from the proposal. */
+  generatedAt: iso_exports.datetime(),
+  acceptedAt: iso_exports.datetime(),
+  /** Who accepted it. Free text: the engine cannot verify it, and pretending
+   * otherwise would be worse — the same reason `ApprovalSchema.by` is. */
+  acceptedBy: string2().min(1),
+  components: ComponentsSchema,
+  /** The revision this one replaces, or null for the first. */
+  supersedes: number2().int().positive().nullable()
+});
+
+// src/store/project-profile-store.ts
+var InvalidProfileRecordError = class extends Error {
+  constructor(file, detail) {
+    super(`${file} is not a valid project profile:
+${detail}`);
+    this.name = "InvalidProfileRecordError";
+  }
+};
+var RevisionSchema = number2().int().positive();
+function proposedProfileFile(projectDir) {
+  return path4.join(resolveLoopPaths(projectDir).profile, "proposed.json");
+}
+function acceptedDir(projectDir) {
+  return path4.join(resolveLoopPaths(projectDir).profile, "accepted");
+}
+function revisionFileName(revision) {
+  return `rev-${String(revision).padStart(3, "0")}.json`;
+}
+function acceptedRevisionFile(projectDir, revision) {
+  return path4.join(acceptedDir(projectDir), revisionFileName(RevisionSchema.parse(revision)));
+}
+async function readProposedProfile(projectDir) {
+  const file = proposedProfileFile(projectDir);
+  for (const candidate of [file, `${file}.bak`]) {
+    let raw;
+    try {
+      raw = await fs5.readFile(candidate, "utf8");
+    } catch {
+      continue;
+    }
+    const parsed = ProposedProfileSchema.safeParse(parseJson(raw));
+    if (parsed.success) return parsed.data;
+  }
+  return null;
+}
+async function listAcceptedRevisions(projectDir) {
+  let entries2;
+  try {
+    entries2 = await fs5.readdir(acceptedDir(projectDir), { withFileTypes: true });
+  } catch (error2) {
+    if (error2.code !== "ENOENT") throw error2;
+    return [];
+  }
+  const revisions = [];
+  for (const entry of entries2) {
+    if (!entry.isFile()) continue;
+    const match = /^rev-(\d+)\.json$/.exec(entry.name);
+    if (match?.[1] === void 0) continue;
+    const revision = Number(match[1]);
+    if (!RevisionSchema.safeParse(revision).success) continue;
+    if (revisionFileName(revision) !== entry.name) continue;
+    revisions.push(revision);
+  }
+  return revisions.sort((a, b) => a - b);
+}
+async function readAcceptedRevision(projectDir, revision) {
+  const file = acceptedRevisionFile(projectDir, revision);
+  let raw;
+  try {
+    raw = await fs5.readFile(file, "utf8");
+  } catch (error2) {
+    if (error2.code === "ENOENT") return null;
+    throw error2;
+  }
+  const parsed = ProjectProfileSchema.safeParse(parseJson(raw));
+  if (!parsed.success) throw new InvalidProfileRecordError(file, prettifyError(parsed.error));
+  return parsed.data;
+}
+async function readAcceptedProfile(projectDir) {
+  const revisions = await listAcceptedRevisions(projectDir);
+  const highest = revisions.at(-1);
+  if (highest === void 0) return null;
+  return readAcceptedRevision(projectDir, highest);
+}
+function parseJson(raw) {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return void 0;
+  }
+}
+
+// src/store/feature-store.ts
+var InvalidFeatureRecordError = class extends Error {
+  constructor(file, detail) {
+    super(`${file} is not a valid feature brief:
+${detail}`);
+    this.name = "InvalidFeatureRecordError";
+  }
+};
+var FeatureNotFoundError = class extends Error {
+  constructor(featureId, dir) {
+    super(`no feature "${featureId}" under ${dir}`);
+    this.name = "FeatureNotFoundError";
+  }
+};
+var ApprovedRevisionImmutableError = class extends Error {
+  constructor(featureId, revision) {
+    super(
+      `revision ${revision} of ${featureId} is approved and is never rewritten \u2014 a later plan may already rest on exactly these words. Supersede it: that creates the next revision as a draft, carrying this content forward, and leaves this one saying what it always said.`
+    );
+    this.name = "ApprovedRevisionImmutableError";
+  }
+};
+var AcceptanceRequiredError = class extends Error {
+  constructor(featureId, revision) {
+    super(
+      `revision ${revision} of ${featureId} has no acceptance criteria, so there is nothing in it to approve \u2014 a draft may have none while it is being assembled, but every later story plans against them. Record at least one before approving.`
+    );
+    this.name = "AcceptanceRequiredError";
+  }
+};
+var UnknownComponentError = class extends Error {
+  constructor(unknown2, known) {
+    super(
+      known.length === 0 ? `this project has no accepted component map, so ${quoted(unknown2)} cannot name a component of it. Run \`mjloop-cli profile show\` and \`mjloop-cli profile accept\` first, or leave affectedComponents empty until the map exists.` : `${quoted(unknown2)} is not in this project's accepted component map, which names ${quoted(known)}. Skill selection joins on these ids, so a component nothing has accepted would route work nowhere.`
+    );
+    this.unknown = unknown2;
+    this.known = known;
+    this.name = "UnknownComponentError";
+  }
+};
+var StaleFeatureRevisionError = class extends StalePreconditionError {
+  constructor(featureId, actualRevision, expectedRevision) {
+    super("plan", featureId, actualRevision === null ? null : String(actualRevision));
+    this.actualRevision = actualRevision;
+    this.expectedRevision = expectedRevision;
+    this.name = "StaleFeatureRevisionError";
+    this.message = `${featureId} has moved on \u2014 this write was built on revision ${expectedRevision}, and the feature is now on ${actualRevision === null ? "no revision at all" : `revision ${actualRevision}`}`;
+  }
+};
+var StaleFeatureContentError = class extends StalePreconditionError {
+  constructor(featureId, revision, actualDigest, expectedDigest) {
+    super("plan", featureId, actualDigest);
+    this.actualDigest = actualDigest;
+    this.expectedDigest = expectedDigest;
+    this.name = "StaleFeatureContentError";
+    this.message = `${featureId} has moved on \u2014 revision ${revision} has been rewritten since this write read it, so approving now would freeze words nobody has read. Read the brief again and decide on what it says today.`;
+  }
+};
+var RevisionSchema2 = number2().int().positive();
+function briefDigest(brief) {
+  return crypto.createHash("sha256").update(JSON.stringify(brief)).digest("hex");
+}
+function featureRevisionFile(featureDir, revision) {
+  return path5.join(featureDir, `rev-${String(RevisionSchema2.parse(revision)).padStart(3, "0")}.json`);
+}
+async function listFeatureDirs(featuresDir) {
+  let entries2;
+  try {
+    entries2 = await fs6.readdir(featuresDir, { withFileTypes: true });
+  } catch (error2) {
+    if (error2.code !== "ENOENT") throw error2;
+    return [];
+  }
+  return entries2.filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort();
+}
+async function listFeatureIds(projectDir) {
+  const ids = /* @__PURE__ */ new Set();
+  for (const entry of await listFeatureDirs(resolveLoopPaths(projectDir).features)) {
+    const id = /^(F\d{3})-/.exec(entry)?.[1];
+    if (id !== void 0) ids.add(id);
+  }
+  return [...ids].sort();
+}
+async function locateFeatureDir(projectDir, featureId) {
+  const featuresDir = resolveLoopPaths(projectDir).features;
+  const id = FeatureIdSchema.parse(featureId);
+  const match = (await listFeatureDirs(featuresDir)).find((entry) => entry.startsWith(`${id}-`));
+  return match === void 0 ? null : path5.join(featuresDir, match);
+}
+async function findFeatureDir(projectDir, featureId) {
+  const dir = await locateFeatureDir(projectDir, featureId);
+  if (dir === null) throw new FeatureNotFoundError(featureId, resolveLoopPaths(projectDir).features);
+  return dir;
+}
+async function listRevisionsIn(featureDir) {
+  let entries2;
+  try {
+    entries2 = await fs6.readdir(featureDir, { withFileTypes: true });
+  } catch (error2) {
+    if (error2.code !== "ENOENT") throw error2;
+    return [];
+  }
+  const revisions = [];
+  for (const entry of entries2) {
+    if (!entry.isFile()) continue;
+    const match = /^rev-(\d+)\.json$/.exec(entry.name);
+    if (match?.[1] === void 0) continue;
+    const revision = Number(match[1]);
+    if (!RevisionSchema2.safeParse(revision).success) continue;
+    if (path5.basename(featureRevisionFile(featureDir, revision)) !== entry.name) continue;
+    revisions.push(revision);
+  }
+  return revisions.sort((a, b) => a - b);
+}
+async function listFeatureRevisions(projectDir, featureId) {
+  const dir = await locateFeatureDir(projectDir, featureId);
+  return dir === null ? [] : listRevisionsIn(dir);
+}
+async function readRevisionFile(file) {
+  let raw;
+  try {
+    raw = await fs6.readFile(file, "utf8");
+  } catch (error2) {
+    if (error2.code === "ENOENT") return null;
+    throw error2;
+  }
+  let data;
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    data = void 0;
+  }
+  const parsed = FeatureBriefSchema.safeParse(data);
+  if (!parsed.success) throw new InvalidFeatureRecordError(file, prettifyError(parsed.error));
+  return parsed.data;
+}
+async function readFeatureBrief(projectDir, featureId) {
+  const dir = await locateFeatureDir(projectDir, featureId);
+  if (dir === null) return null;
+  const latest = (await listRevisionsIn(dir)).at(-1);
+  if (latest === void 0) return null;
+  const file = featureRevisionFile(dir, latest);
+  const brief = await readRevisionFile(file);
+  if (brief === null) return null;
+  return { brief, status: brief.status, file, digest: briefDigest(brief) };
+}
+async function listFeatureSummaries(projectDir) {
+  const summaries = [];
+  for (const id of await listFeatureIds(projectDir)) {
+    const dir = await findFeatureDir(projectDir, id);
+    const revisions = await listRevisionsIn(dir);
+    const latestRevision = revisions.at(-1);
+    if (latestRevision === void 0) continue;
+    const latest = await readRevisionFile(featureRevisionFile(dir, latestRevision));
+    if (latest === null) continue;
+    const first = latestRevision === 1 ? latest : await readRevisionFile(featureRevisionFile(dir, revisions[0] ?? 1));
+    summaries.push({
+      id,
+      title: latest.title,
+      status: latest.status,
+      latestRevision,
+      approvedRevision: await highestApprovedRevision(dir, revisions),
+      revisions,
+      createdAt: (first ?? latest).createdAt
+    });
+  }
+  return summaries;
+}
+async function highestApprovedRevision(featureDir, revisions) {
+  for (const revision of [...revisions].reverse()) {
+    const brief = await readRevisionFile(featureRevisionFile(featureDir, revision));
+    if (brief?.status === "approved") return revision;
+  }
+  return null;
+}
+async function approveFeatureBrief(projectDir, input, now = () => /* @__PURE__ */ new Date()) {
+  return locked(projectDir, async () => {
+    const current = await loadLatestForWrite(projectDir, input.id, {
+      revision: input.expectRevision,
+      digest: input.expectDigest
+    });
+    if (current.brief.acceptance.length === 0) {
+      throw new AcceptanceRequiredError(current.brief.id, current.brief.revision);
+    }
+    await assertKnownComponents(projectDir, current.brief.affectedComponents);
+    const brief = validate(current.file, {
+      ...current.brief,
+      status: "approved",
+      approval: { by: input.by, at: now().toISOString(), note: input.note ?? null }
+    });
+    await writeDraftRevision(current.file, brief);
+    return { brief, status: brief.status, file: current.file, digest: briefDigest(brief) };
+  });
+}
+async function locked(projectDir, fn) {
+  const paths = resolveLoopPaths(projectDir);
+  await fs6.mkdir(paths.root, { recursive: true });
+  return withLock(paths.lock, fn);
+}
+async function loadLatest(projectDir, featureId) {
+  const dir = await findFeatureDir(projectDir, featureId);
+  const revision = (await listRevisionsIn(dir)).at(-1);
+  if (revision === void 0) throw new FeatureNotFoundError(featureId, dir);
+  const file = featureRevisionFile(dir, revision);
+  const brief = await readRevisionFile(file);
+  if (brief === null) throw new FeatureNotFoundError(featureId, dir);
+  return { dir, file, brief };
+}
+async function loadLatestForWrite(projectDir, featureId, expect2) {
+  const current = await loadLatest(projectDir, featureId);
+  if (expect2 !== void 0 && current.brief.revision !== expect2.revision) {
+    throw new StaleFeatureRevisionError(featureId, current.brief.revision, expect2.revision);
+  }
+  if (expect2 !== void 0) {
+    const digest = briefDigest(current.brief);
+    if (digest !== expect2.digest) {
+      throw new StaleFeatureContentError(featureId, current.brief.revision, digest, expect2.digest);
+    }
+  }
+  if (current.brief.status === "approved") {
+    throw new ApprovedRevisionImmutableError(current.brief.id, current.brief.revision);
+  }
+  return current;
+}
+function validate(file, candidate) {
+  const parsed = FeatureBriefSchema.safeParse(candidate);
+  if (!parsed.success) throw new InvalidFeatureRecordError(file, prettifyError(parsed.error));
+  return parsed.data;
+}
+async function assertKnownComponents(projectDir, ids) {
+  if (ids.length === 0) return;
+  const profile = await readAcceptedProfile(projectDir);
+  const known = (profile?.components ?? []).map((component) => component.id);
+  const unknown2 = ids.filter((id) => !known.includes(id));
+  if (unknown2.length > 0) throw new UnknownComponentError(unknown2, known);
+}
+async function writeDraftRevision(file, brief) {
+  const onDisk = await readRevisionFile(file);
+  if (onDisk !== null && onDisk.status === "approved") {
+    throw new ApprovedRevisionImmutableError(onDisk.id, onDisk.revision);
+  }
+  await writeJsonAtomic(file, brief, { backup: false });
+}
+function quoted(ids) {
+  return ids.map((id) => `"${id}"`).join(", ");
+}
+
+// src/store/plan-store.ts
+import fs7 from "node:fs/promises";
+import path6 from "node:path";
 
 // src/store/frontmatter.ts
 var YAML2 = __toESM(require_dist(), 1);
@@ -16968,7 +17767,7 @@ function storyFileName(frontmatter) {
 }
 async function listPlanDirs(plansDir) {
   try {
-    const entries2 = await fs5.readdir(plansDir, { withFileTypes: true });
+    const entries2 = await fs7.readdir(plansDir, { withFileTypes: true });
     return entries2.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
   } catch (error2) {
     if (error2.code !== "ENOENT") throw error2;
@@ -16988,15 +17787,15 @@ async function findPlanDir(projectDir, planId) {
   const entries2 = await listPlanDirs(plansDir);
   const match = entries2.find((entry) => entry.startsWith(`${planId}-`));
   if (match === void 0) throw new PlanNotFoundError(planId, plansDir);
-  return path4.join(plansDir, match);
+  return path6.join(plansDir, match);
 }
 async function readPlan(projectDir, planId) {
   const dir = await findPlanDir(projectDir, planId);
-  const file = path4.join(dir, "PLAN.md");
+  const file = path6.join(dir, "PLAN.md");
   let raw = "";
   let missing = false;
   try {
-    raw = await fs5.readFile(file, "utf8");
+    raw = await fs7.readFile(file, "utf8");
   } catch (error2) {
     const code = error2.code;
     if (code !== "ENOENT") throw new UnreadablePlanFileError(planId, file, code);
@@ -17021,14 +17820,14 @@ async function readPlan(projectDir, planId) {
     }
   }
   const frontmatter = await rebuildFrontmatter(dir, planId, salvage);
-  await fs5.writeFile(file, serialiseFrontmatter(frontmatter, body), "utf8");
+  await fs7.writeFile(file, serialiseFrontmatter(frontmatter, body), "utf8");
   return { frontmatter, body, dir, repaired: true };
 }
 function isMapping(data) {
   return typeof data === "object" && data !== null && !Array.isArray(data);
 }
 function derivedSlug(dir, planId) {
-  const remainder = path4.basename(dir).slice(planId.length + 1);
+  const remainder = path6.basename(dir).slice(planId.length + 1);
   if (IdSchema.safeParse(remainder).success) return remainder;
   const slug = remainder.replace(/[^A-Za-z0-9_-]+/g, "-").slice(0, SLUG_MAX).replace(/^-+|-+$/g, "");
   return slug.length === 0 ? planId : slug;
@@ -17041,7 +17840,7 @@ async function rebuildFrontmatter(dir, planId, salvage) {
   let title = salvagedTitle.success ? salvagedTitle.data : slug;
   let createdAt = salvagedCreatedAt.success ? salvagedCreatedAt.data : void 0;
   try {
-    const manifest = JSON.parse(await fs5.readFile(path4.join(dir, "manifest.json"), "utf8"));
+    const manifest = JSON.parse(await fs7.readFile(path6.join(dir, "manifest.json"), "utf8"));
     const manifestTitle = string2().min(1).safeParse(manifest.title);
     if (!salvagedTitle.success && manifestTitle.success) title = manifestTitle.data;
     const manifestCreatedAt = iso_exports.datetime().safeParse(manifest.generated_at);
@@ -17049,7 +17848,7 @@ async function rebuildFrontmatter(dir, planId, salvage) {
   } catch {
   }
   if (createdAt === void 0) {
-    const stats = await fs5.stat(dir);
+    const stats = await fs7.stat(dir);
     createdAt = new Date(stats.birthtimeMs || stats.mtimeMs).toISOString();
   }
   const parsed = PlanFrontmatterSchema.safeParse({
@@ -17060,28 +17859,28 @@ async function rebuildFrontmatter(dir, planId, salvage) {
     approval: salvagedApproval.success ? salvagedApproval.data : null
   });
   if (!parsed.success) {
-    throw new InvalidPlanFileError(path4.join(dir, "PLAN.md"), prettifyError(parsed.error));
+    throw new InvalidPlanFileError(path6.join(dir, "PLAN.md"), prettifyError(parsed.error));
   }
   return parsed.data;
 }
-async function writePlan(projectDir, plan, dir = path4.join(resolveLoopPaths(projectDir).plans, `${plan.frontmatter.id}-${plan.frontmatter.slug}`)) {
-  await fs5.mkdir(path4.join(dir, "stories"), { recursive: true });
-  await fs5.writeFile(path4.join(dir, "PLAN.md"), serialiseFrontmatter(plan.frontmatter, plan.body), "utf8");
+async function writePlan(projectDir, plan, dir = path6.join(resolveLoopPaths(projectDir).plans, `${plan.frontmatter.id}-${plan.frontmatter.slug}`)) {
+  await fs7.mkdir(path6.join(dir, "stories"), { recursive: true });
+  await fs7.writeFile(path6.join(dir, "PLAN.md"), serialiseFrontmatter(plan.frontmatter, plan.body), "utf8");
   return dir;
 }
 async function listStories(projectDir, planId) {
-  const dir = path4.join(await findPlanDir(projectDir, planId), "stories");
+  const dir = path6.join(await findPlanDir(projectDir, planId), "stories");
   let entries2 = [];
   try {
-    entries2 = await fs5.readdir(dir);
+    entries2 = await fs7.readdir(dir);
   } catch (error2) {
     if (error2.code !== "ENOENT") throw error2;
   }
   const stories = [];
   for (const entry of entries2.filter((name) => name.endsWith(".md"))) {
-    const file = path4.join(dir, entry);
+    const file = path6.join(dir, entry);
     try {
-      const { data, body } = parseFrontmatter(await fs5.readFile(file, "utf8"));
+      const { data, body } = parseFrontmatter(await fs7.readFile(file, "utf8"));
       const parsed = StoryFrontmatterSchema.safeParse(data);
       if (!parsed.success) continue;
       stories.push({ frontmatter: parsed.data, body, file });
@@ -17096,36 +17895,20 @@ async function readStory(projectDir, storyId) {
   const stories = await listStories(projectDir, planId);
   const found = stories.find((story) => story.frontmatter.id === storyId);
   if (found === void 0) {
-    throw new StoryNotFoundError(storyId, path4.join(await findPlanDir(projectDir, planId), "stories"));
+    throw new StoryNotFoundError(storyId, path6.join(await findPlanDir(projectDir, planId), "stories"));
   }
   return found;
 }
 async function writeStory(projectDir, story) {
-  const dir = path4.join(await findPlanDir(projectDir, story.frontmatter.plan), "stories");
-  await fs5.mkdir(dir, { recursive: true });
-  const file = path4.join(dir, storyFileName(story.frontmatter));
-  await fs5.writeFile(file, serialiseFrontmatter(story.frontmatter, story.body), "utf8");
+  const dir = path6.join(await findPlanDir(projectDir, story.frontmatter.plan), "stories");
+  await fs7.mkdir(dir, { recursive: true });
+  const file = path6.join(dir, storyFileName(story.frontmatter));
+  await fs7.writeFile(file, serialiseFrontmatter(story.frontmatter, story.body), "utf8");
   return file;
 }
 
-// src/store/precondition.ts
-var StalePreconditionError = class extends Error {
-  constructor(subject, id, actual) {
-    super(`${subject} ${id} has moved on \u2014 it is now ${actual ?? "unset"}`);
-    this.subject = subject;
-    this.id = id;
-    this.actual = actual;
-    this.name = "StalePreconditionError";
-  }
-};
-function expect(subject, id, actual, expected) {
-  if (expected === void 0) return;
-  if (actual === expected) return;
-  throw new StalePreconditionError(subject, id, actual === null || actual === void 0 ? null : String(actual));
-}
-
 // src/ops/fingerprint.ts
-import path5 from "node:path";
+import path7 from "node:path";
 function distinctFindings(findings) {
   const sorted = findings.map((finding) => ({ identity: identifyWork(finding), finding })).sort((a, b) => compareWork(a.identity, b.identity));
   return sorted.filter((entry, index) => {
@@ -17140,7 +17923,292 @@ function compareWork(a, b) {
   return a[0].localeCompare(b[0]) || a[1].localeCompare(b[1]) || a[2].localeCompare(b[2]) || a[3] - b[3];
 }
 function normaliseFile(file) {
-  return path5.posix.normalize(file.replaceAll("\\", "/"));
+  return path7.posix.normalize(file.replaceAll("\\", "/"));
+}
+
+// src/store/skill-acceptance-store.ts
+import fs10 from "node:fs/promises";
+import path10 from "node:path";
+
+// src/schemas/skill-library.ts
+var DigestSchema = string2().regex(/^[a-f0-9]{64}$/, "a digest is 64 lower-case hex characters");
+var SkillPackageSchema = strictObject({
+  schema: literal(1),
+  /**
+   * Stable across revisions of one source. Two imports of the same GitHub
+   * repository at two different pinned revisions share a `packageId` and
+   * differ in `digest` — `packageId` is "which skill", `digest` is "which
+   * bytes of it".
+   */
+  packageId: IdSchema,
+  /** Of the content; also the directory name under the library root. */
+  digest: DigestSchema,
+  source: strictObject({
+    kind: SkillSourceSchema,
+    url: string2().url().startsWith("https://"),
+    /**
+     * A pinned commit or tag, never a moving ref such as a branch name. A
+     * branch would let the *same recorded revision* resolve to different
+     * bytes over time, which is precisely what content-addressing by digest
+     * is here to make impossible — the revision has to hold that promise on
+     * its own terms, not merely happen to agree with the digest today.
+     */
+    revision: string2().min(1)
+  }),
+  license: strictObject({
+    spdx: string2().min(1).nullable(),
+    file: string2().min(1).nullable()
+  }),
+  skillName: string2().min(1).max(200),
+  description: string2().min(1).max(1e3),
+  tags: array(string2().min(1)),
+  dependencies: strictObject({
+    /** An inventory of what the package declares — never a resolution. */
+    executables: array(string2().min(1)),
+    /** Likewise: named, not installed. */
+    packages: array(string2().min(1))
+  }),
+  audit: strictObject({
+    state: _enum(["pending", "passed", "failed"]),
+    findings: array(string2().min(1)),
+    at: iso_exports.datetime().nullable()
+  }),
+  /**
+   * The bounded text S05 hands an agent. Capped at the same 4000 characters
+   * `AcceptedProjectSkill.guidance` is, for the same reason stated there: it
+   * is copied into a brief on every dispatch, so an unbounded string here
+   * would make every dispatch as large as the largest guidance any package
+   * in the library has ever carried.
+   */
+  guidance: string2().min(1).max(4e3),
+  importedAt: iso_exports.datetime()
+});
+
+// src/schemas/skill-acceptance.ts
+var ProjectSkillAcceptanceSchema = strictObject({
+  schema: literal(1),
+  skillId: IdSchema,
+  /** Stable across revisions of one source — see `SkillPackageSchema.packageId`. */
+  packageId: IdSchema,
+  /**
+   * A digest, never a path. The stop condition is explicit: no global-library
+   * path may be stored in a project record, because the library moves per
+   * machine and this record is committed.
+   */
+  digest: DigestSchema,
+  components: array(IdSchema),
+  agents: array(AgentNameSchema),
+  tags: array(string2().min(1)),
+  /**
+   * No global fallback of any kind. `orchestration.skills.update_mode` is
+   * only ever a *default offered* at acceptance time by whichever caller
+   * assembles this input — never consulted afterwards — because a global
+   * policy could otherwise silently change what a project's already-accepted
+   * skill does on its next run without that project ever having decided so.
+   */
+  updatePolicy: SkillUpdateModeSchema,
+  status: _enum(["active", "disabled"]),
+  /**
+   * The per-project host compatibility result.
+   *
+   * Nothing in this story determines host compatibility — no field on
+   * `SkillPackage` records what a host needs, and checking `dependencies.
+   * executables` against the machine that will run an agent is squarely the
+   * sandboxed problem S07 owns. `acceptSkill` accepts this as an explicit
+   * input rather than computing it, and defaults it to `true` when the
+   * caller does not know better yet: today nothing here can prove a package
+   * is *incompatible*, so recording an unearned `false` would be a claim as
+   * ungrounded as an unearned `true` — the honest default is the one that
+   * matches what this story can actually establish. A later story that can
+   * compute this for real overwrites it rather than reads a fabricated one.
+   */
+  compatible: boolean2(),
+  /** Who accepted it. Free text; the engine cannot verify it. */
+  acceptedBy: string2().min(1),
+  acceptedAt: iso_exports.datetime()
+});
+
+// src/store/skill-library-store.ts
+import fs9 from "node:fs/promises";
+import path9 from "node:path";
+
+// src/store/library-paths.ts
+import fs8 from "node:fs";
+import path8 from "node:path";
+import os from "node:os";
+var LibraryRootCollisionError = class extends Error {
+  constructor(root, projectDir) {
+    super(
+      `the resolved skill library root "${root}" is inside the project directory "${projectDir}" or inside a ".mjloop" directory \u2014 the library is shared across every project on this machine and must never live inside one project's checkout or its .mjloop state`
+    );
+    this.name = "LibraryRootCollisionError";
+  }
+};
+function resolveLibraryRoot(projectDir) {
+  const root = pickRoot();
+  const resolvedRoot = path8.resolve(root);
+  const resolvedProject = path8.resolve(projectDir);
+  const canonicalRoot = canonicalize(resolvedRoot);
+  const canonicalProject = canonicalize(resolvedProject);
+  const insideProject = canonicalRoot === canonicalProject || canonicalRoot.startsWith(canonicalProject + path8.sep);
+  const insideDotMjloop = canonicalRoot.split(path8.sep).some((segment) => segment === ".mjloop");
+  if (insideProject || insideDotMjloop) throw new LibraryRootCollisionError(resolvedRoot, resolvedProject);
+  return resolvedRoot;
+}
+function canonicalize(target) {
+  const trailing = [];
+  let existing = target;
+  for (; ; ) {
+    try {
+      return path8.join(fs8.realpathSync(existing), ...trailing);
+    } catch {
+      const parent = path8.dirname(existing);
+      if (parent === existing) return target;
+      trailing.unshift(path8.basename(existing));
+      existing = parent;
+    }
+  }
+}
+function pickRoot() {
+  const dataHome = process.env.MJLOOP_DATA_HOME;
+  if (dataHome !== void 0 && dataHome !== "" && path8.isAbsolute(dataHome)) return dataHome;
+  const xdgDataHome = process.env.XDG_DATA_HOME;
+  if (xdgDataHome !== void 0 && xdgDataHome !== "" && path8.isAbsolute(xdgDataHome)) {
+    return path8.join(xdgDataHome, "mjloop");
+  }
+  return path8.join(os.homedir(), ".local", "share", "mjloop");
+}
+function packagesDir(projectDir) {
+  return path8.join(resolveLibraryRoot(projectDir), "packages");
+}
+
+// src/store/skill-library-store.ts
+var InvalidSkillPackageError = class extends Error {
+  constructor(file, detail) {
+    super(`${file} is not a valid skill package:
+${detail}`);
+    this.name = "InvalidSkillPackageError";
+  }
+};
+var InvalidDigestError = class extends Error {
+  constructor(digest) {
+    super(`"${digest}" is not a valid package digest \u2014 a digest is 64 lower-case hex characters`);
+    this.name = "InvalidDigestError";
+  }
+};
+function validateDigest(digest) {
+  const parsed = DigestSchema.safeParse(digest);
+  if (!parsed.success) throw new InvalidDigestError(digest);
+  return parsed.data;
+}
+function packageDirFor(projectDir, digest) {
+  return path9.join(packagesDir(projectDir), validateDigest(digest));
+}
+function packageRecordFileFor(projectDir, digest) {
+  return path9.join(packageDirFor(projectDir, digest), "package.json");
+}
+async function listPackages(projectDir) {
+  let entries2;
+  try {
+    entries2 = await fs9.readdir(packagesDir(projectDir));
+  } catch (error2) {
+    if (error2.code !== "ENOENT") throw error2;
+    return { packages: [], unreadable: [] };
+  }
+  const packages = [];
+  const unreadable = [];
+  for (const entry of entries2.sort()) {
+    if (!DigestSchema.safeParse(entry).success) continue;
+    try {
+      const record2 = await readPackage(projectDir, entry);
+      if (record2 !== null) packages.push(record2);
+    } catch (error2) {
+      unreadable.push({ digest: entry, reason: error2 instanceof Error ? error2.message : String(error2) });
+    }
+  }
+  return { packages, unreadable };
+}
+async function readPackage(projectDir, digest) {
+  const file = packageRecordFileFor(projectDir, digest);
+  let raw;
+  try {
+    raw = await fs9.readFile(file, "utf8");
+  } catch (error2) {
+    const code = error2.code;
+    if (code === "ENOENT" || code === "ENOTDIR") return null;
+    throw error2;
+  }
+  const parsed = SkillPackageSchema.safeParse(parseJson2(raw));
+  if (!parsed.success) throw new InvalidSkillPackageError(file, prettifyError(parsed.error));
+  return parsed.data;
+}
+function parseJson2(raw) {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return void 0;
+  }
+}
+
+// src/store/skill-acceptance-store.ts
+var InvalidSkillIdError = class extends Error {
+  constructor(skillId) {
+    super(`"${skillId}" is not a valid skill id \u2014 a skill id is letters, digits, "-" and "_" only`);
+    this.name = "InvalidSkillIdError";
+  }
+};
+var InvalidSkillAcceptanceRecordError = class extends Error {
+  constructor(file, detail) {
+    super(`${file} is not a valid skill acceptance:
+${detail}`);
+    this.name = "InvalidSkillAcceptanceRecordError";
+  }
+};
+function validateSkillId(skillId) {
+  const parsed = IdSchema.safeParse(skillId);
+  if (!parsed.success) throw new InvalidSkillIdError(skillId);
+  return parsed.data;
+}
+function acceptanceFile(projectDir, skillId) {
+  return path10.join(resolveLoopPaths(projectDir).skills, `${validateSkillId(skillId)}.json`);
+}
+async function listAcceptances(projectDir) {
+  let entries2;
+  try {
+    entries2 = await fs10.readdir(resolveLoopPaths(projectDir).skills, { withFileTypes: true });
+  } catch (error2) {
+    if (error2.code !== "ENOENT") throw error2;
+    return [];
+  }
+  const acceptances = [];
+  for (const entry of entries2.sort((a, b) => a.name.localeCompare(b.name))) {
+    if (!entry.isFile() || !entry.name.endsWith(".json")) continue;
+    const skillId = entry.name.slice(0, -".json".length);
+    if (!IdSchema.safeParse(skillId).success) continue;
+    const record2 = await readAcceptance(projectDir, skillId);
+    if (record2 !== null) acceptances.push(record2);
+  }
+  return acceptances;
+}
+async function readAcceptance(projectDir, skillId) {
+  const file = acceptanceFile(projectDir, skillId);
+  let raw;
+  try {
+    raw = await fs10.readFile(file, "utf8");
+  } catch (error2) {
+    if (error2.code === "ENOENT") return null;
+    throw error2;
+  }
+  const parsed = ProjectSkillAcceptanceSchema.safeParse(parseJson3(raw));
+  if (!parsed.success) throw new InvalidSkillAcceptanceRecordError(file, prettifyError(parsed.error));
+  return parsed.data;
+}
+function parseJson3(raw) {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return void 0;
+  }
 }
 
 // src/ops/run.ts
@@ -17161,7 +18229,7 @@ function runDirName(state) {
   return `${state.run_id}--${state.current.story ?? "adhoc"}--${state.track}`;
 }
 function runDirPath(projectDir, state) {
-  return path6.join(resolveLoopPaths(projectDir).runs, runDirName(state));
+  return path11.join(resolveLoopPaths(projectDir).runs, runDirName(state));
 }
 async function halt(projectDir, reason, now = () => /* @__PURE__ */ new Date(), options = {}) {
   const store = new StateStore(projectDir, now);
@@ -17190,7 +18258,7 @@ run.`,
 };
 async function writeHaltReport(projectDir, state, cause, open) {
   const dir = runDirPath(projectDir, state);
-  await fs6.mkdir(dir, { recursive: true });
+  await fs11.mkdir(dir, { recursive: true });
   const cycles = state.history.map((entry) => `| ${entry.cycle} | ${entry.agents.join(", ")} | ${entry.result} |`).join("\n");
   const findings = open.length === 0 ? "_none recorded_" : open.map((f) => `- **${f.severity}** ${f.file}:${f.line} \u2014 ${f.claim}`).join("\n");
   const report = `# Halt report \u2014 ${state.run_id}
@@ -17216,7 +18284,7 @@ Review the per-agent output in this directory.
 
 ${NEXT_STEP[cause]}
 `;
-  await fs6.writeFile(path6.join(dir, "HALT.md"), report, "utf8");
+  await fs11.writeFile(path11.join(dir, "HALT.md"), report, "utf8");
 }
 
 // src/ops/history.ts
@@ -17225,7 +18293,7 @@ async function readRunHistory(projectDir, options = {}) {
   const limit = options.limit ?? HISTORY_DEFAULT_LIMIT;
   if (limit <= 0) return [];
   const runsDir = resolveLoopPaths(projectDir).runs;
-  const entries2 = await fs7.readdir(runsDir, { withFileTypes: true }).catch(() => []);
+  const entries2 = await fs12.readdir(runsDir, { withFileTypes: true }).catch(() => []);
   const names = entries2.filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort().reverse();
   const live = await readLiveRun(projectDir);
   const runs = [];
@@ -17235,7 +18303,7 @@ async function readRunHistory(projectDir, options = {}) {
     const [runId, story, track] = parts;
     if (options.track !== void 0 && track !== options.track) continue;
     runs.push(
-      await readRun(path7.join(runsDir, name), {
+      await readRun(path12.join(runsDir, name), {
         id: name,
         run_id: runId,
         track,
@@ -17260,12 +18328,12 @@ async function readLiveRun(projectDir) {
   };
 }
 async function readRun(dir, identity) {
-  const inside = await fs7.readdir(dir, { withFileTypes: true }).catch(() => []);
+  const inside = await fs12.readdir(dir, { withFileTypes: true }).catch(() => []);
   const timing = identity.live !== null && identity.live.dir === identity.id ? identity.live : null;
   const cycleDirs = inside.filter((entry) => entry.isDirectory() && /^cycle-\d+$/.test(entry.name)).map((entry) => ({ name: entry.name, cycle: Number(entry.name.slice("cycle-".length)) })).sort((a, b) => a.cycle - b.cycle);
   const cycles = [];
   for (const { name, cycle } of cycleDirs) {
-    cycles.push(await readCycle(path7.join(dir, name), cycle, timing?.closedAt.get(cycle) ?? null));
+    cycles.push(await readCycle(path12.join(dir, name), cycle, timing?.closedAt.get(cycle) ?? null));
   }
   const hasClosing = inside.some((entry) => entry.isDirectory() && entry.name === "closing");
   return {
@@ -17279,17 +18347,17 @@ async function readRun(dir, identity) {
     cycles,
     // The closing pass has no cycle number and `state.history` has no entry for
     // it: it happens after the run's last cycle closed.
-    closing: hasClosing ? await readCycle(path7.join(dir, "closing"), 0, null) : null
+    closing: hasClosing ? await readCycle(path12.join(dir, "closing"), 0, null) : null
   };
 }
 async function readCycle(dir, cycle, at) {
-  const inside = await fs7.readdir(dir).catch(() => []);
-  const roster = await readJson(path7.join(dir, "roster.json"), RosterFields);
-  const verify = await readJson(path7.join(dir, "verify", "index.json"), LedgerSchema);
+  const inside = await fs12.readdir(dir).catch(() => []);
+  const roster = await readJson(path12.join(dir, "roster.json"), RosterFields);
+  const verify = await readJson(path12.join(dir, "verify", "index.json"), LedgerSchema);
   const agents = [];
   for (const entry of inside.filter((name) => name.endsWith(".json")).sort()) {
     if (entry === "roster.json" || entry === "findings.json") continue;
-    const result = await readJson(path7.join(dir, entry), ResultFields);
+    const result = await readJson(path12.join(dir, entry), ResultFields);
     if (result === null) continue;
     const [name, instance] = splitInstance(entry.slice(0, -".json".length));
     agents.push({
@@ -17328,7 +18396,7 @@ var ResultFields = object({
 });
 async function readJson(file, schema) {
   try {
-    const parsed = schema.safeParse(JSON.parse(await fs7.readFile(file, "utf8")));
+    const parsed = schema.safeParse(JSON.parse(await fs12.readFile(file, "utf8")));
     return parsed.success ? parsed.data : null;
   } catch {
     return null;
@@ -17496,13 +18564,13 @@ function byDraftedThenName(a, b) {
 }
 
 // src/ops/verify.ts
-import fs8 from "node:fs/promises";
-import path8 from "node:path";
+import fs13 from "node:fs/promises";
+import path13 from "node:path";
 function verifyLedgerPath(cycleDir) {
-  return path8.join(cycleDir, "verify", "index.json");
+  return path13.join(cycleDir, "verify", "index.json");
 }
 async function readVerifyLedger(cycleDir) {
-  const raw = await fs8.readFile(verifyLedgerPath(cycleDir), "utf8").catch(() => null);
+  const raw = await fs13.readFile(verifyLedgerPath(cycleDir), "utf8").catch(() => null);
   if (raw === null) return [];
   try {
     const parsed = LedgerSchema.safeParse(JSON.parse(raw));
@@ -17538,8 +18606,8 @@ var CacheSchema = array(CacheEntrySchema);
 
 // src/store/config-mutation.ts
 var YAML3 = __toESM(require_dist(), 1);
-import crypto from "node:crypto";
-import fs9 from "node:fs/promises";
+import crypto2 from "node:crypto";
+import fs14 from "node:fs/promises";
 var VerifySlotSchema2 = _enum(["test", "lint", "build"]);
 var ConfigChangeSchema = discriminatedUnion("kind", [
   strictObject({
@@ -17581,6 +18649,61 @@ var ConfigChangeSchema = discriminatedUnion("kind", [
     kind: literal("track"),
     track: IdSchema,
     value: TrackSchema.nullable()
+  }),
+  // One variant per orchestration leaf, rather than one `orchestration` kind
+  // carrying a section and a key. The discriminant is what makes each value
+  // schema exact — a single kind would have to widen `value` to the union of
+  // every leaf's type, and a boolean would then be accepted for
+  // `question_budget` at the wire and only caught by the post-apply re-parse.
+  // Restating the bounds here is deliberate duplication: this is the door the
+  // browser and the CLI push values through, and it must be exactly as strict
+  // as the schema those values are finally validated against.
+  strictObject({
+    kind: literal("orchestration.profile.auto_accept"),
+    value: boolean2()
+  }),
+  strictObject({
+    kind: literal("orchestration.discovery.mode"),
+    value: FeatureDiscoveryModeSchema
+  }),
+  strictObject({
+    kind: literal("orchestration.discovery.question_budget"),
+    value: number2().int().min(1).max(20)
+  }),
+  strictObject({
+    kind: literal("orchestration.discovery.completion"),
+    value: DiscoveryCompletionSchema
+  }),
+  strictObject({
+    kind: literal("orchestration.execution.after_plan_approval"),
+    value: AfterPlanApprovalSchema
+  }),
+  strictObject({
+    kind: literal("orchestration.execution.uncertain_concurrency"),
+    value: UncertainConcurrencySchema
+  }),
+  strictObject({
+    kind: literal("orchestration.execution.repair_attempts"),
+    value: number2().int().min(0).max(5)
+  }),
+  // The one section whose leaves share a type, so one kind with a `key` costs
+  // nothing in strictness — the same shape `gate` and `limit` already use.
+  strictObject({
+    kind: literal("orchestration.quality"),
+    key: _enum(["independent_plan_review", "independent_verification"]),
+    value: boolean2()
+  }),
+  strictObject({
+    kind: literal("orchestration.skills.sources"),
+    value: array(SkillSourceSchema)
+  }),
+  strictObject({
+    kind: literal("orchestration.skills.trusted_registries"),
+    value: array(string2().min(1).startsWith("https://", "a trusted registry must be an https:// URL"))
+  }),
+  strictObject({
+    kind: literal("orchestration.skills.update_mode"),
+    value: SkillUpdateModeSchema
   })
 ]);
 var ConfigPatchSchema = strictObject({
@@ -17590,15 +18713,15 @@ var ConfigPatchSchema = strictObject({
 var ConfigMutationError = class extends Error {
   kind;
   path;
-  constructor(kind, path18 = []) {
+  constructor(kind, path23 = []) {
     super(kind);
     this.name = "ConfigMutationError";
     this.kind = kind;
-    this.path = path18;
+    this.path = path23;
   }
 };
 function configRevision(raw) {
-  return crypto.createHash("sha256").update(raw).digest("hex");
+  return crypto2.createHash("sha256").update(raw).digest("hex");
 }
 async function mutateConfig(projectDir, patch) {
   const parsedPatch = ConfigPatchSchema.parse(patch);
@@ -17606,7 +18729,7 @@ async function mutateConfig(projectDir, patch) {
   return withLock(paths.lock, async () => {
     let raw;
     try {
-      raw = await fs9.readFile(paths.config, "utf8");
+      raw = await fs14.readFile(paths.config, "utf8");
     } catch (error2) {
       if (error2.code === "ENOENT") throw new ConfigMutationError("missing");
       throw error2;
@@ -17665,12 +18788,51 @@ function applyChange(document, change) {
     case "track":
       if (change.value === null) document.deleteIn(["tracks", change.track]);
       else document.setIn(["tracks", change.track], change.value);
+      return;
+    // `setIn` builds the intermediate maps it needs, which is what lets the
+    // very first orchestration setting land in a config.yaml written before
+    // the block existed — the common case on every already-provisioned
+    // project. Only the named leaf is written; every sibling arrives on read
+    // from the schema's prefaults, so one changed setting never rewrites
+    // twelve lines of somebody's hand-edited file.
+    case "orchestration.profile.auto_accept":
+      document.setIn(["orchestration", "profile", "auto_accept"], change.value);
+      return;
+    case "orchestration.discovery.mode":
+      document.setIn(["orchestration", "discovery", "mode"], change.value);
+      return;
+    case "orchestration.discovery.question_budget":
+      document.setIn(["orchestration", "discovery", "question_budget"], change.value);
+      return;
+    case "orchestration.discovery.completion":
+      document.setIn(["orchestration", "discovery", "completion"], change.value);
+      return;
+    case "orchestration.execution.after_plan_approval":
+      document.setIn(["orchestration", "execution", "after_plan_approval"], change.value);
+      return;
+    case "orchestration.execution.uncertain_concurrency":
+      document.setIn(["orchestration", "execution", "uncertain_concurrency"], change.value);
+      return;
+    case "orchestration.execution.repair_attempts":
+      document.setIn(["orchestration", "execution", "repair_attempts"], change.value);
+      return;
+    case "orchestration.quality":
+      document.setIn(["orchestration", "quality", change.key], change.value);
+      return;
+    case "orchestration.skills.sources":
+      document.setIn(["orchestration", "skills", "sources"], change.value);
+      return;
+    case "orchestration.skills.trusted_registries":
+      document.setIn(["orchestration", "skills", "trusted_registries"], change.value);
+      return;
+    case "orchestration.skills.update_mode":
+      document.setIn(["orchestration", "skills", "update_mode"], change.value);
   }
 }
 
 // src/store/memory-store.ts
-import fs10 from "node:fs/promises";
-import path9 from "node:path";
+import fs15 from "node:fs/promises";
+import path14 from "node:path";
 
 // src/schemas/memory.ts
 var MemoryKindSchema = _enum(["decision", "lesson", "pattern"]);
@@ -17704,7 +18866,7 @@ var MemoryNotFoundError = class extends Error {
 };
 async function listFiles(dir) {
   try {
-    return await fs10.readdir(dir);
+    return await fs15.readdir(dir);
   } catch (error2) {
     if (error2.code !== "ENOENT") throw error2;
     return [];
@@ -17715,9 +18877,9 @@ async function listMemories(projectDir) {
   const entries2 = await listFiles(dir);
   const memories = [];
   for (const name of entries2.filter((entry) => entry.endsWith(".md"))) {
-    const file = path9.join(dir, name);
+    const file = path14.join(dir, name);
     try {
-      const { data, body } = parseFrontmatter(await fs10.readFile(file, "utf8"));
+      const { data, body } = parseFrontmatter(await fs15.readFile(file, "utf8"));
       const parsed = MemoryFrontmatterSchema.safeParse(data);
       if (!parsed.success) continue;
       memories.push({ frontmatter: parsed.data, body, file });
@@ -17750,7 +18912,7 @@ async function readState(projectDir) {
 }
 async function readConfigView(projectDir) {
   const paths = resolveLoopPaths(projectDir);
-  const raw = await fs11.readFile(paths.config, "utf8").catch(() => null);
+  const raw = await fs16.readFile(paths.config, "utf8").catch(() => null);
   try {
     return {
       raw,
@@ -17763,6 +18925,55 @@ async function readConfigView(projectDir) {
     return { raw, revision: raw === null ? null : configRevision(raw), parsed: null, invalid: true };
   }
 }
+async function readProfileView(projectDir) {
+  const [accepted, proposed] = await Promise.all([
+    readAcceptedProfile(projectDir),
+    readProposedProfile(projectDir)
+  ]);
+  if (accepted === null && proposed === null) throw new NotFoundError("profile");
+  return {
+    revision: accepted?.revision ?? null,
+    acceptedAt: accepted?.acceptedAt ?? null,
+    acceptedBy: accepted?.acceptedBy ?? null,
+    components: accepted?.components ?? [],
+    proposedAt: proposed?.generatedAt ?? null,
+    proposalDiffers: proposed !== null && componentFingerprint(proposed.components) !== componentFingerprint(accepted?.components ?? [])
+  };
+}
+function componentFingerprint(components) {
+  return components.map(
+    (component) => [
+      component.id,
+      component.root,
+      component.technology,
+      component.verification.test ?? "",
+      component.verification.lint ?? "",
+      component.verification.build ?? "",
+      component.skillTags.join(" ")
+    ].join("\0")
+  ).join("\n");
+}
+async function readSkillsView(projectDir) {
+  const [library, acceptances] = await Promise.all([listPackages(projectDir), listAcceptances(projectDir)]);
+  return { packages: library.packages, unreadable: library.unreadable, acceptances };
+}
+async function readFeatures(projectDir) {
+  return await listFeatureSummaries(projectDir);
+}
+async function readFeatureDetail(projectDir, featureId) {
+  const record2 = await readFeatureBrief(projectDir, featureId);
+  if (record2 === null) throw new NotFoundError("feature");
+  const revisions = await listFeatureRevisions(projectDir, featureId);
+  return {
+    brief: record2.brief,
+    status: record2.status,
+    revisions: revisions.map((revision) => ({
+      revision,
+      status: revision < record2.brief.revision ? "superseded" : record2.status
+    })),
+    digest: record2.digest
+  };
+}
 async function readPlanDetail(projectDir, planId) {
   let dir;
   try {
@@ -17770,17 +18981,17 @@ async function readPlanDetail(projectDir, planId) {
   } catch {
     throw new NotFoundError("plan");
   }
-  const raw = await fs11.readFile(path10.join(dir, "PLAN.md"), "utf8").catch(() => null);
+  const raw = await fs16.readFile(path15.join(dir, "PLAN.md"), "utf8").catch(() => null);
   const parsed = raw === null ? null : PlanFrontmatterSchema.safeParse(parseFrontmatter(raw).data);
   const frontmatter = parsed?.success === true ? parsed.data : null;
   const [review, stories, manifestTitle] = await Promise.all([
-    fs11.readFile(path10.join(dir, "REVIEW.md"), "utf8").catch(() => null),
+    fs16.readFile(path15.join(dir, "REVIEW.md"), "utf8").catch(() => null),
     readStoryDetails(projectDir, planId),
     readManifestTitle(dir)
   ]);
   return {
     id: planId,
-    title: frontmatter?.title ?? manifestTitle ?? path10.basename(dir),
+    title: frontmatter?.title ?? manifestTitle ?? path15.basename(dir),
     // The whole record — `decision`, `by`, `at`, `note` — where the snapshot
     // carries only the decision. An approval is auditable or it is a flag.
     approval: frontmatter?.approval ?? null,
@@ -17811,7 +19022,7 @@ async function readStoryDetail(projectDir, storyId) {
 }
 async function readManifestTitle(dir) {
   try {
-    const parsed = ManifestSchema.safeParse(JSON.parse(await fs11.readFile(path10.join(dir, "manifest.json"), "utf8")));
+    const parsed = ManifestSchema.safeParse(JSON.parse(await fs16.readFile(path15.join(dir, "manifest.json"), "utf8")));
     return parsed.success ? parsed.data.title : null;
   } catch {
     return null;
@@ -17819,10 +19030,10 @@ async function readManifestTitle(dir) {
 }
 async function readRuns(projectDir) {
   const runs = resolveLoopPaths(projectDir).runs;
-  const names = await fs11.readdir(runs, { withFileTypes: true }).then((found) => found.filter((entry) => entry.isDirectory()).map((entry) => entry.name)).catch(() => []);
+  const names = await fs16.readdir(runs, { withFileTypes: true }).then((found) => found.filter((entry) => entry.isDirectory()).map((entry) => entry.name)).catch(() => []);
   const out = [];
   for (const name of names.sort().reverse()) {
-    const inside = await fs11.readdir(path10.join(runs, name)).catch(() => []);
+    const inside = await fs16.readdir(path15.join(runs, name)).catch(() => []);
     const [, story, track] = name.split("--");
     out.push({
       id: name,
@@ -17835,29 +19046,35 @@ async function readRuns(projectDir) {
   return out;
 }
 async function readRunDetail(projectDir, runId) {
-  const dir = path10.join(resolveLoopPaths(projectDir).runs, runId);
-  const inside = await fs11.readdir(dir).catch(() => null);
+  const dir = path15.join(resolveLoopPaths(projectDir).runs, runId);
+  const inside = await fs16.readdir(dir).catch(() => null);
   if (inside === null) throw new NotFoundError("run");
   return {
     id: runId,
-    halt: await fs11.readFile(path10.join(dir, "HALT.md"), "utf8").catch(() => null),
+    halt: await fs16.readFile(path15.join(dir, "HALT.md"), "utf8").catch(() => null),
     cycles: inside.filter((entry) => /^cycle-\d+$/.test(entry)).map((entry) => Number(entry.slice("cycle-".length))).sort((a, b) => a - b)
   };
+}
+async function readSkillManifest(projectDir, runId) {
+  const dir = path15.join(resolveLoopPaths(projectDir).runs, runId);
+  const exists = await fs16.readdir(dir).catch(() => null);
+  if (exists === null) throw new NotFoundError("run");
+  return readJson2(path15.join(dir, "skill-selection.json"), SkillManifestSchema);
 }
 var CYCLE_VERIFY_MAX = 50;
 var CYCLE_HANDOFF_MAX = 12e3;
 async function readCycleDetail(projectDir, runId, cycle) {
-  const dir = path10.join(resolveLoopPaths(projectDir).runs, runId, `cycle-${String(cycle).padStart(2, "0")}`);
-  const inside = await fs11.readdir(dir).catch(() => null);
+  const dir = path15.join(resolveLoopPaths(projectDir).runs, runId, `cycle-${String(cycle).padStart(2, "0")}`);
+  const inside = await fs16.readdir(dir).catch(() => null);
   if (inside === null) throw new NotFoundError("cycle");
-  const roster = await readJson2(path10.join(dir, "roster.json"), RosterSchema);
-  const findings = await readJson2(path10.join(dir, "findings.json"), FindingSchema.array());
+  const roster = await readJson2(path15.join(dir, "roster.json"), RosterSchema);
+  const findings = await readJson2(path15.join(dir, "findings.json"), FindingSchema.array());
   const ledger = await readVerifyLedger(dir);
-  const handoff = await fs11.readFile(path10.join(dir, "handoff.md"), "utf8").catch(() => null);
+  const handoff = await fs16.readFile(path15.join(dir, "handoff.md"), "utf8").catch(() => null);
   const agents = [];
   for (const entry of inside.filter((name) => name.endsWith(".json")).sort()) {
     if (entry === "roster.json" || entry === "findings.json") continue;
-    const result = await readJson2(path10.join(dir, entry), AgentResultSchema);
+    const result = await readJson2(path15.join(dir, entry), AgentResultSchema);
     if (result !== null) agents.push({ agent: entry.replace(/\.json$/, ""), result });
   }
   return {
@@ -17875,10 +19092,10 @@ async function readCycleDetail(projectDir, runId, cycle) {
   };
 }
 async function readRosterProgress(projectDir, runId, cycle) {
-  const dir = path10.join(resolveLoopPaths(projectDir).runs, runId, `cycle-${String(cycle).padStart(2, "0")}`);
-  const roster = await readJson2(path10.join(dir, "roster.json"), RosterSchema);
+  const dir = path15.join(resolveLoopPaths(projectDir).runs, runId, `cycle-${String(cycle).padStart(2, "0")}`);
+  const roster = await readJson2(path15.join(dir, "roster.json"), RosterSchema);
   if (roster === null) return null;
-  const inside = await fs11.readdir(dir).catch(() => []);
+  const inside = await fs16.readdir(dir).catch(() => []);
   const landed = roster.selected.filter((agent) => inside.includes(`${agent}.json`));
   return { cycle, selected: roster.selected, landed };
 }
@@ -17908,7 +19125,7 @@ async function readPreflightEstimate(projectDir, track) {
 }
 async function readJson2(file, schema) {
   try {
-    const parsed = schema.safeParse(JSON.parse(await fs11.readFile(file, "utf8")));
+    const parsed = schema.safeParse(JSON.parse(await fs16.readFile(file, "utf8")));
     return parsed.success ? parsed.data : null;
   } catch {
     return null;
@@ -17954,6 +19171,7 @@ async function route(projectDir, segments) {
       if (segments.length === 1) return ok(await readRuns(projectDir));
       if (first === void 0 || !RUN_ID.test(first)) return fail(400, "error.badRequest");
       if (segments.length === 2) return ok(await readRunDetail(projectDir, first));
+      if (segments.length === 3 && second === "skills") return ok(await readSkillManifest(projectDir, first));
       if (segments.length === 3) {
         const cycle = Number(second);
         if (!Number.isInteger(cycle) || cycle < 1 || cycle > 999) return fail(400, "error.badRequest");
@@ -17967,16 +19185,27 @@ async function route(projectDir, segments) {
       if (segments.length !== 2 || first === void 0) break;
       if (!IdSchema.safeParse(first).success) return fail(400, "error.badRequest");
       return ok(await readPreflightEstimate(projectDir, first));
+    case "profile":
+      if (segments.length !== 1) break;
+      return ok(await readProfileView(projectDir));
+    case "features":
+      if (segments.length === 1) return ok(await readFeatures(projectDir));
+      if (segments.length !== 2 || first === void 0) break;
+      if (!FeatureIdSchema.safeParse(first).success) return fail(400, "error.badRequest");
+      return ok(await readFeatureDetail(projectDir, first));
     case "memory":
       if (segments.length === 1) return ok(await readMemories(projectDir));
       if (segments.length !== 2 || first === void 0) break;
       if (!MEMORY_ID.test(first)) return fail(400, "error.badRequest");
       return ok(await readMemoryEntry(projectDir, first));
+    case "skills":
+      if (segments.length !== 1) break;
+      return ok(await readSkillsView(projectDir));
   }
   return fail(404, "error.notFound");
 }
 function etag(body) {
-  return `W/"${crypto2.createHash("sha1").update(body).digest("base64url")}"`;
+  return `W/"${crypto3.createHash("sha1").update(body).digest("base64url")}"`;
 }
 function sendApi(request, response, result) {
   const body = JSON.stringify(result.body);
@@ -18036,8 +19265,13 @@ var JobQueue = class {
    * Set when a job fails. The queue stops rather than running the rest, because
    * a person who returns to fifteen repetitions of one failure has been given
    * less than a person who returns to one.
+   *
+   * It is lifted again the moment there is nothing left for it to hold — see
+   * `settle`. A pause that outlives the jobs it was protecting is indistinct
+   * from a broken Run button.
    */
   blocked = false;
+  pausedBy = null;
   constructor(options) {
     this.options = options;
     this.clock = options.clock ?? (() => /* @__PURE__ */ new Date());
@@ -18057,22 +19291,43 @@ var JobQueue = class {
     this.options.onChange();
     return job;
   }
-  /** Drop a queued job. A running one is stopped instead — see `stop`. */
+  /**
+   * Cancel a job by id, whichever half of the queue it is in.
+   *
+   * The running job is stopped rather than refused. One `×` on one row means
+   * one thing to the person clicking it, and a control that quietly does
+   * nothing on the only row that is actually doing something is the version of
+   * this that shipped.
+   */
   cancel(jobId) {
+    if (this.active?.job.id === jobId) {
+      this.stop();
+      return;
+    }
     const index = this.pending.findIndex((job2) => job2.id === jobId);
     if (index === -1) return;
     const [job] = this.pending.splice(index, 1);
     if (job === void 0) return;
     job.status = "cancelled";
     job.endedAt = this.clock().toISOString();
+    job.reason = { code: "job.cancelled.cleared" };
     this.finished.push(job);
+    this.settle();
     this.options.onChange();
   }
-  /** Stop the running job. The queue stays blocked until `resume`. */
+  /**
+   * Stop the running job. Anything queued behind it holds until `resume`.
+   *
+   * A second press while the ladder is already running is not an escalation:
+   * `beginShutdown` is what owns the timings, and re-arming it here would reset
+   * them and make Stop take longer the more often it is pressed.
+   */
   stop() {
-    if (this.active === null) return;
+    const active = this.active;
+    if (active === null || active.shutdown !== null) return;
     this.blocked = true;
-    this.beginShutdown(this.active, { status: "cancelled", reason: { code: "job.cancelled.stopped" } });
+    this.pausedBy = "stopped";
+    this.beginShutdown(active, { status: "cancelled", reason: { code: "job.cancelled.stopped" } });
   }
   clear() {
     while (this.pending.length > 0) {
@@ -18083,13 +19338,28 @@ var JobQueue = class {
       job.reason = { code: "job.cancelled.cleared" };
       this.finished.push(job);
     }
+    this.settle();
     this.options.onChange();
   }
   /** Start the head again after a failure or a stop. */
   resume() {
     this.blocked = false;
+    this.pausedBy = null;
     this.pump();
     this.options.onChange();
+  }
+  /**
+   * Lift a pause that has nothing left to hold.
+   *
+   * The pause exists to stop the *rest* of the queue running into the same
+   * wall. With nothing pending there is no rest, and leaving the flag set made
+   * the next command the user typed sit at `queued` with no banner, no Resume
+   * button and no explanation — the single worst behaviour this page had.
+   */
+  settle() {
+    if (this.pending.length > 0) return;
+    this.blocked = false;
+    this.pausedBy = null;
   }
   write(data) {
     this.active?.session.write(data);
@@ -18116,7 +19386,9 @@ var JobQueue = class {
   session() {
     return {
       jobId: this.active?.job.id ?? null,
-      blocked: this.blocked && this.pending.length > 0,
+      blocked: this.blocked,
+      pausedBy: this.blocked ? this.pausedBy : null,
+      closing: this.active?.shutdown !== null && this.active !== null,
       stalledSince: this.stalledSince
     };
   }
@@ -18235,7 +19507,14 @@ var JobQueue = class {
     this.stalledSince = null;
     if (job.status === "failed") {
       this.blocked = true;
-      this.options.onNotice({ code: "queue.blocked", params: { job: job.command } });
+      this.pausedBy = "failure";
+    }
+    this.settle();
+    if (job.status === "failed") {
+      this.options.onNotice({
+        code: this.blocked ? "queue.blocked" : "queue.failed",
+        params: { job: job.command }
+      });
     }
     this.pump();
     this.options.onChange();
@@ -18250,16 +19529,16 @@ var JobQueue = class {
 };
 
 // src/web/writes.ts
-import os from "node:os";
+import os2 from "node:os";
 
 // src/ops/plan.ts
-import fs12 from "node:fs/promises";
-import path12 from "node:path";
+import fs17 from "node:fs/promises";
+import path17 from "node:path";
 
 // src/ops/manifest.ts
-import path11 from "node:path";
+import path16 from "node:path";
 function manifestPath(planDir) {
-  return path11.join(planDir, "manifest.json");
+  return path16.join(planDir, "manifest.json");
 }
 async function renderManifest(projectDir, planId, now = () => /* @__PURE__ */ new Date()) {
   const plan = await readPlan(projectDir, planId);
@@ -18276,7 +19555,7 @@ async function renderManifest(projectDir, planId, now = () => /* @__PURE__ */ ne
       status: story.frontmatter.status,
       ui: story.frontmatter.ui,
       depends_on: story.frontmatter.depends_on,
-      file: path11.relative(plan.dir, story.file)
+      file: path16.relative(plan.dir, story.file)
     }))
   });
   await writeJsonAtomic(manifestPath(plan.dir), manifest, { backup: false });
@@ -18356,8 +19635,8 @@ async function storyUpdate(projectDir, storyId, patch, now = () => /* @__PURE__ 
       );
       assertDependenciesResolve(siblings, merged.data);
     }
-    const renamed = path12.join(path12.dirname(current.file), storyFileName(merged.data));
-    if (renamed !== current.file) await fs12.rename(current.file, renamed);
+    const renamed = path17.join(path17.dirname(current.file), storyFileName(merged.data));
+    if (renamed !== current.file) await fs17.rename(current.file, renamed);
     const file = await writeStory(projectDir, { frontmatter: merged.data, body: current.body });
     const manifest = await renderManifest(projectDir, planId, now);
     return { id: storyId, file, manifest };
@@ -18388,12 +19667,39 @@ var WriteSchema = discriminatedUnion("kind", [
     kind: literal("config.patch"),
     revision: string2().regex(/^[a-f0-9]{64}$/),
     changes: array(ConfigChangeSchema).min(1).max(100)
+  }),
+  strictObject({
+    kind: literal("feature.approve"),
+    feature: FeatureIdSchema,
+    /**
+     * The revision the operator was looking at when they decided.
+     *
+     * Bounded exactly as the store bounds a revision — a positive integer — and
+     * no more narrowly, because a ceiling this side invented would lock the
+     * browser out of a revision the store can legitimately reach. It never
+     * becomes a path: `approveFeatureBrief` finds the latest revision from the
+     * directory itself and compares this against it, so this is a token to be
+     * matched, not a file to be opened.
+     */
+    revision: number2().int().positive(),
+    /**
+     * What the brief said on the screen the decision was made from.
+     *
+     * The revision above cannot answer that on its own: a draft holds one
+     * revision number for the whole of its editable life, so a page open while
+     * the interview appends one last decision would still be pointing at
+     * "revision 1" and would approve words nobody read. Same shape and same
+     * job as `config.patch`'s `revision` — a sha256 the server produced,
+     * handed straight back — and it is checked inside the store's lock.
+     */
+    digest: string2().regex(/^[a-f0-9]{64}$/),
+    note: string2().max(2e3).nullable().default(null)
   })
 ]);
 function decidedBy() {
   let who = "unknown";
   try {
-    who = os.userInfo().username;
+    who = os2.userInfo().username;
   } catch {
   }
   return `dashboard:${who}`;
@@ -18415,6 +19721,15 @@ var HANDLERS = {
   },
   "config.patch": async (projectDir, write) => {
     await mutateConfig(projectDir, { revision: write.revision, changes: write.changes });
+  },
+  "feature.approve": async (projectDir, write) => {
+    await approveFeatureBrief(projectDir, {
+      id: write.feature,
+      expectRevision: write.revision,
+      expectDigest: write.digest,
+      by: decidedBy(),
+      note: write.note
+    });
   }
 };
 async function applyWrite(projectDir, write) {
@@ -18427,6 +19742,9 @@ async function applyWrite(projectDir, write) {
         ok: false,
         code: error2.kind === "stale" ? "write.stale.config" : "write.invalid.config"
       };
+    }
+    if (error2 instanceof StaleFeatureRevisionError || error2 instanceof StaleFeatureContentError || error2 instanceof ApprovedRevisionImmutableError) {
+      return { ok: false, code: "write.stale.feature" };
     }
     if (error2 instanceof StalePreconditionError) {
       return { ok: false, code: STALE[error2.subject] };
@@ -18464,6 +19782,13 @@ var ClientMessageSchema = discriminatedUnion("type", [
    *
    * `id` is the page's own correlation token, echoed back on the receipt; it is
    * never used to name anything on disk.
+   *
+   * The kinds it carries are `WriteSchema`'s and it widens only when that union
+   * does, which is why `feature.approve` arrived without a line changing here.
+   * That is also why no `FeatureView` joins `Snapshot` above: a brief is *read*
+   * over `/api/features`, never pushed, so the only thing a browser can do to
+   * one is this frame. A record that arrives by one route and leaves by another
+   * has two surfaces to audit, and this one has one.
    */
   strictObject({ type: literal("write"), id: string2().min(1).max(64), write: WriteSchema })
 ]);
@@ -18537,17 +19862,17 @@ var spawnPtySession = ({ cwd, command, cols, rows }) => {
 };
 
 // src/web/snapshot.ts
-import fs15 from "node:fs/promises";
-import path15 from "node:path";
+import fs20 from "node:fs/promises";
+import path20 from "node:path";
 
 // src/ops/summary.ts
-import fs13 from "node:fs/promises";
-import path13 from "node:path";
+import fs18 from "node:fs/promises";
+import path18 from "node:path";
 var NO_FINDINGS = { high: 0, medium: 0, low: 0 };
 var MAP_FILE = "map.md";
 async function hasDesignSystem(projectDir) {
   try {
-    return (await fs13.stat(resolveLoopPaths(projectDir).designSystem)).isFile();
+    return (await fs18.stat(resolveLoopPaths(projectDir).designSystem)).isFile();
   } catch {
     return false;
   }
@@ -18555,11 +19880,11 @@ async function hasDesignSystem(projectDir) {
 async function runMap(projectDir, state) {
   if (state.run_id === null || state.track === null) return null;
   try {
-    if (!(await fs13.stat(path13.join(runDirPath(projectDir, state), MAP_FILE))).isFile()) return null;
+    if (!(await fs18.stat(path18.join(runDirPath(projectDir, state), MAP_FILE))).isFile()) return null;
   } catch {
     return null;
   }
-  return path13.join(".mjloop", "runs", runDirName(state), MAP_FILE);
+  return path18.join(".mjloop", "runs", runDirName(state), MAP_FILE);
 }
 async function stateSummary(projectDir) {
   let config2 = null;
@@ -18631,11 +19956,11 @@ async function stateSummary(projectDir) {
 }
 
 // src/web/revision.ts
-import fs14 from "node:fs/promises";
-import path14 from "node:path";
+import fs19 from "node:fs/promises";
+import path19 from "node:path";
 async function stamp(file) {
   try {
-    const stats = await fs14.stat(file);
+    const stats = await fs19.stat(file);
     return `${Math.trunc(stats.mtimeMs)}.${stats.size}`;
   } catch {
     return "-";
@@ -18643,12 +19968,12 @@ async function stamp(file) {
 }
 async function stampDir(dir, documents) {
   const parts = [await stamp(dir)];
-  for (const document of documents) parts.push(await stamp(path14.join(dir, document)));
+  for (const document of documents) parts.push(await stamp(path19.join(dir, document)));
   return parts.join(":");
 }
 async function entries(dir) {
   try {
-    return (await fs14.readdir(dir)).sort();
+    return (await fs19.readdir(dir)).sort();
   } catch {
     return [];
   }
@@ -18659,8 +19984,8 @@ async function readRevisions(projectDir, tick, running) {
   const planIds = await entries(paths.plans);
   const plans = [];
   for (const id of planIds) {
-    plans.push(`${id}=${await stampDir(path14.join(paths.plans, id), PLAN_DOCUMENTS)}`);
-    plans.push(await stamp(path14.join(paths.plans, id, "stories")));
+    plans.push(`${id}=${await stampDir(path19.join(paths.plans, id), PLAN_DOCUMENTS)}`);
+    plans.push(await stamp(path19.join(paths.plans, id, "stories")));
   }
   const [state, config2, memory, runs] = await Promise.all([
     stamp(paths.state),
@@ -18741,14 +20066,14 @@ async function readPlanView(projectDir, id) {
     id,
     // The directory name is the last resort, and it always exists — `findPlanDir`
     // found the plan by it.
-    title: frontmatter?.title ?? manifest?.title ?? path15.basename(dir),
+    title: frontmatter?.title ?? manifest?.title ?? path20.basename(dir),
     approval: frontmatter?.approval?.decision ?? null,
     stories: manifest?.stories ?? []
   };
 }
 async function readPlanFrontmatter(dir) {
   try {
-    const raw = await fs15.readFile(path15.join(dir, "PLAN.md"), "utf8");
+    const raw = await fs20.readFile(path20.join(dir, "PLAN.md"), "utf8");
     const parsed = PlanFrontmatterSchema.safeParse(parseFrontmatter(raw).data);
     if (!parsed.success) return null;
     return { title: parsed.data.title, approval: parsed.data.approval };
@@ -18758,7 +20083,7 @@ async function readPlanFrontmatter(dir) {
 }
 async function readManifest(dir) {
   try {
-    const raw = await fs15.readFile(path15.join(dir, "manifest.json"), "utf8");
+    const raw = await fs20.readFile(path20.join(dir, "manifest.json"), "utf8");
     const parsed = ManifestSchema.safeParse(JSON.parse(raw));
     if (!parsed.success) return null;
     return {
@@ -18777,7 +20102,7 @@ async function readManifest(dir) {
 }
 async function listRuns(projectDir) {
   try {
-    const entries2 = await fs15.readdir(resolveLoopPaths(projectDir).runs, { withFileTypes: true });
+    const entries2 = await fs20.readdir(resolveLoopPaths(projectDir).runs, { withFileTypes: true });
     return entries2.filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort().reverse();
   } catch {
     return [];
@@ -18798,11 +20123,12 @@ var OK_CODES = {
   gate: "write.ok.gate",
   "story.status": "write.ok.story",
   halt: "write.ok.halt",
-  "config.patch": "write.ok.config"
+  "config.patch": "write.ok.config",
+  "feature.approve": "write.ok.feature"
 };
 function tokenMatches(expected, given) {
   if (given === null || given.length !== expected.length) return false;
-  return crypto3.timingSafeEqual(Buffer.from(expected), Buffer.from(given));
+  return crypto4.timingSafeEqual(Buffer.from(expected), Buffer.from(given));
 }
 var COOKIE = "mjloop_token";
 function readCookie(header, name) {
@@ -18818,7 +20144,7 @@ function suppliedToken(url, cookieHeader) {
 }
 async function startServer(options) {
   const { projectDir } = options;
-  const token = crypto3.randomBytes(32).toString("hex");
+  const token = crypto4.randomBytes(32).toString("hex");
   const sockets = /* @__PURE__ */ new Set();
   const broadcast = (message) => {
     const payload = JSON.stringify(message);
@@ -18992,15 +20318,15 @@ async function handleRequest(request, response, token, projectDir) {
     return;
   }
   const requested = url.pathname === "/" ? "/index.html" : url.pathname;
-  const file = path16.resolve(PUBLIC_DIR, `.${requested}`);
+  const file = path21.resolve(PUBLIC_DIR, `.${requested}`);
   if (!file.startsWith(PUBLIC_DIR)) {
     response.writeHead(403).end();
     return;
   }
   try {
-    const body = await fs16.readFile(file);
+    const body = await fs21.readFile(file);
     response.writeHead(200, {
-      "content-type": MIME[path16.extname(file)] ?? "application/octet-stream",
+      "content-type": MIME[path21.extname(file)] ?? "application/octet-stream",
       // The page carries a token in its URL. Keeping it out of caches and
       // referrers is most of what stops it leaking.
       "cache-control": "no-store",
@@ -19032,7 +20358,7 @@ function parseArgs(argv, cwd) {
       case "--dir": {
         const value = argv[++index];
         if (value === void 0) throw new UsageError("--dir needs a path");
-        args.dir = path17.resolve(cwd, value);
+        args.dir = path22.resolve(cwd, value);
         break;
       }
       case "--port": {
@@ -19095,7 +20421,7 @@ ${USAGE}`);
     return 1;
   }
   try {
-    await fs17.stat(resolveLoopPaths(args.dir).root);
+    await fs22.stat(resolveLoopPaths(args.dir).root);
   } catch {
     process.stderr.write(`no .mjloop/ in ${args.dir} \u2014 run /mjloop:init there first.
 `);

@@ -18,6 +18,9 @@ export const WEB_CODES = [
   'job.cancelled.stopped',
   'job.cancelled.cleared',
   'queue.blocked',
+  /* A failure with nothing left behind it. The queue is not holding anything —
+     saying that it is would be a lie the user then goes looking for. */
+  'queue.failed',
 
   /* the read api — a diagnosis goes to the terminal the server was launched
      from, never onto the wire. There is no `params` on any of these, because a
@@ -31,6 +34,11 @@ export const WEB_CODES = [
   'write.stale.plan',
   'write.stale.story',
   'write.stale.run',
+  /* One code for both ways an approval can arrive too late — the revision moved,
+     or somebody else approved the very draft on screen. The store separates them
+     because it has to name the way forward; the page only has to say that the
+     screen is out of date and nothing was changed. */
+  'write.stale.feature',
   'write.stale.config',
   'write.invalid.config',
   'write.failed',
@@ -38,6 +46,7 @@ export const WEB_CODES = [
   'write.ok.story',
   'write.ok.halt',
   'write.ok.config',
+  'write.ok.feature',
 ] as const
 
 export type WebCode = (typeof WEB_CODES)[number]

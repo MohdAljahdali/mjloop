@@ -11,7 +11,7 @@ import { installStorage, read as prefs, write as remember } from './lib/local.js
 import { routeFrom, startRouter } from './lib/router.js'
 import { connect, send } from './net/socket.js'
 import * as bus from './ui/bus.js'
-import { flag, translateStatic, verbatim } from './ui/dom.js'
+import { attr, flag, label, phrase, translateStatic, verbatim } from './ui/dom.js'
 import { followQueue, mountPane, showJob, shownJob } from './ui/pane.js'
 import { draw, register } from './ui/render.js'
 import { drawRail, mountRail } from './ui/rail.js'
@@ -24,7 +24,7 @@ import { mountConfig } from './panels/config.js'
 import { mountEvidence } from './panels/evidence.js'
 import { mountMemory } from './panels/memory.js'
 import { mountLauncher } from './panels/launcher.js'
-import { mountPlans } from './panels/plans.js'
+import { mountPlans, ready } from './panels/plans.js'
 import { mountQueue } from './panels/queue.js'
 import { mountRun } from './panels/run.js'
 
@@ -95,6 +95,21 @@ mountMemory()
 const config = mountConfig()
 mountQueue()
 register({ id: 'rail', node: /** @type {HTMLElement} */ (document.querySelector('.rail')), update: drawRail })
+/**
+ * The two numbers on the navigation.
+ *
+ * Wired here rather than inside `ui/rail.js` because one of them is the plans
+ * panel's own readiness rule, and `ui/` reaching into `panels/` to borrow it
+ * would invert the layering. `app.js` is the file that already knows both.
+ */
+register({
+  id: 'nav',
+  node: /** @type {HTMLElement} */ (document.querySelector('.tabs')),
+  update: (snapshot) => {
+    badge(rail('navReady'), tab('tab-plans'), ready(snapshot.plans).length, 'tabs.readyCount')
+    badge(rail('navGuard'), tab('tab-run'), snapshot.state.findings.high, 'tabs.highCount')
+  },
+})
 register({
   id: 'chrome',
   node: /** @type {HTMLElement} */ (document.querySelector('.brand')),
@@ -127,6 +142,16 @@ bus.on('reject', () => plans.decide('rejected'))
 bus.on('requeue', (element) => plans.requeue(element.dataset['story'] ?? '', element.dataset['from'] ?? 'doing'))
 bus.on('config-save', () => config.save())
 bus.on('config-reset', () => config.reset())
+// The structured `specialists:` and `tracks:` editors. Every one of these
+// mutates the panel's draft and nothing else — the save button is still the
+// only thing that reaches the server.
+bus.on('specialist-add', () => config.specialistAdd())
+bus.on('specialist-remove', (element) => config.specialistRemove(element))
+bus.on('track-add', () => config.trackAdd())
+bus.on('track-remove', (element) => config.trackRemove(element))
+bus.on('track-duplicate', (element) => config.trackDuplicate(element))
+bus.on('agent-add', (element) => config.agentAdd(element))
+bus.on('agent-remove', (element) => config.agentRemove(element))
 bus.on('new-plan', (element) => {
   // A form, but the same execution path as everything else: it composes a loop
   // command and enqueues it.
@@ -170,6 +195,9 @@ connect({
       activeJob = message.snapshot.session.jobId
       currentRun = message.snapshot.state.run_id
       followQueue(previous, activeJob)
+      // Work opens the pane it needs. Nothing closes it again on its own, and
+      // nothing moves it at all once the reader has set a height themselves.
+      if (previous === null && activeJob !== null) pane.follow()
       draw(message.snapshot)
     } else if (message.type === 'output') {
       if (message.jobId === shownJob()) write(message.data)
@@ -219,6 +247,35 @@ function railSlots() {
  */
 function rail(name) {
   return /** @type {HTMLElement} */ (document.querySelector(`[data-rail="${name}"]`))
+}
+
+/**
+ * @param {string} id
+ * @returns {HTMLElement}
+ */
+function tab(id) {
+  return /** @type {HTMLElement} */ (document.getElementById(id))
+}
+
+/**
+ * A count on a navigation row, and the sentence that says what it counts.
+ *
+ * The digits are `aria-hidden` and the sentence goes on the anchor's `title`: a
+ * bare number announced after a view's name is a riddle, and the view already
+ * has a perfectly good accessible name.
+ *
+ * @param {HTMLElement} node
+ * @param {HTMLElement} anchor
+ * @param {number} count
+ * @param {string} key
+ */
+function badge(node, anchor, count, key) {
+  // A count, so it is a number the interface is talking about and gets the
+  // reader's own digits — not an identifier like `P001-S02`.
+  phrase(node, 'tabs.number', { n: count })
+  flag(node, 'hidden', count === 0)
+  if (count === 0) attr(anchor, 'title', null)
+  else label(anchor, 'title', key, { n: count })
 }
 
 await loadFallback()

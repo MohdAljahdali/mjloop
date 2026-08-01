@@ -5,8 +5,9 @@
 .banners {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding-inline: 16px;
+  gap: 8px;
+  padding-inline: 18px;
+  padding-block-end: 10px;
 }
 
 .banners:empty {
@@ -15,12 +16,21 @@
 
 .banner {
   margin: 0;
-  padding: 8px 12px;
+  padding: 10px 14px;
   border-radius: var(--radius);
   display: flex;
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
+  box-shadow: var(--shadow-1);
+  animation: banner-in 0.2s ease both;
+}
+
+@keyframes banner-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
 }
 
 .banner small {
@@ -34,49 +44,99 @@
   overflow-wrap: anywhere;
 }
 
-.banner.error {
-  background: #2d1214;
-  border: 1px solid var(--bad);
+/* One shape, four temperatures: the tint carries the meaning and the border
+   states it again for anyone who cannot separate the hues. */
+.banner.error,
+.banner.offline {
+  background: var(--tint-bad);
+  border: 1px solid color-mix(in srgb, var(--bad) 55%, transparent);
+  color: color-mix(in srgb, var(--bad) 30%, var(--text));
 }
 
 .banner.warn {
-  background: #2b2412;
-  border: 1px solid var(--warn);
+  background: var(--tint-warn);
+  border: 1px solid color-mix(in srgb, var(--warn) 55%, transparent);
 }
 
 .banner.note {
-  background: #10203a;
-  border: 1px solid var(--accent);
-}
-
-.banner.offline {
-  background: #2d1214;
-  border: 1px solid var(--bad);
+  background: var(--tint-accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
 }
 
 .rail {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 8px;
   min-height: var(--rail-h);
-  padding: 4px 16px;
-  border-block-start: 1px solid var(--line);
+  padding: 6px 18px;
+  border-block-start: 1px solid var(--line-soft);
+  background: color-mix(in srgb, var(--bg) 45%, transparent);
   font-size: 13px;
   overflow-x: auto;
+  scrollbar-width: none;
+}
+
+/**
+ * One bar, not two, once there is room for one.
+ *
+ * The brand row and the rail were stacked: about 90px of chrome above every
+ * panel, most of it empty, on a page whose whole job is to show what is
+ * happening below it. Side by side they cost 52px and read as a single status
+ * line — which is what they are.
+ *
+ * Grid areas rather than a flex row, because the banners have to keep the full
+ * width underneath both of them: an outage is not a rail item.
+ */
+@media (min-width: 900px) {
+  .top {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas:
+      "brand rail"
+      "banners banners";
+    align-items: center;
+  }
+
+  .brand {
+    grid-area: brand;
+  }
+
+  .rail {
+    grid-area: rail;
+    justify-content: flex-end;
+    border-block-start: 0;
+    background: none;
+  }
+
+  .banners {
+    grid-area: banners;
+  }
+
+  /* The readings stay next to the status pill they belong to rather than
+     stretching across whatever is left of the bar. */
+  .rail-detail {
+    flex: 0 1 auto;
+  }
 }
 
 .rail-detail {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 8px;
   flex: 1;
   flex-wrap: wrap;
 }
 
+/* Each fact is a small slab rather than loose text, so the rail reads as a row
+   of readings and not as a sentence that happens to contain numbers. */
 .bit {
   display: inline-flex;
   align-items: baseline;
-  gap: 5px;
+  gap: 6px;
+  padding: 3px 9px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--panel-2) 70%, transparent);
+  border: 1px solid var(--line-soft);
 }
 
 .bit:empty {
@@ -84,47 +144,87 @@
 }
 
 .bit .k {
-  color: var(--dim);
-  font-size: 11px;
+  color: var(--faint);
+  font-size: 10px;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.09em;
+  font-weight: 650;
 }
 
 .bit .v {
   font-family: var(--mono);
   font-size: 12px;
+  color: var(--text);
 }
 
 .pill {
-  border-radius: 999px;
-  padding: 1px 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border-radius: var(--radius-pill);
+  padding: 3px 12px;
   font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
   border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--panel-2) 80%, transparent);
   color: var(--dim);
+  white-space: nowrap;
+}
+
+.pill:empty {
+  display: none;
+}
+
+/* The dot is the status at a glance; the word beside it is the status for
+   anyone who cannot use the colour. */
+.pill::before {
+  content: "";
+  inline-size: 7px;
+  block-size: 7px;
+  border-radius: 50%;
+  background: currentcolor;
+  flex: none;
 }
 
 .pill[data-status="running"] {
   color: var(--accent);
-  border-color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  background: var(--tint-accent);
+}
+
+/* A run that is turning says so without a spinner stealing the eye. */
+.pill[data-status="running"]::before {
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.25;
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 18%, transparent);
+  }
 }
 
 .pill[data-status="halted"],
 .pill[data-status="failed"] {
   color: var(--bad);
-  border-color: var(--bad);
+  border-color: color-mix(in srgb, var(--bad) 55%, transparent);
+  background: var(--tint-bad);
 }
 
 .pill[data-status="done"] {
   color: var(--ok);
-  border-color: var(--ok);
+  border-color: color-mix(in srgb, var(--ok) 55%, transparent);
+  background: var(--tint-ok);
 }
 
 .danger {
   color: var(--bad);
-  border-color: var(--bad);
+  border-color: color-mix(in srgb, var(--bad) 45%, var(--line));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--bad) 14%, var(--raise)), var(--panel-2));
 }
 
 .danger:hover:not(:disabled) {
   border-color: var(--bad);
-  background: #2d1214;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--bad) 26%, var(--raise)), var(--panel-2));
 }

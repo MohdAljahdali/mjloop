@@ -1,9 +1,16 @@
+import fs from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { buildServer, resolveProjectDir } from '../../src/mcp/server.js'
 import { gateSet } from '../../src/ops/plan.js'
+import type { SkillPackage } from '../../src/schemas/skill-library.js'
 import { loadConfig, writeConfig } from '../../src/store/config-store.js'
+import { readFeatureRevision } from '../../src/store/feature-store.js'
+import { acceptProfile } from '../../src/store/project-profile-store.js'
+import { writePackage } from '../../src/store/skill-library-store.js'
 import { makeTmpProject, type TmpProject } from '../helpers/tmp-project.js'
 
 let project: TmpProject
@@ -104,10 +111,14 @@ describe('MCP surface', () => {
   // context this server is attached to, for the leader and every subagent. The
   // list is asserted exactly so that adding a tool is a deliberate edit to a
   // budget rather than a side effect of writing an op.
-  it('exposes exactly the eighteen tools', async () => {
+  it('exposes exactly the twenty-two tools', async () => {
     const { tools } = await client.listTools()
     expect(tools.map((t) => t.name).sort()).toEqual([
       'mjloop_cycle_advance',
+      'mjloop_feature_approve',
+      'mjloop_feature_create',
+      'mjloop_feature_get',
+      'mjloop_feature_update',
       'mjloop_gate_set',
       'mjloop_halt',
       'mjloop_index_render',
@@ -137,6 +148,95 @@ describe('MCP surface', () => {
     expect(names.filter((name) => name.startsWith('mjloop_report'))).toEqual(['mjloop_report_get'])
     expect(names).not.toContain('mjloop_telemetry_get')
     expect(names).not.toContain('mjloop_preflight_get')
+  })
+
+  // The feature-brief store has eight entry points and this surface has four,
+  // so the same test the report projections get: a bare count of twenty-two
+  // would still pass if a later edit split `create` back into two tools and
+  // dropped something else to pay for it.
+  it('serves the whole feature-brief lifecycle through four tools', async () => {
+    const { tools } = await client.listTools()
+    const names = tools.map((t) => t.name)
+    expect(names.filter((name) => name.startsWith('mjloop_feature')).sort()).toEqual([
+      'mjloop_feature_approve',
+      'mjloop_feature_create',
+      'mjloop_feature_get',
+      'mjloop_feature_update',
+    ])
+    // The four that would have been five, six, seven and eight. Minting a
+    // successor is a create, the three read projections are one walk over one
+    // directory, and recording a decision is an update.
+    expect(names).not.toContain('mjloop_feature_supersede')
+    expect(names).not.toContain('mjloop_feature_list')
+    expect(names).not.toContain('mjloop_feature_decision_add')
+    expect(names).not.toContain('mjloop_feature_revision_get')
+  })
+
+  // Minting a successor is only reachable through `create`, so the argument
+  // that selects it has to be declared there — the same rule the `run_id` and
+  // `closing` assertions below apply, on the tool where forgetting it would
+  // leave an approved brief with no way to be changed at all.
+  it('lets a caller mint a successor through the tool that mints a draft', async () => {
+    const { tools } = await client.listTools()
+    const create = tools.find((t) => t.name === 'mjloop_feature_create')
+    const declared = Object.keys(properties(create?.inputSchema))
+    expect(declared).toContain('supersedes')
+    expect(declared).toContain('expect_revision')
+    expect(create?.inputSchema.required ?? []).not.toContain('supersedes')
+  })
+
+  // The rule `mjloop_gate_set` states, on the second tool in this file that
+  // records a decision no engine check can make for the caller. A plan is
+  // written *from* an approved brief, so an approval invented here authorises
+  // work no person ever agreed to.
+  it('tells the caller never to record an approval nobody gave', async () => {
+    const { tools } = await client.listTools()
+    const approve = tools.find((t) => t.name === 'mjloop_feature_approve')
+    expect(approve?.description).toMatch(/[Nn]ever record an approval nobody gave/)
+    expect(approve?.description).toMatch(/ask/i)
+  })
+
+  // A precondition on the revision number alone is not a precondition on a
+  // draft: the number does not move while the record is editable, which is
+  // exactly the window an approval waits in. Both are required, so an approval
+  // cannot be built on a brief nobody read.
+  it('makes an approval swap on what the brief said, not only on which revision it was', async () => {
+    const { tools } = await client.listTools()
+    const approve = tools.find((t) => t.name === 'mjloop_feature_approve')
+    const required = approve?.inputSchema.required ?? []
+    expect(required).toContain('expect_revision')
+    expect(required).toContain('expect_digest')
+  })
+
+  // The other end of the same argument: a token nothing hands out cannot be
+  // handed back. Every read projection carries the digest an approval needs.
+  it('hands the approval token out on the read the approver made the decision from', async () => {
+    await client.callTool({
+      name: 'mjloop_feature_create',
+      arguments: {
+        project_dir: project.dir,
+        title: 'Passwordless sign-in',
+        problem: 'Members forget passwords and support resets them by hand.',
+        discovery_mode: 'always',
+        question_budget: 8,
+      },
+    })
+    const read = await client.callTool({
+      name: 'mjloop_feature_get',
+      arguments: { project_dir: project.dir, feature: 'F001' },
+    })
+    expect(JSON.parse(textOf(read)).digest).toMatch(/^[a-f0-9]{64}$/)
+  })
+
+  // `mjloop_feature_create` refuses these alongside `supersedes` and names
+  // `mjloop_feature_update` as where they belong, so this is the assertion that
+  // keeps that sentence true.
+  it('lets a caller correct the discovery policy through the tool the refusal names', async () => {
+    const { tools } = await client.listTools()
+    const declared = Object.keys(properties(tools.find((t) => t.name === 'mjloop_feature_update')?.inputSchema))
+    for (const argument of ['discovery_mode', 'question_budget', 'discovery_complete']) {
+      expect(declared, argument).toContain(argument)
+    }
   })
 
   // A parameter the op accepts and the tool never declares is unreachable
@@ -685,5 +785,681 @@ describe('tool behaviour', () => {
       arguments: { project_dir: project.dir, report: 'preflight', track: 'invented' },
     })
     expect((result as { isError?: boolean }).isError).toBe(true)
+  })
+
+  describe('skills projection', () => {
+    const DIGEST_A = 'a'.repeat(64)
+
+    function skillPackage(digest: string): SkillPackage {
+      return {
+        schema: 1,
+        packageId: 'flutter-widgets',
+        digest,
+        source: { kind: 'github', url: 'https://github.com/example/flutter-widgets', revision: 'a1b2c3d' },
+        license: { spdx: 'MIT', file: 'LICENSE' },
+        skillName: 'Flutter Widgets',
+        description: 'Shared widget kit conventions for the mobile component.',
+        tags: ['flutter'],
+        dependencies: { executables: [], packages: ['flutter'] },
+        audit: { state: 'passed', findings: [], at: '2026-07-30T09:00:00.000Z' },
+        guidance: 'Use the shared widget kit under lib/widgets.',
+        importedAt: '2026-07-30T09:00:00.000Z',
+      }
+    }
+
+    let dataHome: string
+    let contentDir: string
+
+    beforeEach(async () => {
+      dataHome = await fs.mkdtemp(path.join(os.tmpdir(), 'loop-library-'))
+      process.env.MJLOOP_DATA_HOME = dataHome
+      contentDir = await fs.mkdtemp(path.join(os.tmpdir(), 'loop-content-'))
+      await fs.writeFile(path.join(contentDir, 'SKILL.md'), '# Flutter Widgets\n', 'utf8')
+    })
+
+    afterEach(async () => {
+      delete process.env.MJLOOP_DATA_HOME
+      await fs.rm(dataHome, { recursive: true, force: true })
+      await fs.rm(contentDir, { recursive: true, force: true })
+    })
+
+    it('is empty at no error on a machine with no library and a project with no acceptances', async () => {
+      await client.callTool({ name: 'mjloop_init', arguments: { project_dir: project.dir } })
+      const result = await client.callTool({
+        name: 'mjloop_report_get',
+        arguments: { project_dir: project.dir, report: 'skills' },
+      })
+      expect((result as { isError?: boolean }).isError).not.toBe(true)
+      const skills = JSON.parse(textOf(result))
+      expect(skills.packages).toEqual([])
+      expect(skills.unreadable).toEqual([])
+      expect(skills.acceptances).toEqual([])
+    })
+
+    it('reports the library and this project\'s acceptances — a read of what mjloop-cli skills decided', async () => {
+      await client.callTool({ name: 'mjloop_init', arguments: { project_dir: project.dir } })
+      await writePackage(project.dir, skillPackage(DIGEST_A), contentDir)
+
+      const result = await client.callTool({
+        name: 'mjloop_report_get',
+        arguments: { project_dir: project.dir, report: 'skills' },
+      })
+      expect((result as { isError?: boolean }).isError).not.toBe(true)
+      const skills = JSON.parse(textOf(result))
+      expect(skills.packages).toHaveLength(1)
+      expect(skills.packages[0].digest).toBe(DIGEST_A)
+      // No acceptance was ever made through mjloop-cli skills accept, so the
+      // library holding a package must not, on its own, make it selectable —
+      // this projection reports the library and the (empty) acceptance list
+      // as two separate facts rather than inferring one from the other.
+      expect(skills.acceptances).toEqual([])
+    })
+
+    it('reports an unreadable digest directory beside the packages it could read — evidence an import left behind', async () => {
+      await client.callTool({ name: 'mjloop_init', arguments: { project_dir: project.dir } })
+      const corruptDigest = 'b'.repeat(64)
+      const corruptDir = path.join(dataHome, 'packages', corruptDigest)
+      await fs.mkdir(corruptDir, { recursive: true })
+      await fs.writeFile(path.join(corruptDir, 'package.json'), '{"schema":1}', 'utf8')
+
+      const result = await client.callTool({
+        name: 'mjloop_report_get',
+        arguments: { project_dir: project.dir, report: 'skills' },
+      })
+      expect((result as { isError?: boolean }).isError).not.toBe(true)
+      const skills = JSON.parse(textOf(result))
+      expect(skills.unreadable).toHaveLength(1)
+      expect(skills.unreadable[0].digest).toBe(corruptDigest)
+    })
+  })
+})
+
+describe('feature briefs', () => {
+  /** The interview's own call: a draft, plus the policy it actually ran under. */
+  async function createDraft(overrides: Record<string, unknown> = {}): Promise<unknown> {
+    return client.callTool({
+      name: 'mjloop_feature_create',
+      arguments: {
+        project_dir: project.dir,
+        title: 'Passwordless sign-in',
+        problem: 'Members forget passwords and support resets them by hand.',
+        discovery_mode: 'always',
+        question_budget: 8,
+        ...overrides,
+      },
+    })
+  }
+
+  /** An accepted component map, which is what `affected_components` is checked against. */
+  async function acceptComponents(ids: string[]): Promise<void> {
+    await acceptProfile(project.dir, {
+      // Sorted, because an accepted profile insists on it.
+      components: [...ids].sort().map((id) => ({
+        id,
+        root: id,
+        technology: 'unknown' as const,
+        verification: { test: null, lint: null, build: null },
+        skillTags: [],
+      })),
+      by: 'mohd',
+      generatedAt: '2026-07-30T09:00:00.000Z',
+      expectRevision: null,
+    })
+  }
+
+  /**
+   * The precondition a caller that has just read the brief would present.
+   *
+   * Both halves come from the read, because that is where a real caller gets
+   * them: `mjloop_feature_get` returns the revision list and the digest, and an
+   * approval is refused unless it hands back the ones belonging to the record
+   * it actually showed the user.
+   */
+  async function precondition(id: string): Promise<{ expect_revision: number; expect_digest: string }> {
+    const read = JSON.parse(
+      textOf(await client.callTool({ name: 'mjloop_feature_get', arguments: { project_dir: project.dir, feature: id } })),
+    )
+    return { expect_revision: read.brief.revision, expect_digest: read.digest }
+  }
+
+  /** A draft carrying the one thing approval refuses to do without. */
+  async function approvableDraft(): Promise<string> {
+    const created = await createDraft()
+    const id = JSON.parse(textOf(created)).brief.id
+    await client.callTool({
+      name: 'mjloop_feature_update',
+      arguments: {
+        project_dir: project.dir,
+        feature: id,
+        acceptance: ['A member with no password signs in from an emailed link'],
+      },
+    })
+    return id
+  }
+
+  it('mints a draft carrying the discovery policy the interview ran under', async () => {
+    const created = await createDraft()
+    expect(isError(created)).toBe(false)
+    const record = JSON.parse(textOf(created))
+    expect(record.brief.id).toBe('F001')
+    expect(record.brief.revision).toBe(1)
+    expect(record.brief.status).toBe('draft')
+    // Recorded rather than defaulted: a brief must say which policy produced
+    // it, and a project that switches discovery off next week must not make
+    // this one look like it was never interviewed.
+    expect(record.brief.discovery).toEqual({ mode: 'always', questionBudget: 8, completedAt: null })
+    expect(record.brief.approval).toBeNull()
+    // No tag is declared until a person names one during discovery.
+    expect(record.brief.tags).toEqual([])
+  })
+
+  // Skill selection joins on this list, and the story is explicit that it
+  // must be declared rather than derived — so the tool that lets an
+  // interview record one is the only surface tested here; reading it back out
+  // of `problem` or `acceptance` text is a defect this repository does not
+  // ship.
+  it('lets the interview declare a cross-cutting tag through mjloop_feature_update', async () => {
+    const id = JSON.parse(textOf(await createDraft())).brief.id
+    const tagged = await client.callTool({
+      name: 'mjloop_feature_update',
+      arguments: { project_dir: project.dir, feature: id, tags: ['security'] },
+    })
+    expect(isError(tagged)).toBe(false)
+    expect(JSON.parse(textOf(tagged)).brief.tags).toEqual(['security'])
+
+    const read = await client.callTool({
+      name: 'mjloop_feature_get',
+      arguments: { project_dir: project.dir, feature: id },
+    })
+    expect(JSON.parse(textOf(read)).brief.tags).toEqual(['security'])
+  })
+
+  it('replaces the declared tags rather than appending to them', async () => {
+    const id = JSON.parse(textOf(await createDraft())).brief.id
+    await client.callTool({
+      name: 'mjloop_feature_update',
+      arguments: { project_dir: project.dir, feature: id, tags: ['security', 'billing'] },
+    })
+    const replaced = await client.callTool({
+      name: 'mjloop_feature_update',
+      arguments: { project_dir: project.dir, feature: id, tags: ['security'] },
+    })
+    expect(JSON.parse(textOf(replaced)).brief.tags).toEqual(['security'])
+  })
+
+  // A draft is assembled, so the first call cannot carry acceptance criteria.
+  // The tool must therefore not demand them — and approval must.
+  it('mints a draft with no acceptance criteria and refuses to approve it', async () => {
+    const created = await createDraft()
+    expect(JSON.parse(textOf(created)).brief.acceptance).toEqual([])
+
+    const approved = await client.callTool({
+      name: 'mjloop_feature_approve',
+      arguments: { project_dir: project.dir, feature: 'F001', ...(await precondition('F001')), by: 'mohd' },
+    })
+    expect(isError(approved)).toBe(true)
+    expect(textOf(approved)).toContain('acceptance criteria')
+
+    const onDisk = await readFeatureRevision(project.dir, 'F001', 1)
+    expect(onDisk?.brief.status).toBe('draft')
+  })
+
+  it('refuses a create that names no policy to record', async () => {
+    const created = await client.callTool({
+      name: 'mjloop_feature_create',
+      arguments: { project_dir: project.dir, title: 'Passwordless sign-in', problem: 'Support resets by hand.' },
+    })
+    expect(isError(created)).toBe(true)
+    expect(textOf(created)).toContain('discovery_mode')
+    expect(textOf(created)).toContain('question_budget')
+  })
+
+  it('records a decision, the answer it produced, and the moment the interview stopped', async () => {
+    const created = await createDraft()
+    const id = JSON.parse(textOf(created)).brief.id
+
+    const decided = await client.callTool({
+      name: 'mjloop_feature_update',
+      arguments: {
+        project_dir: project.dir,
+        feature: id,
+        question: 'Does a magic link expire after one use, or after fifteen minutes?',
+        recommendation: 'One use, because a link in an inbox outlives the session that asked for it.',
+        answer: 'One use.',
+        acceptance: ['A used link cannot be used again'],
+        discovery_complete: true,
+      },
+    })
+    expect(isError(decided)).toBe(false)
+    const brief = JSON.parse(textOf(decided)).brief
+    expect(brief.decisions).toHaveLength(1)
+    expect(brief.decisions[0].answer).toBe('One use.')
+    // Stamped by the engine, exactly as `appendFeatureDecision` stamps `at`.
+    expect(typeof brief.decisions[0].at).toBe('string')
+    expect(brief.acceptance).toEqual(['A used link cannot be used again'])
+    expect(typeof brief.discovery.completedAt).toBe('string')
+  })
+
+  // The budget running out is a real output. A decision with no answer says the
+  // interview stopped before this one was settled, and dropping it would hand
+  // planning a brief that looks more settled than it is.
+  it('records an unresolved decision', async () => {
+    const id = JSON.parse(textOf(await createDraft())).brief.id
+    const decided = await client.callTool({
+      name: 'mjloop_feature_update',
+      arguments: {
+        project_dir: project.dir,
+        feature: id,
+        question: 'Do we keep password sign-in alongside the link?',
+        recommendation: 'Keep it until the link path has run for a release.',
+      },
+    })
+    expect(isError(decided)).toBe(false)
+    expect(JSON.parse(textOf(decided)).brief.decisions[0].answer).toBeNull()
+  })
+
+  it('refuses an answer that belongs to no question', async () => {
+    const id = JSON.parse(textOf(await createDraft())).brief.id
+    const result = await client.callTool({
+      name: 'mjloop_feature_update',
+      arguments: { project_dir: project.dir, feature: id, answer: 'One use.' },
+    })
+    expect(isError(result)).toBe(true)
+    expect(textOf(result)).toContain('question')
+    expect(JSON.parse(textOf(await client.callTool({
+      name: 'mjloop_feature_get',
+      arguments: { project_dir: project.dir, feature: id },
+    }))).brief.decisions).toEqual([])
+  })
+
+  // Reporting success for a call that changed nothing tells the interview its
+  // answer was written down when no file moved.
+  it('refuses an update that changes nothing', async () => {
+    const id = JSON.parse(textOf(await createDraft())).brief.id
+    const result = await client.callTool({
+      name: 'mjloop_feature_update',
+      arguments: { project_dir: project.dir, feature: id },
+    })
+    expect(isError(result)).toBe(true)
+    expect(textOf(result)).toContain('nothing to change')
+  })
+
+  it('approves a draft, recording the actor and the approver own words', async () => {
+    const id = await approvableDraft()
+    const approved = await client.callTool({
+      name: 'mjloop_feature_approve',
+      arguments: {
+        project_dir: project.dir,
+        feature: id,
+        ...(await precondition(id)),
+        by: 'mohd',
+        note: 'Ship the link, keep passwords for a release.',
+      },
+    })
+    expect(isError(approved)).toBe(false)
+    const brief = JSON.parse(textOf(approved)).brief
+    expect(brief.status).toBe('approved')
+    expect(brief.approval.by).toBe('mohd')
+    expect(brief.approval.note).toBe('Ship the link, keep passwords for a release.')
+    expect(typeof brief.approval.at).toBe('string')
+  })
+
+  // The 800ms-stale-screen case: the compare-and-swap is the whole reason
+  // approval takes an expected revision rather than approving whatever is there.
+  it('refuses an approval built on a revision that has moved on', async () => {
+    const id = await approvableDraft()
+    const stale = await client.callTool({
+      name: 'mjloop_feature_approve',
+      arguments: { project_dir: project.dir, feature: id, ...(await precondition(id)), expect_revision: 2, by: 'mohd' },
+    })
+    expect(isError(stale)).toBe(true)
+    expect(textOf(stale)).toContain('moved on')
+
+    const onDisk = await readFeatureRevision(project.dir, id, 1)
+    expect(onDisk?.brief.status).toBe('draft')
+  })
+
+  // The case the revision number cannot see, and the one the skill tells the
+  // model to expect: it read a brief, showed it, waited, and something changed
+  // it in the meantime. The revision is still 1 the whole time — a draft's
+  // number does not move while it is a draft — so the digest is what carries
+  // the refusal.
+  it('refuses an approval built on words that changed after they were read', async () => {
+    const id = await approvableDraft()
+    const read = await precondition(id)
+    await client.callTool({
+      name: 'mjloop_feature_update',
+      arguments: {
+        project_dir: project.dir,
+        feature: id,
+        question: 'Should a session expire after thirty days?',
+        answer: 'Yes, expire it.',
+      },
+    })
+
+    const stale = await client.callTool({
+      name: 'mjloop_feature_approve',
+      arguments: { project_dir: project.dir, feature: id, ...read, by: 'mohd' },
+    })
+    expect(isError(stale)).toBe(true)
+    expect(textOf(stale)).toContain('moved on')
+    // Still a draft, so the way forward is reading it again rather than
+    // re-sending the call with a higher number.
+    expect((await readFeatureRevision(project.dir, id, 1))?.brief.status).toBe('draft')
+  })
+
+  // `mjloop_feature_create` refuses `discovery_mode` and `question_budget`
+  // alongside `supersedes` and names this tool as where they belong. They have
+  // to be reachable here, or that refusal points at a dead end — and the
+  // successor would record the policy its *predecessor's* interview ran under
+  // for as long as the feature lives.
+  it('lets the interview behind a successor record its own policy', async () => {
+    const id = await approvableDraft()
+    await client.callTool({
+      name: 'mjloop_feature_approve',
+      arguments: { project_dir: project.dir, feature: id, ...(await precondition(id)), by: 'mohd' },
+    })
+    await client.callTool({
+      name: 'mjloop_feature_create',
+      arguments: { project_dir: project.dir, supersedes: id, expect_revision: 1 },
+    })
+
+    const corrected = await client.callTool({
+      name: 'mjloop_feature_update',
+      arguments: { project_dir: project.dir, feature: id, discovery_mode: 'ask', question_budget: 3 },
+    })
+    expect(isError(corrected)).toBe(false)
+    expect(JSON.parse(textOf(corrected)).brief.discovery).toMatchObject({ mode: 'ask', questionBudget: 3 })
+    // …and revision 1 still records the policy *its* interview ran under.
+    expect((await readFeatureRevision(project.dir, id, 1))?.brief.discovery.mode).toBe('always')
+  })
+
+  it('refuses every edit to an approved revision, and names supersede as the way forward', async () => {
+    const id = await approvableDraft()
+    await client.callTool({
+      name: 'mjloop_feature_approve',
+      arguments: { project_dir: project.dir, feature: id, ...(await precondition(id)), by: 'mohd' },
+    })
+
+    const edited = await client.callTool({
+      name: 'mjloop_feature_update',
+      arguments: { project_dir: project.dir, feature: id, title: 'Passwordless sign-in, take two' },
+    })
+    expect(isError(edited)).toBe(true)
+    expect(textOf(edited)).toContain('Supersede')
+
+    const decided = await client.callTool({
+      name: 'mjloop_feature_update',
+      arguments: { project_dir: project.dir, feature: id, question: 'Should the link work on mobile?' },
+    })
+    expect(isError(decided)).toBe(true)
+
+    const onDisk = await readFeatureRevision(project.dir, id, 1)
+    expect(onDisk?.brief.title).toBe('Passwordless sign-in')
+    expect(onDisk?.brief.decisions).toEqual([])
+  })
+
+  it('mints a successor through create, leaving the approved revision untouched', async () => {
+    const id = await approvableDraft()
+    const approved = await client.callTool({
+      name: 'mjloop_feature_approve',
+      arguments: { project_dir: project.dir, feature: id, ...(await precondition(id)), by: 'mohd', note: 'Ship it.' },
+    })
+    const first = JSON.parse(textOf(approved)).brief
+
+    const successor = await client.callTool({
+      name: 'mjloop_feature_create',
+      arguments: { project_dir: project.dir, supersedes: id, expect_revision: 1 },
+    })
+    expect(isError(successor)).toBe(false)
+    const second = JSON.parse(textOf(successor)).brief
+    expect(second.revision).toBe(2)
+    expect(second.status).toBe('draft')
+    expect(second.approval).toBeNull()
+    expect(second.supersedes).toEqual({ id, revision: 1 })
+    // The content carries forward, so a successor starts from what was agreed.
+    expect(second.acceptance).toEqual(first.acceptance)
+
+    const onDisk = await readFeatureRevision(project.dir, id, 1)
+    expect(onDisk?.brief).toEqual(first)
+    // Never stored, always derived: the word appears because revision 2 exists.
+    expect(onDisk?.status).toBe('superseded')
+  })
+
+  // Silently ignoring content passed alongside `supersedes` would report
+  // success for a title nobody wrote down — the same refusal a closing roster
+  // that also names a cycle gets.
+  it('refuses a supersede that also carries content', async () => {
+    const id = await approvableDraft()
+    await client.callTool({
+      name: 'mjloop_feature_approve',
+      arguments: { project_dir: project.dir, feature: id, expect_revision: 1, by: 'mohd' },
+    })
+    const result = await client.callTool({
+      name: 'mjloop_feature_create',
+      arguments: { project_dir: project.dir, supersedes: id, expect_revision: 1, title: 'Something else' },
+    })
+    expect(isError(result)).toBe(true)
+    expect(textOf(result)).toContain('mjloop_feature_update')
+    expect(await readFeatureRevision(project.dir, id, 2)).toBeNull()
+  })
+
+  it('refuses a supersede that names no revision to swap on', async () => {
+    const id = await approvableDraft()
+    await client.callTool({
+      name: 'mjloop_feature_approve',
+      arguments: { project_dir: project.dir, feature: id, expect_revision: 1, by: 'mohd' },
+    })
+    const result = await client.callTool({
+      name: 'mjloop_feature_create',
+      arguments: { project_dir: project.dir, supersedes: id },
+    })
+    expect(isError(result)).toBe(true)
+    expect(textOf(result)).toContain('expect_revision')
+  })
+
+  it('serves the three read projections through one tool', async () => {
+    const empty = await client.callTool({ name: 'mjloop_feature_get', arguments: { project_dir: project.dir } })
+    expect(isError(empty)).toBe(false)
+    expect(JSON.parse(textOf(empty)).features).toEqual([])
+
+    const id = await approvableDraft()
+    await client.callTool({
+      name: 'mjloop_feature_approve',
+      arguments: { project_dir: project.dir, feature: id, ...(await precondition(id)), by: 'mohd' },
+    })
+    await client.callTool({
+      name: 'mjloop_feature_create',
+      arguments: { project_dir: project.dir, supersedes: id, expect_revision: 1 },
+    })
+
+    const listed = await client.callTool({ name: 'mjloop_feature_get', arguments: { project_dir: project.dir } })
+    const summaries = JSON.parse(textOf(listed)).features
+    expect(summaries).toHaveLength(1)
+    expect(summaries[0]).toMatchObject({ id, latestRevision: 2, approvedRevision: 1, revisions: [1, 2] })
+
+    const latest = await client.callTool({
+      name: 'mjloop_feature_get',
+      arguments: { project_dir: project.dir, feature: id },
+    })
+    expect(JSON.parse(textOf(latest)).brief.revision).toBe(2)
+    // The revision list travels with the read, because it is what a caller
+    // needs before it can name an `expect_revision` for anything.
+    expect(JSON.parse(textOf(latest)).revisions).toEqual([1, 2])
+
+    const pinned = await client.callTool({
+      name: 'mjloop_feature_get',
+      arguments: { project_dir: project.dir, feature: id, revision: 1 },
+    })
+    expect(JSON.parse(textOf(pinned)).brief.revision).toBe(1)
+    expect(JSON.parse(textOf(pinned)).status).toBe('superseded')
+  })
+
+  it('returns a tool error for a feature that does not exist', async () => {
+    const result = await client.callTool({
+      name: 'mjloop_feature_get',
+      arguments: { project_dir: project.dir, feature: 'F404' },
+    })
+    expect(isError(result)).toBe(true)
+    expect(textOf(result)).toContain('F404')
+  })
+
+  it('names the revisions that do exist when asked for one that does not', async () => {
+    const id = JSON.parse(textOf(await createDraft())).brief.id
+    const result = await client.callTool({
+      name: 'mjloop_feature_get',
+      arguments: { project_dir: project.dir, feature: id, revision: 7 },
+    })
+    expect(isError(result)).toBe(true)
+    expect(textOf(result)).toContain('no revision 7')
+    // "It has 1" is the actionable half: a caller that guessed a revision
+    // number needs the list, not a bare denial.
+    expect(textOf(result)).toMatch(/it has 1$/)
+  })
+
+  // An expectation with nothing to swap on is a caller that thinks it is
+  // replacing something. Answering it with a brand new F002 would be the
+  // silent wrong outcome.
+  it('refuses a first revision that names a revision to swap on', async () => {
+    const result = await createDraft({ expect_revision: 1 })
+    expect(isError(result)).toBe(true)
+    expect(textOf(result)).toContain('supersedes')
+    expect(JSON.parse(textOf(await client.callTool({
+      name: 'mjloop_feature_get',
+      arguments: { project_dir: project.dir },
+    }))).features).toEqual([])
+  })
+
+  it('reopens an interview that was marked complete', async () => {
+    const id = JSON.parse(textOf(await createDraft())).brief.id
+    await client.callTool({
+      name: 'mjloop_feature_update',
+      arguments: { project_dir: project.dir, feature: id, discovery_complete: true },
+    })
+    const reopened = await client.callTool({
+      name: 'mjloop_feature_update',
+      arguments: { project_dir: project.dir, feature: id, discovery_complete: false },
+    })
+    expect(isError(reopened)).toBe(false)
+    expect(JSON.parse(textOf(reopened)).brief.discovery.completedAt).toBeNull()
+  })
+
+  it('accepts an affected component the accepted map names', async () => {
+    await acceptComponents(['mobile', 'admin'])
+    const created = await createDraft({ affected_components: ['mobile'] })
+    expect(isError(created)).toBe(false)
+    expect(JSON.parse(textOf(created)).brief.affectedComponents).toEqual(['mobile'])
+  })
+
+  it('refuses an affected component the accepted map has never heard of', async () => {
+    await acceptComponents(['mobile', 'admin'])
+    const created = await createDraft({ affected_components: ['ghost'] })
+    expect(isError(created)).toBe(true)
+    expect(textOf(created)).toContain('ghost')
+    expect(await readFeatureRevision(project.dir, 'F001', 1)).toBeNull()
+  })
+
+  // The third string on this surface that names a directory, after the agent
+  // name and the track, and it is checked the same way and for the same reason.
+  it('refuses a feature id that would steer a path out of .mjloop/features', async () => {
+    const outcome = await client
+      .callTool({
+        name: 'mjloop_feature_get',
+        arguments: { project_dir: project.dir, feature: '../../../etc' },
+      })
+      .then((result) => (isError(result) ? 'rejected' : 'accepted'), () => 'rejected')
+    expect(outcome).toBe('rejected')
+  })
+
+  // Rollback is reselection: the content of an earlier revision approved as a
+  // *new* one. Nothing is mutated and nothing is deleted, so the record still
+  // shows every position the project held and the order it held them in.
+  it('rolls back by approving an earlier revision content as a new revision', async () => {
+    const id = await approvableDraft()
+    await client.callTool({
+      name: 'mjloop_feature_approve',
+      arguments: { project_dir: project.dir, feature: id, ...(await precondition(id)), by: 'mohd', note: 'The link only.' },
+    })
+    const original = (await readFeatureRevision(project.dir, id, 1))?.brief
+
+    await client.callTool({
+      name: 'mjloop_feature_create',
+      arguments: { project_dir: project.dir, supersedes: id, expect_revision: 1 },
+    })
+    await client.callTool({
+      name: 'mjloop_feature_update',
+      arguments: { project_dir: project.dir, feature: id, acceptance: ['A one-time code arrives by SMS'] },
+    })
+    await client.callTool({
+      name: 'mjloop_feature_approve',
+      arguments: { project_dir: project.dir, feature: id, ...(await precondition(id)), by: 'mohd', note: 'SMS instead.' },
+    })
+
+    await client.callTool({
+      name: 'mjloop_feature_create',
+      arguments: { project_dir: project.dir, supersedes: id, expect_revision: 2 },
+    })
+    await client.callTool({
+      name: 'mjloop_feature_update',
+      arguments: { project_dir: project.dir, feature: id, acceptance: original?.acceptance },
+    })
+    const rolled = await client.callTool({
+      name: 'mjloop_feature_approve',
+      arguments: { project_dir: project.dir, feature: id, ...(await precondition(id)), by: 'mohd', note: 'Back to the link.' },
+    })
+    expect(isError(rolled)).toBe(false)
+
+    const third = JSON.parse(textOf(rolled)).brief
+    expect(third.revision).toBe(3)
+    expect(third.acceptance).toEqual(original?.acceptance)
+    // Neither predecessor moved, and both still say what they said.
+    expect((await readFeatureRevision(project.dir, id, 1))?.brief).toEqual(original)
+    expect((await readFeatureRevision(project.dir, id, 2))?.brief.acceptance).toEqual(['A one-time code arrives by SMS'])
+  })
+
+  // `mjloop_run_start` is the only surface in the product that opens a run —
+  // the cockpit denies `runStart` permanently (`web/writes.ts`), `/mjloop:resume`
+  // is told not to call it, and the CLI registers no subcommand for it. So a
+  // `feature` the tool does not accept is a `feature` nothing can ever reach,
+  // and the manifest `runStart` was extended to pin would be pinned only by
+  // tests while three documents and the leader skill described it as shipping
+  // behaviour. Worse than dead: the SDK drops an unknown argument silently, so
+  // a leader that passed one would get a normal-looking run and no manifest.
+  it('lets a run be started against an approved feature, and pins the manifest for it', async () => {
+    await client.callTool({ name: 'mjloop_init', arguments: { project_dir: project.dir } })
+    await acceptComponents(['mobile'])
+    const id = await approvableDraft()
+    await client.callTool({
+      name: 'mjloop_feature_update',
+      arguments: { project_dir: project.dir, feature: id, affected_components: ['mobile'] },
+    })
+    await client.callTool({
+      name: 'mjloop_feature_approve',
+      arguments: { project_dir: project.dir, feature: id, ...(await precondition(id)), by: 'mohd' },
+    })
+
+    const started = await client.callTool({
+      name: 'mjloop_run_start',
+      arguments: { project_dir: project.dir, track: 'edit', goal: 'Add link login', feature: id },
+    })
+    expect(isError(started)).toBe(false)
+
+    const state = JSON.parse(textOf(started))
+    const dir = path.join(project.dir, '.mjloop', 'runs', `${state.run_id}--adhoc--edit`)
+    expect((await fs.readdir(dir)).sort()).toEqual(['skill-selection.json', 'verify-pinned.json'])
+    const manifest = JSON.parse(await fs.readFile(path.join(dir, 'skill-selection.json'), 'utf8'))
+    expect(manifest.sourceBrief).toEqual({ id, revision: 1 })
+  })
+
+  it('refuses a feature id that is not shaped like one, rather than dropping it', async () => {
+    // The failure mode the nullish argument has to avoid: an unparseable id
+    // that reaches `runStart` anyway would half-start a run, and one silently
+    // ignored would start a run the caller believes is routed and is not.
+    await client.callTool({ name: 'mjloop_init', arguments: { project_dir: project.dir } })
+    const started = await client.callTool({
+      name: 'mjloop_run_start',
+      arguments: { project_dir: project.dir, track: 'edit', goal: 'x', feature: 'not-a-feature' },
+    })
+    expect(isError(started)).toBe(true)
   })
 })

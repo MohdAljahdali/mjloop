@@ -109,14 +109,14 @@ describe('local', () => {
         throw new Error('disabled')
       },
     })
-    expect(read().pane).toBe('docked')
+    expect(read().pane).toBe('collapsed')
     expect(write({ pane: 'full' }).pane).toBe('full')
 
     installStorage({ getItem: () => '{ not json', setItem: () => {} })
-    expect(read().pane).toBe('docked')
+    expect(read().pane).toBe('collapsed')
 
     installStorage({ getItem: () => JSON.stringify({ pane: 'enormous', lang: 5 }), setItem: () => {} })
-    expect(read().pane).toBe('docked')
+    expect(read().pane).toBe('collapsed')
     expect(read().lang).toBe(null)
   })
 })

@@ -1,9 +1,18 @@
+import fs from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { initLoop } from '../../src/ops/init.js'
 import { gateSet, planCreate, storyAdd } from '../../src/ops/plan.js'
+import { runDirName, runStart } from '../../src/ops/run.js'
 import { TELEMETRY_MAX_ROWS } from '../../src/ops/telemetry.js'
+import type { SkillPackage } from '../../src/schemas/skill-library.js'
 import { etag, handleApi } from '../../src/web/api.js'
 import { WEB_CODES } from '../../src/web/codes.js'
+import { approveFeatureBrief, createFeatureBrief, updateFeatureDraft } from '../../src/store/feature-store.js'
+import { acceptProfile } from '../../src/store/project-profile-store.js'
+import { acceptSkill } from '../../src/store/skill-acceptance-store.js'
+import { writePackage } from '../../src/store/skill-library-store.js'
 import { makeTmpProject, type TmpProject } from '../helpers/tmp-project.js'
 
 /**
@@ -53,6 +62,239 @@ describe('handleApi', () => {
     // all.
     expect((await call('/api/telemetry'))?.status).toBe(200)
     expect((await call('/api/preflight/edit'))?.status).toBe(200)
+    // `initLoop` scans the project, so a provisioned project always has at
+    // least a proposal to report — even one that found nothing.
+    expect((await call('/api/profile'))?.status).toBe(200)
+  })
+
+  it('reports the component map without offering any way to change it', async () => {
+    await acceptProfile(
+      project.dir,
+      {
+        components: [
+          {
+            id: 'web',
+            root: 'web',
+            technology: 'nextjs',
+            verification: { test: 'cd web && npm test', lint: null, build: null },
+            skillTags: ['nextjs'],
+          },
+        ],
+        by: 'Mohd',
+        generatedAt: NOW.toISOString(),
+        expectRevision: null,
+      },
+      clock,
+    )
+
+    const result = await call('/api/profile')
+    expect(result?.status).toBe(200)
+    expect(result?.body).toMatchObject({ revision: 1, acceptedBy: 'Mohd' })
+    // Accepting a component map activates routing for every later run, which is
+    // the class of write the browser is permanently denied. There is a route
+    // that reads it and there is deliberately none that writes it.
+    for (const method of ['POST', 'PUT', 'DELETE', 'PATCH']) {
+      expect((await call('/api/profile', method))?.status).toBe(405)
+    }
+    // No parameter, and none a later story could smuggle in: an accepted
+    // revision is immutable, so there is nothing here to select between.
+    expect((await call('/api/profile/1'))?.status).toBe(404)
+    expect((await call('/api/profile/../../etc'))?.status).toBe(404)
+  })
+
+  it('serves a feature brief and its history, and offers no way to author one', async () => {
+    await createFeatureBrief(
+      project.dir,
+      {
+        title: 'Passwordless sign-in',
+        problem: 'Password resets are the top support cost.',
+        discovery: { mode: 'ask', questionBudget: 8 },
+      },
+      clock,
+    )
+    const draft = await updateFeatureDraft(project.dir, 'F001', { acceptance: ['a mailed link signs the user in'] })
+    await approveFeatureBrief(
+      project.dir,
+      { id: 'F001', expectRevision: 1, expectDigest: draft.digest, by: 'Mohd' },
+      clock,
+    )
+
+    expect((await call('/api/features'))?.status).toBe(200)
+    const detail = await call('/api/features/F001')
+    expect(detail?.status).toBe(200)
+    expect(detail?.body).toMatchObject({
+      status: 'approved',
+      revisions: [{ revision: 1, status: 'approved' }],
+      // What the operator's Approve button hands back, so that a click can be
+      // made conditional on the words this response actually showed.
+      digest: expect.stringMatching(/^[a-f0-9]{64}$/),
+    })
+
+    // An approved brief is what a later plan is built on. There are two routes
+    // that read one and deliberately none that writes one: the single feature
+    // write a browser may perform is an approval, and it goes through the
+    // guarded socket door in `writes.ts` where it can be made conditional on
+    // the revision the operator was actually looking at.
+    for (const method of ['POST', 'PUT', 'DELETE', 'PATCH']) {
+      expect((await call('/api/features', method))?.status).toBe(405)
+      expect((await call('/api/features/F001', method))?.status).toBe(405)
+    }
+    // A revision is not selectable here. The route serves the latest and the
+    // history beside it, and a route that took a revision would be the first
+    // half of one that set it.
+    expect((await call('/api/features/F001/1'))?.status).toBe(404)
+    expect((await call('/api/features/F001/rev-001.json'))?.status).toBe(404)
+  })
+
+  it("serves a run's pinned skill manifest, and offers no way to set one", async () => {
+    await acceptProfile(
+      project.dir,
+      {
+        components: [
+          {
+            id: 'web',
+            root: 'web',
+            technology: 'nextjs',
+            verification: { test: 'cd web && npm test', lint: null, build: null },
+            skillTags: ['nextjs'],
+          },
+        ],
+        by: 'Mohd',
+        generatedAt: NOW.toISOString(),
+        expectRevision: null,
+      },
+      clock,
+    )
+    await createFeatureBrief(
+      project.dir,
+      {
+        title: 'Passwordless sign-in',
+        problem: 'Password resets are the top support cost.',
+        discovery: { mode: 'ask', questionBudget: 8 },
+      },
+      clock,
+    )
+    const draft = await updateFeatureDraft(project.dir, 'F001', { acceptance: ['a mailed link signs the user in'] })
+    await approveFeatureBrief(
+      project.dir,
+      { id: 'F001', expectRevision: 1, expectDigest: draft.digest, by: 'Mohd' },
+      clock,
+    )
+
+    // Most runs name no feature at all, and `pinSkillManifest` pins nothing
+    // for them — `null` is that ordinary case, not a 404 and not an invented
+    // empty manifest.
+    const bare = await runStart(project.dir, { track: 'edit', goal: 'Rename' }, clock)
+    const bareResult = await call(`/api/runs/${runDirName(bare)}/skills`)
+    expect(bareResult?.status).toBe(200)
+    expect(bareResult?.body).toBe(null)
+
+    const routed = await runStart(project.dir, { track: 'edit', goal: 'Add link login', feature: 'F001' }, clock)
+    const routedResult = await call(`/api/runs/${runDirName(routed)}/skills`)
+    expect(routedResult?.status).toBe(200)
+    expect(routedResult?.body).toMatchObject({ schema: 1, sourceBrief: { id: 'F001', revision: 1 } })
+
+    // The routing decision a run started with is reported; nothing here lets
+    // the browser set one.
+    for (const method of ['POST', 'PUT', 'DELETE', 'PATCH']) {
+      expect((await call(`/api/runs/${runDirName(routed)}/skills`, method))?.status).toBe(405)
+    }
+  })
+
+  it('answers 404 for a skill manifest on a run that never started', async () => {
+    const result = await call('/api/runs/nope/skills')
+    expect(result?.status).toBe(404)
+    expect(result?.body).toEqual({ error: { code: 'error.notFound' } })
+  })
+
+  describe('/api/skills', () => {
+    const DIGEST_A = 'a'.repeat(64)
+    let dataHome: string
+    let contentDir: string
+
+    function skillPackage(digest: string): SkillPackage {
+      return {
+        schema: 1,
+        packageId: 'flutter-widgets',
+        digest,
+        source: { kind: 'github', url: 'https://github.com/example/flutter-widgets', revision: 'a1b2c3d' },
+        license: { spdx: 'MIT', file: 'LICENSE' },
+        skillName: 'Flutter Widgets',
+        description: 'Shared widget kit conventions for the mobile component.',
+        tags: ['flutter'],
+        dependencies: { executables: [], packages: ['flutter'] },
+        audit: { state: 'passed', findings: [], at: '2026-07-30T09:00:00.000Z' },
+        guidance: 'Use the shared widget kit under lib/widgets.',
+        importedAt: '2026-07-30T09:00:00.000Z',
+      }
+    }
+
+    beforeEach(async () => {
+      dataHome = await fs.mkdtemp(path.join(os.tmpdir(), 'loop-library-'))
+      process.env.MJLOOP_DATA_HOME = dataHome
+      contentDir = await fs.mkdtemp(path.join(os.tmpdir(), 'loop-content-'))
+      await fs.writeFile(path.join(contentDir, 'SKILL.md'), '# Flutter Widgets\n', 'utf8')
+    })
+
+    afterEach(async () => {
+      delete process.env.MJLOOP_DATA_HOME
+      await fs.rm(dataHome, { recursive: true, force: true })
+      await fs.rm(contentDir, { recursive: true, force: true })
+    })
+
+    it('is empty at 200 on a machine with no library and a project with no acceptances', async () => {
+      const result = await call('/api/skills')
+      expect(result?.status).toBe(200)
+      expect(result?.body).toEqual({ packages: [], unreadable: [], acceptances: [] })
+    })
+
+    it('reports the library and this project\'s acceptances, and offers no way to change either', async () => {
+      await writePackage(project.dir, skillPackage(DIGEST_A), contentDir)
+      await acceptSkill(project.dir, { packageDigest: DIGEST_A, updatePolicy: 'review', acceptedBy: 'Mohd' }, clock)
+
+      const result = await call('/api/skills')
+      expect(result?.status).toBe(200)
+      expect(result?.body).toMatchObject({
+        packages: [{ digest: DIGEST_A, skillName: 'Flutter Widgets' }],
+        acceptances: [{ skillId: 'flutter-widgets', status: 'active' }],
+      })
+
+      // Activation is the class of write `web/writes.ts` permanently denies
+      // the browser — `mjloop-cli skills accept` is where that decision is
+      // made, and this route only ever reports it.
+      for (const method of ['POST', 'PUT', 'DELETE', 'PATCH']) {
+        expect((await call('/api/skills', method))?.status).toBe(405)
+      }
+    })
+
+    it('answers 404 for a nested path, since there is nothing here to select', async () => {
+      expect((await call('/api/skills/flutter-widgets'))?.status).toBe(404)
+    })
+  })
+
+  it('answers for a project that has raised no feature without describing it', async () => {
+    // An empty list, not a 404: unlike the component map, whose absence changes
+    // how every later run is routed, no feature yet is the ordinary state of a
+    // freshly provisioned project.
+    expect((await call('/api/features'))?.body).toEqual([])
+    const missing = await call('/api/features/F404')
+    expect(missing?.status).toBe(404)
+    expect(missing?.body).toEqual({ error: { code: 'error.notFound' } })
+    // Refused by the engine's own id schema before anything reads a directory.
+    expect((await call('/api/features/nonsense'))?.status).toBe(400)
+    expect((await call('/api/features/F1'))?.status).toBe(400)
+    expect((await call('/api/features/f001'))?.status).toBe(400)
+  })
+
+  it('answers for a project nothing has ever mapped without describing it', async () => {
+    const bare = await makeTmpProject()
+    try {
+      const result = await handleApi(bare.dir, 'GET', '/api/profile')
+      expect(result?.status).toBe(404)
+      expect(result?.body).toEqual({ error: { code: 'error.notFound' } })
+    } finally {
+      await bare.cleanup()
+    }
   })
 
   it('bounds the reports it serves', async () => {
@@ -98,6 +340,11 @@ describe('handleApi', () => {
       '/api/preflight/../../etc',
       '/api/preflight/..%2F..%2Fconfig.yaml',
       '/api/telemetry/../../etc',
+      '/api/profile/../../etc',
+      '/api/profile/..%2F..%2Fconfig.yaml',
+      '/api/features/../../etc',
+      '/api/features/..%2F..%2Fconfig.yaml',
+      '/api/features/F001/../../state.json',
       // An un-normalised path, which a browser would never send but a raw
       // socket can: it is still ours to refuse rather than to resolve.
       '/api/../app.js',
@@ -122,8 +369,12 @@ describe('handleApi', () => {
       await call('/api/plans/P999'),
       await call('/api/state', 'POST'),
       await call('/api/runs/x/0'),
+      await call('/api/runs/nope/skills'),
       await call('/api/preflight/nonsense'),
       await call('/api/preflight/not a track'),
+      await call('/api/profile/1'),
+      await call('/api/features/nonsense'),
+      await call('/api/features/F404'),
     ]
     for (const failure of failures) {
       const error = (failure?.body as { error?: Record<string, unknown> }).error ?? {}

@@ -24,6 +24,25 @@ describe('writeConfig / loadConfig', () => {
     expect(raw.trimStart().startsWith('{')).toBe(false)
   })
 
+  it('round-trips discovery mode "off" as a string and not as boolean false', async () => {
+    // YAML 1.1 reads a bare `off` as the boolean false; YAML 1.2's core schema
+    // reads it as the string. Which one this project gets is decided by the
+    // `yaml` package's default schema, not by us, and the whole orchestration
+    // block ships with `mode: off` — so this is asserted rather than assumed.
+    // If it ever flips, `mode` must be quoted on write, because a boolean
+    // `false` fails FeatureDiscoveryModeSchema and the config stops loading.
+    const config = defaultConfig({ test: 'npm test', lint: null, build: null })
+    expect(config.orchestration.discovery.mode).toBe('off')
+    await writeConfig(project.dir, config)
+
+    const raw = await fs.readFile(resolveLoopPaths(project.dir).config, 'utf8')
+    expect(raw).toContain('mode: off')
+
+    const loaded = await loadConfig(project.dir)
+    expect(loaded.orchestration.discovery.mode).toBe('off')
+    expect(loaded.orchestration).toEqual(config.orchestration)
+  })
+
   it('throws ConfigMissingError when .mjloop is not provisioned', async () => {
     await expect(loadConfig(project.dir)).rejects.toBeInstanceOf(ConfigMissingError)
   })

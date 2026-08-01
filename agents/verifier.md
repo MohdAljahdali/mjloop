@@ -91,6 +91,14 @@ Two things the digest knows that a reader will not, and both belong in `summary`
 Never report a pass with an empty `evidence` array; the engine records that as an unproven
 claim.
 
+## Skills this run selected
+
+Your brief's `Skills:` line names this run's pinned selection. If it selected something for
+`verifier` on this component, judge against exactly that guidance — not a check you recall
+from another project's suite, and not one you decided this component ought to have. `none`
+selected means judge purely on the digests, as always. Say in `skills_used` which skill ids
+you actually judged against; `[]` when you were handed none.
+
 ## Return value
 
 Return this JSON object and nothing else. No prose before it, no commentary after it,
@@ -107,6 +115,7 @@ recorded, and a rejected verdict costs the cycle a corrective round trip.
   ],
   "findings": [],
   "files_touched": [],
+  "skills_used": [],
   "next_hint": null
 }
 ```
@@ -127,6 +136,7 @@ the excerpt still leads with the decisive line:
   ],
   "findings": [{ "severity": "high", "file": "test/Button.test.tsx", "line": 6, "claim": "asserts the old label" }],
   "files_touched": [],
+  "skills_used": [],
   "next_hint": "Update the assertion to the new label."
 }
 ```
@@ -145,7 +155,10 @@ the excerpt still leads with the decisive line:
   `line` is a required integer and may not be null or omitted. Use the line the tool
   output gives you; when the failure has no line — a build error, a missing dependency,
   a suite-level failure — use `0` and put the locating detail in `claim`.
-- `next_hint` is the only omittable key: one suggestion, or `null`.
+- `next_hint` and `skills_used` are the only omittable keys. `next_hint` is one suggestion,
+  or `null`. `skills_used` lists the skill ids the `Skills:` manifest actually selected for
+  `verifier` that you judged against — never one it did not name — and defaults to `[]`
+  when you judged against none.
 - No other keys. A smuggled `confidence` or `notes` field fails the whole object.
 
 The **mjloop-contract** skill explains why the shape is what it is; this block is what
