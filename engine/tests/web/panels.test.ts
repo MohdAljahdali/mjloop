@@ -19,6 +19,7 @@ import { mountToasts, toast } from '../../src/web/public/ui/toasts.js'
 import { DEP_DEPTH_LIMIT } from '../../src/web/public/lib/stories.js'
 import { emptySnapshot, loadPage, readLocale } from './helpers/page.js'
 import { ConfigSchema } from '../../src/schemas/config.js'
+import { SkillManifestSchema } from '../../src/schemas/skill-selection.js'
 import { ConfigChangeSchema } from '../../src/store/config-mutation.js'
 import type { FeatureDetail, ProfileView } from '../../src/web/read.js'
 import type { FeatureSummary } from '../../src/store/feature-store.js'
@@ -1476,6 +1477,309 @@ describe('stories', () => {
     expect(document.querySelectorAll('#stories-ready-list .ready-row')).toHaveLength(2)
     expect(document.getElementById('tally-ready')?.textContent).toBe('2')
     expect(document.getElementById('tally-done')?.textContent).toBe('0')
+  })
+
+  /**
+   * C7: per-agent skill inspection, and the pinned-manifest read that goes
+   * with it. `acceptance()` mirrors the fixture `describe('skills library')`
+   * already uses (below), duplicated rather than shared across two
+   * `describe` closures for the same reason every other fixture in this file
+   * stays local to its own block.
+   */
+  const acceptance = (patch: Partial<ProjectSkillAcceptance> & { skillId: string }): ProjectSkillAcceptance => ({
+    schema: 1,
+    packageId: 'p',
+    digest: 'b'.repeat(64),
+    components: [],
+    agents: ['builder'],
+    tags: [],
+    updatePolicy: 'auto',
+    status: 'active',
+    compatible: true,
+    acceptedBy: 'mohd',
+    acceptedAt: NOW,
+    ...patch,
+  })
+
+  const skillManifest = (patch: Record<string, unknown> = {}): unknown =>
+    SkillManifestSchema.parse({
+      schema: 1,
+      generatedAt: NOW,
+      sourceBrief: { id: 'F001', revision: 2 },
+      profileRevision: 3,
+      selections: [
+        {
+          component: 'web',
+          agent: 'builder',
+          skillIds: ['react-forms'],
+          reasons: ['tag "react" matched component skillTags'],
+          sourceBrief: { id: 'F001', revision: 2 },
+        },
+      ],
+      guidance: { 'react-forms': 'Prefer controlled inputs over refs.' },
+      concurrency: { mode: 'parallel', reason: 'components do not overlap' },
+      ...patch,
+    })
+
+  it("shows each of the build track's drafted agents its own accepted skills, including one with none, and leaves out a skill accepted only for an off-track role", async () => {
+    installStorage(memoryStorage(JSON.stringify({ activePlan: 'P001' })))
+    serve({
+      '/api/plans/P001': {
+        id: 'P001',
+        title: 'A plan',
+        approval: null,
+        body: '',
+        review: null,
+        stories: [detailStory({ id: 'P001-S01', title: 'One' })],
+      },
+      '/api/config': configView({
+        tracks: { build: { required: ['builder'], available: ['scout'], max_cycles: 5 } },
+      }),
+      '/api/skills': {
+        packages: [],
+        unreadable: [],
+        acceptances: [
+          acceptance({ skillId: 'react-forms', agents: ['builder'] }),
+          // `planner` is a real, valid role — dynamic skill selection routes
+          // to it from a feature brief — but the `build` track's own
+          // `required`/`available` never lists it, so this has nothing to do
+          // with this story's track and must appear under neither agent.
+          acceptance({ skillId: 'brief-writer', agents: ['planner'] }),
+        ],
+      },
+    })
+    mountDoc()
+    reveal('panel-stories')
+    const stories = mountStories()
+    draw(emptySnapshot({ plans: [plan({ id: 'P001', stories: [story({ id: 'P001-S01' })] })] }))
+    await vi.waitFor(() => expect(document.querySelectorAll('#stories-list .story')).toHaveLength(1))
+
+    stories.openTab('P001-S01')
+    await vi.waitFor(() =>
+      expect(document.querySelectorAll('#story-open-skills-agents .skill-agent')).toHaveLength(2),
+    )
+
+    const rows = [...document.querySelectorAll('#story-open-skills-agents .skill-agent')]
+    const builderRow = rows.find((row) => row.querySelector('h4')?.textContent === 'builder') as HTMLElement
+    const scoutRow = rows.find((row) => row.querySelector('h4')?.textContent === 'scout') as HTMLElement
+    expect(builderRow).toBeDefined()
+    expect(scoutRow).toBeDefined()
+
+    expect(cells('#story-open-skills-agents .skill-agent h4')).toEqual(['builder', 'scout'])
+    expect([...builderRow.querySelectorAll('.acceptance li')].map((node) => node.textContent)).toEqual([
+      'react-forms',
+    ])
+    expect((builderRow.querySelector('[data-slot="none"]') as HTMLElement).hidden).toBe(true)
+
+    // `scout` is drafted (`available`) but this project has accepted nothing
+    // that names it — the empty tell, not a silently blank list.
+    expect(scoutRow.querySelectorAll('.acceptance li')).toHaveLength(0)
+    expect((scoutRow.querySelector('[data-slot="none"]') as HTMLElement).hidden).toBe(false)
+    expect(scoutRow.querySelector('[data-slot="none"]')?.textContent).toBe(english['story.skills.agentNone'])
+
+    expect(document.querySelector('#story-open-skills-agents')?.textContent).not.toContain('brief-writer')
+  })
+
+  it('flags an off-track agent, a disabled acceptance and an incompatible one — never a fourth invented reason, and says so when nothing is flagged', async () => {
+    installStorage(memoryStorage(JSON.stringify({ activePlan: 'P001' })))
+    serve({
+      '/api/plans/P001': {
+        id: 'P001',
+        title: 'A plan',
+        approval: null,
+        body: '',
+        review: null,
+        stories: [detailStory({ id: 'P001-S01', title: 'One' })],
+      },
+      '/api/config': configView({ tracks: { build: { required: ['builder'], max_cycles: 5 } } }),
+      '/api/skills': {
+        packages: [],
+        unreadable: [],
+        acceptances: [
+          acceptance({ skillId: 'clean-skill', agents: ['builder'] }),
+          acceptance({ skillId: 'mixed-role', agents: ['builder', 'planner'] }),
+          acceptance({ skillId: 'disabled-skill', agents: ['builder'], status: 'disabled' }),
+          acceptance({ skillId: 'incompatible-skill', agents: ['builder'], compatible: false }),
+        ],
+      },
+    })
+    mountDoc()
+    reveal('panel-stories')
+    const stories = mountStories()
+    draw(emptySnapshot({ plans: [plan({ id: 'P001', stories: [story({ id: 'P001-S01' })] })] }))
+    await vi.waitFor(() => expect(document.querySelectorAll('#stories-list .story')).toHaveLength(1))
+
+    stories.openTab('P001-S01')
+    await vi.waitFor(() =>
+      expect(document.querySelectorAll('#story-open-skills-warnings .skill-warning')).toHaveLength(3),
+    )
+    expect((document.getElementById('story-open-skills-warnings-empty') as HTMLElement).hidden).toBe(true)
+
+    const rows = [...document.querySelectorAll('#story-open-skills-warnings .skill-warning')]
+    const byId = (id: string): HTMLElement =>
+      rows.find((row) => row.querySelector('code')?.textContent === id) as HTMLElement
+
+    const mixed = byId('mixed-role')
+    expect((mixed.querySelector('[data-slot="offTrack"]') as HTMLElement).hidden).toBe(false)
+    expect(mixed.querySelector('[data-slot="offTrack"]')?.textContent).toContain('planner')
+    expect((mixed.querySelector('[data-slot="notActive"]') as HTMLElement).hidden).toBe(true)
+    expect((mixed.querySelector('[data-slot="notCompatible"]') as HTMLElement).hidden).toBe(true)
+
+    const disabled = byId('disabled-skill')
+    expect((disabled.querySelector('[data-slot="notActive"]') as HTMLElement).hidden).toBe(false)
+    expect(disabled.querySelector('[data-slot="notActive"]')?.textContent).toBe(english['story.skills.warnDisabled'])
+    expect((disabled.querySelector('[data-slot="offTrack"]') as HTMLElement).hidden).toBe(true)
+
+    const incompatible = byId('incompatible-skill')
+    expect((incompatible.querySelector('[data-slot="notCompatible"]') as HTMLElement).hidden).toBe(false)
+    expect(incompatible.querySelector('[data-slot="notCompatible"]')?.textContent).toBe(
+      english['story.skills.warnIncompatible'],
+    )
+
+    // The one clean acceptance never appears in the warnings list at all.
+    expect(document.querySelector('#story-open-skills-warnings')?.textContent).not.toContain('clean-skill')
+
+    // The same story, now with nothing left to flag: the empty tell, not a
+    // list that just looks done loading. Warnings are project-wide (every
+    // drafted agent against this project's whole acceptance table), not
+    // per-story, so re-serving `/api/skills` and bumping its own revision —
+    // never `revisions.plans` — is what this project's own transport rule
+    // says has to move it (`web/revision.ts:84`).
+    serve({
+      '/api/plans/P001': {
+        id: 'P001',
+        title: 'A plan',
+        approval: null,
+        body: '',
+        review: null,
+        stories: [detailStory({ id: 'P001-S01', title: 'One' })],
+      },
+      '/api/config': configView({ tracks: { build: { required: ['builder'], max_cycles: 5 } } }),
+      '/api/skills': {
+        packages: [],
+        unreadable: [],
+        acceptances: [acceptance({ skillId: 'clean-skill', agents: ['builder'] })],
+      },
+    })
+    draw(
+      emptySnapshot({
+        plans: [plan({ id: 'P001', stories: [story({ id: 'P001-S01' })] })],
+        revisions: { ...emptySnapshot().revisions, skills: 'r2' },
+      }),
+    )
+    await vi.waitFor(() =>
+      expect((document.getElementById('story-open-skills-warnings-empty') as HTMLElement).hidden).toBe(false),
+    )
+    expect(document.getElementById('story-open-skills-warnings-empty')?.textContent).toBe(
+      english['story.skills.warningsNone'],
+    )
+    expect(document.querySelectorAll('#story-open-skills-warnings .skill-warning')).toHaveLength(0)
+  })
+
+  it("draws what the story's evidence run actually pinned, and keeps the honesty line about the pinning gap on screen", async () => {
+    installStorage(memoryStorage(JSON.stringify({ activePlan: 'P001' })))
+    serve({
+      '/api/plans/P001': {
+        id: 'P001',
+        title: 'A plan',
+        approval: null,
+        body: '',
+        review: null,
+        stories: [
+          detailStory({ id: 'P001-S01', title: 'One', status: 'done', evidence: '2026-07-28-001--P001-S01--build' }),
+        ],
+      },
+      '/api/runs/2026-07-28-001--P001-S01--build/skills': skillManifest(),
+    })
+    mountDoc()
+    reveal('panel-stories')
+    const stories = mountStories()
+    draw(emptySnapshot({ plans: [plan({ id: 'P001', stories: [story({ id: 'P001-S01', status: 'done' })] })] }))
+    await vi.waitFor(() => expect(document.querySelectorAll('#stories-list .story')).toHaveLength(1))
+
+    stories.openTab('P001-S01')
+    await vi.waitFor(() =>
+      expect((document.getElementById('story-open-skills-pinned') as HTMLElement).hidden).toBe(false),
+    )
+
+    expect((document.getElementById('story-open-skills-no-evidence') as HTMLElement).hidden).toBe(true)
+    expect((document.getElementById('story-open-skills-pinned-none') as HTMLElement).hidden).toBe(true)
+    // Always on screen, whether or not this particular run pinned anything —
+    // it explains why the block is usually empty, not that this one is.
+    expect(document.getElementById('story-open-skills-hole')).not.toBeNull()
+
+    expect(document.getElementById('story-open-skills-pinned-brief')?.textContent).toBe('F001@2')
+    expect(document.getElementById('story-open-skills-pinned-profile')?.textContent).toBe('3')
+    expect(document.getElementById('story-open-skills-pinned-concurrency')?.textContent).toBe(
+      english['manifest.mode.parallel'],
+    )
+
+    const card = document.querySelector('#story-open-skills-pinned-selections .component') as HTMLElement
+    expect(card.querySelector('[data-slot="component"]')?.textContent).toBe('web')
+    expect(card.querySelector('[data-slot="agent"]')?.textContent).toBe('builder')
+    const skillRow = card.querySelector('.rule') as HTMLElement
+    expect(skillRow.querySelector('[data-slot="skillId"]')?.textContent).toBe('react-forms')
+    expect(skillRow.querySelector('[data-slot="reason"]')?.textContent).toContain('react')
+  })
+
+  it('says there is no evidence run yet for a story that has never finished one', async () => {
+    installStorage(memoryStorage(JSON.stringify({ activePlan: 'P001' })))
+    serve({
+      '/api/plans/P001': {
+        id: 'P001',
+        title: 'A plan',
+        approval: null,
+        body: '',
+        review: null,
+        stories: [detailStory({ id: 'P001-S01', title: 'One', evidence: null })],
+      },
+    })
+    mountDoc()
+    reveal('panel-stories')
+    const stories = mountStories()
+    draw(emptySnapshot({ plans: [plan({ id: 'P001', stories: [story({ id: 'P001-S01' })] })] }))
+    await vi.waitFor(() => expect(document.querySelectorAll('#stories-list .story')).toHaveLength(1))
+
+    stories.openTab('P001-S01')
+    await vi.waitFor(() => expect(document.getElementById('story-open-title')?.textContent).toBe('P001-S01 — One'))
+
+    expect((document.getElementById('story-open-skills-no-evidence') as HTMLElement).hidden).toBe(false)
+    expect(document.getElementById('story-open-skills-no-evidence')?.textContent).toBe(
+      english['story.skills.pinnedNoEvidence'],
+    )
+    expect((document.getElementById('story-open-skills-pinned') as HTMLElement).hidden).toBe(true)
+    expect((document.getElementById('story-open-skills-pinned-none') as HTMLElement).hidden).toBe(true)
+    expect(document.getElementById('story-open-skills-hole')).not.toBeNull()
+  })
+
+  it("says a finished run pinned no manifest — the ordinary case for a story build, since /mjloop:build names a story rather than a feature", async () => {
+    installStorage(memoryStorage(JSON.stringify({ activePlan: 'P001' })))
+    serve({
+      '/api/plans/P001': {
+        id: 'P001',
+        title: 'A plan',
+        approval: null,
+        body: '',
+        review: null,
+        stories: [detailStory({ id: 'P001-S01', title: 'One', status: 'done', evidence: 'r1' })],
+      },
+      '/api/runs/r1/skills': null,
+    })
+    mountDoc()
+    reveal('panel-stories')
+    const stories = mountStories()
+    draw(emptySnapshot({ plans: [plan({ id: 'P001', stories: [story({ id: 'P001-S01', status: 'done' })] })] }))
+    await vi.waitFor(() => expect(document.querySelectorAll('#stories-list .story')).toHaveLength(1))
+
+    stories.openTab('P001-S01')
+    await vi.waitFor(() =>
+      expect((document.getElementById('story-open-skills-pinned-none') as HTMLElement).hidden).toBe(false),
+    )
+    expect(document.getElementById('story-open-skills-pinned-none')?.textContent).toBe(
+      english['story.skills.pinnedNone'],
+    )
+    expect((document.getElementById('story-open-skills-no-evidence') as HTMLElement).hidden).toBe(true)
+    expect((document.getElementById('story-open-skills-pinned') as HTMLElement).hidden).toBe(true)
   })
 })
 

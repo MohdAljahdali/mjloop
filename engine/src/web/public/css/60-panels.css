@@ -1623,12 +1623,14 @@ details summary {
    Shared by the dependency view below, which is the identical shape: a small
    uppercase label over its own list. */
 .story-open-runs,
-.story-open-deps {
+.story-open-deps,
+.story-open-skills {
   margin-block-start: 14px;
 }
 
 .story-open-runs h3,
-.story-open-deps h3 {
+.story-open-deps h3,
+.story-open-skills h3 {
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.1em;
@@ -1637,10 +1639,36 @@ details summary {
   margin: 0 0 8px;
 }
 
+.story-open-skills h4 {
+  font-size: 12px;
+  margin: 14px 0 6px;
+}
+
 .story-open-runs .empty,
-.story-open-deps .empty {
+.story-open-deps .empty,
+.story-open-skills .empty {
   padding: 10px 14px;
   margin: 0;
+}
+
+.skill-agents,
+.skill-warnings {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.skill-agent h4 {
+  margin: 0 0 4px;
+}
+
+.skill-warning {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .deps {

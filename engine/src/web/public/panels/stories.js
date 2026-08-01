@@ -17,9 +17,10 @@
  * function answers the filter, the ready block, the row's disabled state and
  * the count on the navigation, so the four cannot disagree.
  */
-import { attr, clone, cls, flag, label, phrase, verbatim } from '../ui/dom.js'
+import { attr, clone, cls, flag, label, phrase, translateStatic, verbatim } from '../ui/dom.js'
 import { pluralKey, t } from '../lib/i18n.js'
 import { feed } from '../lib/api.js'
+import { stamp } from '../lib/fmt.js'
 import { runKey, storyKey } from '../lib/keys.js'
 import { subscribe, value as planDoc } from '../lib/plandoc.js'
 import {
@@ -34,7 +35,20 @@ import {
   setStoryFilter,
   storyFilter,
 } from '../lib/selection.js'
-import { FILTERS, depTree, dependents, planIndex, readyIn, sift, statusIndex, unmet } from '../lib/stories.js'
+import {
+  FILTERS,
+  acceptancesFor,
+  depTree,
+  dependents,
+  draftedAgents,
+  planIndex,
+  readyIn,
+  relevantAcceptances,
+  sift,
+  skillWarnings,
+  statusIndex,
+  unmet,
+} from '../lib/stories.js'
 import { reconcile } from '../ui/list.js'
 import { mountWorktabs } from '../ui/worktabs.js'
 import { draw, register } from '../ui/render.js'
@@ -47,10 +61,26 @@ import { submit } from '../ui/writes.js'
  * @typedef {import('../../read.js').PlanDetail} PlanDetail
  * @typedef {import('../../read.js').StoryDetail} StoryDetail
  * @typedef {import('../../read.js').RunSummary} RunSummary
+ * @typedef {import('../../read.js').ConfigView} ConfigView
+ * @typedef {import('../../read.js').SkillsView} SkillsView
+ * @typedef {import('../../../schemas/skill-acceptance.js').ProjectSkillAcceptance} ProjectSkillAcceptance
+ * @typedef {import('../../../schemas/skill-selection.js').SkillManifest} SkillManifest
+ * @typedef {import('../../../schemas/skill-selection.js').SkillSelection} SkillSelection
  */
 
 /** How many buildable stories the start block lists before it says "and n more". */
 const READY_SHOWN = 6
+
+/**
+ * The one track a story ever runs against from this pane. `commands/build.md:6`
+ * ("Run the `build` track for: $ARGUMENTS") is the whole routing rule behind
+ * `/mjloop:build`, the same command `story-open-command` (below) already
+ * previews character for character — so this is a citation of that command's
+ * own hardcoded literal, not a guess at which track applies, and not a picker:
+ * unlike `panels/run.js`'s preflight estimate, which asks *before* a track is
+ * chosen, a story pane already knows.
+ */
+const STORY_TRACK = 'build'
 
 /**
  * @param {string} id
@@ -125,6 +155,21 @@ export function mountStories() {
   const runsEmpty = pick('story-open-runs-empty')
   const runsHost = pick('story-open-runs')
 
+  const skillsAgentsEmpty = pick('story-open-skills-agents-empty')
+  const skillsAgentsHost = pick('story-open-skills-agents')
+  const skillsWarningsEmpty = pick('story-open-skills-warnings-empty')
+  const skillsWarningsHost = pick('story-open-skills-warnings')
+  const pinnedNoEvidence = pick('story-open-skills-no-evidence')
+  const pinnedNone = pick('story-open-skills-pinned-none')
+  const pinnedBlock = pick('story-open-skills-pinned')
+  const pinnedBrief = pick('story-open-skills-pinned-brief')
+  const pinnedProfile = pick('story-open-skills-pinned-profile')
+  const pinnedConcurrency = pick('story-open-skills-pinned-concurrency')
+  const pinnedReason = pick('story-open-skills-pinned-reason')
+  const pinnedGenerated = pick('story-open-skills-pinned-generated')
+  const pinnedManifestEmpty = pick('story-open-skills-pinned-empty')
+  const pinnedSelections = pick('story-open-skills-pinned-selections')
+
   const listEmpty = pick('stories-empty')
   const host = pick('stories-list')
   const more = pick('stories-more')
@@ -162,6 +207,18 @@ export function mountStories() {
   let first = /** @type {string | null} */ (null)
 
   /**
+   * This story's own track-relevant skill acceptances, set by `drawSkills`
+   * before its `reconcile()` calls and read by the row factories those calls
+   * insert — the same pattern `statuses` above follows for `storyWaitRow`
+   * and `storyDepRow`, for the identical reason: a row factory has no other
+   * way to reach data that changed on a draw after the row itself was created
+   * and kept alive by `reconcile`'s own key-based reuse.
+   *
+   * @type {ProjectSkillAcceptance[]}
+   */
+  let skillAcceptances = []
+
+  /**
    * Every run on disk, for the open tab's execution history.
    *
    * `RunSummary.story` is parsed out of the run *directory name*
@@ -178,6 +235,74 @@ export function mountStories() {
     path: () => '/api/runs',
     onChange: () => draw(),
   })
+
+  /**
+   * `config.tracks.build`, for the agents it drafts. The whole document,
+   * exactly as `panels/run.js`'s own track picker reads it — there is no
+   * route that answers "one track's own shape" alone.
+   *
+   * @type {import('../lib/api.js').Feed<ConfigView>}
+   */
+  const config = feed({
+    dep: (state) => state.revisions.config,
+    path: () => '/api/config',
+    onChange: () => draw(),
+  })
+
+  /**
+   * This project's own skill acceptances — the library and this project's
+   * decision about each package, read-only. `web/writes.ts` denies the
+   * browser the write that would change this; `panels/skills.js` shows the
+   * whole project-wide table, and this feed is the same document filtered to
+   * one story's own track below.
+   *
+   * @type {import('../lib/api.js').Feed<SkillsView>}
+   */
+  const skillsView = feed({
+    dep: (state) => state.revisions.skills,
+    path: () => '/api/skills',
+    onChange: () => draw(),
+  })
+
+  /**
+   * The open tab's own pinned routing decision, or `null` while it has none.
+   *
+   * Two different nothings collapse into the same `null` here, same as
+   * `panels/run.js:150-159`'s identical feed for the *live* run: a story with
+   * no evidence run yet (`openStoryEvidence()` returns `null`, so `dep` does
+   * too — no fetch is even made) and an evidence run that simply pinned
+   * nothing, because `resolveSkillManifest` (`ops/run.ts:96`) only ever pins
+   * one when the caller named an approved feature and `/mjloop:build <story>`
+   * never does. `drawSkills` below tells the two apart from `story.evidence`
+   * directly, never from this feed alone.
+   *
+   * @type {import('../lib/api.js').Feed<SkillManifest | null>}
+   */
+  const skillManifest = feed({
+    dep: (state) => {
+      const evidence = openStoryEvidence()
+      return evidence === null ? null : `${evidence}:${state.revisions.runs}`
+    },
+    path: () => `/api/runs/${encodeURIComponent(openStoryEvidence() ?? '')}/skills`,
+    onChange: () => draw(),
+  })
+
+  /**
+   * The open tab's own story record's `evidence` field — the run directory
+   * `readSkillManifest` reads by id — or `null`. A function rather than a
+   * cached value: `dep` and `path` above are each called fresh against
+   * whatever the current document says, and caching the lookup in a shared
+   * variable written by only one of them would be the one place they could
+   * read two different stories in the same tick.
+   *
+   * @returns {string | null}
+   */
+  function openStoryEvidence() {
+    const id = activeStory()
+    if (id === null) return null
+    const story = (planDoc()?.stories ?? []).find((entry) => entry.id === id)
+    return story?.evidence ?? null
+  }
 
   // The document is fetched and ticked elsewhere; this panel only reads it.
   subscribe(() => draw())
@@ -197,6 +322,9 @@ export function mountStories() {
     node,
     update(state) {
       runs.update(state)
+      config.update(state)
+      skillsView.update(state)
+      skillManifest.update(state)
 
       const id = activePlan()
       const view = planDoc()
@@ -433,6 +561,226 @@ export function mountStories() {
     phrase(runsEmpty, 'story.runs.empty')
     flag(runsEmpty, 'hidden', storyRuns.length > 0)
     reconcile(runsHost, storyRuns, (entry) => runKey(entry.id), storyRunRow)
+
+    drawSkills(story)
+  }
+
+  /**
+   * Skills, inspection only — C7's whole scope. Activating a skill or
+   * accepting a component map changes what every later run is told, which is
+   * the write class `web/writes.ts`'s header permanently denies the browser,
+   * so there is nothing here to press, same as `panels/skills.js`'s identical
+   * header states for the project-wide table this filters to one story's own
+   * track.
+   *
+   * Two independent claims, kept visibly apart because they answer different
+   * questions and can each be true while the other is empty: what a drafted
+   * agent *could* use right now (this project's live acceptances, filtered to
+   * `STORY_TRACK`) against what a finished run *actually* routed (a manifest
+   * frozen at `runStart`, which — for a story run — is almost always nothing;
+   * `story.skills.hole` says why, unconditionally, so an empty block reads as
+   * the documented normal case rather than a bug in the page).
+   *
+   * @param {StoryDetail} story
+   */
+  function drawSkills(story) {
+    const track = config.value()?.parsed?.tracks?.[STORY_TRACK]
+    const drafted = draftedAgents(track)
+    flag(skillsAgentsEmpty, 'hidden', drafted.length > 0)
+    phrase(skillsAgentsEmpty, 'story.skills.noTrack')
+
+    // Set before either `reconcile()` call below inserts a row, exactly the
+    // order `statuses` (above) already relies on for `storyWaitRow` and
+    // `storyDepRow` — a row factory reads this closure, never a value passed
+    // through `reconcile`'s own item.
+    skillAcceptances = relevantAcceptances(skillsView.value()?.acceptances ?? [], drafted)
+    reconcile(skillsAgentsHost, drafted, (agent) => agent, agentSkillRow)
+
+    const warned = skillAcceptances
+      .map((acceptance) => ({ acceptance, warn: skillWarnings(acceptance, drafted) }))
+      .filter(({ warn }) => warn.offTrack.length > 0 || warn.notActive || warn.notCompatible)
+    flag(skillsWarningsEmpty, 'hidden', warned.length > 0)
+    phrase(skillsWarningsEmpty, 'story.skills.warningsNone')
+    reconcile(skillsWarningsHost, warned, (entry) => entry.acceptance.skillId, skillWarningRow)
+
+    drawPinnedManifest(story)
+  }
+
+  /**
+   * @returns {{ root: HTMLElement, update: (agent: string) => void }}
+   */
+  function agentSkillRow() {
+    const { root, slots } = clone('tpl-story-skill-agent')
+    return {
+      root,
+      /** @param {string} agent */
+      update(agent) {
+        const name = slots['agent']
+        if (name !== undefined) verbatim(name, agent)
+
+        const matches = acceptancesFor(skillAcceptances, agent)
+        const none = slots['none']
+        if (none !== undefined) {
+          flag(none, 'hidden', matches.length > 0)
+          phrase(none, 'story.skills.agentNone')
+        }
+
+        const host = slots['skills']
+        if (host !== undefined) {
+          // `tpl-acceptance` — the same bare bullet `story-open-acceptance`
+          // and `skills.js`'s `findings` list already clone for "one line of
+          // text per row"; a skill id here needs nothing more than that.
+          reconcile(host, matches, (acceptance) => acceptance.skillId, () => {
+            const row = clone('tpl-acceptance')
+            return {
+              root: row.root,
+              /** @param {ProjectSkillAcceptance} acceptance */
+              update(acceptance) {
+                verbatim(row.slots['text'] ?? row.root, acceptance.skillId)
+              },
+            }
+          })
+        }
+      },
+    }
+  }
+
+  /**
+   * @returns {{ root: HTMLElement, update: (entry: { acceptance: ProjectSkillAcceptance, warn: { offTrack: string[], notActive: boolean, notCompatible: boolean } }) => void }}
+   */
+  function skillWarningRow() {
+    const { root, slots } = clone('tpl-story-skill-warning')
+    return {
+      root,
+      /** @param {{ acceptance: ProjectSkillAcceptance, warn: { offTrack: string[], notActive: boolean, notCompatible: boolean } }} entry */
+      update({ acceptance, warn }) {
+        const skillId = slots['skillId']
+        if (skillId !== undefined) verbatim(skillId, acceptance.skillId)
+
+        const offTrack = slots['offTrack']
+        if (offTrack !== undefined) {
+          flag(offTrack, 'hidden', warn.offTrack.length === 0)
+          if (warn.offTrack.length > 0) {
+            phrase(offTrack, 'story.skills.warnOffTrack', { agents: warn.offTrack.join(', ') })
+          }
+        }
+        const notActive = slots['notActive']
+        if (notActive !== undefined) flag(notActive, 'hidden', !warn.notActive)
+        const notCompatible = slots['notCompatible']
+        if (notCompatible !== undefined) flag(notCompatible, 'hidden', !warn.notCompatible)
+
+        // The two static banners (`notActive`, `notCompatible`) carry their
+        // own `data-i18n` in the markup, same as `skills.js`'s cards — only
+        // `offTrack` needs a `{agents}` hole, so only it is written above.
+        translateStatic(root)
+      },
+    }
+  }
+
+  /**
+   * The routing decision the open story's evidence run actually pinned —
+   * hidden entirely while there is none, for the two different reasons
+   * `story-open-skills-hole` and `story-open-skills-no-evidence` state on
+   * screen: no evidence run yet, or a finished run that pinned nothing
+   * because it named no approved feature.
+   *
+   * @param {StoryDetail} story
+   */
+  function drawPinnedManifest(story) {
+    const hasEvidence = story.evidence !== null
+    flag(pinnedNoEvidence, 'hidden', hasEvidence)
+    phrase(pinnedNoEvidence, 'story.skills.pinnedNoEvidence')
+
+    // `skillManifest`'s own feed already answers `null` for both "no evidence
+    // run" (its `dep` returns `null`, so it never fetches) and "fetched, and
+    // the run pinned nothing" — read `story.evidence` directly rather than the
+    // feed to tell the two apart, exactly as this function's own doc says.
+    const view = hasEvidence ? skillManifest.value() : null
+    flag(pinnedNone, 'hidden', !hasEvidence || view !== null)
+    phrase(pinnedNone, 'story.skills.pinnedNone')
+
+    flag(pinnedBlock, 'hidden', view === null)
+    if (view === null) return
+
+    verbatim(pinnedBrief, `${view.sourceBrief.id}@${view.sourceBrief.revision}`)
+    verbatim(pinnedProfile, view.profileRevision)
+    phrase(pinnedConcurrency, `manifest.mode.${view.concurrency.mode}`)
+    verbatim(pinnedReason, view.concurrency.reason)
+    verbatim(pinnedGenerated, stamp(view.generatedAt))
+
+    const selections = view.selections
+    flag(pinnedManifestEmpty, 'hidden', selections.length > 0)
+    phrase(pinnedManifestEmpty, 'manifest.empty')
+    reconcile(
+      pinnedSelections,
+      selections,
+      (selection) => `${selection.component}/${selection.agent}`,
+      () => pinnedSelectionCard(view),
+    )
+  }
+
+  /**
+   * One (component, agent) row — the identical shape `panels/run.js:567-594`
+   * draws for the *live* run's manifest, off the same two templates
+   * (`tpl-selection`, `tpl-selected-skill`). Not shared as one function: the
+   * two panels read two different feeds (this one a story's evidence run,
+   * that one `snapshot.state.run_id`) and `run.js`'s manifest block has no
+   * test of its own to catch a shared helper drifting under one caller and
+   * not the other, so duplicating the ~20 lines is the safer trade here.
+   *
+   * @param {SkillManifest} view
+   */
+  function pinnedSelectionCard(view) {
+    const { root, slots } = clone('tpl-selection')
+    return {
+      root,
+      /** @param {SkillSelection} selection */
+      update(selection) {
+        const component = slots['component']
+        if (component !== undefined) verbatim(component, selection.component)
+        const agent = slots['agent']
+        if (agent !== undefined) verbatim(agent, selection.agent)
+
+        const none = slots['none']
+        if (none !== undefined) {
+          flag(none, 'hidden', selection.skillIds.length > 0)
+          phrase(none, 'manifest.noneSelected')
+        }
+
+        const host = slots['skills']
+        if (host === undefined) return
+        const rows = selection.skillIds.map((skillId, index) => ({
+          skillId,
+          reason: selection.reasons[index] ?? '',
+          guidance: view.guidance[skillId] ?? '',
+        }))
+        reconcile(host, rows, (row) => row.skillId, pinnedSkillRow)
+      },
+    }
+  }
+
+  function pinnedSkillRow() {
+    const { root, slots } = clone('tpl-selected-skill')
+    return {
+      root,
+      /** @param {{ skillId: string, reason: string, guidance: string }} row */
+      update(row) {
+        const skillId = slots['skillId']
+        if (skillId !== undefined) verbatim(skillId, row.skillId)
+        const reason = slots['reason']
+        if (reason !== undefined) verbatim(reason, row.reason)
+
+        const guidance = slots['guidance']
+        if (guidance !== undefined) verbatim(guidance, row.guidance)
+        // The schema guarantees every selected skill carries guidance, so an
+        // empty one means a manifest written before that refinement existed.
+        // Hidden rather than shown as an empty disclosure.
+        const details = slots['guidanceDetails']
+        if (details !== undefined) flag(details, 'hidden', row.guidance === '')
+
+        translateStatic(root)
+      },
+    }
   }
 
   /**

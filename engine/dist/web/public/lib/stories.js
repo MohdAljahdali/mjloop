@@ -276,6 +276,80 @@ export function depTree(story, byId) {
 }
 
 /**
+ * The agents a track's `required`/`available` say a working cycle may draft —
+ * never `closing`, which runs once *after* the run passes and is never inside
+ * a working cycle (`schemas/config.ts:71-80`, the same distinction
+ * `draftable` draws at `schemas/config.ts:136` for `map.drafted_by`).
+ * Deduplicated, required first: the two sets are disjoint by convention but
+ * `TrackSchema` never asserts that, so a name in both would otherwise draw
+ * its per-agent block twice. An absent track — deleted from `config.yaml`, or
+ * the config document not yet fetched — drafts nobody rather than throwing.
+ *
+ * @param {import('../../../schemas/config.js').Track | undefined} track
+ * @returns {string[]}
+ */
+export function draftedAgents(track) {
+  if (track === undefined) return []
+  return [...new Set([...track.required, ...track.available])]
+}
+
+/**
+ * This project's own skill acceptances that name at least one agent `drafted`
+ * actually drafts — the set a reader of one story's track has any reason to
+ * look at here.
+ *
+ * An acceptance naming only agents outside `drafted` (`planner`, say, which
+ * no track's `required`/`available` this page ever reads lists — dynamic
+ * skill selection routes it from a feature brief, not from a track) can be
+ * entirely correct on its own terms; it simply has nothing to do with this
+ * story's track, and is left out rather than drawn as a warning about
+ * nothing.
+ *
+ * @param {readonly import('../../../schemas/skill-acceptance.js').ProjectSkillAcceptance[]} acceptances
+ * @param {readonly string[]} drafted
+ * @returns {import('../../../schemas/skill-acceptance.js').ProjectSkillAcceptance[]}
+ */
+export function relevantAcceptances(acceptances, drafted) {
+  const draftedSet = new Set(drafted)
+  return acceptances.filter((acceptance) => acceptance.agents.some((agent) => draftedSet.has(agent)))
+}
+
+/**
+ * The accepted skills naming one drafted agent, in acceptance order.
+ *
+ * @param {readonly import('../../../schemas/skill-acceptance.js').ProjectSkillAcceptance[]} acceptances
+ * @param {string} agent
+ * @returns {import('../../../schemas/skill-acceptance.js').ProjectSkillAcceptance[]}
+ */
+export function acceptancesFor(acceptances, agent) {
+  return acceptances.filter((acceptance) => acceptance.agents.includes(agent))
+}
+
+/**
+ * The three pre-run facts one acceptance's own fields can support — never a
+ * fourth invented one, and never a claim this project has no field for (there
+ * is no permission model for an agent in this engine, so this deliberately
+ * stops at exactly what `schemas/skill-acceptance.ts` records: `agents`
+ * against the track's own drafted set, `status`, `compatible`).
+ *
+ * `offTrack` names every agent this acceptance lists that `drafted` does
+ * not, not only the first — an acceptance wrongly naming two roles a track
+ * never drafts should say both, not silently pick one.
+ *
+ * @param {import('../../../schemas/skill-acceptance.js').ProjectSkillAcceptance} acceptance
+ * @param {readonly string[]} drafted
+ * @returns {{ offTrack: string[], notActive: boolean, notCompatible: boolean }}
+ */
+export function skillWarnings(acceptance, drafted) {
+  const draftedSet = new Set(drafted)
+  return {
+    offTrack: acceptance.agents.filter((agent) => !draftedSet.has(agent)),
+    notActive: acceptance.status !== 'active',
+    notCompatible: !acceptance.compatible,
+  }
+}
+
+/**
  * The stories a filter and a search box leave standing.
  *
  * `ready` is not a story status — it is a status *and* a dependency check, and

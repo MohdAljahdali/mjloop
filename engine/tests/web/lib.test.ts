@@ -5,10 +5,14 @@ import { installStorage, read, write } from '../../src/web/public/lib/local.js'
 import type { OpenStory } from '../../src/web/public/lib/local.js'
 import { routeFrom } from '../../src/web/public/lib/router.js'
 import {
+  acceptancesFor,
+  draftedAgents,
   planStatus,
   ready,
   readyIn,
+  relevantAcceptances,
   sift,
+  skillWarnings,
   statusIndex,
   tally,
   unmet,
@@ -16,6 +20,8 @@ import {
 import { deriveEvents } from '../../src/web/public/lib/notifications.js'
 import { emptySnapshot } from './helpers/page.js'
 import type { Job, PlanView, StoryView } from '../../src/web/protocol.js'
+import type { Track } from '../../src/schemas/config.js'
+import type { ProjectSkillAcceptance } from '../../src/schemas/skill-acceptance.js'
 
 /**
  * `lib/` is DOM-free so it is testable here, under the suite's existing
@@ -276,6 +282,95 @@ describe('story derivations', () => {
     expect(sift(stories, 'draw pane', '', statuses).map((entry) => entry.id)).toEqual(['P001-S03'])
     expect(sift(stories, 'S03', '', statuses).map((entry) => entry.id)).toEqual(['P001-S03'])
     expect(sift(stories, '', '', statuses)).toHaveLength(3)
+  })
+})
+
+const track = (patch: Partial<Track> = {}): Track => ({
+  required: ['builder', 'verifier'],
+  available: ['scout', 'critic'],
+  closing: ['docs'],
+  order: [],
+  max_cycles: 5,
+  ...patch,
+})
+
+const acceptance = (patch: Partial<ProjectSkillAcceptance> & { skillId: string }): ProjectSkillAcceptance => ({
+  schema: 1,
+  packageId: 'p',
+  digest: 'a'.repeat(64),
+  components: [],
+  agents: ['builder'],
+  tags: [],
+  updatePolicy: 'auto',
+  status: 'active',
+  compatible: true,
+  acceptedBy: 'dashboard:mohd',
+  acceptedAt: '2026-07-28T09:00:00.000Z',
+  ...patch,
+})
+
+describe('skill inspection (C7)', () => {
+  it("drafts required and available, never closing, deduplicated and required-first — the same distinction schemas/config.ts:71-80 draws for a working cycle", () => {
+    expect(draftedAgents(track())).toEqual(['builder', 'verifier', 'scout', 'critic'])
+    // `docs` is `closing`: it runs once after the run passes, never inside a
+    // working cycle, so it must never appear here.
+    expect(draftedAgents(track())).not.toContain('docs')
+    // An absent track — deleted from config.yaml, or not fetched yet — drafts
+    // nobody rather than throwing.
+    expect(draftedAgents(undefined)).toEqual([])
+    // A name in both `required` and `available` (not asserted disjoint by
+    // `TrackSchema`) still drafts once.
+    expect(draftedAgents(track({ required: ['builder'], available: ['builder', 'scout'] }))).toEqual([
+      'builder',
+      'scout',
+    ])
+  })
+
+  it('keeps only the acceptances that name a drafted agent, and reads one drafted agent out of that set', () => {
+    const drafted = draftedAgents(track())
+    const acceptances = [
+      acceptance({ skillId: 's1', agents: ['builder'] }),
+      // `planner` is a real, valid role — dynamic skill selection routes to
+      // it from a feature brief — but no track's `required`/`available` this
+      // page reads ever lists it, so an acceptance naming only `planner` has
+      // nothing to do with this story's track and must be left out.
+      acceptance({ skillId: 's2', agents: ['planner'] }),
+      acceptance({ skillId: 's3', agents: ['verifier', 'planner'] }),
+    ]
+    const relevant = relevantAcceptances(acceptances, drafted)
+    expect(relevant.map((entry) => entry.skillId)).toEqual(['s1', 's3'])
+
+    // The agent-to-skill filter, including the case an agent has none —
+    // `scout` is drafted but no acceptance in this project names it.
+    expect(acceptancesFor(relevant, 'builder').map((entry) => entry.skillId)).toEqual(['s1'])
+    expect(acceptancesFor(relevant, 'verifier').map((entry) => entry.skillId)).toEqual(['s3'])
+    expect(acceptancesFor(relevant, 'scout')).toEqual([])
+  })
+
+  it('supports exactly three pre-run warnings, each off one field the acceptance record actually carries', () => {
+    const drafted = draftedAgents(track())
+
+    // Clean: none of the three conditions fire.
+    expect(skillWarnings(acceptance({ skillId: 's1' }), drafted)).toEqual({
+      offTrack: [],
+      notActive: false,
+      notCompatible: false,
+    })
+
+    // Off-track names every offending agent, not only the first.
+    expect(
+      skillWarnings(acceptance({ skillId: 's2', agents: ['builder', 'planner', 'triager'] }), drafted).offTrack,
+    ).toEqual(['planner', 'triager'])
+
+    expect(skillWarnings(acceptance({ skillId: 's3', status: 'disabled' }), drafted).notActive).toBe(true)
+    expect(skillWarnings(acceptance({ skillId: 's4', compatible: false }), drafted).notCompatible).toBe(true)
+
+    // All three can fire on the same acceptance at once.
+    const worst = skillWarnings(
+      acceptance({ skillId: 's5', agents: ['planner'], status: 'disabled', compatible: false }),
+      drafted,
+    )
+    expect(worst).toEqual({ offTrack: ['planner'], notActive: true, notCompatible: true })
   })
 })
 

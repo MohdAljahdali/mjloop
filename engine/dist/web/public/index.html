@@ -530,6 +530,61 @@
                 <p class="empty" id="story-open-runs-empty" hidden></p>
                 <ul class="runs" id="story-open-runs"></ul>
               </section>
+
+              <!-- C7: inspection only, and permanently so — activating a skill
+                   or accepting a component map changes what every later run is
+                   told, the write class `web/writes.ts`'s header denies the
+                   browser. Same header `panels/skills.js` carries for its own
+                   project-wide table, which this section filters to the
+                   agents this story's own `build` track would draft. -->
+              <section class="story-open-skills">
+                <h3 data-i18n="story.skills.title"></h3>
+                <p class="hint" data-i18n="story.skills.why"></p>
+                <p class="empty" id="story-open-skills-agents-empty" hidden></p>
+                <ul class="skill-agents" id="story-open-skills-agents"></ul>
+
+                <h4 data-i18n="story.skills.warningsTitle"></h4>
+                <p class="empty" id="story-open-skills-warnings-empty" hidden></p>
+                <ul class="skill-warnings" id="story-open-skills-warnings"></ul>
+
+                <h3 data-i18n="story.skills.pinnedTitle"></h3>
+                <!-- Always on screen, not a conditional warning:
+                     `ops/run.ts`'s `resolveSkillManifest` (:96) pins a
+                     manifest only when the caller names an approved feature,
+                     and `/mjloop:build <story>` (`commands/build.md:6`) never
+                     does — so this block reads empty for almost every story
+                     anybody opens, and a reader who does not already know
+                     that reads it as a bug in the page rather than the
+                     documented shape of dynamic skill selection today. -->
+                <p class="hint" id="story-open-skills-hole" data-i18n="story.skills.hole"></p>
+                <p class="empty" id="story-open-skills-no-evidence" hidden></p>
+                <p class="empty" id="story-open-skills-pinned-none" hidden></p>
+                <div id="story-open-skills-pinned" hidden>
+                  <dl class="facts">
+                    <div class="fact">
+                      <dt data-i18n="manifest.brief"></dt>
+                      <dd><code id="story-open-skills-pinned-brief"></code></dd>
+                    </div>
+                    <div class="fact">
+                      <dt data-i18n="manifest.profile"></dt>
+                      <dd><code id="story-open-skills-pinned-profile"></code></dd>
+                    </div>
+                    <div class="fact">
+                      <dt data-i18n="manifest.concurrency"></dt>
+                      <dd>
+                        <span id="story-open-skills-pinned-concurrency"></span>
+                        <span class="hint" id="story-open-skills-pinned-reason"></span>
+                      </dd>
+                    </div>
+                    <div class="fact">
+                      <dt data-i18n="manifest.generated"></dt>
+                      <dd id="story-open-skills-pinned-generated"></dd>
+                    </div>
+                  </dl>
+                  <p class="empty" id="story-open-skills-pinned-empty" hidden></p>
+                  <div id="story-open-skills-pinned-selections"></div>
+                </div>
+              </section>
             </section>
 
             <section class="block">
@@ -1297,6 +1352,30 @@
       <li class="dep-row" role="treeitem">
         <code class="story-id" data-slot="id"></code>
         <span class="story-status" data-slot="status"></span>
+      </li>
+    </template>
+
+    <!-- One drafted agent's own accepted skills — `tpl-acceptance` (below)
+         reused for the bullet list itself, the same bare-bullet shape
+         `story-open-acceptance` and `skills.js`'s package findings already
+         clone, because a skill id here needs nothing more than that. -->
+    <template id="tpl-story-skill-agent">
+      <li class="skill-agent">
+        <h4><code data-slot="agent"></code></h4>
+        <p class="empty" data-slot="none" hidden></p>
+        <ul class="acceptance" data-slot="skills"></ul>
+      </li>
+    </template>
+
+    <!-- One accepted skill this story's track has reason to look at, flagged
+         for one of exactly three facts its own record can support
+         (`lib/stories.js`'s `skillWarnings`) — never a fourth invented one. -->
+    <template id="tpl-story-skill-warning">
+      <li class="skill-warning">
+        <code data-slot="skillId"></code>
+        <p class="banner warn" data-slot="offTrack" hidden></p>
+        <p class="banner warn" data-slot="notActive" hidden data-i18n="story.skills.warnDisabled"></p>
+        <p class="banner warn" data-slot="notCompatible" hidden data-i18n="story.skills.warnIncompatible"></p>
       </li>
     </template>
 
