@@ -383,7 +383,25 @@
                      one shared terminal to show one job's transcript. -->
                 <button type="button" id="story-open-attach" data-act="job-attach" hidden></button>
               </header>
+              <!-- The exact command a press of Build sends for this story —
+                   character for character what `bus.on('story-run', ...)`
+                   (app.js) composes — shown whether or not the story can build
+                   right now, because it is what Run *would* do the moment it
+                   can. -->
+              <p class="story-open-command">
+                <span data-i18n="story.command.label"></span>
+                <code id="story-open-command"></code>
+              </p>
+              <!-- The readiness inspector. `lib/stories.js`'s `readyIn` is the
+                   rule: `todo` and every dependency `done`. A story that is not
+                   ready is in exactly one of four states; three reuse
+                   `story.notBuildable.*` (`story-open-meta`, below), already
+                   carried by the row's disabled Build button. The fourth —
+                   waiting on named dependencies — gets a row per dependency
+                   here instead of the composed sentence this replaced, its id
+                   through `verbatim` and its status through `phrase`. -->
               <p class="story-open-meta" id="story-open-meta"></p>
+              <ul class="story-open-waits" id="story-open-waits" hidden></ul>
               <dl class="facts" id="story-open-facts"></dl>
               <details id="story-open-accept-details" hidden>
                 <summary id="story-open-accept-summary"></summary>
@@ -1123,6 +1141,16 @@
         <span class="chip" data-slot="track"></span>
         <span data-slot="cycles"></span>
         <span class="res" data-slot="outcome"></span>
+      </li>
+    </template>
+
+    <!-- One unmet dependency, in the story pane's readiness inspector: the id
+         it is waiting on and that id's own current status, never composed into
+         a sentence. -->
+    <template id="tpl-story-wait">
+      <li class="wait-row">
+        <code class="story-id" data-slot="id"></code>
+        <span class="story-status" data-slot="status"></span>
       </li>
     </template>
 

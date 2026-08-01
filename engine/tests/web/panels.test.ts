@@ -597,6 +597,118 @@ describe('stories', () => {
     expect((document.getElementById('story-open-runs-empty') as HTMLElement).hidden).toBe(false)
   })
 
+  /**
+   * A plan built for the readiness inspector: two dependencies in different
+   * non-`done` statuses, a story that waits on both, and a story with nothing
+   * standing in its way. `story` (the manifest fixture) drives the readiness
+   * check `unmet()` reads; `detailStory` drives the read side the pane draws.
+   */
+  async function openReadinessFixture(): Promise<ReturnType<typeof mountStories>> {
+    installStorage(memoryStorage(JSON.stringify({ activePlan: 'P001' })))
+    serve({
+      '/api/plans/P001': {
+        id: 'P001',
+        title: 'A plan',
+        approval: null,
+        body: '',
+        review: null,
+        stories: [
+          detailStory({ id: 'P001-S01', title: 'One', status: 'doing' }),
+          detailStory({ id: 'P001-S02', title: 'Two', status: 'blocked' }),
+          detailStory({ id: 'P001-S03', title: 'Three', depends_on: ['P001-S01', 'P001-S02'] }),
+          detailStory({ id: 'P001-S04', title: 'Four' }),
+          // A typo'd `depends_on`: `P001-S99` names no story in this plan.
+          // `assertDependenciesResolve` (ops/plan.ts:239-250) refuses this at
+          // write time, but a hand-edited story file on disk is exactly the
+          // case that check exists for, and `unmet()` still has to answer.
+          detailStory({ id: 'P001-S05', title: 'Five', depends_on: ['P001-S99'] }),
+        ],
+      },
+    })
+    mountDoc()
+    reveal('panel-stories')
+    const stories = mountStories()
+    draw(
+      emptySnapshot({
+        plans: [
+          plan({
+            id: 'P001',
+            stories: [
+              story({ id: 'P001-S01', status: 'doing' }),
+              story({ id: 'P001-S02', status: 'blocked' }),
+              story({ id: 'P001-S03', depends_on: ['P001-S01', 'P001-S02'] }),
+              story({ id: 'P001-S04' }),
+              story({ id: 'P001-S05', depends_on: ['P001-S99'] }),
+            ],
+          }),
+        ],
+      }),
+    )
+    await vi.waitFor(() => expect(document.querySelectorAll('#stories-list .story')).toHaveLength(5))
+    return stories
+  }
+
+  it('reads out each unmet dependency with its own status, and previews the exact Build command', async () => {
+    const stories = await openReadinessFixture()
+
+    // Blocked by two dependencies in two different statuses: the inspector
+    // names both, structurally — never the composed "Waits on P001-S01,
+    // P001-S02" sentence this replaced.
+    stories.openTab('P001-S03')
+    await vi.waitFor(() => expect(document.getElementById('story-open-title')?.textContent).toBe('P001-S03 — Three'))
+    expect((document.getElementById('story-open-waits') as HTMLElement).hidden).toBe(false)
+    const rows = [...document.querySelectorAll('#story-open-waits .wait-row')]
+    expect(rows.map((row) => row.querySelector('.story-id')?.textContent)).toEqual(['P001-S01', 'P001-S02'])
+    expect(rows.map((row) => row.querySelector('.story-status')?.textContent)).toEqual(['doing', 'blocked'])
+    // Colour is never the only signal for a status — a word too, always — but
+    // the class is the reinforcement, and it has to name the *dependency's*
+    // status, not the open story's own.
+    expect(rows[0]?.querySelector('.story-status')?.classList.contains('status-doing')).toBe(true)
+    expect(rows[1]?.querySelector('.story-status')?.classList.contains('status-blocked')).toBe(true)
+    expect(document.getElementById('story-open-meta')?.textContent).toBe(english['story.waitsOn'])
+    // What Build would actually enqueue for this story — `bus.on('story-run')`
+    // (app.js) sends this exact string, character for character.
+    expect(document.getElementById('story-open-command')?.textContent).toBe('/mjloop:build P001-S03')
+
+    // Nothing standing in its way: no rows, the existing "clear" phrase, and
+    // the command preview follows the id that is actually open.
+    stories.openTab('P001-S04')
+    await vi.waitFor(() =>
+      expect(document.getElementById('story-open-title')?.textContent).toBe('P001-S04 — Four'),
+    )
+    expect((document.getElementById('story-open-waits') as HTMLElement).hidden).toBe(true)
+    expect(document.querySelectorAll('#story-open-waits .wait-row')).toHaveLength(0)
+    expect(document.getElementById('story-open-meta')?.textContent).toBe(english['story.open.clear'])
+    expect(document.getElementById('story-open-command')?.textContent).toBe('/mjloop:build P001-S04')
+
+    // A dependency this plan's own index cannot resolve — a typo, per
+    // `unmet()`'s own doc — still gets a row: the id itself, with no status
+    // word to lie about.
+    stories.openTab('P001-S05')
+    await vi.waitFor(() =>
+      expect(document.getElementById('story-open-title')?.textContent).toBe('P001-S05 — Five'),
+    )
+    const unresolved = [...document.querySelectorAll('#story-open-waits .wait-row')]
+    expect(unresolved.map((row) => row.querySelector('.story-id')?.textContent)).toEqual(['P001-S99'])
+    expect(unresolved.map((row) => row.querySelector('.story-status')?.textContent)).toEqual(['—'])
+  })
+
+  it('says which non-dependency reason a story is not ready, reusing story.notBuildable rather than a fifth wording', async () => {
+    const stories = await openReadinessFixture()
+
+    // `doing`: already being built.
+    stories.openTab('P001-S01')
+    await vi.waitFor(() => expect(document.getElementById('story-open-title')?.textContent).toBe('P001-S01 — One'))
+    expect(document.getElementById('story-open-meta')?.textContent).toBe(english['story.notBuildable.doing'])
+    expect((document.getElementById('story-open-waits') as HTMLElement).hidden).toBe(true)
+
+    // `blocked`: the last run could not finish it.
+    stories.openTab('P001-S02')
+    await vi.waitFor(() => expect(document.getElementById('story-open-title')?.textContent).toBe('P001-S02 — Two'))
+    expect(document.getElementById('story-open-meta')?.textContent).toBe(english['story.notBuildable.blocked'])
+    expect((document.getElementById('story-open-waits') as HTMLElement).hidden).toBe(true)
+  })
+
   it('walks the strip with the arrow keys, and the direction follows the document', async () => {
     // The page's first keyboard interaction. ui/tabs.js refused role="tablist"
     // precisely because arrows have to honour text direction; this takes that on

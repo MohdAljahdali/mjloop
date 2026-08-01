@@ -110,7 +110,9 @@ export function mountStories() {
   const openTitle = pick('story-open-title')
   const openStatus = pick('story-open-status')
   const openAttach = pick('story-open-attach')
+  const openCommand = pick('story-open-command')
   const openMeta = pick('story-open-meta')
+  const openWaits = pick('story-open-waits')
   const openFacts = pick('story-open-facts')
   const acceptDetails = pick('story-open-accept-details')
   const acceptSummary = pick('story-open-accept-summary')
@@ -312,10 +314,36 @@ export function mountStories() {
     flag(openAttach, 'hidden', job === null)
     phrase(openAttach, 'job.view')
 
+    // The command a press of Build actually sends — `bus.on('story-run', ...)`
+    // (app.js:165-167) composes `/mjloop:build ${story}` from the same id, so
+    // this is that exact string, not a guess at it. Shown unconditionally: it
+    // answers "what does Run do" whether or not the story can build yet.
+    verbatim(openCommand, `/mjloop:build ${story.id}`)
+
+    // The readiness inspector. `readyIn` (`lib/stories.js`) is the rule this
+    // page owes the truth to: a story builds when its own status is `todo`
+    // and every dependency is `done`. So a story that cannot build right now
+    // is in exactly one of four states — already done, already being built,
+    // blocked, or waiting on named dependencies — and the first three reuse
+    // `story.notBuildable.*`, the same wording already on the row's disabled
+    // Build button, rather than a fifth. The fourth cannot be one phrase
+    // honestly: each unmet dependency gets its own row below, its id through
+    // `verbatim` and its own current status through `phrase`.
     const waiting = unmet(story, statuses)
-    phrase(openMeta, waiting.length === 0 ? 'story.open.clear' : 'story.blockedBy', {
-      ids: waiting.join(', '),
-    })
+    const waitingOnDeps = story.status === 'todo' && waiting.length > 0
+    flag(openWaits, 'hidden', !waitingOnDeps)
+    if (waitingOnDeps) {
+      phrase(openMeta, 'story.waitsOn')
+    } else if (story.status === 'todo') {
+      phrase(openMeta, 'story.open.clear')
+    } else {
+      phrase(openMeta, `story.notBuildable.${story.status}`)
+    }
+    // Reconciled unconditionally, empty when there is nothing to wait on:
+    // `reconcile` only removes a row that is missing from *this* call's list,
+    // so switching from a blocked story to a ready one without this would
+    // leave the previous story's rows sitting behind the `hidden` list.
+    reconcile(openWaits, waitingOnDeps ? waiting : [], (id) => id, storyWaitRow)
 
     // Facts rather than prose, so each one is a labelled cell a reader can scan
     // and a translator can move.
@@ -427,6 +455,41 @@ export function mountStories() {
         if (outcome !== undefined) {
           phrase(outcome, entry.halted ? 'story.run.halted' : 'story.run.ended')
           cls(outcome, 'res', entry.halted ? 'fail' : 'pass')
+        }
+      },
+    }
+  }
+
+  /**
+   * One row of the readiness inspector: an unmet dependency's id and its own
+   * current status, read off the same `statuses` index `unmet()` used to find
+   * it — never a second lookup that could disagree.
+   *
+   * @returns {{ root: HTMLElement, update: (id: string) => void }}
+   */
+  function storyWaitRow() {
+    const { root, slots } = clone('tpl-story-wait')
+    return {
+      root,
+      /** @param {string} id */
+      update(id) {
+        const idSlot = slots['id']
+        if (idSlot !== undefined) verbatim(idSlot, id)
+
+        const statusSlot = slots['status']
+        if (statusSlot !== undefined) {
+          const value = statuses.get(id)
+          // Absent rather than a fourth status: `unmet()`'s own doc explains
+          // why an id can be missing from this plan's index — a typo, or (what
+          // the engine actually refuses to let anyone write) a cross-plan
+          // dependency. `story.status.*` has no member for that, so the id is
+          // the only honest thing left to show.
+          if (value === undefined) {
+            verbatim(statusSlot, '—')
+          } else {
+            phrase(statusSlot, `story.status.${value}`)
+            cls(statusSlot, 'status', value)
+          }
         }
       },
     }
