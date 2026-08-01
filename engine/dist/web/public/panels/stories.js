@@ -44,6 +44,7 @@ import {
   planIndex,
   readyIn,
   relevantAcceptances,
+  routableAgents,
   sift,
   skillWarnings,
   statusIndex,
@@ -581,11 +582,24 @@ export function mountStories() {
    * `story.skills.hole` says why, unconditionally, so an empty block reads as
    * the documented normal case rather than a bug in the page).
    *
+   * The per-agent rows below draw `routableAgents(track)`, not
+   * `draftedAgents(track)` itself: the `build` track's `required`/`available`
+   * names roles — `scout`, `ui-designer`, `ui-critic`, `security`, `perf` on
+   * this project's own default track — that `acceptSkill` refuses to let any
+   * acceptance's `agents` ever name (`UnknownAcceptanceAgentError`,
+   * `store/skill-acceptance-store.ts:263-266`). A row for one of those is not
+   * "nothing accepted for this agent yet", it is a state the CLI makes
+   * impossible, so it is never drawn. `story.skills.noTrack`'s emptiness
+   * check stays on the un-narrowed `drafted` list: it means "this project's
+   * config has no build track at all", which is `draftedAgents` returning
+   * `[]` for an absent track, not "this track drafts nobody routable".
+   *
    * @param {StoryDetail} story
    */
   function drawSkills(story) {
     const track = config.value()?.parsed?.tracks?.[STORY_TRACK]
     const drafted = draftedAgents(track)
+    const routable = routableAgents(track)
     flag(skillsAgentsEmpty, 'hidden', drafted.length > 0)
     phrase(skillsAgentsEmpty, 'story.skills.noTrack')
 
@@ -593,12 +607,12 @@ export function mountStories() {
     // order `statuses` (above) already relies on for `storyWaitRow` and
     // `storyDepRow` — a row factory reads this closure, never a value passed
     // through `reconcile`'s own item.
-    skillAcceptances = relevantAcceptances(skillsView.value()?.acceptances ?? [], drafted)
-    reconcile(skillsAgentsHost, drafted, (agent) => agent, agentSkillRow)
+    skillAcceptances = relevantAcceptances(skillsView.value()?.acceptances ?? [], routable)
+    reconcile(skillsAgentsHost, routable, (agent) => agent, agentSkillRow)
 
     const warned = skillAcceptances
-      .map((acceptance) => ({ acceptance, warn: skillWarnings(acceptance, drafted) }))
-      .filter(({ warn }) => warn.offTrack.length > 0 || warn.notActive || warn.notCompatible)
+      .map((acceptance) => ({ acceptance, warn: skillWarnings(acceptance) }))
+      .filter(({ warn }) => warn.noAgents || warn.notActive || warn.notCompatible)
     flag(skillsWarningsEmpty, 'hidden', warned.length > 0)
     phrase(skillsWarningsEmpty, 'story.skills.warningsNone')
     reconcile(skillsWarningsHost, warned, (entry) => entry.acceptance.skillId, skillWarningRow)
@@ -646,32 +660,27 @@ export function mountStories() {
   }
 
   /**
-   * @returns {{ root: HTMLElement, update: (entry: { acceptance: ProjectSkillAcceptance, warn: { offTrack: string[], notActive: boolean, notCompatible: boolean } }) => void }}
+   * @returns {{ root: HTMLElement, update: (entry: { acceptance: ProjectSkillAcceptance, warn: { noAgents: boolean, notActive: boolean, notCompatible: boolean } }) => void }}
    */
   function skillWarningRow() {
     const { root, slots } = clone('tpl-story-skill-warning')
     return {
       root,
-      /** @param {{ acceptance: ProjectSkillAcceptance, warn: { offTrack: string[], notActive: boolean, notCompatible: boolean } }} entry */
+      /** @param {{ acceptance: ProjectSkillAcceptance, warn: { noAgents: boolean, notActive: boolean, notCompatible: boolean } }} entry */
       update({ acceptance, warn }) {
         const skillId = slots['skillId']
         if (skillId !== undefined) verbatim(skillId, acceptance.skillId)
 
-        const offTrack = slots['offTrack']
-        if (offTrack !== undefined) {
-          flag(offTrack, 'hidden', warn.offTrack.length === 0)
-          if (warn.offTrack.length > 0) {
-            phrase(offTrack, 'story.skills.warnOffTrack', { agents: warn.offTrack.join(', ') })
-          }
-        }
+        const noAgents = slots['noAgents']
+        if (noAgents !== undefined) flag(noAgents, 'hidden', !warn.noAgents)
         const notActive = slots['notActive']
         if (notActive !== undefined) flag(notActive, 'hidden', !warn.notActive)
         const notCompatible = slots['notCompatible']
         if (notCompatible !== undefined) flag(notCompatible, 'hidden', !warn.notCompatible)
 
-        // The two static banners (`notActive`, `notCompatible`) carry their
-        // own `data-i18n` in the markup, same as `skills.js`'s cards — only
-        // `offTrack` needs a `{agents}` hole, so only it is written above.
+        // All three banners carry their own `data-i18n` in the markup, same
+        // as `skills.js`'s cards — none of them holds a `{}` interpolation,
+        // so nothing here needs `phrase()` for its text.
         translateStatic(root)
       },
     }

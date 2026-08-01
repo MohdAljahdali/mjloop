@@ -344,7 +344,7 @@
   "story.skills.agentNone": "لا مهارة مقبولة تسمّي هذا الوكيل.",
   "story.skills.warningsTitle": "يستحق التحقق قبل التشغيل",
   "story.skills.warningsNone": "لا شيء يستحق التنبيه.",
-  "story.skills.warnOffTrack": "مقبولة أيضًا لِـ{agents}، وهو ما لا يُدرجه مسار ‏build‏ أبدًا.",
+  "story.skills.warnNoAgents": "مقبولة بلا أي وكيل — لا تُختار لأي تشغيل أبدًا.",
   "story.skills.warnDisabled": "مقبولة لكنها معطَّلة — لا تُختار لأي تشغيل أبدًا.",
   "story.skills.warnIncompatible": "معلَّمة بأنها لا تعمل على هذا المضيف — لا تُختار لأي تشغيل أبدًا.",
   "story.skills.pinnedTitle": "المهارات المثبَّتة لتشغيلة الدليل",

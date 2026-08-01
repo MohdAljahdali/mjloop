@@ -11,6 +11,7 @@ import {
   ready,
   readyIn,
   relevantAcceptances,
+  routableAgents,
   sift,
   skillWarnings,
   statusIndex,
@@ -326,7 +327,20 @@ describe('skill inspection (C7)', () => {
     ])
   })
 
-  it('keeps only the acceptances that name a drafted agent, and reads one drafted agent out of that set', () => {
+  it("narrows drafted agents to the roles an acceptance's own `agents` field can ever name, dropping the ones the CLI refuses", () => {
+    // `track()` mirrors the project's real default `build` track shape
+    // (required builder/verifier, available scout/critic) — not a
+    // hand-narrowed fixture, which is how C7 shipped this unnoticed.
+    expect(routableAgents(track())).toEqual(['builder', 'verifier', 'critic'])
+    // `scout` is drafted (`available`) but `acceptSkill` throws
+    // `UnknownAcceptanceAgentError` for any `agents` entry outside
+    // `SKILL_ACCEPTANCE_AGENTS` (`store/skill-acceptance-store.ts:263-266`) —
+    // no acceptance can ever name it, so it never draws a row.
+    expect(routableAgents(track())).not.toContain('scout')
+    expect(routableAgents(undefined)).toEqual([])
+  })
+
+  it('keeps only the acceptances that name a drafted agent, plus every acceptance that names none at all', () => {
     const drafted = draftedAgents(track())
     const acceptances = [
       acceptance({ skillId: 's1', agents: ['builder'] }),
@@ -336,41 +350,41 @@ describe('skill inspection (C7)', () => {
       // nothing to do with this story's track and must be left out.
       acceptance({ skillId: 's2', agents: ['planner'] }),
       acceptance({ skillId: 's3', agents: ['verifier', 'planner'] }),
+      // `acceptSkill` with no `--agents` writes `agents: []`
+      // (`cli/index.ts:1070`) — dead on every track at once, not merely
+      // unrelated to this one, so it is kept regardless of `drafted` for
+      // `skillWarnings`' `noAgents` flag to catch below.
+      acceptance({ skillId: 's4', agents: [] }),
     ]
     const relevant = relevantAcceptances(acceptances, drafted)
-    expect(relevant.map((entry) => entry.skillId)).toEqual(['s1', 's3'])
+    expect(relevant.map((entry) => entry.skillId)).toEqual(['s1', 's3', 's4'])
 
     // The agent-to-skill filter, including the case an agent has none —
     // `scout` is drafted but no acceptance in this project names it.
     expect(acceptancesFor(relevant, 'builder').map((entry) => entry.skillId)).toEqual(['s1'])
     expect(acceptancesFor(relevant, 'verifier').map((entry) => entry.skillId)).toEqual(['s3'])
     expect(acceptancesFor(relevant, 'scout')).toEqual([])
+    // `agents.includes(agent)` is false for every agent when `agents` is
+    // `[]`, so `s4` never lands under any agent's own row — it only ever
+    // shows up in the warnings list.
+    expect(acceptancesFor(relevant, 'builder').map((entry) => entry.skillId)).not.toContain('s4')
   })
 
   it('supports exactly three pre-run warnings, each off one field the acceptance record actually carries', () => {
-    const drafted = draftedAgents(track())
-
     // Clean: none of the three conditions fire.
-    expect(skillWarnings(acceptance({ skillId: 's1' }), drafted)).toEqual({
-      offTrack: [],
+    expect(skillWarnings(acceptance({ skillId: 's1' }))).toEqual({
+      noAgents: false,
       notActive: false,
       notCompatible: false,
     })
 
-    // Off-track names every offending agent, not only the first.
-    expect(
-      skillWarnings(acceptance({ skillId: 's2', agents: ['builder', 'planner', 'triager'] }), drafted).offTrack,
-    ).toEqual(['planner', 'triager'])
-
-    expect(skillWarnings(acceptance({ skillId: 's3', status: 'disabled' }), drafted).notActive).toBe(true)
-    expect(skillWarnings(acceptance({ skillId: 's4', compatible: false }), drafted).notCompatible).toBe(true)
+    expect(skillWarnings(acceptance({ skillId: 's2', agents: [] })).noAgents).toBe(true)
+    expect(skillWarnings(acceptance({ skillId: 's3', status: 'disabled' })).notActive).toBe(true)
+    expect(skillWarnings(acceptance({ skillId: 's4', compatible: false })).notCompatible).toBe(true)
 
     // All three can fire on the same acceptance at once.
-    const worst = skillWarnings(
-      acceptance({ skillId: 's5', agents: ['planner'], status: 'disabled', compatible: false }),
-      drafted,
-    )
-    expect(worst).toEqual({ offTrack: ['planner'], notActive: true, notCompatible: true })
+    const worst = skillWarnings(acceptance({ skillId: 's5', agents: [], status: 'disabled', compatible: false }))
+    expect(worst).toEqual({ noAgents: true, notActive: true, notCompatible: true })
   })
 })
 

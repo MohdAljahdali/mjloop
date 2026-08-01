@@ -1369,11 +1369,15 @@
 
     <!-- One accepted skill this story's track has reason to look at, flagged
          for one of exactly three facts its own record can support
-         (`lib/stories.js`'s `skillWarnings`) — never a fourth invented one. -->
+         (`lib/stories.js`'s `skillWarnings`) — never a fourth invented one.
+         There is deliberately no "accepted for an agent this track never
+         drafts" banner: skill routing (`ops/run.ts:210`,
+         `ops/skill-selection.ts:103`) never reads `config.tracks` at all, so
+         that fact describes no engine behaviour to warn about. -->
     <template id="tpl-story-skill-warning">
       <li class="skill-warning">
         <code data-slot="skillId"></code>
-        <p class="banner warn" data-slot="offTrack" hidden></p>
+        <p class="banner warn" data-slot="noAgents" hidden data-i18n="story.skills.warnNoAgents"></p>
         <p class="banner warn" data-slot="notActive" hidden data-i18n="story.skills.warnDisabled"></p>
         <p class="banner warn" data-slot="notCompatible" hidden data-i18n="story.skills.warnIncompatible"></p>
       </li>

@@ -18,7 +18,7 @@ import { suggestions } from '../../src/web/public/panels/launcher.js'
 import { mountToasts, toast } from '../../src/web/public/ui/toasts.js'
 import { DEP_DEPTH_LIMIT } from '../../src/web/public/lib/stories.js'
 import { emptySnapshot, loadPage, readLocale } from './helpers/page.js'
-import { ConfigSchema } from '../../src/schemas/config.js'
+import { ConfigSchema, DEFAULT_TRACKS } from '../../src/schemas/config.js'
 import { SkillManifestSchema } from '../../src/schemas/skill-selection.js'
 import { ConfigChangeSchema } from '../../src/store/config-mutation.js'
 import type { FeatureDetail, ProfileView } from '../../src/web/read.js'
@@ -1521,7 +1521,7 @@ describe('stories', () => {
       ...patch,
     })
 
-  it("shows each of the build track's drafted agents its own accepted skills, including one with none, and leaves out a skill accepted only for an off-track role", async () => {
+  it("shows a row only for the drafted agents an acceptance's own `agents` field could ever name, including one with no accepted skill, and leaves out a skill accepted only for an off-track role", async () => {
     installStorage(memoryStorage(JSON.stringify({ activePlan: 'P001' })))
     serve({
       '/api/plans/P001': {
@@ -1532,9 +1532,15 @@ describe('stories', () => {
         review: null,
         stories: [detailStory({ id: 'P001-S01', title: 'One' })],
       },
-      '/api/config': configView({
-        tracks: { build: { required: ['builder'], available: ['scout'], max_cycles: 5 } },
-      }),
+      // The project's real default `build` track (`DEFAULT_TRACKS.build`,
+      // `schemas/config.ts:815-823`), not a hand-narrowed fixture: its
+      // `required`/`available` also draft `scout`, `ui-designer`,
+      // `ui-critic`, `security` and `perf`, none of which `acceptSkill` will
+      // ever let an `agents` entry name (`UnknownAcceptanceAgentError`,
+      // `store/skill-acceptance-store.ts:263-266`) — every C7 fixture used a
+      // trimmed track, which is why five permanently empty rows for those
+      // five went unnoticed.
+      '/api/config': configView({ tracks: { build: DEFAULT_TRACKS.build } }),
       '/api/skills': {
         packages: [],
         unreadable: [],
@@ -1556,31 +1562,37 @@ describe('stories', () => {
 
     stories.openTab('P001-S01')
     await vi.waitFor(() =>
-      expect(document.querySelectorAll('#story-open-skills-agents .skill-agent')).toHaveLength(2),
+      expect(document.querySelectorAll('#story-open-skills-agents .skill-agent')).toHaveLength(3),
     )
+
+    // Exactly the three roles among this track's drafted agents an
+    // acceptance could ever name — `scout`, `ui-designer`, `ui-critic`,
+    // `security` and `perf` draw no row at all, a structural impossibility
+    // rather than merely an empty list.
+    expect(cells('#story-open-skills-agents .skill-agent h4')).toEqual(['builder', 'verifier', 'critic'])
 
     const rows = [...document.querySelectorAll('#story-open-skills-agents .skill-agent')]
     const builderRow = rows.find((row) => row.querySelector('h4')?.textContent === 'builder') as HTMLElement
-    const scoutRow = rows.find((row) => row.querySelector('h4')?.textContent === 'scout') as HTMLElement
+    const verifierRow = rows.find((row) => row.querySelector('h4')?.textContent === 'verifier') as HTMLElement
     expect(builderRow).toBeDefined()
-    expect(scoutRow).toBeDefined()
+    expect(verifierRow).toBeDefined()
 
-    expect(cells('#story-open-skills-agents .skill-agent h4')).toEqual(['builder', 'scout'])
     expect([...builderRow.querySelectorAll('.acceptance li')].map((node) => node.textContent)).toEqual([
       'react-forms',
     ])
     expect((builderRow.querySelector('[data-slot="none"]') as HTMLElement).hidden).toBe(true)
 
-    // `scout` is drafted (`available`) but this project has accepted nothing
-    // that names it — the empty tell, not a silently blank list.
-    expect(scoutRow.querySelectorAll('.acceptance li')).toHaveLength(0)
-    expect((scoutRow.querySelector('[data-slot="none"]') as HTMLElement).hidden).toBe(false)
-    expect(scoutRow.querySelector('[data-slot="none"]')?.textContent).toBe(english['story.skills.agentNone'])
+    // `verifier` is drafted (`required`) but this project has accepted
+    // nothing that names it — the empty tell, not a silently blank list.
+    expect(verifierRow.querySelectorAll('.acceptance li')).toHaveLength(0)
+    expect((verifierRow.querySelector('[data-slot="none"]') as HTMLElement).hidden).toBe(false)
+    expect(verifierRow.querySelector('[data-slot="none"]')?.textContent).toBe(english['story.skills.agentNone'])
 
     expect(document.querySelector('#story-open-skills-agents')?.textContent).not.toContain('brief-writer')
+    expect(document.querySelector('#story-open-skills-agents')?.textContent).not.toContain('scout')
   })
 
-  it('flags an off-track agent, a disabled acceptance and an incompatible one — never a fourth invented reason, and says so when nothing is flagged', async () => {
+  it('flags an acceptance accepted for no agent, a disabled acceptance and an incompatible one — never an invented "off-track" reason — and says so when nothing is flagged', async () => {
     installStorage(memoryStorage(JSON.stringify({ activePlan: 'P001' })))
     serve({
       '/api/plans/P001': {
@@ -1597,7 +1609,18 @@ describe('stories', () => {
         unreadable: [],
         acceptances: [
           acceptance({ skillId: 'clean-skill', agents: ['builder'] }),
-          acceptance({ skillId: 'mixed-role', agents: ['builder', 'planner'] }),
+          // Accepted for a role this track never drafts (`planner`) *and*
+          // one it does (`builder`). Skill routing never reads
+          // `config.tracks` at all (`ops/run.ts:210`,
+          // `ops/skill-selection.ts:103`), so this behaves exactly as
+          // intended for whichever track drafts `planner` — there is
+          // nothing here to warn about.
+          acceptance({ skillId: 'off-track-but-fine', agents: ['builder', 'planner'] }),
+          // `acceptSkill` with no `--agents` writes `agents: []`
+          // (`cli/index.ts:1070`) — the one acceptance that is actually,
+          // provably dead: `selectSkills` (`ops/skill-selection.ts:103`)
+          // matches `agents.includes(agent)` against it for no agent, ever.
+          acceptance({ skillId: 'no-agents-skill', agents: [] }),
           acceptance({ skillId: 'disabled-skill', agents: ['builder'], status: 'disabled' }),
           acceptance({ skillId: 'incompatible-skill', agents: ['builder'], compatible: false }),
         ],
@@ -1619,16 +1642,16 @@ describe('stories', () => {
     const byId = (id: string): HTMLElement =>
       rows.find((row) => row.querySelector('code')?.textContent === id) as HTMLElement
 
-    const mixed = byId('mixed-role')
-    expect((mixed.querySelector('[data-slot="offTrack"]') as HTMLElement).hidden).toBe(false)
-    expect(mixed.querySelector('[data-slot="offTrack"]')?.textContent).toContain('planner')
-    expect((mixed.querySelector('[data-slot="notActive"]') as HTMLElement).hidden).toBe(true)
-    expect((mixed.querySelector('[data-slot="notCompatible"]') as HTMLElement).hidden).toBe(true)
+    const noAgents = byId('no-agents-skill')
+    expect((noAgents.querySelector('[data-slot="noAgents"]') as HTMLElement).hidden).toBe(false)
+    expect(noAgents.querySelector('[data-slot="noAgents"]')?.textContent).toBe(english['story.skills.warnNoAgents'])
+    expect((noAgents.querySelector('[data-slot="notActive"]') as HTMLElement).hidden).toBe(true)
+    expect((noAgents.querySelector('[data-slot="notCompatible"]') as HTMLElement).hidden).toBe(true)
 
     const disabled = byId('disabled-skill')
     expect((disabled.querySelector('[data-slot="notActive"]') as HTMLElement).hidden).toBe(false)
     expect(disabled.querySelector('[data-slot="notActive"]')?.textContent).toBe(english['story.skills.warnDisabled'])
-    expect((disabled.querySelector('[data-slot="offTrack"]') as HTMLElement).hidden).toBe(true)
+    expect((disabled.querySelector('[data-slot="noAgents"]') as HTMLElement).hidden).toBe(true)
 
     const incompatible = byId('incompatible-skill')
     expect((incompatible.querySelector('[data-slot="notCompatible"]') as HTMLElement).hidden).toBe(false)
@@ -1636,8 +1659,10 @@ describe('stories', () => {
       english['story.skills.warnIncompatible'],
     )
 
-    // The one clean acceptance never appears in the warnings list at all.
+    // The clean acceptance, and the one accepted for an off-track role
+    // alongside an on-track one, never appear in the warnings list at all.
     expect(document.querySelector('#story-open-skills-warnings')?.textContent).not.toContain('clean-skill')
+    expect(document.querySelector('#story-open-skills-warnings')?.textContent).not.toContain('off-track-but-fine')
 
     // The same story, now with nothing left to flag: the empty tell, not a
     // list that just looks done loading. Warnings are project-wide (every

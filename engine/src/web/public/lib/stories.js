@@ -294,9 +294,43 @@ export function draftedAgents(track) {
 }
 
 /**
- * This project's own skill acceptances that name at least one agent `drafted`
- * actually drafts — the set a reader of one story's track has any reason to
- * look at here.
+ * The fixed agent roles dynamic skill selection ever routes to.
+ *
+ * Mirrors `SKILL_ACCEPTANCE_AGENTS` in `schemas/skill-acceptance.ts:30`
+ * exactly, and cannot import it: that file is parsed for both the CLI and
+ * this browser bundle, but its own header (`schemas/skill-acceptance.ts:20-29`)
+ * already restates `ops/run.ts`'s identical list rather than import across a
+ * layer boundary, and the browser bundle draws the same line again rather
+ * than reach into `schemas/` for one constant. Used to keep the per-agent
+ * rows this page draws to the agents an acceptance's own `agents` field could
+ * ever name — see `routableAgents`, below. If `SKILL_ACCEPTANCE_AGENTS`
+ * changes in `schemas/skill-acceptance.ts`, this list must change with it.
+ */
+export const SKILL_ACCEPTANCE_AGENTS = ['planner', 'builder', 'critic', 'verifier']
+
+/**
+ * The drafted agents this page has any reason to draw a skills row for —
+ * `draftedAgents` narrowed to the roles `acceptSkill` (`store/skill-acceptance-store.ts:263-266`)
+ * will ever let an `agents` entry name. `acceptSkill` throws
+ * `UnknownAcceptanceAgentError` for anything outside `SKILL_ACCEPTANCE_AGENTS`,
+ * so a drafted agent this filter drops — `scout`, `ui-designer`, `ui-critic`,
+ * `security`, `perf` on the default `build` track — can *never* hold an
+ * acceptance; a row for one is not "nothing accepted yet", it is an
+ * impossibility the CLI refuses, and inviting a reader to go accept a skill
+ * for it would be exactly that lie.
+ *
+ * @param {import('../../../schemas/config.js').Track | undefined} track
+ * @returns {string[]}
+ */
+export function routableAgents(track) {
+  const routable = new Set(SKILL_ACCEPTANCE_AGENTS)
+  return draftedAgents(track).filter((agent) => routable.has(agent))
+}
+
+/**
+ * This project's own skill acceptances that this story's track has any
+ * reason to look at here: one naming at least one agent `drafted` actually
+ * drafts, plus every acceptance whose `agents` is empty.
  *
  * An acceptance naming only agents outside `drafted` (`planner`, say, which
  * no track's `required`/`available` this page ever reads lists — dynamic
@@ -305,13 +339,27 @@ export function draftedAgents(track) {
  * story's track, and is left out rather than drawn as a warning about
  * nothing.
  *
+ * An empty `agents` is a different case entirely, and not track-scoped: it
+ * is not "nothing to do with this track", it is dead on every track at once.
+ * `acceptSkill(dir, {agents: undefined, ...})` — the CLI's only caller,
+ * `cli/index.ts:1070` — writes `agents: []`, and `selectSkills`
+ * (`ops/skill-selection.ts:103`, `.filter((skill) => skill.agents.includes(agent))`)
+ * then matches it to nothing, on every run, forever, exactly the failure
+ * `store/skill-acceptance-store.ts:254-256`'s own comment names ("the record
+ * would sit ... reading `status active` while routing nothing on every
+ * run"). Dropping it here the way an off-track acceptance is dropped would
+ * hide the one acceptance that is actually, provably inert; it is kept so
+ * `skillWarnings`' `noAgents` flag below can say so.
+ *
  * @param {readonly import('../../../schemas/skill-acceptance.js').ProjectSkillAcceptance[]} acceptances
  * @param {readonly string[]} drafted
  * @returns {import('../../../schemas/skill-acceptance.js').ProjectSkillAcceptance[]}
  */
 export function relevantAcceptances(acceptances, drafted) {
   const draftedSet = new Set(drafted)
-  return acceptances.filter((acceptance) => acceptance.agents.some((agent) => draftedSet.has(agent)))
+  return acceptances.filter(
+    (acceptance) => acceptance.agents.length === 0 || acceptance.agents.some((agent) => draftedSet.has(agent)),
+  )
 }
 
 /**
@@ -329,21 +377,31 @@ export function acceptancesFor(acceptances, agent) {
  * The three pre-run facts one acceptance's own fields can support — never a
  * fourth invented one, and never a claim this project has no field for (there
  * is no permission model for an agent in this engine, so this deliberately
- * stops at exactly what `schemas/skill-acceptance.ts` records: `agents`
- * against the track's own drafted set, `status`, `compatible`).
+ * stops at exactly what `schemas/skill-acceptance.ts` records and
+ * `ops/skill-selection.ts:100-103` actually acts on: `status`, `compatible`,
+ * `agents`).
  *
- * `offTrack` names every agent this acceptance lists that `drafted` does
- * not, not only the first — an acceptance wrongly naming two roles a track
- * never drafts should say both, not silently pick one.
+ * There is deliberately no fourth, "off-track" flag naming an agent this
+ * acceptance lists that the story's own track does not draft. Skill routing
+ * (`resolveSkillManifest`, `ops/run.ts:210`, and `selectSkills`,
+ * `ops/skill-selection.ts:103`) never reads `config.tracks` at all — it
+ * flatMaps a hardcoded four-role list and filters only on
+ * `skill.agents.includes(agent)` — so an acceptance naming an agent outside
+ * this track behaves exactly as intended for whichever *other* track drafts
+ * that agent. There is no join here the engine actually makes, so there is
+ * nothing here to warn about.
+ *
+ * `noAgents` is the one warning this engine's own behaviour can support: an
+ * acceptance with an empty `agents` matches `skill.agents.includes(agent)`
+ * for no agent at all, ever — see `relevantAcceptances`, above, for why it is
+ * still shown rather than dropped.
  *
  * @param {import('../../../schemas/skill-acceptance.js').ProjectSkillAcceptance} acceptance
- * @param {readonly string[]} drafted
- * @returns {{ offTrack: string[], notActive: boolean, notCompatible: boolean }}
+ * @returns {{ noAgents: boolean, notActive: boolean, notCompatible: boolean }}
  */
-export function skillWarnings(acceptance, drafted) {
-  const draftedSet = new Set(drafted)
+export function skillWarnings(acceptance) {
   return {
-    offTrack: acceptance.agents.filter((agent) => !draftedSet.has(agent)),
+    noAgents: acceptance.agents.length === 0,
     notActive: acceptance.status !== 'active',
     notCompatible: !acceptance.compatible,
   }
