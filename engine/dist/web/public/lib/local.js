@@ -8,10 +8,28 @@
  */
 
 /**
+ * One open story tab.
+ *
+ * A record from the first version that persists it, not a bare id. Pinning and
+ * reopening a closed tab both need somewhere to put a flag, and a stored shape
+ * is stuck with itself: a payload written by yesterday's page is read by
+ * today's, and `parse` drops what it has no branch for — silently, which is the
+ * point of the whitelist and also the reason a wrong shape here is expensive.
+ *
+ * @typedef {object} OpenStory
+ * @property {string} id
+ * @property {boolean} pinned
+ */
+
+/**
  * @typedef {object} Prefs
  * @property {string | null} lang
  * @property {'collapsed' | 'docked' | 'full'} pane
  * @property {string} memoryQuery
+ * @property {string | null} activePlan
+ * @property {string} storyFilter
+ * @property {readonly OpenStory[]} openStories
+ * @property {readonly string[]} recentlyClosed
  */
 
 /**
@@ -25,9 +43,28 @@
  *
  * @type {Prefs}
  */
-const DEFAULTS = { lang: null, pane: 'collapsed', memoryQuery: '' }
+const DEFAULTS = {
+  lang: null,
+  pane: 'collapsed',
+  memoryQuery: '',
+  activePlan: null,
+  storyFilter: '',
+  // Frozen, because `read()` hands the cache back by reference and a caller
+  // that pushed onto a default would be editing every later reader's default.
+  openStories: Object.freeze([]),
+  recentlyClosed: Object.freeze([]),
+}
 const PANES = ['collapsed', 'docked', 'full']
 const KEY = 'mjloop.prefs'
+/**
+ * Bounds on two lists that come back from storage.
+ *
+ * Not tuning. A stored value is whatever was last written there, by any version
+ * of this page or by hand, and both of these are rendered — an unbounded array
+ * is an unbounded number of tabs to draw.
+ */
+const TABS_MAX = 24
+const RECENT_MAX = 10
 
 /** @type {Pick<Storage, 'getItem' | 'setItem'> | null} */
 let store = null
@@ -52,6 +89,47 @@ function safeGet() {
 }
 
 /**
+ * A stored value as a bag of fields, or null if it is not one.
+ *
+ * Written out rather than leaning on a narrowing at the call site: inside a
+ * loop over `unknown[]`, the false branch of `typeof entry === 'string'`
+ * narrows to `{}`, and reading `.id` off `{}` is a compile error under
+ * `tsconfig.web.json`. Typing the loop `any[]` would compile and disable every
+ * check below, which is the opposite of what these branches are for.
+ *
+ * @param {unknown} entry
+ * @returns {Record<string, unknown> | null}
+ */
+function fields(entry) {
+  return typeof entry === 'object' && entry !== null ? /** @type {Record<string, unknown>} */ (entry) : null
+}
+
+/**
+ * The open story tabs, normalised.
+ *
+ * A bare string is read as an unpinned id rather than dropped, so a payload
+ * written before tabs could be pinned upgrades in place instead of losing the
+ * reader's tabs on the release that adds pinning.
+ *
+ * @param {unknown[]} entries
+ * @returns {OpenStory[]}
+ */
+function tabs(entries) {
+  /** @type {OpenStory[]} */
+  const out = []
+  const seen = new Set()
+  for (const entry of entries) {
+    const bag = fields(entry)
+    const id = typeof entry === 'string' ? entry : typeof bag?.['id'] === 'string' ? bag['id'] : null
+    if (id === null || id === '' || seen.has(id)) continue
+    seen.add(id)
+    out.push({ id, pinned: bag?.['pinned'] === true })
+    if (out.length === TABS_MAX) break
+  }
+  return out
+}
+
+/**
  * @param {string | null} raw
  * @returns {Partial<Prefs>}
  */
@@ -73,6 +151,17 @@ function parse(raw) {
     out.pane = /** @type {Prefs['pane']} */ (value['pane'])
   }
   if (typeof value['memoryQuery'] === 'string') out.memoryQuery = value['memoryQuery']
+  if (typeof value['activePlan'] === 'string') out.activePlan = value['activePlan']
+  // Not checked against `FILTERS`: importing the vocabulary here would tie a
+  // storage module to a derivation module, and an unknown filter shows every
+  // story rather than none — a value from a newer page degrades to "all".
+  if (typeof value['storyFilter'] === 'string') out.storyFilter = value['storyFilter']
+  if (Array.isArray(value['openStories'])) out.openStories = tabs(value['openStories'])
+  if (Array.isArray(value['recentlyClosed'])) {
+    out.recentlyClosed = value['recentlyClosed']
+      .filter((entry) => typeof entry === 'string' && entry !== '')
+      .slice(0, RECENT_MAX)
+  }
   return out
 }
 

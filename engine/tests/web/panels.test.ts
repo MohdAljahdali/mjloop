@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { installForTest } from '../../src/web/public/lib/i18n.js'
-import { installStorage } from '../../src/web/public/lib/local.js'
+import { installStorage, read as prefs } from '../../src/web/public/lib/local.js'
 import { draw, installScheduler } from '../../src/web/public/ui/render.js'
 import { drawRail, mountRail } from '../../src/web/public/ui/rail.js'
 import { collectConfigChanges, mountConfig } from '../../src/web/public/panels/config.js'
@@ -77,8 +77,10 @@ const plan = (patch: Partial<PlanView> & { id: string }): PlanView => ({
   ...patch,
 })
 
-const memoryStorage = (): Pick<Storage, 'getItem' | 'setItem'> => {
+/** @param seed What `mjloop.prefs` already holds, for the cases that are about a reload. */
+const memoryStorage = (seed?: string): Pick<Storage, 'getItem' | 'setItem'> => {
   const held = new Map<string, string>()
+  if (seed !== undefined) held.set('mjloop.prefs', seed)
   return { getItem: (key) => held.get(key) ?? null, setItem: (key, value) => void held.set(key, value) }
 }
 
@@ -208,6 +210,50 @@ describe('plans', () => {
     expect(document.getElementById('plans-workspace')?.dataset['detailOpen']).toBe('true')
 
     mounted.toggle('P001')
+  })
+
+  it('opens the plan the reader left open, and the filter they chose, with no click', async () => {
+    // The whole point of persisting the selection: a reload is not a reset.
+    // Mount reads it, so a plan that was open before the refresh is open after
+    // it, and the filter picker shows the value rather than merely holding it.
+    installStorage(memoryStorage(JSON.stringify({ activePlan: 'P001', storyFilter: 'done' })))
+    serve({
+      '/api/plans/P001': {
+        id: 'P001',
+        title: 'Large plan',
+        approval: null,
+        body: '# Large plan',
+        review: null,
+        stories: [
+          { id: 'P001-S01', title: 'Done one', status: 'done', ui: false, depends_on: [], acceptance: [], evidence: null },
+          { id: 'P001-S02', title: 'Todo one', status: 'todo', ui: false, depends_on: [], acceptance: [], evidence: null },
+        ],
+      },
+    })
+    reveal('panel-plans')
+    mountPlans()
+    draw(emptySnapshot({ plans: [plan({ id: 'P001', stories: [story({ id: 'P001-S01', status: 'done' }), story({ id: 'P001-S02' })] })] }))
+
+    await vi.waitFor(() => expect((document.getElementById('plan-detail') as HTMLElement).hidden).toBe(false))
+    expect((document.getElementById('story-filter') as HTMLSelectElement).value).toBe('done')
+    await vi.waitFor(() =>
+      expect(
+        [...document.querySelectorAll('#plan-detail-stories .story .story-id')].map((node) => node.textContent),
+      ).toEqual(['P001-S01']),
+    )
+  })
+
+  it('keeps a plan the snapshot has stopped listing rather than forgetting it', async () => {
+    // A frame that does not list the open plan hides the detail; it must not
+    // write the selection away. snapshot.ts already refuses to let one
+    // unreadable plan directory blank the whole panel, and a reader whose plan
+    // blinked out of one frame has not asked to close it.
+    installStorage(memoryStorage(JSON.stringify({ activePlan: 'P001' })))
+    reveal('panel-plans')
+    mountPlans()
+    draw(emptySnapshot({ plans: [] }))
+    expect(prefs().activePlan).toBe('P001')
+    expect((document.getElementById('plan-detail') as HTMLElement).hidden).toBe(true)
   })
 
   it('draws each story once, in the open plan, with its status as a word', async () => {

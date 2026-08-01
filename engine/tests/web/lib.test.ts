@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { installForTest, parts, pluralKey, t, tn } from '../../src/web/public/lib/i18n.js'
 import { duration, time } from '../../src/web/public/lib/fmt.js'
 import { installStorage, read, write } from '../../src/web/public/lib/local.js'
+import type { OpenStory } from '../../src/web/public/lib/local.js'
 import { routeFrom } from '../../src/web/public/lib/router.js'
 import {
   planStatus,
@@ -110,6 +111,59 @@ describe('fmt', () => {
 })
 
 describe('local', () => {
+  it('reads back the selection it was given', () => {
+    const stored = JSON.stringify({
+      activePlan: 'P001',
+      storyFilter: 'ready',
+      openStories: [{ id: 'P001-S02', pinned: true }, { id: 'P001-S03' }],
+      recentlyClosed: ['P001-S01'],
+    })
+    installStorage({ getItem: () => stored, setItem: () => {} })
+    expect(read().activePlan).toBe('P001')
+    expect(read().storyFilter).toBe('ready')
+    expect(read().openStories).toEqual([
+      { id: 'P001-S02', pinned: true },
+      { id: 'P001-S03', pinned: false },
+    ])
+    expect(read().recentlyClosed).toEqual(['P001-S01'])
+  })
+
+  it('upgrades a tab list of bare ids rather than dropping it', () => {
+    // The shape a page that could not yet pin a tab would have written. Losing
+    // the reader's tabs on the release that adds pinning is the failure this
+    // branch exists to prevent, and the whitelist drops silently.
+    installStorage({ getItem: () => JSON.stringify({ openStories: ['P001-S02', 'P001-S03'] }), setItem: () => {} })
+    expect(read().openStories).toEqual([
+      { id: 'P001-S02', pinned: false },
+      { id: 'P001-S03', pinned: false },
+    ])
+  })
+
+  it('bounds and cleans the two lists that come back from storage', () => {
+    installStorage({
+      getItem: () =>
+        JSON.stringify({
+          // Duplicates, empties, and entries that are neither a string nor a
+          // record: all of it is whatever was last written to this key.
+          openStories: ['P001-S01', 'P001-S01', '', 7, null, { pinned: true }, ...Array.from({ length: 40 }, (_, i) => `P002-S${i}`)],
+          recentlyClosed: [...Array.from({ length: 40 }, (_, i) => `P003-S${i}`), 9],
+        }),
+      setItem: () => {},
+    })
+    const open = read().openStories
+    expect(open).toHaveLength(24)
+    expect(open[0]).toEqual({ id: 'P001-S01', pinned: false })
+    expect(open.filter((entry) => entry.id === 'P001-S01')).toHaveLength(1)
+    expect(read().recentlyClosed).toHaveLength(10)
+    expect(read().recentlyClosed.every((entry) => typeof entry === 'string')).toBe(true)
+  })
+
+  it('hands back defaults a caller cannot edit for everyone else', () => {
+    installStorage({ getItem: () => null, setItem: () => {} })
+    expect(read().openStories).toEqual([])
+    expect(() => (read().openStories as OpenStory[]).push({ id: 'P001-S01', pinned: false })).toThrow()
+  })
+
   it('survives storage that is disabled, corrupt or holding an unknown value', () => {
     installStorage({
       getItem: () => {

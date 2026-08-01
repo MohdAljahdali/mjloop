@@ -28,6 +28,7 @@ import { feed } from '../lib/api.js'
 import { stamp } from '../lib/fmt.js'
 import { t } from '../lib/i18n.js'
 import { planKey, storyKey } from '../lib/keys.js'
+import { activePlan, setActivePlan, setStoryFilter, storyFilter } from '../lib/selection.js'
 import { FILTERS, planIndex, planStatus, ready, readyIn, sift, statusIndex, tally, unmet } from '../lib/stories.js'
 import { reconcile } from '../ui/list.js'
 import { draw, register, snapshot as latest } from '../ui/render.js'
@@ -44,8 +45,15 @@ import { submit } from '../ui/writes.js'
 /** How many buildable stories the start block lists before it says "and n more". */
 const READY_SHOWN = 6
 
-/** The plan whose detail is open, or null. */
-let opened = /** @type {string | null} */ (null)
+/**
+ * The plan whose detail is open, or null.
+ *
+ * Held in `lib/selection.js` rather than here, so it survives a reload and so
+ * the Stories side reads the same answer. Read at draw time, which means a
+ * value written before or after mount is picked up on the next frame with no
+ * rewiring.
+ */
+const opened = () => activePlan()
 /** The plan opened by a user action and waiting for its fetched detail. */
 let focusPending = /** @type {string | null} */ (null)
 
@@ -96,7 +104,7 @@ export function mountPlans() {
 
   /** Uncontrolled, like every other box on this page: read on input, never written. */
   let text = ''
-  let filter = ''
+  let filter = storyFilter()
 
   for (const value of FILTERS) {
     const option = document.createElement('option')
@@ -110,8 +118,12 @@ export function mountPlans() {
   })
   filterPicker.addEventListener('change', () => {
     filter = filterPicker.value
+    setStoryFilter(filter)
     draw()
   })
+  // Written once, at mount, for a value a person chose earlier — the case the
+  // `.value=` rule is drawn around. No `update()` touches it.
+  filterPicker.value = filter
 
   /**
    * The open plan's own story statuses, for the fetched detail's dependency
@@ -131,8 +143,8 @@ export function mountPlans() {
     // Only the open plan is fetched, and only while it is open. One feed rather
     // than one per row: a project with forty plans would otherwise issue forty
     // conditional GETs a second to draw four visible lines of prose.
-    dep: (state) => (opened === null ? null : `${opened}:${state.revisions.plans}`),
-    path: () => `/api/plans/${encodeURIComponent(opened ?? '')}`,
+    dep: (state) => (opened() === null ? null : `${opened()}:${state.revisions.plans}`),
+    path: () => `/api/plans/${encodeURIComponent(opened() ?? '')}`,
     onChange: () => draw(),
   })
 
@@ -143,7 +155,7 @@ export function mountPlans() {
       plan.update(state)
 
       const plans = state.plans
-      workspace.dataset['detailOpen'] = opened === null ? 'false' : 'true'
+      workspace.dataset['detailOpen'] = opened() === null ? 'false' : 'true'
       phrase(empty, 'plans.empty')
       flag(empty, 'hidden', plans.length > 0)
 
@@ -243,8 +255,8 @@ export function mountPlans() {
         if (open !== undefined) {
           open.dataset['plan'] = view.id
           attr(open, 'aria-controls', 'plan-detail')
-          attr(open, 'aria-expanded', opened === view.id ? 'true' : 'false')
-          phrase(open, opened === view.id ? 'plans.close' : 'plans.open')
+          attr(open, 'aria-expanded', opened() === view.id ? 'true' : 'false')
+          phrase(open, opened() === view.id ? 'plans.close' : 'plans.open')
         }
 
         const noStories = slots['empty']
@@ -293,7 +305,7 @@ export function mountPlans() {
 
   /** @param {PlanDetail | null} view */
   function drawDetail(view) {
-    flag(detail, 'hidden', opened === null || view === null)
+    flag(detail, 'hidden', opened() === null || view === null)
     if (view === null) return
 
     verbatim(detailTitle, `${view.id} — ${view.title}`)
@@ -454,24 +466,28 @@ export function mountPlans() {
   return {
     /** @param {string} id */
     toggle(id) {
-      const closing = opened === id
-      opened = closing ? null : id
+      const closing = opened() === id
+      setActivePlan(closing ? null : id)
       focusPending = closing ? null : id
       draw()
     },
     close() {
-      opened = null
+      setActivePlan(null)
       focusPending = null
       draw()
     },
     /** @param {'approved' | 'rejected' | 'changes_requested'} decision */
     decide(decision) {
-      const current = latest()?.plans.find((view) => view.id === opened)
-      if (opened === null || current === undefined) return
+      // Read once: the decision is submitted against the plan that was open
+      // when the button was pressed, not against whatever it is by the time the
+      // frame is composed.
+      const plan = opened()
+      const current = latest()?.plans.find((view) => view.id === plan)
+      if (plan === null || current === undefined) return
       const written = note.value.trim()
       submit({
         kind: 'gate',
-        plan: opened,
+        plan,
         // What was on record when the button was pressed. A stale click is
         // refused rather than obeyed, which is why this needs no dialog.
         from: /** @type {'approved' | 'rejected' | 'changes_requested' | null} */ (current.approval),
