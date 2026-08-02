@@ -1,15 +1,17 @@
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { initLoop } from '../../src/ops/init.js'
 import { gateSet, planCreate, storyAdd } from '../../src/ops/plan.js'
 import { runDirName, runStart } from '../../src/ops/run.js'
 import { TELEMETRY_MAX_ROWS } from '../../src/ops/telemetry.js'
+import type { SkillSource } from '../../src/schemas/config.js'
 import type { SkillPackage } from '../../src/schemas/skill-library.js'
 import { etag, handleApi } from '../../src/web/api.js'
 import { WEB_CODES } from '../../src/web/codes.js'
 import { approveFeatureBrief, createFeatureBrief, updateFeatureDraft } from '../../src/store/feature-store.js'
+import { loadConfig, writeConfig } from '../../src/store/config-store.js'
 import { acceptProfile } from '../../src/store/project-profile-store.js'
 import { acceptSkill } from '../../src/store/skill-acceptance-store.js'
 import { writePackage } from '../../src/store/skill-library-store.js'
@@ -350,6 +352,13 @@ describe('handleApi', () => {
   })
 
   describe('GET /api/skills/search', () => {
+    /** Widens `project`'s own config to allow the named sources, keeping everything else `initLoop` wrote. */
+    async function allowSources(sources: SkillSource[]): Promise<void> {
+      const config = await loadConfig(project.dir)
+      config.orchestration.skills.sources = sources
+      await writeConfig(project.dir, config)
+    }
+
     it('is a 400 without a query of at least two characters', async () => {
       for (const path of ['/api/skills/search', '/api/skills/search?q=', '/api/skills/search?q=a']) {
         expect((await call(path))?.status, path).toBe(400)
@@ -365,6 +374,39 @@ describe('handleApi', () => {
       const result = await call('/api/skills/search?q=react&source=skills-sh')
       expect(result?.status).toBe(403)
       expect(result?.body).toEqual({ error: { code: 'error.skillSourceDisabled' } })
+    })
+
+    describe('with skills-sh allowed and no token in the environment', () => {
+      // `discoverCandidates` is called from `api.ts` with no `deps`, so it
+      // reads the real `process.env` — the route's whole point is to use the
+      // ambient environment. Stubbing both variable names to an empty string
+      // (rather than deleting them) is what keeps this hermetic on a
+      // developer machine that happens to export a real token in its shell:
+      // `vi.stubEnv` always wins over whatever the process already has, and
+      // `vi.unstubAllEnvs` in `afterEach` restores it unconditionally, even
+      // if an assertion above throws. The refusal fires before any request is
+      // built, so this reaches no network either way.
+      beforeEach(() => {
+        vi.stubEnv('SKILLS_SH_TOKEN', '')
+        vi.stubEnv('VERCEL_OIDC_TOKEN', '')
+      })
+      afterEach(() => {
+        vi.unstubAllEnvs()
+      })
+
+      it('answers 503 for a missing skills.sh token, not a fault of the caller', async () => {
+        await allowSources(['skills-sh'])
+        const result = await call('/api/skills/search?q=react&source=skills-sh')
+        expect(result?.status).toBe(503)
+        expect(result?.body).toEqual({ error: { code: 'error.skillsShTokenMissing' } })
+      })
+    })
+
+    it('answers 501 for general web search, which this build has no provider for', async () => {
+      await allowSources(['web'])
+      const result = await call('/api/skills/search?q=react&source=web')
+      expect(result?.status).toBe(501)
+      expect(result?.body).toEqual({ error: { code: 'error.webSearchUnavailable' } })
     })
 
     it('stays a 405 for a POST', async () => {

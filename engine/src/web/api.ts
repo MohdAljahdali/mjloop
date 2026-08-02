@@ -285,15 +285,21 @@ async function route(projectDir: string, segments: readonly string[], query: URL
         try {
           return ok({ candidates: await discoverCandidates(projectDir, { query: q, source: source.data }) })
         } catch (error) {
-          // 403 rather than the file's usual 400/404/405/500: none of those
-          // fits a well-formed request refused by this project's own policy,
-          // and 403 is already this server's vocabulary for a policy refusal
-          // (`server.ts`'s token check answers the same code for the same
-          // reason — a request understood and rejected, not malformed or
-          // missing).
+          // Three different statuses, because the three refusals are not one
+          // kind and demand three different remedies from whoever — or
+          // whatever — reads the status before the code:
+          //  - disabled: the request is understood, and refused by this
+          //    project's own policy. 403, the ordinary code for that shape.
+          //  - missing token: not a caller who lacks permission, but a
+          //    deployment that is not configured — it would happen to every
+          //    caller alike, and the fix (set the env var, restart) is on the
+          //    server, not in the request. 503.
+          //  - web search: this build implements no general web search
+          //    connector at all, which retrying or reconfiguring cannot
+          //    change. 501, exactly what that status means.
           if (error instanceof SkillSourceDisabledError) return fail(403, 'error.skillSourceDisabled')
-          if (error instanceof SkillsShTokenMissingError) return fail(403, 'error.skillsShTokenMissing')
-          if (error instanceof WebSearchUnavailableError) return fail(403, 'error.webSearchUnavailable')
+          if (error instanceof SkillsShTokenMissingError) return fail(503, 'error.skillsShTokenMissing')
+          if (error instanceof WebSearchUnavailableError) return fail(501, 'error.webSearchUnavailable')
           throw error
         }
       }
