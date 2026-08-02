@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { installForTest, parts, pluralKey, t, tn } from '../../src/web/public/lib/i18n.js'
-import { duration, time } from '../../src/web/public/lib/fmt.js'
-import { installStorage, read, write } from '../../src/web/public/lib/local.js'
-import type { OpenStory } from '../../src/web/public/lib/local.js'
-import { routeFrom } from '../../src/web/public/lib/router.js'
+import { installForTest, parts, pluralKey, t, tn } from '../../src/web/app/lib/i18n.ts'
+import { duration, time } from '../../src/web/app/lib/fmt.ts'
+import { installStorage, read, write } from '../../src/web/app/lib/local.ts'
+import type { OpenStory } from '../../src/web/app/lib/local.ts'
+import { routeFrom } from '../../src/web/app/lib/router.ts'
 import {
   acceptancesFor,
   draftedAgents,
@@ -17,8 +17,8 @@ import {
   statusIndex,
   tally,
   unmet,
-} from '../../src/web/public/lib/stories.js'
-import { deriveEvents } from '../../src/web/public/lib/notifications.js'
+} from '../../src/web/app/lib/stories.ts'
+import { deriveEvents } from '../../src/web/app/lib/notifications.ts'
 import { emptySnapshot } from './helpers/page.js'
 import type { Job, PlanView, StoryView } from '../../src/web/protocol.js'
 import type { Track } from '../../src/schemas/config.js'
