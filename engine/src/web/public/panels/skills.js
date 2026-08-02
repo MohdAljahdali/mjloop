@@ -104,6 +104,18 @@ export function routeOnDisk(view) {
 const search = { candidates: [], code: null, asked: false }
 
 /**
+ * Counts every call to `searchSkills`, so a response for a query nobody is
+ * waiting for any more can tell itself apart from the current one.
+ *
+ * The same guard `feed()` (`lib/api.js`) applies to its own generation
+ * counter, for the same reason: fire a second search before the first
+ * answer lands, and without this the first answer can resolve *after* the
+ * second and overwrite it — the panel would then show results for a query
+ * that is no longer in the input.
+ */
+let generation = 0
+
+/**
  * Run the search the form is holding. Exported so `app.js` can register it as
  * the `skills-search` action and so the panel test can await it.
  *
@@ -116,7 +128,12 @@ export async function searchSkills() {
   // is a no-op rather than a round trip that comes back 400.
   if (q.length < 2) return
 
+  const mine = ++generation
   const answer = await get(`/api/skills/search?q=${encodeURIComponent(q)}&source=${encodeURIComponent(source)}`)
+  // A later search already started; this answer belongs to a query nobody is
+  // waiting for any more and must be dropped rather than drawn.
+  if (mine !== generation) return
+
   search.asked = true
   if (answer.ok) {
     search.candidates = Array.isArray(answer.body?.candidates) ? answer.body.candidates : []

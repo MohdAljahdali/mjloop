@@ -3635,4 +3635,68 @@ describe('searching for a skill from the cockpit', () => {
     await searchSkills()
     expect(fetchSpy).not.toHaveBeenCalled()
   })
+
+  it('drops a stale answer for a search that is no longer current', async () => {
+    // Answers 404 for both feeds this panel also mounts, which `feed()` treats
+    // as a settled "nothing" (`view` stays null) rather than the `{}` the
+    // default stub would hand back as a 200 — a 200 the panel's own
+    // `joinAcceptances` cannot parse and would throw on before ever reaching
+    // this block's own draw.
+    serve({})
+    reveal('panel-skills')
+    mountSkills()
+    draw(emptySnapshot())
+
+    const candidate = (skillName: string, url: string): unknown => ({
+      source: 'github',
+      url,
+      repository: url.replace('https://github.com/', ''),
+      ref: 'HEAD',
+      skillName,
+      description: `Use when ${skillName}.`,
+    })
+
+    // Each call gets its own controllable response, so the test can decide
+    // which answer lands first — the case a plain mock cannot express.
+    const pending: { resolve: (response: Response) => void }[] = []
+    vi.spyOn(globalThis, 'fetch').mockImplementation(
+      (() =>
+        new Promise<Response>((resolve) => {
+          pending.push({ resolve })
+        })) as never,
+    )
+
+    const input = document.getElementById('skills-search-q') as HTMLInputElement
+
+    // Two searches, fired before either answer lands — a person typing past
+    // their first query before the round trip for it returns.
+    input.value = 'first'
+    const firstCall = searchSkills()
+    input.value = 'second'
+    const secondCall = searchSkills()
+
+    expect(pending).toHaveLength(2)
+
+    // The *second* search's answer lands first, and is drawn.
+    pending[1]?.resolve(
+      new Response(JSON.stringify({ candidates: [candidate('second', 'https://github.com/x/second')] }), {
+        status: 200,
+      }),
+    )
+    await secondCall
+    expect(document.getElementById('skills-search-results')?.textContent).toContain('x/second')
+
+    // The *first* search's answer lands after it — for a query nobody is
+    // waiting for any more. Without the generation guard this overwrites the
+    // second search's own, newer results.
+    pending[0]?.resolve(
+      new Response(JSON.stringify({ candidates: [candidate('first', 'https://github.com/x/first')] }), {
+        status: 200,
+      }),
+    )
+    await firstCall
+
+    expect(document.getElementById('skills-search-results')?.textContent).toContain('x/second')
+    expect(document.getElementById('skills-search-results')?.textContent).not.toContain('x/first')
+  })
 })
