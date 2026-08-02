@@ -1,31 +1,27 @@
 {
   /*
-   * Type checking for the page.
+   * Type checking for the page, including its templates.
    *
-   * There is no bundler and no build step for `src/web/public/`, so without
-   * this the browser JavaScript is the one part of the engine a compiler never
-   * looks at — and it is the part that reads `Snapshot` field by field. JSDoc
-   * plus `checkJs` gives it `protocol.ts`'s real types: a typo in
-   * `snapshot.state.track` is a compile error rather than a blank slot on
-   * screen six months from now.
+   * Run through `vue-tsc` in the `typecheck` script rather than `tsc`: a typo
+   * in `{{ snapshot.state.trakc }}` is a compile error here, where the old
+   * JSDoc pass over hand-written DOM could only see the JavaScript.
    *
-   * It emits nothing and changes nothing at runtime. It is wired into the
-   * `typecheck` script rather than given one of its own — a separate script
-   * becomes decoration within two months.
+   * It emits nothing. Vite does the emitting.
    */
   "compilerOptions": {
     "target": "ES2023",
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
-    "types": ["node"],
-    "allowJs": true,
-    "checkJs": true,
+    "types": ["vite/client"],
     "noEmit": true,
     "strict": true,
+    "jsx": "preserve",
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true,
-    "skipLibCheck": true
+    "verbatimModuleSyntax": true,
+    "skipLibCheck": true,
+    "allowImportingTsExtensions": true
   },
-  "include": ["src/web/public/**/*.js", "src/web/page-globals.d.ts"]
+  "include": ["src/web/app/**/*.ts", "src/web/app/**/*.vue", "src/web/app/env.d.ts"]
 }

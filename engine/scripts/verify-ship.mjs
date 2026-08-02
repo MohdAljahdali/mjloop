@@ -15,6 +15,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { VENDOR_FILES } from './vendor.mjs'
+import { referencedAssets } from './assets.mjs'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
 const staging = await fs.mkdtemp(path.join(os.tmpdir(), 'mjloop-ship-'))
@@ -99,43 +100,35 @@ try {
 }
 
 /**
- * The page, checked against the source tree rather than against a list.
+ * The page, checked against its own build output rather than against a list.
  *
- * A hand-maintained asset list is a list somebody forgets to extend. The build
- * copies `src/web/public` verbatim, so the shipped page is *defined* as a
- * byte-for-byte mirror of it plus the three vendor bundles — and with no
- * bundler, a mistyped import specifier is a white screen rather than a build
- * error, so the import graph is walked too.
+ * `src/web/app/` is compiled by Vite, not copied, so there is no source tree
+ * left to byte-compare `dist` against — the shipped names are hashed and the
+ * shipped bytes are transformed. What still holds without a bundler in the
+ * way: every asset `index.html` names must have arrived, and a mistyped
+ * import specifier is a white screen rather than a build error, so the import
+ * graph is walked too.
  */
 async function checkPage(page) {
-  const source = path.join(root, 'src', 'web', 'public')
-
   const shipped = await walk(page)
-  const authored = await walk(source)
 
   /** A floor, so a bug in the walker cannot make all of this vacuously pass. */
-  check('the page has its files', authored.length >= 25, `${authored.length} files under src/web/public`)
-
-  const mismatched = []
-  for (const relative of authored) {
-    const [a, b] = await Promise.all([
-      fs.readFile(path.join(source, relative)).catch(() => null),
-      fs.readFile(path.join(page, relative)).catch(() => null),
-    ])
-    if (a === null || b === null || !a.equals(b)) mismatched.push(relative)
-  }
-  check('dist mirrors src/web/public byte for byte', mismatched.length === 0, mismatched.join(', '))
-
-  // The other direction: nothing may be shipped that is not either authored or
-  // a declared vendor bundle.
-  const known = new Set([...authored, ...VENDOR_FILES.map((name) => `vendor/${name}`)])
-  const extra = shipped.filter((relative) => !known.has(relative))
-  check('dist ships nothing the source tree does not have', extra.length === 0, extra.join(', '))
+  check('the page has its files', shipped.length >= 5, `${shipped.length} files under dist/web/public`)
 
   const missingVendor = VENDOR_FILES.filter((name) => !shipped.includes(`vendor/${name}`))
   check('dist ships the vendor bundles', missingVendor.length === 0, missingVendor.join(', '))
 
-  const spine = ['index.html', 'app.js', 'app.css', 'locales/en.json']
+  // The failure this catches: a build whose `index.html` names a hashed asset
+  // that never made it into `dist`. Every test passes — they run against the
+  // source tree — and the shipped page is blank.
+  const indexHtml = await fs.readFile(path.join(page, 'index.html'), 'utf8')
+  const missingAssets = []
+  for (const asset of referencedAssets(indexHtml)) {
+    if (!(await fs.stat(path.join(page, asset)).catch(() => false))) missingAssets.push(asset)
+  }
+  check('every asset the page references was shipped', missingAssets.length === 0, missingAssets.join(', '))
+
+  const spine = ['index.html', 'locales/en.json']
   const missingSpine = spine.filter((asset) => !shipped.includes(asset))
   check('dist ships the page spine', missingSpine.length === 0, missingSpine.join(', '))
 

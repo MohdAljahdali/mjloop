@@ -19,6 +19,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
+import { build as viteBuild } from 'vite'
 // Browser bundles the page loads. Pure JavaScript, so they ship in `dist` too.
 // Shared with `verify-ship.mjs` so the two cannot drift.
 import { VENDOR } from './vendor.mjs'
@@ -80,8 +81,12 @@ for (const [entry, out] of ENTRIES) {
   }
 }
 
+// The page is compiled now, not copied: `src/web/app/` is Vue SFCs. Everything
+// outside the import graph is still copied — `locales/` is fetched at runtime
+// by `lib/i18n.ts`, and `vendor/` is loaded by hand from `index.html`.
 const target = path.join(root, 'dist', 'web', 'public')
-await fs.cp(path.join(root, 'src', 'web', 'public'), target, { recursive: true })
+await viteBuild({ configFile: path.join(root, 'vite.config.ts'), logLevel: 'warn' })
+await fs.cp(path.join(root, 'src', 'web', 'app', 'locales'), path.join(target, 'locales'), { recursive: true })
 const vendorDir = path.join(target, 'vendor')
 await fs.mkdir(vendorDir, { recursive: true })
 for (const [specifier, name] of VENDOR) {
