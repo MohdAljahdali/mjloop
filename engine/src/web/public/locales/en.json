@@ -89,10 +89,8 @@
   "features.confirm": "Approve",
 
   "skills.onDisk": "Skills in this project",
-  "skills.onDiskWhy": "Every SKILL.md under .claude/skills/ in this checkout. A session can load these; whether mjloop routes work to one is a separate decision, shown per skill below.",
-  "skills.onDiskNone": "This checkout has no .claude/skills/ directory, so it ships no skill of its own.",
-  "skills.onDiskRouted": "Routed by mjloop to: {components}",
-  "skills.onDiskUnrouted": "Present, and routed by nothing — mjloop never selects it. Accepting is a command: mjloop-cli skills accept.",
+  "skills.onDiskWhy": "Every SKILL.md under .claude/skills/ in this checkout — the skills a session can load. What mjloop actually routes work to is decided separately: see this project's accepted skills below.",
+  "skills.onDiskNone": "No skill was read from .claude/skills/ in this checkout.",
 
   "skills.search": "Find a skill",
   "skills.searchWhy": "Search a source this project has allowed. Results are metadata only — nothing is downloaded, nothing is written, and none of these is active. Importing one is a command: mjloop-cli skills inspect, then mjloop-cli skills import.",

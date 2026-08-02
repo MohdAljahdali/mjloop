@@ -7,7 +7,7 @@ import { mountPlanDoc } from '../../src/web/public/lib/plandoc.js'
 import { drawRail, mountRail } from '../../src/web/public/ui/rail.js'
 import { collectConfigChanges, mountConfig } from '../../src/web/public/panels/config.js'
 import { mountEvidence } from '../../src/web/public/panels/evidence.js'
-import { joinAcceptances, mountSkills, routeOnDisk, searchSkills, shortDigest } from '../../src/web/public/panels/skills.js'
+import { joinAcceptances, mountSkills, searchSkills, shortDigest } from '../../src/web/public/panels/skills.js'
 import { approvable, mountFeatures } from '../../src/web/public/panels/features.js'
 import { mountPlans, planMemories, planRuns } from '../../src/web/public/panels/plans.js'
 import { mountStories } from '../../src/web/public/panels/stories.js'
@@ -3522,31 +3522,64 @@ describe('skills library', () => {
 })
 
 describe('the skills a project has on disk', () => {
-  it('pairs each on-disk skill with the acceptance that routes it, or with null', () => {
-    const view = {
-      packages: [],
-      unreadable: [],
-      acceptances: [
-        { skillId: 'brief-writer', digest: 'a'.repeat(64), packageId: 'pkg', status: 'active', compatible: true,
-          components: ['web'], agents: ['builder'], tags: [], updatePolicy: 'review',
-          acceptedBy: 'mohd', acceptedAt: NOW } as unknown as ProjectSkillAcceptance,
-      ],
-      onDisk: [
-        { name: 'brief-writer', description: 'Use when a request needs a brief.', path: '.claude/skills/brief-writer/SKILL.md' },
-        { name: 'lonely', description: 'Use when nothing routes here.', path: '.claude/skills/lonely/SKILL.md' },
-      ],
-      onDiskUnreadable: [],
-    }
+  it('draws each skill\'s name, description and path', async () => {
+    serve({
+      '/api/skills': {
+        packages: [],
+        unreadable: [],
+        acceptances: [],
+        onDisk: [
+          {
+            name: 'brief-writer',
+            description: 'Use when a request needs a brief.',
+            path: '.claude/skills/brief-writer/SKILL.md',
+          },
+        ],
+        onDiskUnreadable: [],
+      },
+    })
 
-    const routed = routeOnDisk(view as never)
-    expect(routed.map((entry) => [entry.skill.name, entry.routedBy?.skillId ?? null])).toEqual([
-      ['brief-writer', 'brief-writer'],
-      ['lonely', null],
-    ])
+    reveal('panel-skills')
+    mountSkills()
+    draw(emptySnapshot())
+    await vi.waitFor(() => expect(document.querySelectorAll('#skills-ondisk .component')).toHaveLength(1))
+
+    expect(document.querySelector('#skills-ondisk [data-slot="name"]')?.textContent).toBe('brief-writer')
+    expect(document.querySelector('#skills-ondisk [data-slot="description"]')?.textContent).toBe(
+      'Use when a request needs a brief.',
+    )
+    expect(document.querySelector('#skills-ondisk [data-slot="path"]')?.textContent).toBe(
+      '.claude/skills/brief-writer/SKILL.md',
+    )
   })
 
-  it('answers empty before the fetch has settled', () => {
-    expect(routeOnDisk(null)).toEqual([])
+  it('claims none only once the fetch has settled, and draws an unreadable file as a banner', async () => {
+    serve({
+      '/api/skills': {
+        packages: [],
+        unreadable: [],
+        acceptances: [],
+        onDisk: [],
+        onDiskUnreadable: [{ path: '.claude/skills/broken/SKILL.md', reason: 'missing frontmatter' }],
+      },
+    })
+
+    reveal('panel-skills')
+    mountSkills()
+    draw(emptySnapshot())
+
+    // Nothing is claimed before the fetch settles.
+    expect((document.getElementById('skills-ondisk-empty') as HTMLElement).hidden).toBe(true)
+
+    await vi.waitFor(() => expect(document.querySelectorAll('#skills-ondisk-unreadable .banner')).toHaveLength(1))
+
+    expect((document.getElementById('skills-ondisk-empty') as HTMLElement).hidden).toBe(false)
+    expect(document.querySelector('#skills-ondisk-unreadable [data-slot="path"]')?.textContent).toBe(
+      '.claude/skills/broken/SKILL.md',
+    )
+    expect(document.querySelector('#skills-ondisk-unreadable [data-slot="reason"]')?.textContent).toBe(
+      'missing frontmatter',
+    )
   })
 })
 

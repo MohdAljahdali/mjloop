@@ -97,10 +97,8 @@
   "features.confirm": "اعتماد",
 
   "skills.onDisk": "مهارات هذا المشروع",
-  "skills.onDiskWhy": "كل ملف SKILL.md تحت ‎.claude/skills/‎ في هذه النسخة. الجلسة تستطيع تحميلها، أمّا توجيه mjloop للعمل إلى إحداها فقرار منفصل يظهر بجانب كل مهارة أدناه.",
-  "skills.onDiskNone": "لا يحتوي هذا المشروع على مجلّد ‎.claude/skills/‎، فهو لا يقدّم مهارةً خاصةً به.",
-  "skills.onDiskRouted": "‏mjloop يوجّهها إلى: {components}",
-  "skills.onDiskUnrouted": "موجودة، ولا يوجّهها شيء — لن يختارها mjloop أبداً. القبول أمرٌ يُنفَّذ: ‏mjloop-cli skills accept‏.",
+  "skills.onDiskWhy": "كل ملف SKILL.md تحت ‏.claude/skills/‏ في هذه النسخة — وهذه هي المهارات التي تستطيع الجلسة تحميلها. أمّا ما يوجّه mjloop العمل إليه فقرارٌ منفصل: انظر مهارات هذا المشروع المقبولة أدناه.",
+  "skills.onDiskNone": "لم تُقرأ أي مهارة من ‏.claude/skills/‏ في هذه النسخة.",
 
   "skills.search": "ابحث عن مهارة",
   "skills.searchWhy": "ابحث في مصدرٍ سمح به هذا المشروع. النتائج بيانات وصفية فقط — لا يُنزَّل شيء، ولا يُكتب شيء، ولا شيء منها مُفعَّل. الاستيراد أمرٌ يُنفَّذ: ‏mjloop-cli skills inspect‏ ثم ‏mjloop-cli skills import‏.",
@@ -641,7 +639,7 @@
   "error.notFound": "غير موجود.",
   "error.unreadable": "تعذّرت القراءة — راجع الطرفيّة التي شُغّل منها الخادم.",
   "error.badRequest": "لم يُفهم هذا الطلب.",
-  "error.skillSourceDisabled": "لم يسمح هذا المشروع بهذا المصدر للمهارات. أضِفه إلى orchestration.skills.sources في ‎.mjloop/config.yaml‎ أولاً.",
+  "error.skillSourceDisabled": "لم يسمح هذا المشروع بهذا المصدر للمهارات. أضِفه إلى orchestration.skills.sources في ‏.mjloop/config.yaml‏ أولاً.",
   "error.skillsShTokenMissing": "البحث في ‏skills.sh‏ يحتاج رمز ‏Vercel OIDC‏. عيّن ‏SKILLS_SH_TOKEN‏ أو ‏VERCEL_OIDC_TOKEN‏ في الصدفة التي شُغّل منها الـ ‏cockpit‏ ثم أعِد تشغيله.",
   "error.webSearchUnavailable": "لا يحتوي هذا الإصدار على مزوّد بحث عام على الويب. ابحث في ‏github‏ أو ‏skills.sh‏ بدلاً من ذلك.",
 

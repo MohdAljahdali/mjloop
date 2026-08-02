@@ -74,24 +74,6 @@ export function joinAcceptances(view) {
 }
 
 /**
- * Pair every skill on disk with the acceptance that routes it, or with null.
- *
- * The null is the interesting half here, exactly as in `joinAcceptances`: a
- * `SKILL.md` sitting in `.claude/skills/` that no acceptance names is a skill
- * the session can load and mjloop will never select. Neither list says that
- * on its own, and `readSkillsView` serves both in one document so the join
- * costs no second request.
- *
- * @param {SkillsView | null} view
- * @returns {{ skill: ProjectSkillOnDisk, routedBy: ProjectSkillAcceptance | null }[]}
- */
-export function routeOnDisk(view) {
-  if (view === null) return []
-  const byId = new Map(view.acceptances.map((acceptance) => [acceptance.skillId, acceptance]))
-  return view.onDisk.map((skill) => ({ skill, routedBy: byId.get(skill.name) ?? null }))
-}
-
-/**
  * The last search's answer, held here rather than in a `feed`.
  *
  * A `feed` re-fetches when a revision moves, which is right for a document
@@ -202,12 +184,12 @@ export function mountSkills() {
       phrase(acceptancesEmpty, 'skills.acceptancesNone')
       reconcile(acceptancesHost, joined, (entry) => entry.acceptance.skillId, acceptanceCard)
 
-      const onDisk = routeOnDisk(view)
+      const onDisk = view?.onDisk ?? []
       // "No skills here" is claimed only once the answer is in — the same rule
       // the acceptances list above follows.
       flag(onDiskEmpty, 'hidden', view === null || onDisk.length > 0)
       phrase(onDiskEmpty, 'skills.onDiskNone')
-      reconcile(onDiskHost, onDisk, (entry) => entry.skill.path, projectSkillCard)
+      reconcile(onDiskHost, onDisk, (skill) => skill.path, projectSkillCard)
       reconcile(
         onDiskUnreadableHost,
         view?.onDiskUnreadable ?? [],
@@ -439,24 +421,14 @@ export function mountSkills() {
     const { root, slots } = clone('tpl-project-skill')
     return {
       root,
-      /** @param {{ skill: ProjectSkillOnDisk, routedBy: ProjectSkillAcceptance | null }} entry */
-      update(entry) {
+      /** @param {ProjectSkillOnDisk} skill */
+      update(skill) {
         const name = slots['name']
-        if (name !== undefined) verbatim(name, entry.skill.name)
+        if (name !== undefined) verbatim(name, skill.name)
         const description = slots['description']
-        if (description !== undefined) verbatim(description, entry.skill.description)
+        if (description !== undefined) verbatim(description, skill.description)
         const at = slots['path']
-        if (at !== undefined) verbatim(at, entry.skill.path)
-
-        const routing = slots['routing']
-        if (routing !== undefined) {
-          // The one sentence neither list can produce alone. An acceptance
-          // reaching no component routes nothing, whatever else it says, so
-          // that case is drawn as unrouted rather than as a blank list.
-          const components = entry.routedBy?.components ?? []
-          if (components.length === 0) phrase(routing, 'skills.onDiskUnrouted')
-          else phrase(routing, 'skills.onDiskRouted', { components: components.join(' ') })
-        }
+        if (at !== undefined) verbatim(at, skill.path)
 
         translateStatic(root)
       },
