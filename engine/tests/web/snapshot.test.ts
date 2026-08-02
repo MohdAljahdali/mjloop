@@ -226,6 +226,29 @@ describe('revisions', () => {
     expect((await buildSnapshot(project.dir)).revisions.skills).not.toBe(before)
   })
 
+  it('move when a SKILL.md already on disk is edited in place', async () => {
+    await initLoop(project.dir, clock)
+
+    // Two levels down from `.claude/skills/`: `stampTree` reaches one level,
+    // which sees this directory's own mtime and its listing — neither of
+    // which moves for an edit to the file inside it.
+    const dir = path.join(project.dir, '.claude', 'skills', 'brief-writer')
+    await fs.mkdir(dir, { recursive: true })
+    const file = path.join(dir, 'SKILL.md')
+    await fs.writeFile(file, '---\nname: brief-writer\ndescription: Use when a request needs a brief.\n---\nBody.\n')
+
+    const before = (await buildSnapshot(project.dir)).revisions.skills
+    // An in-place edit that also changes the file's size, so the fingerprint
+    // cannot pass by coincidence on a filesystem whose mtime granularity is
+    // coarser than the time this test takes to run.
+    await fs.writeFile(
+      file,
+      '---\nname: brief-writer\ndescription: Use when a request needs a brief, edited.\n---\nBody.\n',
+    )
+
+    expect((await buildSnapshot(project.dir)).revisions.skills).not.toBe(before)
+  })
+
   it('survive a library root that cannot be resolved at all', async () => {
     await initLoop(project.dir, clock)
 
