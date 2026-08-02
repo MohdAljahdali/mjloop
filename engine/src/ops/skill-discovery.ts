@@ -27,6 +27,13 @@ import { SkillCandidateSchema, type SkillCandidate } from '../schemas/skill-impo
 
 export interface SkillDiscoveryDeps {
   fetch: typeof globalThis.fetch
+  /**
+   * Optional, and read rather than defaulted at construction, so an existing
+   * caller passing `{ fetch }` keeps type-checking untouched. The one thing
+   * read from it is a skills.sh token; nothing here reads the ambient
+   * environment for anything else.
+   */
+  env?: Record<string, string | undefined>
 }
 
 const defaultDeps: SkillDiscoveryDeps = { fetch: globalThis.fetch }
@@ -76,6 +83,18 @@ export class WebSearchUnavailableError extends Error {
         'only "github" and "registry" (against orchestration.skills.trusted_registries) resolve real candidates today',
     )
     this.name = 'WebSearchUnavailableError'
+  }
+}
+
+/** skills.sh answers 401 without a Vercel OIDC token, and this build has not been given one. */
+export class SkillsShTokenMissingError extends Error {
+  constructor() {
+    super(
+      'searching skills.sh needs a Vercel OIDC token, and neither SKILLS_SH_TOKEN nor VERCEL_OIDC_TOKEN is set — ' +
+        'https://skills.sh/api/v1/ answers 401 "authentication_required" without one. Set one of the two in this ' +
+        'shell (see https://skills.sh/docs/api#authentication), or search "github", which needs no token.',
+    )
+    this.name = 'SkillsShTokenMissingError'
   }
 }
 
@@ -153,6 +172,72 @@ async function searchGithub(query: string, deps: SkillDiscoveryDeps): Promise<Sk
   return candidates
 }
 
+const SKILLS_SH_ORIGIN = 'https://skills.sh'
+const SKILLS_SH_SEARCH_URL = `${SKILLS_SH_ORIGIN}/api/v1/skills/search`
+
+/**
+ * skills.sh's own search index — data-only, like every connector here.
+ *
+ * Two shapes of dishonesty are deliberately avoided. First, a missing token
+ * is a refusal and never an empty result: 401 means "we did not look", not
+ * "there is nothing". Second, `installs` is *not* mapped onto `stars`. They
+ * are different measurements and a candidate list that prints one under the
+ * other's name is a lie a reviewer cannot see; the count goes into the
+ * description sentence instead, attributed.
+ */
+async function searchSkillsSh(query: string, deps: SkillDiscoveryDeps): Promise<SkillCandidate[]> {
+  const env = deps.env ?? process.env
+  const token = env['SKILLS_SH_TOKEN'] ?? env['VERCEL_OIDC_TOKEN'] ?? null
+  if (token === null || token.length === 0) throw new SkillsShTokenMissingError()
+
+  const url = `${SKILLS_SH_SEARCH_URL}?q=${encodeURIComponent(query)}&limit=${MAX_CANDIDATES}`
+  const body = await fetchJson(url, deps, {
+    headers: {
+      Accept: 'application/json',
+      Authorization: `Bearer ${token}`,
+      'User-Agent': 'mjloop-skill-discovery',
+    },
+  })
+  const items = isRecord(body) && Array.isArray(body.data) ? body.data : []
+
+  const candidates: SkillCandidate[] = []
+  for (const item of items.slice(0, MAX_CANDIDATES)) {
+    if (!isRecord(item)) continue
+    const slug = typeof item.slug === 'string' ? item.slug : typeof item.name === 'string' ? item.name : null
+    const repository = typeof item.source === 'string' ? item.source : null
+    const href = typeof item.url === 'string' ? item.url : null
+    if (slug === null || repository === null || href === null) continue
+
+    // A relative `url` is what the directory serves for a skill page; an
+    // absolute one is passed through untouched. Anything else fails
+    // `SkillCandidateSchema`'s https check below and is dropped rather than
+    // guessed at.
+    const absolute = href.startsWith('/') ? `${SKILLS_SH_ORIGIN}${href}` : href
+
+    const installs = typeof item.installs === 'number' ? item.installs : null
+    const described =
+      typeof item.description === 'string' && item.description.length > 0
+        ? item.description
+        : installs === null
+          ? 'No description in the skills.sh search index — open the candidate page before importing it.'
+          : `No description in the skills.sh search index; ${installs} installs reported. Open the candidate page before importing it.`
+
+    const parsed = SkillCandidateSchema.safeParse({
+      source: 'skills-sh',
+      url: absolute,
+      repository,
+      // The index reports no ref. `HEAD` is the honest placeholder: a
+      // candidate makes no immutability promise anyway, and `inspectCandidate`
+      // is what resolves a ref to a pinned sha before fetching anything.
+      ref: 'HEAD',
+      skillName: slug,
+      description: described,
+    })
+    if (parsed.success) candidates.push(parsed.data)
+  }
+  return candidates
+}
+
 /**
  * A trusted registry's own https endpoint. The contract this module expects
  * of a registry is deliberately small — `{ candidates: [{ url, repository,
@@ -206,6 +291,8 @@ export async function discoverCandidates(
       return searchGithub(options.query, deps)
     case 'registry':
       return searchRegistries(options.query, config.orchestration.skills.trusted_registries, deps)
+    case 'skills-sh':
+      return searchSkillsSh(options.query, deps)
     case 'web':
       // Enabled by policy, but no provider is wired up yet — refusing here is
       // the honest outcome the sandbox section of this story asks for
