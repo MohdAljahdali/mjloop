@@ -37,6 +37,7 @@ const highCount = computed(() => snapshot.value?.state.findings.high ?? 0)
   <nav class="tabs" :aria-label="t('tabs.label')">
     <a
       v-for="id in tabs"
+      :id="`tab-${id}`"
       :key="id"
       :href="`#${id}`"
       :aria-current="active === id ? 'page' : undefined"
@@ -44,8 +45,11 @@ const highCount = computed(() => snapshot.value?.state.findings.high ?? 0)
       @click.prevent="show(id)"
     >
       {{ t(`tabs.${id}`) }}
-      <span v-if="id === 'stories' && readyCount > 0" class="badge" aria-hidden="true">{{ readyCount }}</span>
-      <span v-if="id === 'run' && highCount > 0" class="badge" aria-hidden="true">{{ highCount }}</span>
+      <!-- Digits are prose counts, not identifiers — `app.js:362-365`'s own
+           `badge()` runs them through `t('tabs.number', { n })` for the same
+           reason `tn()` above does: Arabic reads Arabic-Indic digits here. -->
+      <span v-if="id === 'stories' && readyCount > 0" class="nav-count" aria-hidden="true">{{ t('tabs.number', { n: readyCount }) }}</span>
+      <span v-if="id === 'run' && highCount > 0" class="nav-count warnish" aria-hidden="true">{{ t('tabs.number', { n: highCount }) }}</span>
     </a>
   </nav>
 

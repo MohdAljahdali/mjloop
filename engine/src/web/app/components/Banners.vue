@@ -14,7 +14,10 @@ const props = defineProps<{ snapshot: Snapshot; online: boolean }>()
 const { t } = useI18n()
 
 const stale = computed(() => props.snapshot.state.recovered)
-const noDesignSystem = computed(() => !props.snapshot.state.design_system)
+// `rail.js:118` — a project that has not initialised at all is not "missing a
+// design system", it is missing everything; showing this banner then would be
+// telling the reader to run a command against a project that is not there yet.
+const noDesignSystem = computed(() => props.snapshot.state.initialised && !props.snapshot.state.design_system)
 </script>
 
 <template>
