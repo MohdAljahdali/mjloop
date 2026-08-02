@@ -24,6 +24,13 @@ import { FILTERS } from '../../src/web/public/lib/stories.js'
 const ENGINE = fileURLToPath(new URL('../../', import.meta.url))
 const PUBLIC_DIR = path.join(ENGINE, 'src', 'web', 'public')
 const LOCALES_DIR = path.join(PUBLIC_DIR, 'locales')
+/**
+ * `build.mjs` ships this copy, not `LOCALES_DIR` — the old page above still
+ * serves from `public/`, so the two directories hold the same files on
+ * purpose until the second plan retires `public/`. Everything above this
+ * guards `public/`'s copy; nothing above needs repointing.
+ */
+const APP_LOCALES_DIR = path.join(ENGINE, 'src', 'web', 'app', 'locales')
 
 async function readLocale(code: string): Promise<Record<string, string>> {
   return JSON.parse(await fs.readFile(path.join(LOCALES_DIR, `${code}.json`), 'utf8')) as Record<string, string>
@@ -295,5 +302,24 @@ describe('locales', () => {
     // …and the registry has to be the one the page actually installs, or the
     // grep above is reading a dead literal.
     expect(app).toContain('installLocales(LOCALES')
+  })
+})
+
+describe('locale drift between the two shipped copies', () => {
+  // `src/web/public/locales/` is what the old page (still live) serves and
+  // every test above guards. `src/web/app/locales/` is what `build.mjs` ships
+  // now — a copy made once, by hand, when the Vue app tree was created. The
+  // two are byte-identical today; nothing keeps them that way but this test.
+  it('src/web/app/locales holds the same files as src/web/public/locales', async () => {
+    const [publicNames, appNames] = await Promise.all([fs.readdir(LOCALES_DIR), fs.readdir(APP_LOCALES_DIR)])
+    expect(appNames.sort()).toEqual(publicNames.sort())
+  })
+
+  it.each(codes)('%s is byte-identical between the two locale directories', async (code) => {
+    const [publicBytes, appBytes] = await Promise.all([
+      fs.readFile(path.join(LOCALES_DIR, `${code}.json`)),
+      fs.readFile(path.join(APP_LOCALES_DIR, `${code}.json`)).catch(() => null),
+    ])
+    expect(appBytes !== null && appBytes.equals(publicBytes)).toBe(true)
   })
 })

@@ -14,8 +14,16 @@ import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { build as viteBuild } from 'vite'
 import { VENDOR_FILES } from './vendor.mjs'
 import { referencedAssets } from './assets.mjs'
+
+/**
+ * The extensions `server.ts`'s MIME map (`server.ts:34`) knows how to serve.
+ * Anything else in the shipped tree is served as `application/octet-stream`,
+ * silently, so it is checked here rather than left for a user to discover.
+ */
+const SERVABLE_EXTENSIONS = new Set(['.html', '.js', '.css', '.json', '.map'])
 
 const root = fileURLToPath(new URL('..', import.meta.url))
 const staging = await fs.mkdtemp(path.join(os.tmpdir(), 'mjloop-ship-'))
@@ -103,9 +111,13 @@ try {
  * The page, checked against its own build output rather than against a list.
  *
  * `src/web/app/` is compiled by Vite, not copied, so there is no source tree
- * left to byte-compare `dist` against — the shipped names are hashed and the
- * shipped bytes are transformed. What still holds without a bundler in the
- * way: every asset `index.html` names must have arrived, and a mistyped
+ * left to byte-compare `dist` against directly — the shipped names are hashed
+ * and the shipped bytes are transformed. So a fresh build is produced and
+ * *that* is what gets byte-compared: this is the 0.4.0 failure class in its
+ * new shape — a source edit whose build never got re-run would pass every
+ * other check here, because none of them re-derive anything from `src/`.
+ * What else still holds without a bundler standing between the checks and the
+ * page: every asset `index.html` names must have arrived, and a mistyped
  * import specifier is a white screen rather than a build error, so the import
  * graph is walked too.
  */
@@ -122,15 +134,30 @@ async function checkPage(page) {
   // that never made it into `dist`. Every test passes — they run against the
   // source tree — and the shipped page is blank.
   const indexHtml = await fs.readFile(path.join(page, 'index.html'), 'utf8')
+  const referenced = referencedAssets(indexHtml)
   const missingAssets = []
-  for (const asset of referencedAssets(indexHtml)) {
+  for (const asset of referenced) {
     if (!(await fs.stat(path.join(page, asset)).catch(() => false))) missingAssets.push(asset)
   }
   check('every asset the page references was shipped', missingAssets.length === 0, missingAssets.join(', '))
 
+  // The narrower failure the check above cannot catch on its own: an
+  // `index.html` with its module tag stripped references nothing missing —
+  // there is nothing to be missing — and would otherwise ship a blank page
+  // clean through every other check.
+  const shipsEntryScript = referenced.some((asset) => /^assets\/.*\.js$/.test(asset))
+  check('index.html references an entry script', shipsEntryScript, indexHtml)
+
   const spine = ['index.html', 'locales/en.json']
   const missingSpine = spine.filter((asset) => !shipped.includes(asset))
   check('dist ships the page spine', missingSpine.length === 0, missingSpine.join(', '))
+
+  // `server.ts` serves anything it doesn't recognise as `application/octet-
+  // stream`. A source tree that never earns an unservable file today still
+  // ships one silently the day `assetsInlineLimit` is lowered or a font is
+  // added — this needs no source tree to catch, only the MIME map.
+  const unservable = shipped.filter((relative) => !SERVABLE_EXTENSIONS.has(path.extname(relative)))
+  check('dist ships only file types the server can serve', unservable.length === 0, unservable.join(', '))
 
   const { missing, dynamic, reached } = await walkImports(page)
   check('every import and asset reference resolves', missing.length === 0, missing.join(', '))
@@ -139,6 +166,28 @@ async function checkPage(page) {
   // module nobody notices has stopped working.
   const orphans = shipped.filter((relative) => relative.endsWith('.js') && !reached.has(relative))
   check('the page ships no unreachable module', orphans.length === 0, orphans.join(', '))
+
+  // The 0.4.0 check, in its new shape: rebuild from the actual source tree
+  // and diff it against what is staged. Every check above runs entirely
+  // against `dist` — a source edit whose build was never re-run would sail
+  // through all of them, because none of them ever open `src/`.
+  const rebuilt = await fs.mkdtemp(path.join(os.tmpdir(), 'mjloop-ship-rebuilt-'))
+  await viteBuild({
+    configFile: path.join(root, 'vite.config.ts'),
+    logLevel: 'warn',
+    build: { outDir: rebuilt, emptyOutDir: true },
+  })
+  const freshFiles = await walk(rebuilt)
+  const stale = []
+  for (const relative of freshFiles) {
+    const [fresh, staged] = await Promise.all([
+      fs.readFile(path.join(rebuilt, relative)).catch(() => null),
+      fs.readFile(path.join(page, relative)).catch(() => null),
+    ])
+    if (fresh === null || staged === null || !fresh.equals(staged)) stale.push(relative)
+  }
+  check('dist matches a fresh build of the current source', stale.length === 0, stale.join(', '))
+  await fs.rm(rebuilt, { recursive: true, force: true })
 }
 
 /** Every file under `dir`, as forward-slash relative paths. */
