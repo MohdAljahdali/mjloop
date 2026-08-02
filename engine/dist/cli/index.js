@@ -6915,14 +6915,14 @@ var require_parser = __commonJS({
             case "scalar":
             case "single-quoted-scalar":
             case "double-quoted-scalar": {
-              const fs13 = this.flowScalar(this.type);
+              const fs14 = this.flowScalar(this.type);
               if (atNextItem || it.value) {
-                map.items.push({ start, key: fs13, sep: [] });
+                map.items.push({ start, key: fs14, sep: [] });
                 this.onKeyLine = true;
               } else if (it.sep) {
-                this.stack.push(fs13);
+                this.stack.push(fs14);
               } else {
-                Object.assign(it, { key: fs13, sep: [] });
+                Object.assign(it, { key: fs14, sep: [] });
                 this.onKeyLine = true;
               }
               return;
@@ -7050,13 +7050,13 @@ var require_parser = __commonJS({
             case "scalar":
             case "single-quoted-scalar":
             case "double-quoted-scalar": {
-              const fs13 = this.flowScalar(this.type);
+              const fs14 = this.flowScalar(this.type);
               if (!it || it.value)
-                fc.items.push({ start: [], key: fs13, sep: [] });
+                fc.items.push({ start: [], key: fs14, sep: [] });
               else if (it.sep)
-                this.stack.push(fs13);
+                this.stack.push(fs14);
               else
-                Object.assign(it, { key: fs13, sep: [] });
+                Object.assign(it, { key: fs14, sep: [] });
               return;
             }
             case "flow-map-end":
@@ -7366,7 +7366,8 @@ var require_dist = __commonJS({
 
 // src/cli/index.ts
 import { spawn as nodeSpawn2 } from "node:child_process";
-import fs12 from "node:fs/promises";
+import { fileURLToPath } from "node:url";
+import fs13 from "node:fs/promises";
 import os3 from "node:os";
 import path12 from "node:path";
 
@@ -12961,6 +12962,26 @@ var OrchestrationSchema = strictObject({
     update_mode: SkillUpdateModeSchema.default("review")
   }).prefault({})
 });
+var WebSchema = strictObject({
+  /**
+   * Start the cockpit and open it when a session starts in this project.
+   *
+   * On by default, because a project with `.mjloop/` in it is a project whose
+   * runs somebody wants to watch, and the alternative is remembering to type
+   * `/mjloop:web` every morning. Three things keep that from being rude, and
+   * all three are in `sessionStartCommand` rather than here:
+   *
+   *  1. It fires on `source: 'startup'` only. `SessionStart` also fires on
+   *     `/clear` and on a resume, which happen many times a day, and a browser
+   *     tab per `/clear` is the version of this feature people turn off.
+   *  2. It reuses a server already serving this project — see
+   *     `paths.webServer` — rather than racing it for the port.
+   *  3. It does nothing at all when `node-pty` is missing, because the first
+   *     dashboard run installs it and a hook is not the place to start an
+   *     `npm install` nobody asked for.
+   */
+  autostart: boolean2().default(true)
+}).prefault({});
 var LEGACY_CONFIG_KEYS = ["custom_dirs"];
 var ConfigSchema = strictObject({
   version: literal(1),
@@ -13013,7 +13034,8 @@ var ConfigSchema = strictObject({
   }).default({ plan_approval: "human", commit: "auto", preflight: "auto" }),
   /** `.prefault({})` for the reason `verify` above uses it, and because this
    * key is absent from every config written before it existed. */
-  orchestration: OrchestrationSchema.prefault({})
+  orchestration: OrchestrationSchema.prefault({}),
+  web: WebSchema.prefault({})
 }).superRefine((config2, ctx) => {
   const { discovery, skills } = config2.orchestration;
   if (discovery.completion === "auto-plan" && discovery.mode === "off") {
@@ -13137,6 +13159,17 @@ function resolveLoopPaths(projectDir) {
      * wants one fetches it once, by id, rather than polling for a change.
      */
     webTranscripts: path.join(root, "web", "transcripts"),
+    /**
+     * What a running cockpit leaves behind so a second session can find it:
+     * its port, its token and its pid. Written when the server starts
+     * listening and removed when it stops, so a stale file means a crash and
+     * is treated as one — the pid is probed before the file is believed.
+     *
+     * Under `web/` rather than at the root because it is the same kind of
+     * thing as `web/transcripts/`: server runtime, not project state, stamped
+     * by no revision key and read by no poller.
+     */
+    webServer: path.join(root, "web", "server.json"),
     lock: path.join(root, ".lock"),
     /**
      * Mutual exclusion for verify *execution*, and never the same directory as
@@ -15523,8 +15556,70 @@ function applyChange(document, change) {
   }
 }
 
-// src/util/entrypoint.ts
+// src/web/marker.ts
 import fs11 from "node:fs/promises";
+var ServerMarkerSchema = strictObject({
+  port: number2().int().positive(),
+  token: string2().min(1),
+  pid: number2().int().positive()
+});
+async function readServerMarker(projectDir) {
+  let raw;
+  try {
+    raw = await fs11.readFile(resolveLoopPaths(projectDir).webServer, "utf8");
+  } catch {
+    return null;
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  const marker = ServerMarkerSchema.safeParse(parsed);
+  if (!marker.success) return null;
+  if (!alive(marker.data.pid)) return null;
+  return { url: `http://127.0.0.1:${marker.data.port}/?t=${marker.data.token}` };
+}
+function alive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error2) {
+    return error2.code === "EPERM";
+  }
+}
+
+// src/web/session.ts
+import { createRequire } from "node:module";
+var require2 = createRequire(import.meta.url);
+var cached2 = null;
+var PtyMissingError = class extends Error {
+  constructor(cause) {
+    super(`node-pty is not installed, so the dashboard cannot open a terminal (${cause})`);
+    this.name = "PtyMissingError";
+  }
+};
+function pty() {
+  if (cached2 !== null) return cached2;
+  try {
+    cached2 = require2("node-pty");
+  } catch (error2) {
+    throw new PtyMissingError(error2.message);
+  }
+  return cached2;
+}
+function isPtyAvailable() {
+  try {
+    pty();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// src/util/entrypoint.ts
+import fs12 from "node:fs/promises";
 import path11 from "node:path";
 import { pathToFileURL } from "node:url";
 async function isEntrypoint(moduleUrl) {
@@ -15532,7 +15627,7 @@ async function isEntrypoint(moduleUrl) {
   if (argv1 === void 0) return false;
   let resolved = path11.resolve(argv1);
   try {
-    resolved = await fs11.realpath(resolved);
+    resolved = await fs12.realpath(resolved);
   } catch {
   }
   return moduleUrl === pathToFileURL(resolved).href;
@@ -15704,7 +15799,7 @@ async function configGetCommand(args) {
   const file = resolveLoopPaths(dir).config;
   let raw;
   try {
-    raw = await fs12.readFile(file, "utf8");
+    raw = await fs13.readFile(file, "utf8");
   } catch {
     return fail(`${file} not found \u2014 run /mjloop:init first`);
   }
@@ -15738,7 +15833,7 @@ ${prettifyError(change.error)}`);
   const file = resolveLoopPaths(dir).config;
   let current;
   try {
-    current = await fs12.readFile(file, "utf8");
+    current = await fs13.readFile(file, "utf8");
   } catch {
     return fail(`${file} not found \u2014 run /mjloop:init first`);
   }
@@ -15970,8 +16065,8 @@ async function profileRejectCommand(args) {
   }
   const active = (await listAcceptedRevisions(dir)).at(-1) ?? null;
   const file = proposedProfileFile(dir);
-  await fs12.rm(file, { force: true });
-  await fs12.rm(`${file}.bak`, { force: true });
+  await fs13.rm(file, { force: true });
+  await fs13.rm(`${file}.bak`, { force: true });
   const remains = active === null ? "No component map is accepted." : `Revision ${active} is still the accepted component map.`;
   return { stdout: `proposal discarded. ${remains}
 `, exitCode: 0 };
@@ -16408,16 +16503,16 @@ async function skillsImportCommand(args, deps) {
       return { stdout: renderReport(report), exitCode: 1 };
     }
     const pkg = buildSkillPackage(report);
-    const stageDir = await fs12.mkdtemp(path12.join(os3.tmpdir(), "mjloop-skill-import-"));
+    const stageDir = await fs13.mkdtemp(path12.join(os3.tmpdir(), "mjloop-skill-import-"));
     try {
       for (const file of files) {
         const dest = path12.join(stageDir, file.path);
-        await fs12.mkdir(path12.dirname(dest), { recursive: true });
-        await fs12.writeFile(dest, file.buffer);
+        await fs13.mkdir(path12.dirname(dest), { recursive: true });
+        await fs13.writeFile(dest, file.buffer);
       }
       await writePackage(dir, pkg, stageDir);
     } finally {
-      await fs12.rm(stageDir, { recursive: true, force: true });
+      await fs13.rm(stageDir, { recursive: true, force: true });
     }
     return {
       stdout: `imported "${pkg.skillName}" at digest ${pkg.digest}
@@ -16536,14 +16631,57 @@ async function sessionStartCommand(stdin) {
   const cwd = readCwd(stdin);
   const summary = await stateSummary(cwd);
   if (!summary.initialised) return { stdout: "", exitCode: 0 };
+  const lines = [renderSummaryLine(summary)];
+  const cockpit = await autostartCockpit(cwd, readSource(stdin));
+  if (cockpit !== null) lines.push(cockpit);
   const payload = {
     hookSpecificOutput: {
       hookEventName: "SessionStart",
-      additionalContext: renderSummaryLine(summary)
+      additionalContext: lines.join("\n")
     }
   };
   return { stdout: `${JSON.stringify(payload)}
 `, exitCode: 0 };
+}
+async function autostartCockpit(cwd, source) {
+  if (source !== "startup") return null;
+  const config2 = await loadConfig(cwd).catch(() => null);
+  if (config2 === null || !config2.web.autostart) return null;
+  const running = await readServerMarker(cwd);
+  if (running !== null) {
+    openUrl(running.url);
+    return `The cockpit is already running: ${running.url}`;
+  }
+  if (!isPtyAvailable()) {
+    return "Run /mjloop:web once to set the cockpit up \u2014 it installs node-pty, which a session hook will not do unasked.";
+  }
+  try {
+    nodeSpawn2(process.execPath, [webCliPath(), "--dir", cwd], {
+      detached: true,
+      stdio: "ignore"
+    }).unref();
+  } catch {
+    return null;
+  }
+  return "Starting the cockpit \u2014 it opens in your browser in a moment.";
+}
+function webCliPath() {
+  return path12.join(fileURLToPath(new URL("../../", import.meta.url)), "dist", "web", "cli.js");
+}
+function openUrl(url) {
+  const command = process.platform === "darwin" ? "open" : process.platform === "win32" ? "start" : "xdg-open";
+  try {
+    nodeSpawn2(command, [url], { detached: true, stdio: "ignore", shell: process.platform === "win32" }).unref();
+  } catch {
+  }
+}
+function readSource(stdin) {
+  try {
+    const parsed = JSON.parse(stdin);
+    return typeof parsed.source === "string" ? parsed.source : "";
+  } catch {
+    return "";
+  }
 }
 async function stateGuardCommand(stdin) {
   let input;

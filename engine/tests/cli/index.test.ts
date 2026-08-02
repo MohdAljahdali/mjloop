@@ -122,6 +122,74 @@ describe('runCli session-start', () => {
     expect(stdout).toBe('')
     expect(exitCode).toBe(0)
   })
+
+  it('starts nothing on a resume or a clear, however the project is configured', async () => {
+    // `SessionStart` fires on all three, and the other two happen many times a
+    // day. A browser tab per `/clear` is the version of this feature people
+    // turn off within the hour, so the gate is the source and not the setting.
+    await initLoop(project.dir, clock)
+    for (const source of ['resume', 'clear']) {
+      const { stdout } = await runCli(['session-start'], JSON.stringify({ cwd: project.dir, source }))
+      expect(JSON.parse(stdout).hookSpecificOutput.additionalContext).not.toContain('cockpit')
+    }
+  })
+
+  it('says how to set the cockpit up rather than installing node-pty behind the session', async () => {
+    // The first dashboard run installs a native module. A hook that did that
+    // would run an unattended `npm install` on every fresh clone, before the
+    // session has drawn its first prompt.
+    await initLoop(project.dir, clock)
+    const { stdout } = await runCli(['session-start'], JSON.stringify({ cwd: project.dir, source: 'startup' }))
+    const context = JSON.parse(stdout).hookSpecificOutput.additionalContext
+    // Whichever branch this machine takes, it never reports a failure into the
+    // session's opening context.
+    expect(context).toContain('initialised')
+    expect(context).not.toContain('Error')
+  })
+
+  it('reuses a cockpit already serving this project instead of racing it for the port', async () => {
+    // Two servers on one project collide on 4177, and the loser dies in a
+    // detached process nobody is watching. The marker is how the second session
+    // finds the first.
+    await initLoop(project.dir, clock)
+    const marker = resolveLoopPaths(project.dir).webServer
+    await fs.mkdir(path.dirname(marker), { recursive: true })
+    await fs.writeFile(marker, JSON.stringify({ port: 4177, token: 'abc', pid: process.pid }), 'utf8')
+
+    const { stdout } = await runCli(['session-start'], JSON.stringify({ cwd: project.dir, source: 'startup' }))
+    expect(JSON.parse(stdout).hookSpecificOutput.additionalContext).toContain('http://127.0.0.1:4177/?t=abc')
+  })
+
+  it('ignores a marker whose server is gone', async () => {
+    // `close()` removes the marker; a killed process removes nothing. Believing
+    // a stale port and token sends the reader's browser to a refused
+    // connection, which looks like the dashboard is broken.
+    await initLoop(project.dir, clock)
+    const marker = resolveLoopPaths(project.dir).webServer
+    await fs.mkdir(path.dirname(marker), { recursive: true })
+    // pid 1 is init and always alive, so a pid that cannot exist is needed: one
+    // above the platform maximum is never allocated.
+    await fs.writeFile(marker, JSON.stringify({ port: 4177, token: 'abc', pid: 4_194_305 }), 'utf8')
+
+    const { stdout } = await runCli(['session-start'], JSON.stringify({ cwd: project.dir, source: 'startup' }))
+    expect(JSON.parse(stdout).hookSpecificOutput.additionalContext).not.toContain('already running')
+  })
+
+  it('starts nothing when the project turns it off', async () => {
+    await initLoop(project.dir, clock)
+    // `initLoop` writes the key already, which is the point of it being a
+    // schema default rather than an undocumented environment variable: a
+    // reader who wants this off finds it in their own config.yaml.
+    const config = resolveLoopPaths(project.dir).config
+    const raw = await fs.readFile(config, 'utf8')
+    expect(raw).toContain('autostart: true')
+    await fs.writeFile(config, raw.replace('autostart: true', 'autostart: false'), 'utf8')
+
+    const { stdout } = await runCli(['session-start'], JSON.stringify({ cwd: project.dir, source: 'startup' }))
+    const context = JSON.parse(stdout).hookSpecificOutput.additionalContext
+    expect(context).not.toContain('cockpit')
+    expect(context).toContain('initialised')
+  })
 })
 
 describe('evaluateStateGuard', () => {

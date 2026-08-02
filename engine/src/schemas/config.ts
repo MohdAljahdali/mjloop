@@ -483,6 +483,35 @@ export const OrchestrationSchema = z.strictObject({
  * setting anywhere redirects that — so the field's default, and every value it
  * could be given, produced files that are never loaded.
  */
+/**
+ * The cockpit, as a project setting rather than a per-invocation flag.
+ *
+ * Only one key, and it is about the `SessionStart` hook: whether opening this
+ * project starts the dashboard and puts it on screen without being asked.
+ */
+export const WebSchema = z
+  .strictObject({
+    /**
+     * Start the cockpit and open it when a session starts in this project.
+     *
+     * On by default, because a project with `.mjloop/` in it is a project whose
+     * runs somebody wants to watch, and the alternative is remembering to type
+     * `/mjloop:web` every morning. Three things keep that from being rude, and
+     * all three are in `sessionStartCommand` rather than here:
+     *
+     *  1. It fires on `source: 'startup'` only. `SessionStart` also fires on
+     *     `/clear` and on a resume, which happen many times a day, and a browser
+     *     tab per `/clear` is the version of this feature people turn off.
+     *  2. It reuses a server already serving this project — see
+     *     `paths.webServer` — rather than racing it for the port.
+     *  3. It does nothing at all when `node-pty` is missing, because the first
+     *     dashboard run installs it and a hook is not the place to start an
+     *     `npm install` nobody asked for.
+     */
+    autostart: z.boolean().default(true),
+  })
+  .prefault({})
+
 export const LEGACY_CONFIG_KEYS = ['custom_dirs'] as const
 
 export const ConfigSchema = z
@@ -545,6 +574,7 @@ export const ConfigSchema = z
     /** `.prefault({})` for the reason `verify` above uses it, and because this
      * key is absent from every config written before it existed. */
     orchestration: OrchestrationSchema.prefault({}),
+    web: WebSchema.prefault({}),
   })
   // A track cannot see the `specialists` map, so the contradiction between a
   // track that requires an agent and a config that forbids it can only be

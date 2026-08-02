@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { WebSocketServer, type WebSocket } from 'ws'
 import { handleApi, sendApi } from './api.js'
 import { JobQueue } from './queue.js'
+import { clearServerMarker, writeServerMarker } from './marker.js'
 import { ClientMessageSchema, type Message, type ServerMessage, type Snapshot } from './protocol.js'
 import { spawnPtySession, type SessionFactory } from './session.js'
 import { buildSnapshot, emptyCache } from './snapshot.js'
@@ -290,6 +291,12 @@ export async function startServer(options: ServerOptions): Promise<RunningServer
   const address = server.address()
   const port = typeof address === 'object' && address !== null ? address.port : options.port
 
+  // The one thing a second session needs to find this one instead of racing it
+  // for the port. Best effort in both directions: a project whose `.mjloop`
+  // cannot be written still gets a working dashboard, it just cannot be found
+  // by the `SessionStart` hook.
+  await writeServerMarker(options.projectDir, { port, token, pid: process.pid })
+
   return {
     url: `http://127.0.0.1:${port}/?t=${token}`,
     token,
@@ -300,6 +307,7 @@ export async function startServer(options: ServerOptions): Promise<RunningServer
       for (const socket of sockets) socket.terminate()
       wss.close()
       await new Promise<void>((resolve) => server.close(() => resolve()))
+      await clearServerMarker(options.projectDir)
     },
   }
 }

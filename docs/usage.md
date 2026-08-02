@@ -256,6 +256,16 @@ read, approved and tracked, and **Stories** is where its stories are filtered an
 Whichever plan you have open under Plans is the one Stories shows. Click a story's Run and
 it is queued; type any loop command into the box and it is queued too.
 
+Opening a session in a project that has `.mjloop/` starts it for you and puts it on
+screen. Only on a genuine session start — not on `/clear` and not on a resume, which happen
+too often to be worth a browser tab each — and only once: a second session finds the
+cockpit already serving this project and opens that one rather than racing it for the
+port. Turn it off per project with `mjloop-cli config set web.autostart false`, or find
+`web:` in your own `.mjloop/config.yaml`.
+
+The very first run installs `node-pty`, and a session hook will not do that unasked — so
+on a fresh clone the hook tells you to run `/mjloop:web` once, by hand, and starts nothing.
+
 The queue runs **one at a time**, each in its own `claude` session. `.mjloop/state.json`
 holds one run, so two at once would overwrite each other — the server enforces that
 rather than trusting whoever is clicking.

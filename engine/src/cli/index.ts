@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { spawn as nodeSpawn } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
@@ -16,6 +17,8 @@ import { ImportReportSchema, SkillCandidateSchema, type ImportReport, type Sandb
 import { SkillPackageSchema, type SkillPackage } from '../schemas/skill-library.js'
 import { ConfigChangeSchema, ConfigMutationError, configRevision, mutateConfig } from '../store/config-mutation.js'
 import { ConfigMissingError, loadConfig } from '../store/config-store.js'
+import { readServerMarker } from '../web/marker.js'
+import { isPtyAvailable } from '../web/session.js'
 import { parseFrontmatter } from '../store/frontmatter.js'
 import { PROTECTED_BASENAMES, PROTECTED_DIRECTORIES, resolveLoopPaths } from '../store/paths.js'
 import { StalePreconditionError } from '../store/precondition.js'
@@ -1659,13 +1662,108 @@ async function sessionStartCommand(stdin: string): Promise<CliResult> {
   // Say nothing in projects that do not use mjloop — silence beats noise.
   if (!summary.initialised) return { stdout: '', exitCode: 0 }
 
+  const lines = [renderSummaryLine(summary)]
+  const cockpit = await autostartCockpit(cwd, readSource(stdin))
+  if (cockpit !== null) lines.push(cockpit)
+
   const payload = {
     hookSpecificOutput: {
       hookEventName: 'SessionStart',
-      additionalContext: renderSummaryLine(summary),
+      additionalContext: lines.join('\n'),
     },
   }
   return { stdout: `${JSON.stringify(payload)}\n`, exitCode: 0 }
+}
+
+/**
+ * Put the cockpit on screen when a session opens in a project that uses it.
+ *
+ * Returns a line for the session's context, or null when it did nothing.
+ *
+ * Four gates, and each one is a way this feature becomes unwelcome if it is
+ * missing:
+ *
+ *  1. `startup` only. `SessionStart` also fires on `/clear` and on a resume,
+ *     which happen many times a day; a browser tab per `/clear` is the version
+ *     of this people turn off within the hour.
+ *  2. `web.autostart`, which a project can set to false.
+ *  3. A server already serving this project is reused, not raced. Two servers
+ *     on one project would collide on the port anyway — the default is fixed at
+ *     4177 — and the second would die with `EADDRINUSE` in a detached process
+ *     nobody is watching.
+ *  4. `node-pty`. The first dashboard run installs it, and a hook is not the
+ *     place to start an `npm install` nobody asked for: it would run
+ *     unattended, on every clone, before the session has drawn its first
+ *     prompt. So this says how to do it once, by hand, and starts nothing.
+ *
+ * Every failure below is silent. A hook that cannot open a browser has cost
+ * the reader nothing; a hook that writes an error into the session's opening
+ * context has.
+ */
+async function autostartCockpit(cwd: string, source: string): Promise<string | null> {
+  if (source !== 'startup') return null
+
+  const config = await loadConfig(cwd).catch(() => null)
+  if (config === null || !config.web.autostart) return null
+
+  const running = await readServerMarker(cwd)
+  if (running !== null) {
+    openUrl(running.url)
+    return `The cockpit is already running: ${running.url}`
+  }
+
+  if (!isPtyAvailable()) {
+    return 'Run /mjloop:web once to set the cockpit up — it installs node-pty, which a session hook will not do unasked.'
+  }
+
+  try {
+    // Detached, unref'd, output discarded: this outlives the hook by design, and
+    // a hook that waited on it would hold the session's first prompt behind a
+    // server start.
+    nodeSpawn(process.execPath, [webCliPath(), '--dir', cwd], {
+      detached: true,
+      stdio: 'ignore',
+    }).unref()
+  } catch {
+    return null
+  }
+  return 'Starting the cockpit — it opens in your browser in a moment.'
+}
+
+/**
+ * `startup`, `resume` or `clear`. Absent means a caller that is not Claude
+ * Code, which is every test and every hand-run of this command, so it reads as
+ * the one that starts nothing.
+ */
+/**
+ * The shipped `dist/web/cli.js`, from wherever this file is running.
+ *
+ * `dist/cli/index.js` and `src/cli/index.ts` are both two directories under the
+ * engine root, which is the same expression `web/cli.ts` uses to find the
+ * engine — so one form serves the bundle and a dev checkout. In a checkout it
+ * resolves to `dist/web/cli.js`, which is committed, so it exists either way.
+ */
+function webCliPath(): string {
+  return path.join(fileURLToPath(new URL('../../', import.meta.url)), 'dist', 'web', 'cli.js')
+}
+
+/** The browser, the way `web/cli.ts` opens it. Failure is not worth reporting. */
+function openUrl(url: string): void {
+  const command = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open'
+  try {
+    nodeSpawn(command, [url], { detached: true, stdio: 'ignore', shell: process.platform === 'win32' }).unref()
+  } catch {
+    /* the url is in the session's context either way */
+  }
+}
+
+function readSource(stdin: string): string {
+  try {
+    const parsed = JSON.parse(stdin) as { source?: unknown }
+    return typeof parsed.source === 'string' ? parsed.source : ''
+  } catch {
+    return ''
+  }
 }
 
 async function stateGuardCommand(stdin: string): Promise<CliResult> {

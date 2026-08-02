@@ -13,6 +13,7 @@ export interface LoopPaths {
   features: string
   skills: string
   webTranscripts: string
+  webServer: string
   lock: string
   verifyLock: string
 }
@@ -76,6 +77,17 @@ export function resolveLoopPaths(projectDir: string): LoopPaths {
      * wants one fetches it once, by id, rather than polling for a change.
      */
     webTranscripts: path.join(root, 'web', 'transcripts'),
+    /**
+     * What a running cockpit leaves behind so a second session can find it:
+     * its port, its token and its pid. Written when the server starts
+     * listening and removed when it stops, so a stale file means a crash and
+     * is treated as one — the pid is probed before the file is believed.
+     *
+     * Under `web/` rather than at the root because it is the same kind of
+     * thing as `web/transcripts/`: server runtime, not project state, stamped
+     * by no revision key and read by no poller.
+     */
+    webServer: path.join(root, 'web', 'server.json'),
     lock: path.join(root, '.lock'),
     /**
      * Mutual exclusion for verify *execution*, and never the same directory as

@@ -29729,6 +29729,26 @@ var OrchestrationSchema = strictObject({
     update_mode: SkillUpdateModeSchema.default("review")
   }).prefault({})
 });
+var WebSchema = strictObject({
+  /**
+   * Start the cockpit and open it when a session starts in this project.
+   *
+   * On by default, because a project with `.mjloop/` in it is a project whose
+   * runs somebody wants to watch, and the alternative is remembering to type
+   * `/mjloop:web` every morning. Three things keep that from being rude, and
+   * all three are in `sessionStartCommand` rather than here:
+   *
+   *  1. It fires on `source: 'startup'` only. `SessionStart` also fires on
+   *     `/clear` and on a resume, which happen many times a day, and a browser
+   *     tab per `/clear` is the version of this feature people turn off.
+   *  2. It reuses a server already serving this project — see
+   *     `paths.webServer` — rather than racing it for the port.
+   *  3. It does nothing at all when `node-pty` is missing, because the first
+   *     dashboard run installs it and a hook is not the place to start an
+   *     `npm install` nobody asked for.
+   */
+  autostart: boolean2().default(true)
+}).prefault({});
 var LEGACY_CONFIG_KEYS = ["custom_dirs"];
 var ConfigSchema = strictObject({
   version: literal(1),
@@ -29781,7 +29801,8 @@ var ConfigSchema = strictObject({
   }).default({ plan_approval: "human", commit: "auto", preflight: "auto" }),
   /** `.prefault({})` for the reason `verify` above uses it, and because this
    * key is absent from every config written before it existed. */
-  orchestration: OrchestrationSchema.prefault({})
+  orchestration: OrchestrationSchema.prefault({}),
+  web: WebSchema.prefault({})
 }).superRefine((config2, ctx) => {
   const { discovery, skills } = config2.orchestration;
   if (discovery.completion === "auto-plan" && discovery.mode === "off") {
@@ -30365,6 +30386,17 @@ function resolveLoopPaths(projectDir) {
      * wants one fetches it once, by id, rather than polling for a change.
      */
     webTranscripts: path2.join(root, "web", "transcripts"),
+    /**
+     * What a running cockpit leaves behind so a second session can find it:
+     * its port, its token and its pid. Written when the server starts
+     * listening and removed when it stops, so a stale file means a crash and
+     * is treated as one — the pid is probed before the file is believed.
+     *
+     * Under `web/` rather than at the root because it is the same kind of
+     * thing as `web/transcripts/`: server runtime, not project state, stamped
+     * by no revision key and read by no poller.
+     */
+    webServer: path2.join(root, "web", "server.json"),
     lock: path2.join(root, ".lock"),
     /**
      * Mutual exclusion for verify *execution*, and never the same directory as
