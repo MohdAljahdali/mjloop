@@ -1,0 +1,172 @@
+/* Anchors in a <nav>, not a role="tablist": these panels are URL-addressable,
+   back and forward move between them, and there is no arrow-key handler that
+   has to work out which way "next" points in an rtl document.
+
+   Two shapes, one markup: a scrolling strip under the header on a narrow
+   viewport, and a sidebar beside the content from 900px up. Which one is in
+   force is a media query here — the page's grid areas are in `app.css`. */
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  padding: 8px 14px 0;
+  border-block-end: 1px solid var(--line);
+  background: linear-gradient(180deg, var(--panel), color-mix(in srgb, var(--bg) 70%, var(--panel)));
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tabs a {
+  position: relative;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 15px 9px;
+  color: var(--dim);
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 550;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  border-block-end: 2px solid transparent;
+  transition: color 0.14s ease, background 0.14s ease;
+}
+
+.tabs a:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--raise) 60%, transparent);
+}
+
+/* The open view is stated three times over — colour, weight and a lit edge —
+   because on a dense page one of the three is always the one somebody misses. */
+.tabs a[aria-current="page"] {
+  color: var(--text);
+  border-block-end-color: transparent;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  font-weight: 650;
+}
+
+.tabs a[aria-current="page"]::after {
+  content: "";
+  position: absolute;
+  inset-block-end: -1px;
+  inset-inline: 8px;
+  height: 2px;
+  border-radius: var(--radius-pill);
+  background: var(--loop);
+}
+
+/* A count on a navigation row: how many stories could be built, how many high
+   findings are open. It sits at the end of the row so the label never moves as
+   the number changes. */
+.nav-count {
+  margin-inline-start: auto;
+  min-inline-size: 20px;
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  background: var(--tint-accent);
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.nav-count.warnish {
+  border-color: color-mix(in srgb, var(--bad) 50%, transparent);
+  background: var(--tint-bad);
+}
+
+/* ── icons ───────────────────────────────────────────────────────────────── */
+
+/* Drawn as masks over `currentColor`, so an icon is the same colour as the word
+   beside it in every state — including the accent one — and the page still
+   fetches nothing. Each is keyed to the anchor's id rather than to a class,
+   because the ids are what the markup already guarantees. */
+.tabs a::before {
+  content: "";
+  inline-size: 17px;
+  block-size: 17px;
+  flex: none;
+  background: currentcolor;
+  opacity: 0.85;
+  -webkit-mask: center / contain no-repeat var(--icon);
+  mask: center / contain no-repeat var(--icon);
+}
+
+.tabs a[aria-current="page"]::before {
+  opacity: 1;
+  background: var(--accent);
+}
+
+#tab-run {
+  --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='m10.5 8.5 5.5 3.5-5.5 3.5z'/%3E%3C/svg%3E");
+}
+
+#tab-plans {
+  --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 6.5 4.5 8 7 5'/%3E%3Cpath d='M3 12.5 4.5 14 7 11'/%3E%3Cpath d='M3 18.5 4.5 20 7 17'/%3E%3Cpath d='M11 6.5h10M11 12.5h10M11 18.5h10'/%3E%3C/svg%3E");
+}
+
+#tab-stories {
+  --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='6' rx='1.5'/%3E%3Crect x='3' y='14' width='18' height='6' rx='1.5'/%3E%3Cpath d='M6.5 7h.01M6.5 17h.01'/%3E%3C/svg%3E");
+}
+
+#tab-evidence {
+  --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h6'/%3E%3Cpath d='M14 3v5h5'/%3E%3Ccircle cx='16.5' cy='16.5' r='3.5'/%3E%3Cpath d='m19 19 2.5 2.5'/%3E%3C/svg%3E");
+}
+
+#tab-memory {
+  --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 6c0 1.7 4 3 9 3s9-1.3 9-3-4-3-9-3-9 1.3-9 3Z'/%3E%3Cpath d='M3 6v12c0 1.7 4 3 9 3s9-1.3 9-3V6'/%3E%3Cpath d='M3 12c0 1.7 4 3 9 3s9-1.3 9-3'/%3E%3C/svg%3E");
+}
+
+#tab-config {
+  --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 21v-6M5 11V3M12 21v-9M12 8V3M19 21v-4M19 13V3'/%3E%3Cpath d='M2.5 15h5M9.5 8h5M16.5 17h5'/%3E%3C/svg%3E");
+}
+
+/* ── the sidebar ─────────────────────────────────────────────────────────── */
+
+@media (min-width: 900px) {
+  .tabs {
+    flex-direction: column;
+    gap: 3px;
+    padding: 14px 12px;
+    border-block-end: 0;
+    border-inline-end: 1px solid var(--line);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--panel) 92%, transparent), var(--bg));
+    overflow-y: auto;
+    scrollbar-width: thin;
+  }
+
+  .tabs a {
+    padding: 10px 12px;
+    border-radius: var(--radius-sm);
+    border-block-end: 0;
+    font-size: 13.5px;
+  }
+
+  /* The lit edge turns with the layout: a bar down the inline start of the row,
+     which is the side the eye already follows in either writing direction. */
+  .tabs a[aria-current="page"] {
+    background: linear-gradient(
+      to var(--nav-fade, right),
+      color-mix(in srgb, var(--accent) 20%, transparent),
+      color-mix(in srgb, var(--accent) 6%, transparent)
+    );
+  }
+
+  .tabs a[aria-current="page"]::after {
+    inset-block: 7px;
+    inset-inline-start: 0;
+    inset-inline-end: auto;
+    width: 3px;
+    height: auto;
+  }
+}
+
+/* physical: the wash under the open row has to fall away from the lit edge, and
+   a gradient direction is one of the few things CSS still states in absolute
+   terms. Mirrored here rather than left to chance. */
+[dir="rtl"] {
+  --nav-fade: left;
+}

@@ -1,0 +1,8 @@
+/* The six stylesheets carry across unchanged; only their entry point moved. */
+@import './app.css';
+@import './10-layout.css';
+@import './20-rail.css';
+@import './30-tabs.css';
+@import './40-terminal.css';
+@import './50-controls.css';
+@import './60-panels.css';

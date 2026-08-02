@@ -1,0 +1,278 @@
+/**
+ * Invariants only: the reset, the tokens, `[hidden]`, the terminal pin and the
+ * page grid. Everything that describes one region of the page lives in `css/`.
+ *
+ * Nothing in here or in `css/` may use a physical property — `left`, `right`,
+ * `margin-left`, `text-align: left` — without a `physical:` comment saying why.
+ * A lint enforces it, because this page ships in Arabic and a single physical
+ * margin is enough to put a button on the wrong side of a row.
+ *
+ * The palette is a loop: one accent that travels from indigo to cyan, laid over
+ * four surface elevations. Every colour a panel needs is derived from these
+ * tokens with `color-mix`, so a theme change is a change to this block alone.
+ */
+
+:root {
+  color-scheme: dark;
+
+  /* ── surfaces ─────────────────────────────────────────────────────────── */
+  --bg: #0a0d14;
+  --bg-deep: #070910;
+  --panel: #11151f;
+  --panel-2: #161b27;
+  --raise: #1c2230;
+  --line: #262d3d;
+  --line-soft: #1b2130;
+
+  /* ── ink ──────────────────────────────────────────────────────────────── */
+  --text: #e8edf6;
+  --dim: #8b95ab;
+  --faint: #5d6679;
+
+  /* ── accent and state ─────────────────────────────────────────────────── */
+  --accent: #6ea8ff;
+  --accent-2: #a78bfa;
+  --accent-3: #38d3d3;
+  --ok: #3fd07a;
+  --warn: #e0a33a;
+  --bad: #ff6b6b;
+
+  --loop: linear-gradient(115deg, var(--accent-2), var(--accent) 46%, var(--accent-3));
+
+  /* Tinted washes. One formula, so a tag, a banner and a pill all agree. */
+  --tint-accent: color-mix(in srgb, var(--accent) 14%, transparent);
+  --tint-ok: color-mix(in srgb, var(--ok) 14%, transparent);
+  --tint-warn: color-mix(in srgb, var(--warn) 15%, transparent);
+  --tint-bad: color-mix(in srgb, var(--bad) 14%, transparent);
+
+  /* ── shape and depth ──────────────────────────────────────────────────── */
+  --radius: 10px;
+  --radius-sm: 7px;
+  --radius-pill: 999px;
+  --shadow-1: 0 1px 2px rgb(0 0 0 / 40%);
+  --shadow-2: 0 10px 30px -12px rgb(0 0 0 / 70%);
+  --shadow-3: 0 24px 60px -20px rgb(0 0 0 / 80%);
+  --ring: 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent);
+
+  --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, "Cascadia Mono", monospace;
+  --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", "Noto Sans Arabic", sans-serif;
+
+  --rail-h: 40px;
+  /* A third of the window rather than nearly two fifths. The terminal is where
+     you watch a run, not where you read a project. */
+  --pane-h: 33vh;
+  /* How much height the pane is actually taking, for anything sizing itself
+     against what is left — the open plan's sticky detail, mainly. A collapsed
+     pane must not still be subtracted from the space above it. */
+  --pane-space: 0px;
+  --nav-w: 224px;
+  /* How wide a panel may get before the slack is split around it. High enough
+     that a findings table, a cycle timeline or a story title uses the room on a
+     wide monitor; low enough that a line of prose never runs the full width of
+     an ultrawide one. `.hint` caps itself at 78ch on top of this. */
+  --content-max: 1500px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* The browser hides `[hidden]` with a `display: none` that any class setting
+   `display` outranks — and every banner on this page sets one. Without this the
+   offline and stalled banners are permanently visible. */
+[hidden] {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  /* Two soft lights behind everything, so the flat panels read as layers rather
+     than as one sheet of grey. Fixed, so scrolling a panel does not drag them. */
+  background-image:
+    radial-gradient(70rem 40rem at 12% -12%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 60%),
+    radial-gradient(56rem 34rem at 108% 4%, color-mix(in srgb, var(--accent-2) 9%, transparent), transparent 62%);
+  background-attachment: fixed;
+  color: var(--text);
+  font: 14px/1.55 var(--sans);
+  font-feature-settings: "cv11", "ss01";
+  -webkit-font-smoothing: antialiased;
+  height: 100vh;
+  display: grid;
+  /* A grid item's min-content width must not make the whole app wider than a
+     phone. Dense regions own their horizontal scrolling locally. */
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto auto 1fr auto;
+  /* A full-height app layout: `main` scrolls internally, the page never does.
+     Without this the terminal overflows the viewport in rtl. */
+  overflow: hidden;
+}
+
+/**
+ * Wide enough for a sidebar: the five views move out of the content column and
+ * become a column of their own, so the panel below the header starts at the top
+ * of the page rather than a tab strip down.
+ *
+ * Stated as areas rather than as a second set of row and column counts, because
+ * the page has four laid-out children and three of them have to change place at
+ * once. Everything else on `body` — the dialogs, the toast region, the
+ * templates — is out of flow or `display: none`, so nothing gets auto-placed
+ * into a track it was never meant to occupy.
+ *
+ * Below this width the narrow layout above still applies: the nav is a
+ * scrolling strip under the header, which is the only shape that works when the
+ * viewport is a phone.
+ */
+@media (min-width: 900px) {
+  body {
+    grid-template-columns: var(--nav-w) minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "top top"
+      "nav main"
+      "nav pane";
+  }
+
+  .top {
+    grid-area: top;
+  }
+
+  .tabs {
+    grid-area: nav;
+  }
+
+  main {
+    grid-area: main;
+  }
+
+  .pane {
+    grid-area: pane;
+  }
+}
+
+::selection {
+  background: color-mix(in srgb, var(--accent) 34%, transparent);
+  color: #fff;
+}
+
+/* The terminal is the one thing that must never be mirrored, whatever the ui
+   language does. Pinned here as well as in the markup so a stylesheet edit
+   cannot quietly undo it. */
+.terminal {
+  direction: ltr;
+  /* physical: this is the pin. The terminal is deliberately not mirrored, so
+     its alignment is stated in absolute terms rather than logical ones. */
+  text-align: left;
+  flex: 1;
+  min-height: 0;
+  /* xterm parks a character-measuring span at `left: -9999em`. In an rtl page
+     that lands outside the document and gives the whole page a horizontal
+     scrollbar, so the container clips it. xterm scrolls inside its own
+     viewport, not this box. */
+  overflow: hidden;
+  padding: 10px 12px;
+  background: var(--bg-deep);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 4%), var(--shadow-1);
+}
+
+/* ── form controls ───────────────────────────────────────────────────────── */
+
+select,
+input,
+textarea,
+button {
+  font: inherit;
+  color: var(--text);
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  transition: border-color 0.14s ease, background 0.14s ease, box-shadow 0.14s ease, transform 0.14s ease;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--faint);
+}
+
+input:hover:not(:disabled),
+select:hover:not(:disabled),
+textarea:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--line));
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--accent);
+}
+
+button {
+  cursor: pointer;
+  font-weight: 550;
+  background: linear-gradient(180deg, var(--raise), var(--panel-2));
+  box-shadow: var(--shadow-1);
+}
+
+button:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 12%, var(--raise)), var(--panel-2));
+}
+
+button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+button:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* ── scrollbars ──────────────────────────────────────────────────────────── */
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border: 3px solid transparent;
+  background-clip: content-box;
+  border-radius: var(--radius-pill);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--accent) 45%, var(--line));
+  background-clip: content-box;
+}
+
+/* Motion here is feedback, never decoration for its own sake — so it all goes
+   when the reader has asked for less of it. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

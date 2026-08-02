@@ -1,0 +1,196 @@
+/* The terminal pane: a deliberate size rather than whatever is left over.
+   Three modes, driven entirely by `body[data-pane]`.
+
+   No rule here may set `overflow: visible` on `.terminal`. That clip is what
+   contains xterm's measuring span, which it parks at `left: -9999em` — in an
+   rtl document the span otherwise gives the whole page a horizontal scrollbar. */
+
+.pane {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  padding: 10px 18px 14px;
+  border-block-start: 1px solid var(--line);
+  background: linear-gradient(180deg, var(--panel), var(--bg-deep));
+  box-shadow: 0 -12px 30px -22px rgb(0 0 0 / 90%);
+}
+
+.pane-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pane-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+
+.view {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+
+/* A segmented control: two views of the same pane, so they share one groove
+   rather than sitting as two loose buttons. */
+.view-tab {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  color: var(--dim);
+  padding: 4px 12px;
+  font-size: 12px;
+  border-radius: var(--radius-pill);
+}
+
+.view-tab:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--raise) 70%, transparent);
+  border-color: transparent;
+}
+
+.view-tab[aria-current] {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+  background: var(--tint-accent);
+}
+
+/* Nothing is running, so the pane says so in the middle of the space the
+   terminal would have taken — rather than as a strip with a void under it. */
+.view .empty {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  margin: 0;
+}
+
+.icon {
+  padding: 3px 9px;
+  line-height: 1.2;
+  color: var(--dim);
+  border-radius: var(--radius-sm);
+}
+
+.icon:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.job-label {
+  flex: 1;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--accent);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.viewing {
+  color: var(--warn);
+  font-size: 12px;
+}
+
+/* Two states that used to be visible only after switching to the queue view:
+   that the queue is holding, and that the job on screen is already being closed.
+   Both change what the buttons on this head will do, so both live on the head
+   that is never hidden. */
+.pane-head .pill {
+  white-space: nowrap;
+  flex: none;
+}
+
+.pill.warnish {
+  color: var(--warn);
+  border-color: color-mix(in srgb, var(--warn) 45%, transparent);
+  background: var(--tint-warn);
+}
+
+.command {
+  display: flex;
+  gap: 10px;
+}
+
+/* The same control in a 300px aside, where a field and a button side by side
+   leave room for neither. */
+.command.stacked {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.command input {
+  flex: 1;
+  font-family: var(--mono);
+  padding-block: 9px;
+  background: var(--bg-deep);
+}
+
+.command input:focus {
+  box-shadow: var(--ring);
+}
+
+/* The one button on the page that starts work. It looks like it. */
+.command button {
+  padding-inline: 20px;
+  color: #08111f;
+  font-weight: 700;
+  border-color: transparent;
+  background: var(--loop);
+}
+
+.command button:hover:not(:disabled) {
+  border-color: transparent;
+  background: var(--loop);
+  filter: brightness(1.08);
+  box-shadow: 0 6px 18px -8px color-mix(in srgb, var(--accent) 80%, transparent);
+}
+
+.hint {
+  color: var(--dim);
+  font-size: 12px;
+}
+
+/* ── the three modes ─────────────────────────────────────────────────────── */
+
+body[data-pane="docked"] {
+  --pane-space: var(--pane-h);
+}
+
+body[data-pane="docked"] .pane {
+  height: var(--pane-h);
+}
+
+/* Scoped to the pane's own hint. Unscoped, this hid every `.hint` on the page —
+   including each panel's help line — the moment the pane was collapsed, which is
+   now the state the page opens in. */
+body[data-pane="collapsed"] .pane-body,
+body[data-pane="collapsed"] .pane > .hint {
+  display: none;
+}
+
+body[data-pane="full"] {
+  grid-template-rows: auto auto 0 1fr;
+}
+
+/* Collapsed to a zero-height row and clipped, **not** `display: none`. A grid
+   item with no box generates no track, so hiding `main` outright slides the
+   pane up into the `0` row and the terminal ends up invisible in the one mode
+   whose whole point is to make it bigger. */
+body[data-pane="full"] main {
+  overflow: hidden;
+  padding: 0;
+}
+
+/* The same three modes against the sidebar layout, which has three rows rather
+   than four: the nav column is beside them all, so only `main` and the pane
+   trade height. Without this, full mode collapses the *nav* row and the
+   terminal keeps the size it already had. */
+@media (min-width: 900px) {
+  body[data-pane="full"] {
+    grid-template-rows: auto 0 1fr;
+  }
+}
