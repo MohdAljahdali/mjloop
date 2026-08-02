@@ -4,7 +4,7 @@
  * No Pinia: the state is a single object the server pushes whole, and a module
  * holding refs is the smallest thing that models that honestly.
  */
-import { computed, readonly, ref, shallowReadonly, shallowRef } from 'vue'
+import { computed, ref, shallowReadonly, shallowRef } from 'vue'
 import type { ClientMessage, Message, ServerMessage, Snapshot } from '../../protocol.js'
 import type { Write } from '../../writes.js'
 
@@ -32,7 +32,7 @@ const held = shallowRef<Snapshot | null>(null)
 const connected = ref(false)
 
 export const snapshot = shallowReadonly(held) as Readonly<typeof held>
-export const online = readonly(connected)
+export const online = shallowReadonly(connected)
 export const activeJob = computed(() => held.value?.session.jobId ?? null)
 
 const outputSubscribers = new Set<(frame: OutputFrame) => void>()
@@ -41,10 +41,18 @@ const noticeSubscribers = new Set<(message: Message) => void>()
 let socket: WebSocketLike | null = null
 let token = ''
 let factory: (url: string) => WebSocketLike = (url) => new WebSocket(url)
+let started = false
 
+/**
+ * Idempotent: a second call updates the token and factory but does not open a
+ * second socket. Nothing tears down the first connection's retry chain, so a
+ * second `open()` would race it forever over the module-level `socket`.
+ */
 export function connect(ports: { token: string; socketFactory?: (url: string) => WebSocketLike }): void {
   token = ports.token
   if (ports.socketFactory !== undefined) factory = ports.socketFactory
+  if (started) return
+  started = true
   open()
 }
 
@@ -102,8 +110,11 @@ export function onNotice(fn: (message: Message) => void): () => void {
   return () => void noticeSubscribers.delete(fn)
 }
 
-export function send(message: ClientMessage): void {
-  if (socket !== null && socket.readyState === 1) socket.send(JSON.stringify(message))
+/** Reports whether the frame actually went out, so a caller can react to a dead socket. */
+export function send(message: ClientMessage): boolean {
+  if (socket === null || socket.readyState !== 1) return false
+  socket.send(JSON.stringify(message))
+  return true
 }
 
 /** Pending writes by correlation id, so a receipt knows what it answers. */
@@ -119,8 +130,20 @@ let counter = 0
  */
 export function submit(write: Write, options: { undo?: Write; settled?: (receipt: Receipt) => void } = {}): void {
   const id = `w${++counter}`
+  if (!send({ type: 'write', id, write })) {
+    // The socket is down. Refusing here rather than holding the write is the
+    // same contract as a stale refusal from the server: nothing happened, and
+    // the page says so. The offline banner is already on screen with the why.
+    options.settled?.({ id, ok: false, code: 'write.failed' })
+    announceRefusal({ code: 'write.failed' })
+    return
+  }
   pending.set(id, options)
-  send({ type: 'write', id, write })
+}
+
+/** Routed through `noticeSubscribers`, the same door `settle` uses — one place for Task 7's toast layer to change. */
+function announceRefusal(message: Message): void {
+  for (const fn of noticeSubscribers) fn(message)
 }
 
 function settle(receipt: Receipt): void {
@@ -128,5 +151,5 @@ function settle(receipt: Receipt): void {
   if (heldWrite === undefined) return
   pending.delete(receipt.id)
   heldWrite.settled?.(receipt)
-  for (const fn of noticeSubscribers) fn({ code: receipt.code })
+  announceRefusal({ code: receipt.code })
 }

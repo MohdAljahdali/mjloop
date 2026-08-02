@@ -126,4 +126,37 @@ describe('writes', () => {
     // A refusal is announced, but there is nothing to undo: it did not happen.
     expect(notices).toEqual([{ code: 'write.stale' }])
   })
+
+  it('settles as a refusal, and does not leave a pending entry, when the socket is down', () => {
+    const socket = FakeSocket.last
+    if (socket !== null) socket.readyState = 0
+    const settled = vi.fn()
+    const notices: unknown[] = []
+    store.onNotice((message) => notices.push(message))
+
+    store.submit({ kind: 'halt', run: 'run-1', reason: 'r' }, { settled })
+
+    // Nothing was written to the wire.
+    expect(socket?.sent).toEqual([])
+    // The caller is told immediately: a refusal, not silence.
+    expect(settled).toHaveBeenCalledTimes(1)
+    expect(settled).toHaveBeenCalledWith(expect.objectContaining({ ok: false, code: 'write.failed' }))
+    expect(notices).toEqual([{ code: 'write.failed' }])
+
+    // A receipt that later arrives under the same id (e.g. the socket came
+    // back and the server, coincidentally, reused a correlation id) does not
+    // settle this write a second time — there is nothing pending to match.
+    const id = settled.mock.calls[0]?.[0]?.id
+    if (socket !== null) socket.readyState = 1
+    FakeSocket.last?.deliver({ type: 'receipt', id, ok: true, code: 'write.ok.halt' })
+    expect(settled).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('connect', () => {
+  it('is idempotent: a second call does not open a second socket', () => {
+    const first = FakeSocket.last
+    store.connect({ token: 'tok2', socketFactory: (url) => new FakeSocket(url) as any })
+    expect(FakeSocket.last).toBe(first)
+  })
 })
