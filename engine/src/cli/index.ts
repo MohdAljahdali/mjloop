@@ -464,7 +464,7 @@ const FLAG_VALUES: Record<string, string> = {
   '--components': 'a comma-separated list of component ids from the accepted map',
   '--agents': 'a comma-separated list of agent roles (planner, builder, critic, verifier)',
   '--policy': 'auto, review or pinned',
-  '--source': 'github, registry or web',
+  '--source': 'github, registry, web or skills-sh',
   '--ref': 'a branch, tag, or commit sha to pin',
 }
 
