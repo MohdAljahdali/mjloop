@@ -167,6 +167,27 @@ async function stampTree(dir: string): Promise<string> {
 }
 
 /**
+ * The same shape as `stampTree`, but for `.claude/skills/` specifically: each
+ * entry also folds in a stamp of its `SKILL.md`.
+ *
+ * `stampTree` reaches one level into a directory entry via `stampListing`,
+ * which sees a subdirectory's own mtime and the names inside it — neither of
+ * which moves when an existing `SKILL.md` is edited in place. This tree's
+ * content lives two levels down (`<name>/SKILL.md`), so the fingerprint has
+ * to reach for that file itself rather than stop at the directory holding it.
+ */
+async function stampProjectSkills(dir: string): Promise<string> {
+  const parts = [await stamp(dir)]
+  for (const name of await entries(dir)) {
+    const child = path.join(dir, name)
+    parts.push(
+      `${name}=${await stamp(child)}=${await stampListing(child)}=${await stamp(path.join(child, 'SKILL.md'))}`,
+    )
+  }
+  return parts.join('|')
+}
+
+/**
  * The library's `packages/` listing, or `-` when there is no library to read.
  *
  * `resolveLibraryRoot` **throws** — `LibraryRootCollisionError` when the
@@ -211,7 +232,7 @@ export async function readRevisions(projectDir: string, tick: number, running: b
     plans[key] = plans[key] === undefined ? stamped : `${plans[key]}|${stamped}`
   }
 
-  const [state, config, memory, runs, profile, features, acceptances, library] = await Promise.all([
+  const [state, config, memory, runs, profile, features, acceptances, library, projectSkills] = await Promise.all([
     stamp(paths.state),
     stamp(paths.config),
     stampListing(paths.memory),
@@ -225,6 +246,13 @@ export async function readRevisions(projectDir: string, tick: number, running: b
     stampTree(paths.features),
     stampTree(paths.skills),
     stampLibrary(projectDir),
+    // `.claude/skills` is outside `.mjloop/` and outside `paths` on purpose:
+    // it is Claude Code's directory, not this engine's. It is stamped anyway
+    // because the Skills panel now draws it, and a panel that never refreshes
+    // when the thing it draws changes is a panel showing yesterday.
+    // `stampProjectSkills`, not `stampTree`: a `SKILL.md` is a level deeper
+    // than `stampTree` reaches, so an in-place edit needs its own stamp.
+    stampProjectSkills(path.join(projectDir, '.claude', 'skills')),
   ])
 
   return {
@@ -236,6 +264,6 @@ export async function readRevisions(projectDir: string, tick: number, running: b
     memory,
     profile,
     features,
-    skills: `${acceptances}|${library}`,
+    skills: `${acceptances}|${library}|${projectSkills}`,
   }
 }

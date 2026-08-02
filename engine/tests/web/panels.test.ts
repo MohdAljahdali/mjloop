@@ -7,7 +7,7 @@ import { mountPlanDoc } from '../../src/web/public/lib/plandoc.js'
 import { drawRail, mountRail } from '../../src/web/public/ui/rail.js'
 import { collectConfigChanges, mountConfig } from '../../src/web/public/panels/config.js'
 import { mountEvidence } from '../../src/web/public/panels/evidence.js'
-import { joinAcceptances, mountSkills, shortDigest } from '../../src/web/public/panels/skills.js'
+import { joinAcceptances, mountSkills, searchSkills, shortDigest } from '../../src/web/public/panels/skills.js'
 import { approvable, mountFeatures } from '../../src/web/public/panels/features.js'
 import { mountPlans, planMemories, planRuns } from '../../src/web/public/panels/plans.js'
 import { mountStories } from '../../src/web/public/panels/stories.js'
@@ -3483,6 +3483,8 @@ describe('skills library', () => {
         packages: [pkg()],
         unreadable: [{ digest: 'd'.repeat(64), reason: 'record does not parse' }],
         acceptances: [acceptance({ skillId: 'gone', digest: 'c'.repeat(64) })],
+        onDisk: [],
+        onDiskUnreadable: [],
       },
     })
 
@@ -3506,8 +3508,237 @@ describe('skills library', () => {
     // `skills import` can write, it is as likely to be an interrupted import.
     expect(document.querySelectorAll('#skills-unreadable .grid-row')).toHaveLength(1)
 
-    // Activation is a command. There is nothing on this panel to press.
-    expect(document.querySelectorAll('#panel-skills [data-act]')).toHaveLength(0)
-    expect(document.querySelectorAll('#panel-skills button, #panel-skills input')).toHaveLength(0)
+    // Activation is a command. There is nothing on this panel to press —
+    // except the search form's three sanctioned controls (Task 7): querying a
+    // source and drawing candidates back is not a write. An allowlist rather
+    // than "outside #skills-search", so a control added anywhere else inside
+    // the form — or inside the search block but outside the form — still
+    // fails this assertion instead of passing unnoticed.
+    const sanctioned = new Set([
+      // The form itself, registered as the `skills-search` action — not a
+      // fourth control, but the one `data-act` this panel is allowed to have.
+      ...document.querySelectorAll(
+        '#skills-search, #skills-search-q, #skills-search-source, #skills-search button[type="submit"]',
+      ),
+    ])
+    const outsideSearch = (selector: string): Element[] =>
+      [...document.querySelectorAll(`#panel-skills ${selector}`)].filter((node) => !sanctioned.has(node))
+    expect(outsideSearch('[data-act]')).toHaveLength(0)
+    expect(outsideSearch('button')).toHaveLength(0)
+    expect(outsideSearch('input')).toHaveLength(0)
+    expect(outsideSearch('select')).toHaveLength(0)
+  })
+})
+
+describe('the skills a project has on disk', () => {
+  it('draws each skill\'s name, description and path', async () => {
+    serve({
+      '/api/skills': {
+        packages: [],
+        unreadable: [],
+        acceptances: [],
+        onDisk: [
+          {
+            name: 'brief-writer',
+            description: 'Use when a request needs a brief.',
+            path: '.claude/skills/brief-writer/SKILL.md',
+          },
+        ],
+        onDiskUnreadable: [],
+      },
+    })
+
+    reveal('panel-skills')
+    mountSkills()
+    draw(emptySnapshot())
+    await vi.waitFor(() => expect(document.querySelectorAll('#skills-ondisk .component')).toHaveLength(1))
+
+    expect(document.querySelector('#skills-ondisk [data-slot="name"]')?.textContent).toBe('brief-writer')
+    expect(document.querySelector('#skills-ondisk [data-slot="description"]')?.textContent).toBe(
+      'Use when a request needs a brief.',
+    )
+    expect(document.querySelector('#skills-ondisk [data-slot="path"]')?.textContent).toBe(
+      '.claude/skills/brief-writer/SKILL.md',
+    )
+  })
+
+  it('claims none only once the fetch has settled, and draws an unreadable file as a banner', async () => {
+    serve({
+      '/api/skills': {
+        packages: [],
+        unreadable: [],
+        acceptances: [],
+        onDisk: [],
+        onDiskUnreadable: [{ path: '.claude/skills/broken/SKILL.md', reason: 'missing frontmatter' }],
+      },
+    })
+
+    reveal('panel-skills')
+    mountSkills()
+    draw(emptySnapshot())
+
+    // Nothing is claimed before the fetch settles.
+    expect((document.getElementById('skills-ondisk-empty') as HTMLElement).hidden).toBe(true)
+
+    await vi.waitFor(() => expect(document.querySelectorAll('#skills-ondisk-unreadable .banner')).toHaveLength(1))
+
+    expect((document.getElementById('skills-ondisk-empty') as HTMLElement).hidden).toBe(false)
+    expect(document.querySelector('#skills-ondisk-unreadable [data-slot="path"]')?.textContent).toBe(
+      '.claude/skills/broken/SKILL.md',
+    )
+    expect(document.querySelector('#skills-ondisk-unreadable [data-slot="reason"]')?.textContent).toBe(
+      'missing frontmatter',
+    )
+  })
+})
+
+describe('searching for a skill from the cockpit', () => {
+  it('sends the query and the source, and draws each candidate', async () => {
+    // Answers 404 for both feeds this panel also mounts, which `feed()` treats
+    // as a settled "nothing" (`view` stays null) rather than the `{}` the
+    // default stub would hand back as a 200 — a 200 the panel's own
+    // `joinAcceptances` cannot parse and would throw on before ever reaching
+    // this block's own draw.
+    serve({})
+    reveal('panel-skills')
+    mountSkills()
+    draw(emptySnapshot())
+
+    const asked: string[] = []
+    vi.spyOn(globalThis, 'fetch').mockImplementation((async (at: string) => {
+      asked.push(String(at))
+      return new Response(
+        JSON.stringify({
+          candidates: [
+            {
+              source: 'skills-sh',
+              url: 'https://skills.sh/a/b/c',
+              repository: 'a/b',
+              ref: 'HEAD',
+              skillName: 'c',
+              description: 'Use when c.',
+            },
+          ],
+        }),
+        { status: 200 },
+      )
+    }) as never)
+
+    const input = document.getElementById('skills-search-q') as HTMLInputElement
+    input.value = 'react'
+    document.getElementById('skills-search-source')?.dispatchEvent(new Event('change'))
+
+    await searchSkills()
+
+    expect(asked[0]).toContain('/api/skills/search?q=react')
+    expect(document.getElementById('skills-search-results')?.textContent).toContain('a/b')
+    expect(document.getElementById('skills-search-results')?.textContent).toContain('Use when c.')
+  })
+
+  it('shows the refusal code as a sentence, and draws no results', async () => {
+    // Answers 404 for both feeds this panel also mounts, which `feed()` treats
+    // as a settled "nothing" (`view` stays null) rather than the `{}` the
+    // default stub would hand back as a 200 — a 200 the panel's own
+    // `joinAcceptances` cannot parse and would throw on before ever reaching
+    // this block's own draw.
+    serve({})
+    reveal('panel-skills')
+    mountSkills()
+    draw(emptySnapshot())
+
+    // 503, not the brief's 409: the route (Task 6) splits discovery's three
+    // refusals across 403 (source not allowed), 503 (missing skills.sh
+    // token) and 501 (no general web search provider) — never 409.
+    vi.spyOn(globalThis, 'fetch').mockImplementation((async () =>
+      new Response(JSON.stringify({ error: { code: 'error.skillsShTokenMissing' } }), { status: 503 })) as never)
+
+    const input = document.getElementById('skills-search-q') as HTMLInputElement
+    input.value = 'react'
+    await searchSkills()
+
+    expect((document.getElementById('skills-search-error') as HTMLElement).hidden).toBe(false)
+    expect(document.getElementById('skills-search-results')?.children.length).toBe(0)
+  })
+
+  it('asks nothing at all for a query under two characters', async () => {
+    // Answers 404 for both feeds this panel also mounts, which `feed()` treats
+    // as a settled "nothing" (`view` stays null) rather than the `{}` the
+    // default stub would hand back as a 200 — a 200 the panel's own
+    // `joinAcceptances` cannot parse and would throw on before ever reaching
+    // this block's own draw.
+    serve({})
+    reveal('panel-skills')
+    mountSkills()
+    draw(emptySnapshot())
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch')
+    const input = document.getElementById('skills-search-q') as HTMLInputElement
+    input.value = 'a'
+    await searchSkills()
+    expect(fetchSpy).not.toHaveBeenCalled()
+  })
+
+  it('drops a stale answer for a search that is no longer current', async () => {
+    // Answers 404 for both feeds this panel also mounts, which `feed()` treats
+    // as a settled "nothing" (`view` stays null) rather than the `{}` the
+    // default stub would hand back as a 200 — a 200 the panel's own
+    // `joinAcceptances` cannot parse and would throw on before ever reaching
+    // this block's own draw.
+    serve({})
+    reveal('panel-skills')
+    mountSkills()
+    draw(emptySnapshot())
+
+    const candidate = (skillName: string, url: string): unknown => ({
+      source: 'github',
+      url,
+      repository: url.replace('https://github.com/', ''),
+      ref: 'HEAD',
+      skillName,
+      description: `Use when ${skillName}.`,
+    })
+
+    // Each call gets its own controllable response, so the test can decide
+    // which answer lands first — the case a plain mock cannot express.
+    const pending: { resolve: (response: Response) => void }[] = []
+    vi.spyOn(globalThis, 'fetch').mockImplementation(
+      (() =>
+        new Promise<Response>((resolve) => {
+          pending.push({ resolve })
+        })) as never,
+    )
+
+    const input = document.getElementById('skills-search-q') as HTMLInputElement
+
+    // Two searches, fired before either answer lands — a person typing past
+    // their first query before the round trip for it returns.
+    input.value = 'first'
+    const firstCall = searchSkills()
+    input.value = 'second'
+    const secondCall = searchSkills()
+
+    expect(pending).toHaveLength(2)
+
+    // The *second* search's answer lands first, and is drawn.
+    pending[1]?.resolve(
+      new Response(JSON.stringify({ candidates: [candidate('second', 'https://github.com/x/second')] }), {
+        status: 200,
+      }),
+    )
+    await secondCall
+    expect(document.getElementById('skills-search-results')?.textContent).toContain('x/second')
+
+    // The *first* search's answer lands after it — for a query nobody is
+    // waiting for any more. Without the generation guard this overwrites the
+    // second search's own, newer results.
+    pending[0]?.resolve(
+      new Response(JSON.stringify({ candidates: [candidate('first', 'https://github.com/x/first')] }), {
+        status: 200,
+      }),
+    )
+    await firstCall
+
+    expect(document.getElementById('skills-search-results')?.textContent).toContain('x/second')
+    expect(document.getElementById('skills-search-results')?.textContent).not.toContain('x/first')
   })
 })

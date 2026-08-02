@@ -66,6 +66,15 @@ export const WEB_CODES = [
   'roster.unknown',
   'roster.contradiction',
   'roster.unexplained',
+
+  /* discovery's three refusals. Each is a *policy* answer rather than a fault —
+     the project has not allowed this source, this machine has no token for it,
+     or this build has no provider — and each needs a different next step, so
+     they are three codes and not one. No `params`: the sentence lives in the
+     locale files, like every other. */
+  'error.skillSourceDisabled',
+  'error.skillsShTokenMissing',
+  'error.webSearchUnavailable',
 ] as const
 
 export type WebCode = (typeof WEB_CODES)[number]

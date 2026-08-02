@@ -27,6 +27,13 @@ import {
   readTelemetryReport,
   readTranscript,
 } from './read.js'
+import {
+  discoverCandidates,
+  SkillsShTokenMissingError,
+  SkillSourceDisabledError,
+  WebSearchUnavailableError,
+} from '../ops/skill-discovery.js'
+import { SkillSourceSchema } from '../schemas/config.js'
 
 /**
  * The read side: everything with a body.
@@ -263,8 +270,40 @@ async function route(projectDir: string, segments: readonly string[], query: URL
       // class of write `web/writes.ts`'s header permanently denies the
       // browser. `mjloop-cli skills accept|disable|enable|remove` is where
       // that decision is made.
-      if (segments.length !== 1) break
-      return ok(await readSkillsView(projectDir))
+      if (segments.length === 1) return ok(await readSkillsView(projectDir))
+
+      // `search` is the one sub-route, and it is a read: it returns search
+      // *results* and writes nothing anywhere. The three refusals below are
+      // policy answers rather than faults, so each gets its own code — a
+      // disabled source, a missing token and an unwired provider need three
+      // different next steps from the person reading the screen.
+      if (segments.length === 2 && first === 'search') {
+        const q = query.get('q') ?? ''
+        if (q.length < 2) return fail(400, 'error.badRequest')
+        const source = SkillSourceSchema.safeParse(query.get('source') ?? 'github')
+        if (!source.success) return fail(400, 'error.badRequest')
+        try {
+          return ok({ candidates: await discoverCandidates(projectDir, { query: q, source: source.data }) })
+        } catch (error) {
+          // Three different statuses, because the three refusals are not one
+          // kind and demand three different remedies from whoever — or
+          // whatever — reads the status before the code:
+          //  - disabled: the request is understood, and refused by this
+          //    project's own policy. 403, the ordinary code for that shape.
+          //  - missing token: not a caller who lacks permission, but a
+          //    deployment that is not configured — it would happen to every
+          //    caller alike, and the fix (set the env var, restart) is on the
+          //    server, not in the request. 503.
+          //  - web search: this build implements no general web search
+          //    connector at all, which retrying or reconfiguring cannot
+          //    change. 501, exactly what that status means.
+          if (error instanceof SkillSourceDisabledError) return fail(403, 'error.skillSourceDisabled')
+          if (error instanceof SkillsShTokenMissingError) return fail(503, 'error.skillsShTokenMissing')
+          if (error instanceof WebSearchUnavailableError) return fail(501, 'error.webSearchUnavailable')
+          throw error
+        }
+      }
+      break
   }
 
   return fail(404, 'error.notFound')

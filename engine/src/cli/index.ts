@@ -81,7 +81,7 @@ const USAGE = `usage: mjloop-cli <command>
   skills remove <skillId> [--dir <path>]
                                        remove this project's acceptance only — the package and every
                                        other project's acceptance are untouched
-  skills search <query> [--source github|registry|web] [--dir <path>] [--json]
+  skills search <query> [--source github|registry|web|skills-sh] [--dir <path>] [--json]
                                        metadata-only candidates from an allowed source — nothing is
                                        written, and no candidate becomes active on its own
   skills inspect <url> [--ref <ref>] [--dir <path>] [--json]
@@ -464,7 +464,7 @@ const FLAG_VALUES: Record<string, string> = {
   '--components': 'a comma-separated list of component ids from the accepted map',
   '--agents': 'a comma-separated list of agent roles (planner, builder, critic, verifier)',
   '--policy': 'auto, review or pinned',
-  '--source': 'github, registry or web',
+  '--source': 'github, registry, web or skills-sh',
   '--ref': 'a branch, tag, or commit sha to pin',
 }
 
@@ -1422,13 +1422,13 @@ async function skillsSearchCommand(args: string[], deps: CliDeps): Promise<CliRe
 
   const [query] = positional
   if (query === undefined) {
-    return fail('skills search needs a query: mjloop-cli skills search <query> [--source github|registry|web] [--dir <path>]')
+    return fail('skills search needs a query: mjloop-cli skills search <query> [--source github|registry|web|skills-sh] [--dir <path>]')
   }
 
   let parsedSource: SkillSource = 'github'
   if (source !== undefined) {
     const result = SkillSourceSchema.safeParse(source)
-    if (!result.success) return fail(`--source takes github, registry or web — got "${source}"`)
+    if (!result.success) return fail(`--source takes github, registry, web or skills-sh — got "${source}"`)
     parsedSource = result.data
   }
 

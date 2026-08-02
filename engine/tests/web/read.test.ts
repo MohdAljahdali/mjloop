@@ -720,7 +720,13 @@ describe('read', () => {
     })
 
     it('answers with empty arrays for a machine with no library and a project with no acceptances', async () => {
-      expect(await readSkillsView(project.dir)).toEqual({ packages: [], unreadable: [], acceptances: [] })
+      expect(await readSkillsView(project.dir)).toEqual({
+        packages: [],
+        unreadable: [],
+        acceptances: [],
+        onDisk: [],
+        onDiskUnreadable: [],
+      })
     })
 
     it('reports every library package and this project\'s own acceptances', async () => {
@@ -748,6 +754,26 @@ describe('read', () => {
       expect(view.packages).toEqual([])
       expect(view.unreadable).toHaveLength(1)
       expect(view.unreadable[0]?.digest).toBe(corruptDigest)
+    })
+
+    it('serves the skills the project has on disk beside the ones it accepted', async () => {
+      const dir = project.dir
+      const at = path.join(dir, '.claude', 'skills', 'brief-writer')
+      await fs.mkdir(at, { recursive: true })
+      await fs.writeFile(
+        path.join(at, 'SKILL.md'),
+        '---\nname: brief-writer\ndescription: Use when a request needs a brief.\n---\n\nBody.\n',
+        'utf8',
+      )
+
+      const view = await readSkillsView(dir)
+      expect(view.onDisk).toEqual([
+        { name: 'brief-writer', description: 'Use when a request needs a brief.', path: '.claude/skills/brief-writer/SKILL.md' },
+      ])
+      expect(view.onDiskUnreadable).toEqual([])
+      // The three lists it already served are untouched by this one.
+      expect(view.acceptances).toEqual([])
+      expect(view.packages).toEqual([])
     })
   })
 

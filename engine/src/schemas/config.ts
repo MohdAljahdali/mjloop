@@ -372,8 +372,17 @@ export const UncertainConcurrencySchema = z.enum(['sequential', 'ask', 'parallel
 /** Whether an approved plan starts building on its own, or waits to be told. */
 export const AfterPlanApprovalSchema = z.enum(['auto', 'manual'])
 
-/** Where a skill this project does not already have may be discovered from. */
-export const SkillSourceSchema = z.enum(['github', 'registry', 'web'])
+/**
+ * Where a skill this project does not already have may be discovered from.
+ *
+ * `skills-sh` is the agent-skills directory at https://skills.sh. It is in
+ * this enum and *not* in `sources`' default for the same reason `web` is not:
+ * a source is a place this project will fetch instructions from, and adding
+ * one is the project's decision to make in its own config. Its API also
+ * requires a token, which `ops/skill-discovery.ts` refuses by name rather
+ * than reporting as an empty result.
+ */
+export const SkillSourceSchema = z.enum(['github', 'registry', 'web', 'skills-sh'])
 
 /** What happens when a skill this project uses has a newer version. */
 export const SkillUpdateModeSchema = z.enum(['auto', 'review', 'pinned'])
