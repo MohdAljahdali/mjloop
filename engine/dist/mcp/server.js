@@ -29666,7 +29666,7 @@ var FeatureDiscoveryModeSchema = _enum(["always", "ask", "off"]);
 var DiscoveryCompletionSchema = _enum(["auto-plan", "review", "save-only"]);
 var UncertainConcurrencySchema = _enum(["sequential", "ask", "parallel"]);
 var AfterPlanApprovalSchema = _enum(["auto", "manual"]);
-var SkillSourceSchema = _enum(["github", "registry", "web"]);
+var SkillSourceSchema = _enum(["github", "registry", "web", "skills-sh"]);
 var SkillUpdateModeSchema = _enum(["auto", "review", "pinned"]);
 var OrchestrationSchema = strictObject({
   profile: strictObject({

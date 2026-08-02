@@ -32,7 +32,7 @@ import { mountPlans } from './panels/plans.js'
 import { mountQueue } from './panels/queue.js'
 import { mountRun } from './panels/run.js'
 import { mountStories } from './panels/stories.js'
-import { mountSkills } from './panels/skills.js'
+import { mountSkills, searchSkills } from './panels/skills.js'
 
 /**
  * Adding a language: drop `locales/<code>.json` beside the others, add a line.
@@ -204,6 +204,7 @@ bus.on('story-tab', (element) => stories.openTab(element.dataset['story'] ?? '')
 bus.on('story-tab-close', (element) => stories.closeTab(element.dataset['story'] ?? ''))
 bus.on('story-tab-pin', (element) => stories.pinTab(element.dataset['story'] ?? ''))
 bus.on('story-tab-reopen', () => stories.reopenTab())
+bus.on('skills-search', () => void searchSkills())
 bus.on('config-save', () => config.save())
 bus.on('config-reset', () => config.reset())
 // The structured `specialists:` and `tracks:` editors. Every one of these

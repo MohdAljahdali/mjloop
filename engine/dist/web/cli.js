@@ -3722,17 +3722,17 @@ var require_visit = __commonJS({
     visit.BREAK = BREAK;
     visit.SKIP = SKIP;
     visit.REMOVE = REMOVE;
-    function visit_(key, node, visitor, path25) {
-      const ctrl = callVisitor(key, node, visitor, path25);
+    function visit_(key, node, visitor, path26) {
+      const ctrl = callVisitor(key, node, visitor, path26);
       if (identity.isNode(ctrl) || identity.isPair(ctrl)) {
-        replaceNode(key, path25, ctrl);
-        return visit_(key, ctrl, visitor, path25);
+        replaceNode(key, path26, ctrl);
+        return visit_(key, ctrl, visitor, path26);
       }
       if (typeof ctrl !== "symbol") {
         if (identity.isCollection(node)) {
-          path25 = Object.freeze(path25.concat(node));
+          path26 = Object.freeze(path26.concat(node));
           for (let i = 0; i < node.items.length; ++i) {
-            const ci = visit_(i, node.items[i], visitor, path25);
+            const ci = visit_(i, node.items[i], visitor, path26);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -3743,13 +3743,13 @@ var require_visit = __commonJS({
             }
           }
         } else if (identity.isPair(node)) {
-          path25 = Object.freeze(path25.concat(node));
-          const ck = visit_("key", node.key, visitor, path25);
+          path26 = Object.freeze(path26.concat(node));
+          const ck = visit_("key", node.key, visitor, path26);
           if (ck === BREAK)
             return BREAK;
           else if (ck === REMOVE)
             node.key = null;
-          const cv = visit_("value", node.value, visitor, path25);
+          const cv = visit_("value", node.value, visitor, path26);
           if (cv === BREAK)
             return BREAK;
           else if (cv === REMOVE)
@@ -3770,17 +3770,17 @@ var require_visit = __commonJS({
     visitAsync.BREAK = BREAK;
     visitAsync.SKIP = SKIP;
     visitAsync.REMOVE = REMOVE;
-    async function visitAsync_(key, node, visitor, path25) {
-      const ctrl = await callVisitor(key, node, visitor, path25);
+    async function visitAsync_(key, node, visitor, path26) {
+      const ctrl = await callVisitor(key, node, visitor, path26);
       if (identity.isNode(ctrl) || identity.isPair(ctrl)) {
-        replaceNode(key, path25, ctrl);
-        return visitAsync_(key, ctrl, visitor, path25);
+        replaceNode(key, path26, ctrl);
+        return visitAsync_(key, ctrl, visitor, path26);
       }
       if (typeof ctrl !== "symbol") {
         if (identity.isCollection(node)) {
-          path25 = Object.freeze(path25.concat(node));
+          path26 = Object.freeze(path26.concat(node));
           for (let i = 0; i < node.items.length; ++i) {
-            const ci = await visitAsync_(i, node.items[i], visitor, path25);
+            const ci = await visitAsync_(i, node.items[i], visitor, path26);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -3791,13 +3791,13 @@ var require_visit = __commonJS({
             }
           }
         } else if (identity.isPair(node)) {
-          path25 = Object.freeze(path25.concat(node));
-          const ck = await visitAsync_("key", node.key, visitor, path25);
+          path26 = Object.freeze(path26.concat(node));
+          const ck = await visitAsync_("key", node.key, visitor, path26);
           if (ck === BREAK)
             return BREAK;
           else if (ck === REMOVE)
             node.key = null;
-          const cv = await visitAsync_("value", node.value, visitor, path25);
+          const cv = await visitAsync_("value", node.value, visitor, path26);
           if (cv === BREAK)
             return BREAK;
           else if (cv === REMOVE)
@@ -3824,23 +3824,23 @@ var require_visit = __commonJS({
       }
       return visitor;
     }
-    function callVisitor(key, node, visitor, path25) {
+    function callVisitor(key, node, visitor, path26) {
       if (typeof visitor === "function")
-        return visitor(key, node, path25);
+        return visitor(key, node, path26);
       if (identity.isMap(node))
-        return visitor.Map?.(key, node, path25);
+        return visitor.Map?.(key, node, path26);
       if (identity.isSeq(node))
-        return visitor.Seq?.(key, node, path25);
+        return visitor.Seq?.(key, node, path26);
       if (identity.isPair(node))
-        return visitor.Pair?.(key, node, path25);
+        return visitor.Pair?.(key, node, path26);
       if (identity.isScalar(node))
-        return visitor.Scalar?.(key, node, path25);
+        return visitor.Scalar?.(key, node, path26);
       if (identity.isAlias(node))
-        return visitor.Alias?.(key, node, path25);
+        return visitor.Alias?.(key, node, path26);
       return void 0;
     }
-    function replaceNode(key, path25, node) {
-      const parent = path25[path25.length - 1];
+    function replaceNode(key, path26, node) {
+      const parent = path26[path26.length - 1];
       if (identity.isCollection(parent)) {
         parent.items[key] = node;
       } else if (identity.isPair(parent)) {
@@ -4450,10 +4450,10 @@ var require_Collection = __commonJS({
     var createNode = require_createNode();
     var identity = require_identity();
     var Node = require_Node();
-    function collectionFromPath(schema, path25, value) {
+    function collectionFromPath(schema, path26, value) {
       let v = value;
-      for (let i = path25.length - 1; i >= 0; --i) {
-        const k = path25[i];
+      for (let i = path26.length - 1; i >= 0; --i) {
+        const k = path26[i];
         if (typeof k === "number" && Number.isInteger(k) && k >= 0) {
           const a = [];
           a[k] = v;
@@ -4472,7 +4472,7 @@ var require_Collection = __commonJS({
         sourceObjects: /* @__PURE__ */ new Map()
       });
     }
-    var isEmptyPath = (path25) => path25 == null || typeof path25 === "object" && !!path25[Symbol.iterator]().next().done;
+    var isEmptyPath = (path26) => path26 == null || typeof path26 === "object" && !!path26[Symbol.iterator]().next().done;
     var Collection = class extends Node.NodeBase {
       constructor(type, schema) {
         super(type);
@@ -4502,11 +4502,11 @@ var require_Collection = __commonJS({
        * be a Pair instance or a `{ key, value }` object, which may not have a key
        * that already exists in the map.
        */
-      addIn(path25, value) {
-        if (isEmptyPath(path25))
+      addIn(path26, value) {
+        if (isEmptyPath(path26))
           this.add(value);
         else {
-          const [key, ...rest] = path25;
+          const [key, ...rest] = path26;
           const node = this.get(key, true);
           if (identity.isCollection(node))
             node.addIn(rest, value);
@@ -4520,8 +4520,8 @@ var require_Collection = __commonJS({
        * Removes a value from the collection.
        * @returns `true` if the item was found and removed.
        */
-      deleteIn(path25) {
-        const [key, ...rest] = path25;
+      deleteIn(path26) {
+        const [key, ...rest] = path26;
         if (rest.length === 0)
           return this.delete(key);
         const node = this.get(key, true);
@@ -4535,8 +4535,8 @@ var require_Collection = __commonJS({
        * scalar values from their surrounding node; to disable set `keepScalar` to
        * `true` (collections are always returned intact).
        */
-      getIn(path25, keepScalar) {
-        const [key, ...rest] = path25;
+      getIn(path26, keepScalar) {
+        const [key, ...rest] = path26;
         const node = this.get(key, true);
         if (rest.length === 0)
           return !keepScalar && identity.isScalar(node) ? node.value : node;
@@ -4554,8 +4554,8 @@ var require_Collection = __commonJS({
       /**
        * Checks if the collection includes a value with the key `key`.
        */
-      hasIn(path25) {
-        const [key, ...rest] = path25;
+      hasIn(path26) {
+        const [key, ...rest] = path26;
         if (rest.length === 0)
           return this.has(key);
         const node = this.get(key, true);
@@ -4565,8 +4565,8 @@ var require_Collection = __commonJS({
        * Sets a value in this collection. For `!!set`, `value` needs to be a
        * boolean to add/remove the item from the set.
        */
-      setIn(path25, value) {
-        const [key, ...rest] = path25;
+      setIn(path26, value) {
+        const [key, ...rest] = path26;
         if (rest.length === 0) {
           this.set(key, value);
         } else {
@@ -7081,9 +7081,9 @@ var require_Document = __commonJS({
           this.contents.add(value);
       }
       /** Adds a value to the document. */
-      addIn(path25, value) {
+      addIn(path26, value) {
         if (assertCollection(this.contents))
-          this.contents.addIn(path25, value);
+          this.contents.addIn(path26, value);
       }
       /**
        * Create a new `Alias` node, ensuring that the target `node` has the required anchor.
@@ -7158,14 +7158,14 @@ var require_Document = __commonJS({
        * Removes a value from the document.
        * @returns `true` if the item was found and removed.
        */
-      deleteIn(path25) {
-        if (Collection.isEmptyPath(path25)) {
+      deleteIn(path26) {
+        if (Collection.isEmptyPath(path26)) {
           if (this.contents == null)
             return false;
           this.contents = null;
           return true;
         }
-        return assertCollection(this.contents) ? this.contents.deleteIn(path25) : false;
+        return assertCollection(this.contents) ? this.contents.deleteIn(path26) : false;
       }
       /**
        * Returns item at `key`, or `undefined` if not found. By default unwraps
@@ -7180,10 +7180,10 @@ var require_Document = __commonJS({
        * scalar values from their surrounding node; to disable set `keepScalar` to
        * `true` (collections are always returned intact).
        */
-      getIn(path25, keepScalar) {
-        if (Collection.isEmptyPath(path25))
+      getIn(path26, keepScalar) {
+        if (Collection.isEmptyPath(path26))
           return !keepScalar && identity.isScalar(this.contents) ? this.contents.value : this.contents;
-        return identity.isCollection(this.contents) ? this.contents.getIn(path25, keepScalar) : void 0;
+        return identity.isCollection(this.contents) ? this.contents.getIn(path26, keepScalar) : void 0;
       }
       /**
        * Checks if the document includes a value with the key `key`.
@@ -7194,10 +7194,10 @@ var require_Document = __commonJS({
       /**
        * Checks if the document includes a value at `path`.
        */
-      hasIn(path25) {
-        if (Collection.isEmptyPath(path25))
+      hasIn(path26) {
+        if (Collection.isEmptyPath(path26))
           return this.contents !== void 0;
-        return identity.isCollection(this.contents) ? this.contents.hasIn(path25) : false;
+        return identity.isCollection(this.contents) ? this.contents.hasIn(path26) : false;
       }
       /**
        * Sets a value in this document. For `!!set`, `value` needs to be a
@@ -7214,13 +7214,13 @@ var require_Document = __commonJS({
        * Sets a value in this document. For `!!set`, `value` needs to be a
        * boolean to add/remove the item from the set.
        */
-      setIn(path25, value) {
-        if (Collection.isEmptyPath(path25)) {
+      setIn(path26, value) {
+        if (Collection.isEmptyPath(path26)) {
           this.contents = value;
         } else if (this.contents == null) {
-          this.contents = Collection.collectionFromPath(this.schema, Array.from(path25), value);
+          this.contents = Collection.collectionFromPath(this.schema, Array.from(path26), value);
         } else if (assertCollection(this.contents)) {
-          this.contents.setIn(path25, value);
+          this.contents.setIn(path26, value);
         }
       }
       /**
@@ -9180,9 +9180,9 @@ var require_cst_visit = __commonJS({
     visit.BREAK = BREAK;
     visit.SKIP = SKIP;
     visit.REMOVE = REMOVE;
-    visit.itemAtPath = (cst, path25) => {
+    visit.itemAtPath = (cst, path26) => {
       let item = cst;
-      for (const [field, index] of path25) {
+      for (const [field, index] of path26) {
         const tok = item?.[field];
         if (tok && "items" in tok) {
           item = tok.items[index];
@@ -9191,23 +9191,23 @@ var require_cst_visit = __commonJS({
       }
       return item;
     };
-    visit.parentCollection = (cst, path25) => {
-      const parent = visit.itemAtPath(cst, path25.slice(0, -1));
-      const field = path25[path25.length - 1][0];
+    visit.parentCollection = (cst, path26) => {
+      const parent = visit.itemAtPath(cst, path26.slice(0, -1));
+      const field = path26[path26.length - 1][0];
       const coll = parent?.[field];
       if (coll && "items" in coll)
         return coll;
       throw new Error("Parent collection not found");
     };
-    function _visit(path25, item, visitor) {
-      let ctrl = visitor(item, path25);
+    function _visit(path26, item, visitor) {
+      let ctrl = visitor(item, path26);
       if (typeof ctrl === "symbol")
         return ctrl;
       for (const field of ["key", "value"]) {
         const token = item[field];
         if (token && "items" in token) {
           for (let i = 0; i < token.items.length; ++i) {
-            const ci = _visit(Object.freeze(path25.concat([[field, i]])), token.items[i], visitor);
+            const ci = _visit(Object.freeze(path26.concat([[field, i]])), token.items[i], visitor);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -9218,10 +9218,10 @@ var require_cst_visit = __commonJS({
             }
           }
           if (typeof ctrl === "function" && field === "key")
-            ctrl = ctrl(item, path25);
+            ctrl = ctrl(item, path26);
         }
       }
-      return typeof ctrl === "function" ? ctrl(item, path25) : ctrl;
+      return typeof ctrl === "function" ? ctrl(item, path26) : ctrl;
     }
     exports.visit = visit;
   }
@@ -10523,14 +10523,14 @@ var require_parser = __commonJS({
             case "scalar":
             case "single-quoted-scalar":
             case "double-quoted-scalar": {
-              const fs25 = this.flowScalar(this.type);
+              const fs26 = this.flowScalar(this.type);
               if (atNextItem || it.value) {
-                map.items.push({ start, key: fs25, sep: [] });
+                map.items.push({ start, key: fs26, sep: [] });
                 this.onKeyLine = true;
               } else if (it.sep) {
-                this.stack.push(fs25);
+                this.stack.push(fs26);
               } else {
-                Object.assign(it, { key: fs25, sep: [] });
+                Object.assign(it, { key: fs26, sep: [] });
                 this.onKeyLine = true;
               }
               return;
@@ -10658,13 +10658,13 @@ var require_parser = __commonJS({
             case "scalar":
             case "single-quoted-scalar":
             case "double-quoted-scalar": {
-              const fs25 = this.flowScalar(this.type);
+              const fs26 = this.flowScalar(this.type);
               if (!it || it.value)
-                fc.items.push({ start: [], key: fs25, sep: [] });
+                fc.items.push({ start: [], key: fs26, sep: [] });
               else if (it.sep)
-                this.stack.push(fs25);
+                this.stack.push(fs26);
               else
-                Object.assign(it, { key: fs25, sep: [] });
+                Object.assign(it, { key: fs26, sep: [] });
               return;
             }
             case "flow-map-end":
@@ -10974,8 +10974,8 @@ var require_dist = __commonJS({
 
 // src/web/cli.ts
 import { spawn } from "node:child_process";
-import fs24 from "node:fs/promises";
-import path24 from "node:path";
+import fs25 from "node:fs/promises";
+import path25 from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 
 // src/store/paths.ts
@@ -11088,9 +11088,9 @@ async function isEntrypoint(moduleUrl) {
 
 // src/web/server.ts
 import crypto4 from "node:crypto";
-import fs23 from "node:fs/promises";
+import fs24 from "node:fs/promises";
 import http from "node:http";
-import path23 from "node:path";
+import path24 from "node:path";
 import { fileURLToPath } from "node:url";
 
 // node_modules/ws/wrapper.mjs
@@ -11344,10 +11344,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj, path25) {
-  if (!path25)
+function getElementAtPath(obj, path26) {
+  if (!path26)
     return obj;
-  return path25.reduce((acc, key) => acc?.[key], obj);
+  return path26.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -11756,11 +11756,11 @@ function explicitlyAborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path25, issues) {
+function prefixIssues(path26, issues) {
   return issues.map((iss) => {
     var _a3;
     (_a3 = iss).path ?? (_a3.path = []);
-    iss.path.unshift(path25);
+    iss.path.unshift(path26);
     return iss;
   });
 }
@@ -11907,16 +11907,16 @@ function flattenError(error2, mapper = (issue2) => issue2.message) {
 }
 function formatError(error2, mapper = (issue2) => issue2.message) {
   const fieldErrors = { _errors: [] };
-  const processError = (error3, path25 = []) => {
+  const processError = (error3, path26 = []) => {
     for (const issue2 of error3.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path25, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path26, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path25, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path26, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path25, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path26, ...issue2.path]);
       } else {
-        const fullpath = [...path25, ...issue2.path];
+        const fullpath = [...path26, ...issue2.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue2));
         } else {
@@ -11943,8 +11943,8 @@ function formatError(error2, mapper = (issue2) => issue2.message) {
 }
 function toDotPath(_path) {
   const segs = [];
-  const path25 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
-  for (const seg of path25) {
+  const path26 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
+  for (const seg of path26) {
     if (typeof seg === "number")
       segs.push(`[${seg}]`);
     else if (typeof seg === "symbol")
@@ -16578,15 +16578,15 @@ function findOrderCycle(order) {
   const GRAY = 1;
   const BLACK = 2;
   const color = /* @__PURE__ */ new Map();
-  const path25 = [];
+  const path26 = [];
   function visit(node) {
     color.set(node, GRAY);
-    path25.push(node);
+    path26.push(node);
     for (const next of successors.get(node) ?? []) {
       const state = color.get(next) ?? WHITE;
       if (state === GRAY) {
-        const start = path25.indexOf(next);
-        return [...path25.slice(start), next];
+        const start = path26.indexOf(next);
+        return [...path26.slice(start), next];
       }
       if (state === WHITE) {
         const found = visit(next);
@@ -16594,7 +16594,7 @@ function findOrderCycle(order) {
       }
     }
     color.set(node, BLACK);
-    path25.pop();
+    path26.pop();
     return null;
   }
   for (const node of nodes) {
@@ -16635,7 +16635,7 @@ var FeatureDiscoveryModeSchema = _enum(["always", "ask", "off"]);
 var DiscoveryCompletionSchema = _enum(["auto-plan", "review", "save-only"]);
 var UncertainConcurrencySchema = _enum(["sequential", "ask", "parallel"]);
 var AfterPlanApprovalSchema = _enum(["auto", "manual"]);
-var SkillSourceSchema = _enum(["github", "registry", "web"]);
+var SkillSourceSchema = _enum(["github", "registry", "web", "skills-sh"]);
 var SkillUpdateModeSchema = _enum(["auto", "review", "pinned"]);
 var OrchestrationSchema = strictObject({
   profile: strictObject({
@@ -17064,8 +17064,8 @@ var ManifestSchema = strictObject({
 });
 
 // src/web/read.ts
-import fs16 from "node:fs/promises";
-import path15 from "node:path";
+import fs17 from "node:fs/promises";
+import path16 from "node:path";
 
 // src/ops/history.ts
 import fs12 from "node:fs/promises";
@@ -18691,6 +18691,73 @@ function round(value, decimals) {
   return Math.round(value * scale) / scale;
 }
 
+// src/ops/project-skills.ts
+import fs13 from "node:fs/promises";
+import path13 from "node:path";
+
+// src/schemas/project-skills.ts
+var SkillFrontmatterSchema = object({
+  name: string2().min(1).max(200),
+  description: string2().min(1)
+});
+var ProjectSkillOnDiskSchema = strictObject({
+  /** The frontmatter's `name` — what the session addresses the skill by. */
+  name: string2().min(1).max(200),
+  /** The frontmatter's `description` — when the skill applies, verbatim. */
+  description: string2().min(1),
+  /** Repository-relative and always POSIX-separated, so it is quotable in a review. */
+  path: string2().min(1)
+});
+var UnreadableProjectSkillSchema = strictObject({
+  path: string2().min(1),
+  reason: string2().min(1)
+});
+
+// src/ops/project-skills.ts
+var PROJECT_SKILLS_DIR = path13.join(".claude", "skills");
+function repoRelative(dirName) {
+  return `.claude/skills/${dirName}/SKILL.md`;
+}
+async function readProjectSkills(projectDir) {
+  const root = path13.join(projectDir, PROJECT_SKILLS_DIR);
+  let entries2;
+  try {
+    entries2 = await fs13.readdir(root, { withFileTypes: true });
+  } catch {
+    return { skills: [], unreadable: [] };
+  }
+  const skills = [];
+  const unreadable = [];
+  for (const entry of entries2) {
+    if (!entry.isDirectory() && !entry.isSymbolicLink()) continue;
+    const at = repoRelative(entry.name);
+    const file = path13.join(root, entry.name, "SKILL.md");
+    let raw;
+    try {
+      raw = await fs13.readFile(file, "utf8");
+    } catch {
+      continue;
+    }
+    try {
+      const { data } = parseFrontmatter(raw);
+      const parsed = SkillFrontmatterSchema.safeParse(data);
+      if (!parsed.success) {
+        unreadable.push({
+          path: at,
+          reason: `its frontmatter is missing a required field: ${parsed.error.issues.map((issue2) => issue2.path.join(".")).join(", ")}`
+        });
+        continue;
+      }
+      skills.push({ name: parsed.data.name, description: parsed.data.description, path: at });
+    } catch (error2) {
+      unreadable.push({ path: at, reason: error2 instanceof Error ? error2.message : String(error2) });
+    }
+  }
+  skills.sort((left, right) => left.name.localeCompare(right.name));
+  unreadable.sort((left, right) => left.path.localeCompare(right.path));
+  return { skills, unreadable };
+}
+
 // src/ops/roster.ts
 var ClosingRosterSchema = strictObject({
   /**
@@ -18838,13 +18905,13 @@ function byDraftedThenName(a, b) {
 }
 
 // src/ops/verify.ts
-import fs13 from "node:fs/promises";
-import path13 from "node:path";
+import fs14 from "node:fs/promises";
+import path14 from "node:path";
 function verifyLedgerPath(cycleDir) {
-  return path13.join(cycleDir, "verify", "index.json");
+  return path14.join(cycleDir, "verify", "index.json");
 }
 async function readVerifyLedger(cycleDir) {
-  const raw = await fs13.readFile(verifyLedgerPath(cycleDir), "utf8").catch(() => null);
+  const raw = await fs14.readFile(verifyLedgerPath(cycleDir), "utf8").catch(() => null);
   if (raw === null) return [];
   try {
     const parsed = LedgerSchema.safeParse(JSON.parse(raw));
@@ -18881,7 +18948,7 @@ var CacheSchema = array(CacheEntrySchema);
 // src/store/config-mutation.ts
 var YAML3 = __toESM(require_dist(), 1);
 import crypto2 from "node:crypto";
-import fs14 from "node:fs/promises";
+import fs15 from "node:fs/promises";
 var VerifySlotSchema2 = _enum(["test", "lint", "build"]);
 var ConfigChangeSchema = discriminatedUnion("kind", [
   strictObject({
@@ -18987,11 +19054,11 @@ var ConfigPatchSchema = strictObject({
 var ConfigMutationError = class extends Error {
   kind;
   path;
-  constructor(kind, path25 = []) {
+  constructor(kind, path26 = []) {
     super(kind);
     this.name = "ConfigMutationError";
     this.kind = kind;
-    this.path = path25;
+    this.path = path26;
   }
 };
 function configRevision(raw) {
@@ -19003,7 +19070,7 @@ async function mutateConfig(projectDir, patch) {
   return withLock(paths.lock, async () => {
     let raw;
     try {
-      raw = await fs14.readFile(paths.config, "utf8");
+      raw = await fs15.readFile(paths.config, "utf8");
     } catch (error2) {
       if (error2.code === "ENOENT") throw new ConfigMutationError("missing");
       throw error2;
@@ -19105,8 +19172,8 @@ function applyChange(document, change) {
 }
 
 // src/store/memory-store.ts
-import fs15 from "node:fs/promises";
-import path14 from "node:path";
+import fs16 from "node:fs/promises";
+import path15 from "node:path";
 
 // src/schemas/memory.ts
 var MemoryKindSchema = _enum(["decision", "lesson", "pattern"]);
@@ -19153,7 +19220,7 @@ var MemoryNotFoundError = class extends Error {
 };
 async function listFiles(dir) {
   try {
-    return await fs15.readdir(dir);
+    return await fs16.readdir(dir);
   } catch (error2) {
     if (error2.code !== "ENOENT") throw error2;
     return [];
@@ -19164,9 +19231,9 @@ async function listMemories(projectDir) {
   const entries2 = await listFiles(dir);
   const memories = [];
   for (const name of entries2.filter((entry) => entry.endsWith(".md"))) {
-    const file = path14.join(dir, name);
+    const file = path15.join(dir, name);
     try {
-      const { data, body } = parseFrontmatter(await fs15.readFile(file, "utf8"));
+      const { data, body } = parseFrontmatter(await fs16.readFile(file, "utf8"));
       const parsed = MemoryFrontmatterSchema.safeParse(data);
       if (!parsed.success) continue;
       memories.push({ frontmatter: parsed.data, body, file });
@@ -19199,7 +19266,7 @@ async function readState(projectDir) {
 }
 async function readConfigView(projectDir) {
   const paths = resolveLoopPaths(projectDir);
-  const raw = await fs16.readFile(paths.config, "utf8").catch(() => null);
+  const raw = await fs17.readFile(paths.config, "utf8").catch(() => null);
   try {
     return {
       raw,
@@ -19241,8 +19308,18 @@ function componentFingerprint(components) {
   ).join("\n");
 }
 async function readSkillsView(projectDir) {
-  const [library, acceptances] = await Promise.all([listPackages(projectDir), listAcceptances(projectDir)]);
-  return { packages: library.packages, unreadable: library.unreadable, acceptances };
+  const [library, acceptances, onDisk] = await Promise.all([
+    listPackages(projectDir),
+    listAcceptances(projectDir),
+    readProjectSkills(projectDir)
+  ]);
+  return {
+    packages: library.packages,
+    unreadable: library.unreadable,
+    acceptances,
+    onDisk: onDisk.skills,
+    onDiskUnreadable: onDisk.unreadable
+  };
 }
 async function readFeatures(projectDir) {
   return await listFeatureSummaries(projectDir);
@@ -19268,17 +19345,17 @@ async function readPlanDetail(projectDir, planId) {
   } catch {
     throw new NotFoundError("plan");
   }
-  const raw = await fs16.readFile(path15.join(dir, "PLAN.md"), "utf8").catch(() => null);
+  const raw = await fs17.readFile(path16.join(dir, "PLAN.md"), "utf8").catch(() => null);
   const parsed = raw === null ? null : PlanFrontmatterSchema.safeParse(parseFrontmatter(raw).data);
   const frontmatter = parsed?.success === true ? parsed.data : null;
   const [review, stories, manifestTitle] = await Promise.all([
-    fs16.readFile(path15.join(dir, "REVIEW.md"), "utf8").catch(() => null),
+    fs17.readFile(path16.join(dir, "REVIEW.md"), "utf8").catch(() => null),
     readStoryDetails(projectDir, planId),
     readManifestTitle(dir)
   ]);
   return {
     id: planId,
-    title: frontmatter?.title ?? manifestTitle ?? path15.basename(dir),
+    title: frontmatter?.title ?? manifestTitle ?? path16.basename(dir),
     // The whole record — `decision`, `by`, `at`, `note` — where the snapshot
     // carries only the decision. An approval is auditable or it is a flag.
     approval: frontmatter?.approval ?? null,
@@ -19310,26 +19387,26 @@ async function readStoryDetail(projectDir, storyId) {
 }
 async function readManifestTitle(dir) {
   try {
-    const parsed = ManifestSchema.safeParse(JSON.parse(await fs16.readFile(path15.join(dir, "manifest.json"), "utf8")));
+    const parsed = ManifestSchema.safeParse(JSON.parse(await fs17.readFile(path16.join(dir, "manifest.json"), "utf8")));
     return parsed.success ? parsed.data.title : null;
   } catch {
     return null;
   }
 }
 async function readTranscript(projectDir, jobId) {
-  const file = path15.join(resolveLoopPaths(projectDir).webTranscripts, `${jobId}.log`);
+  const file = path16.join(resolveLoopPaths(projectDir).webTranscripts, `${jobId}.log`);
   try {
-    return await fs16.readFile(file, "utf8");
+    return await fs17.readFile(file, "utf8");
   } catch {
     throw new NotFoundError("transcript");
   }
 }
 async function readRuns(projectDir) {
   const runs = resolveLoopPaths(projectDir).runs;
-  const names = await fs16.readdir(runs, { withFileTypes: true }).then((found) => found.filter((entry) => entry.isDirectory()).map((entry) => entry.name)).catch(() => []);
+  const names = await fs17.readdir(runs, { withFileTypes: true }).then((found) => found.filter((entry) => entry.isDirectory()).map((entry) => entry.name)).catch(() => []);
   const out = [];
   for (const name of names.sort().reverse()) {
-    const inside = await fs16.readdir(path15.join(runs, name)).catch(() => []);
+    const inside = await fs17.readdir(path16.join(runs, name)).catch(() => []);
     const [, story, track] = name.split("--");
     out.push({
       id: name,
@@ -19346,35 +19423,35 @@ async function readStoryRuns(projectDir, storyId) {
   return runs.filter((run) => run.story === storyId);
 }
 async function readRunDetail(projectDir, runId) {
-  const dir = path15.join(resolveLoopPaths(projectDir).runs, runId);
-  const inside = await fs16.readdir(dir).catch(() => null);
+  const dir = path16.join(resolveLoopPaths(projectDir).runs, runId);
+  const inside = await fs17.readdir(dir).catch(() => null);
   if (inside === null) throw new NotFoundError("run");
   return {
     id: runId,
-    halt: await fs16.readFile(path15.join(dir, "HALT.md"), "utf8").catch(() => null),
+    halt: await fs17.readFile(path16.join(dir, "HALT.md"), "utf8").catch(() => null),
     cycles: inside.filter((entry) => /^cycle-\d+$/.test(entry)).map((entry) => Number(entry.slice("cycle-".length))).sort((a, b) => a - b)
   };
 }
 async function readSkillManifest(projectDir, runId) {
-  const dir = path15.join(resolveLoopPaths(projectDir).runs, runId);
-  const exists = await fs16.readdir(dir).catch(() => null);
+  const dir = path16.join(resolveLoopPaths(projectDir).runs, runId);
+  const exists = await fs17.readdir(dir).catch(() => null);
   if (exists === null) throw new NotFoundError("run");
-  return readJson2(path15.join(dir, "skill-selection.json"), SkillManifestSchema);
+  return readJson2(path16.join(dir, "skill-selection.json"), SkillManifestSchema);
 }
 var CYCLE_VERIFY_MAX = 50;
 var CYCLE_HANDOFF_MAX = 12e3;
 async function readCycleDetail(projectDir, runId, cycle) {
-  const dir = path15.join(resolveLoopPaths(projectDir).runs, runId, `cycle-${String(cycle).padStart(2, "0")}`);
-  const inside = await fs16.readdir(dir).catch(() => null);
+  const dir = path16.join(resolveLoopPaths(projectDir).runs, runId, `cycle-${String(cycle).padStart(2, "0")}`);
+  const inside = await fs17.readdir(dir).catch(() => null);
   if (inside === null) throw new NotFoundError("cycle");
-  const roster = await readJson2(path15.join(dir, "roster.json"), RosterSchema);
-  const findings = await readJson2(path15.join(dir, "findings.json"), FindingSchema.array());
+  const roster = await readJson2(path16.join(dir, "roster.json"), RosterSchema);
+  const findings = await readJson2(path16.join(dir, "findings.json"), FindingSchema.array());
   const ledger = await readVerifyLedger(dir);
-  const handoff = await fs16.readFile(path15.join(dir, "handoff.md"), "utf8").catch(() => null);
+  const handoff = await fs17.readFile(path16.join(dir, "handoff.md"), "utf8").catch(() => null);
   const agents = [];
   for (const entry of inside.filter((name) => name.endsWith(".json")).sort()) {
     if (entry === "roster.json" || entry === "findings.json") continue;
-    const result = await readJson2(path15.join(dir, entry), AgentResultSchema);
+    const result = await readJson2(path16.join(dir, entry), AgentResultSchema);
     if (result !== null) agents.push({ agent: entry.replace(/\.json$/, ""), result });
   }
   return {
@@ -19392,10 +19469,10 @@ async function readCycleDetail(projectDir, runId, cycle) {
   };
 }
 async function readRosterProgress(projectDir, runId, cycle) {
-  const dir = path15.join(resolveLoopPaths(projectDir).runs, runId, `cycle-${String(cycle).padStart(2, "0")}`);
-  const roster = await readJson2(path15.join(dir, "roster.json"), RosterSchema);
+  const dir = path16.join(resolveLoopPaths(projectDir).runs, runId, `cycle-${String(cycle).padStart(2, "0")}`);
+  const roster = await readJson2(path16.join(dir, "roster.json"), RosterSchema);
   if (roster === null) return null;
-  const inside = await fs16.readdir(dir).catch(() => []);
+  const inside = await fs17.readdir(dir).catch(() => []);
   const landed = roster.selected.filter((agent) => inside.includes(`${agent}.json`));
   return { cycle, selected: roster.selected, landed };
 }
@@ -19434,10 +19511,286 @@ async function readRosterValidity(projectDir, track, candidate) {
 }
 async function readJson2(file, schema) {
   try {
-    const parsed = schema.safeParse(JSON.parse(await fs16.readFile(file, "utf8")));
+    const parsed = schema.safeParse(JSON.parse(await fs17.readFile(file, "utf8")));
     return parsed.success ? parsed.data : null;
   } catch {
     return null;
+  }
+}
+
+// src/util/bounded-body.ts
+async function readBoundedText(response, capBytes, tooLarge) {
+  const declared = Number(response.headers.get("content-length"));
+  if (Number.isFinite(declared) && declared > capBytes) throw tooLarge();
+  const body = response.body;
+  if (body === null) return "";
+  const reader = body.getReader();
+  const chunks = [];
+  let total = 0;
+  try {
+    for (; ; ) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > capBytes) throw tooLarge();
+      chunks.push(Buffer.from(value));
+    }
+  } finally {
+    await reader.cancel().catch(() => void 0);
+  }
+  return Buffer.concat(chunks).toString("utf8");
+}
+
+// src/schemas/skill-import.ts
+var SkillCandidateSchema = strictObject({
+  source: SkillSourceSchema,
+  /** The page a person would open to look at this candidate. */
+  url: string2().url().startsWith("https://"),
+  /** `owner/name` for GitHub, or whatever the registry's own scheme is. */
+  repository: string2().min(1),
+  /**
+   * The ref the candidate was found at — commonly a branch, so **not**
+   * assumed to be immutable here. `inspectCandidate` resolves this to a
+   * pinned commit sha before fetching anything; a candidate itself makes no
+   * such promise.
+   */
+  ref: string2().min(1),
+  skillName: string2().min(1).max(200),
+  description: string2().min(1).max(1e3),
+  /** Absent when the source does not report a popularity signal. */
+  stars: number2().int().min(0).optional()
+});
+var SandboxCheckResultSchema = strictObject({
+  /** A bare argv array — never a shell string; see the story's rule 7. */
+  argv: array(string2().min(1)).min(1),
+  exitCode: number2().int().nullable(),
+  timedOut: boolean2()
+});
+var SANDBOX_OUTPUT_CAP = 2e4;
+var SandboxOutputSchema = strictObject({
+  text: string2().max(SANDBOX_OUTPUT_CAP),
+  truncated: boolean2()
+});
+var SandboxResultSchema = discriminatedUnion("state", [
+  strictObject({
+    state: literal("skipped"),
+    /** Always "no executable content" today — the common, markdown-only case. */
+    reason: string2().min(1)
+  }),
+  strictObject({
+    state: literal("unavailable"),
+    /** Names the backend that would let this machine verify it, e.g. sandbox-exec or bwrap. */
+    reason: string2().min(1)
+  }),
+  strictObject({
+    state: literal("passed"),
+    checks: array(SandboxCheckResultSchema),
+    output: SandboxOutputSchema
+  }),
+  strictObject({
+    state: literal("failed"),
+    checks: array(SandboxCheckResultSchema),
+    output: SandboxOutputSchema
+  })
+]);
+var NextActionSchema = strictObject({
+  action: literal("search-alternative"),
+  query: string2().min(1)
+});
+var ImportReportSchema = strictObject({
+  schema: literal(1),
+  candidate: SkillCandidateSchema,
+  /** The commit sha the candidate's `ref` was pinned to before anything was fetched, or `null` if pinning failed. */
+  revision: string2().min(1).nullable(),
+  /** sha256 over the canonical sorted content — the same digest `SkillPackageSchema` addresses a package by. */
+  digest: DigestSchema.nullable(),
+  skillName: string2().min(1).max(200).nullable(),
+  description: string2().min(1).max(1e3).nullable(),
+  license: strictObject({
+    spdx: string2().min(1).nullable(),
+    file: string2().min(1).nullable()
+  }).nullable(),
+  dependencies: strictObject({
+    executables: array(string2().min(1)),
+    packages: array(string2().min(1))
+  }).nullable(),
+  /** Paths classified as executable content — read to classify, never executed to do so. */
+  executableFiles: array(string2().min(1)),
+  /** Every refusal and every concern, each a sentence naming what and why. */
+  findings: array(string2().min(1)),
+  /** Whether any finding above blocks acceptance outright (e.g. a missing license, a hostile path). */
+  blocking: boolean2(),
+  /** `null` until the sandbox phase has run; inspection alone never sets this. */
+  sandbox: SandboxResultSchema.nullable(),
+  /** `'passed'` only when `blocking` is `false` and `sandbox.state` is `'passed'` or `'skipped'`. */
+  auditState: _enum(["pending", "passed", "failed"]),
+  /** Present only on a failed or blocked report; absent otherwise. */
+  nextAction: NextActionSchema.nullable()
+});
+
+// src/ops/skill-discovery.ts
+var defaultDeps = { fetch: globalThis.fetch };
+var SkillSourceDisabledError = class extends Error {
+  constructor(source) {
+    super(
+      `"${source}" is not in orchestration.skills.sources for this project \u2014 add it in .mjloop/config.yaml (orchestration.skills.sources) before searching this source. General web search in particular is opt-in: a project must add "web" itself, it is never enabled by default.`
+    );
+    this.name = "SkillSourceDisabledError";
+  }
+};
+var CrossHostRedirectError = class extends Error {
+  constructor(requestedHost, actualHost) {
+    super(
+      `refused a redirect from "${requestedHost}" to "${actualHost}" \u2014 a discovery connector never follows a redirect to a different host, because that is exactly how a compromised or malicious endpoint would hand back content this project never asked for`
+    );
+    this.name = "CrossHostRedirectError";
+  }
+};
+var DiscoveryResponseTooLargeError = class extends Error {
+  constructor(url, capBytes) {
+    super(`response from "${url}" exceeded the ${capBytes}-byte discovery response cap \u2014 refused, not truncated`);
+    this.name = "DiscoveryResponseTooLargeError";
+  }
+};
+var WebSearchUnavailableError = class extends Error {
+  constructor() {
+    super(
+      'orchestration.skills.sources allows "web", but no web search provider is configured in this build \u2014 only "github" and "registry" (against orchestration.skills.trusted_registries) resolve real candidates today'
+    );
+    this.name = "WebSearchUnavailableError";
+  }
+};
+var SkillsShTokenMissingError = class extends Error {
+  constructor() {
+    super(
+      'searching skills.sh needs a Vercel OIDC token, and neither SKILLS_SH_TOKEN nor VERCEL_OIDC_TOKEN is set \u2014 https://skills.sh/api/v1/ answers 401 "authentication_required" without one. Set one of the two in this shell (see https://skills.sh/docs/api#authentication), or search "github", which needs no token.'
+    );
+    this.name = "SkillsShTokenMissingError";
+  }
+};
+var REQUEST_TIMEOUT_MS = 3e4;
+var MAX_RESPONSE_BYTES = 1e6;
+var MAX_CANDIDATES = 20;
+function isRecord(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+async function fetchJson(url, deps, init) {
+  const requestedHost = new URL(url).host;
+  const response = await deps.fetch(url, { ...init, redirect: "manual", signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
+  const actualHost = new URL(response.url || url).host;
+  if (actualHost !== requestedHost) throw new CrossHostRedirectError(requestedHost, actualHost);
+  if (response.status >= 300 && response.status < 400) {
+    throw new CrossHostRedirectError(requestedHost, response.headers.get("location") ?? "(an undisclosed location)");
+  }
+  if (!response.ok) throw new Error(`request to "${url}" failed: ${response.status} ${response.statusText}`);
+  const text = await readBoundedText(response, MAX_RESPONSE_BYTES, () => new DiscoveryResponseTooLargeError(url, MAX_RESPONSE_BYTES));
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(`response from "${url}" is not valid JSON`);
+  }
+}
+var GITHUB_SEARCH_URL = "https://api.github.com/search/repositories";
+async function searchGithub(query, deps) {
+  const url = `${GITHUB_SEARCH_URL}?q=${encodeURIComponent(query)}&per_page=${MAX_CANDIDATES}`;
+  const body = await fetchJson(url, deps, {
+    headers: { Accept: "application/vnd.github+json", "User-Agent": "mjloop-skill-discovery" }
+  });
+  const items = isRecord(body) && Array.isArray(body.items) ? body.items : [];
+  const candidates = [];
+  for (const item of items.slice(0, MAX_CANDIDATES)) {
+    if (!isRecord(item)) continue;
+    const htmlUrl = typeof item.html_url === "string" ? item.html_url : null;
+    const fullName = typeof item.full_name === "string" ? item.full_name : null;
+    const ref = typeof item.default_branch === "string" ? item.default_branch : null;
+    const name = typeof item.name === "string" ? item.name : null;
+    if (htmlUrl === null || fullName === null || ref === null || name === null) continue;
+    const parsed = SkillCandidateSchema.safeParse({
+      source: "github",
+      url: htmlUrl,
+      repository: fullName,
+      ref,
+      skillName: name,
+      description: typeof item.description === "string" && item.description.length > 0 ? item.description : "No description provided.",
+      ...typeof item.stargazers_count === "number" ? { stars: item.stargazers_count } : {}
+    });
+    if (parsed.success) candidates.push(parsed.data);
+  }
+  return candidates;
+}
+var SKILLS_SH_ORIGIN = "https://skills.sh";
+var SKILLS_SH_SEARCH_URL = `${SKILLS_SH_ORIGIN}/api/v1/skills/search`;
+async function searchSkillsSh(query, deps) {
+  const env = deps.env ?? process.env;
+  const token = env["SKILLS_SH_TOKEN"] ?? env["VERCEL_OIDC_TOKEN"] ?? null;
+  if (token === null || token.length === 0) throw new SkillsShTokenMissingError();
+  const url = `${SKILLS_SH_SEARCH_URL}?q=${encodeURIComponent(query)}&limit=${MAX_CANDIDATES}`;
+  const body = await fetchJson(url, deps, {
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${token}`,
+      "User-Agent": "mjloop-skill-discovery"
+    }
+  });
+  const items = isRecord(body) && Array.isArray(body.data) ? body.data : [];
+  const candidates = [];
+  for (const item of items.slice(0, MAX_CANDIDATES)) {
+    if (!isRecord(item)) continue;
+    const slug = typeof item.slug === "string" ? item.slug : typeof item.name === "string" ? item.name : null;
+    const repository = typeof item.source === "string" ? item.source : null;
+    const href = typeof item.url === "string" ? item.url : null;
+    if (slug === null || repository === null || href === null) continue;
+    const absolute = href.startsWith("/") ? `${SKILLS_SH_ORIGIN}${href}` : href;
+    const installs = typeof item.installs === "number" ? item.installs : null;
+    const described = typeof item.description === "string" && item.description.length > 0 ? item.description : installs === null ? "No description in the skills.sh search index \u2014 open the candidate page before importing it." : `No description in the skills.sh search index; ${installs} installs reported. Open the candidate page before importing it.`;
+    const parsed = SkillCandidateSchema.safeParse({
+      source: "skills-sh",
+      url: absolute,
+      repository,
+      // The index reports no ref. `HEAD` is the honest placeholder: a
+      // candidate makes no immutability promise anyway, and `inspectCandidate`
+      // is what resolves a ref to a pinned sha before fetching anything.
+      ref: "HEAD",
+      skillName: slug,
+      description: described
+    });
+    if (parsed.success) candidates.push(parsed.data);
+  }
+  return candidates;
+}
+async function searchOneRegistry(registry2, query, deps) {
+  const url = `${registry2.replace(/\/$/, "")}/search?q=${encodeURIComponent(query)}`;
+  const body = await fetchJson(url, deps, { headers: { Accept: "application/json" } });
+  const items = isRecord(body) && Array.isArray(body.candidates) ? body.candidates : [];
+  const candidates = [];
+  for (const item of items.slice(0, MAX_CANDIDATES)) {
+    if (!isRecord(item)) continue;
+    const parsed = SkillCandidateSchema.safeParse({ ...item, source: "registry" });
+    if (parsed.success) candidates.push(parsed.data);
+  }
+  return candidates;
+}
+async function searchRegistries(query, trustedRegistries, deps) {
+  const results = [];
+  for (const registry2 of trustedRegistries) {
+    results.push(...await searchOneRegistry(registry2, query, deps));
+  }
+  return results.slice(0, MAX_CANDIDATES);
+}
+async function discoverCandidates(projectDir, options, deps = defaultDeps) {
+  const config2 = await loadConfig(projectDir);
+  if (!config2.orchestration.skills.sources.includes(options.source)) {
+    throw new SkillSourceDisabledError(options.source);
+  }
+  switch (options.source) {
+    case "github":
+      return searchGithub(options.query, deps);
+    case "registry":
+      return searchRegistries(options.query, config2.orchestration.skills.trusted_registries, deps);
+    case "skills-sh":
+      return searchSkillsSh(options.query, deps);
+    case "web":
+      throw new WebSearchUnavailableError();
   }
 }
 
@@ -19453,11 +19806,11 @@ var ok = (body) => ({ status: 200, body });
 var fail = (status, code) => ({ status, body: { error: { code } } });
 async function handleApi(projectDir, method, pathname) {
   const mark = pathname.indexOf("?");
-  const path25 = mark === -1 ? pathname : pathname.slice(0, mark);
+  const path26 = mark === -1 ? pathname : pathname.slice(0, mark);
   const query = new URLSearchParams(mark === -1 ? "" : pathname.slice(mark + 1));
-  if (!path25.startsWith("/api/") && path25 !== "/api") return null;
+  if (!path26.startsWith("/api/") && path26 !== "/api") return null;
   if (method !== "GET") return fail(405, "error.badRequest");
-  const segments = path25.split("/").filter((part) => part.length > 0).slice(1);
+  const segments = path26.split("/").filter((part) => part.length > 0).slice(1);
   try {
     return await route(projectDir, segments, query);
   } catch (error2) {
@@ -19539,8 +19892,22 @@ async function route(projectDir, segments, query) {
       if (!JOB_ID.test(first)) return fail(400, "error.badRequest");
       return ok(await readTranscript(projectDir, first));
     case "skills":
-      if (segments.length !== 1) break;
-      return ok(await readSkillsView(projectDir));
+      if (segments.length === 1) return ok(await readSkillsView(projectDir));
+      if (segments.length === 2 && first === "search") {
+        const q = query.get("q") ?? "";
+        if (q.length < 2) return fail(400, "error.badRequest");
+        const source = SkillSourceSchema.safeParse(query.get("source") ?? "github");
+        if (!source.success) return fail(400, "error.badRequest");
+        try {
+          return ok({ candidates: await discoverCandidates(projectDir, { query: q, source: source.data }) });
+        } catch (error2) {
+          if (error2 instanceof SkillSourceDisabledError) return fail(403, "error.skillSourceDisabled");
+          if (error2 instanceof SkillsShTokenMissingError) return fail(503, "error.skillsShTokenMissing");
+          if (error2 instanceof WebSearchUnavailableError) return fail(501, "error.webSearchUnavailable");
+          throw error2;
+        }
+      }
+      break;
   }
   return fail(404, "error.notFound");
 }
@@ -19566,8 +19933,8 @@ function sendApi(request, response, result) {
 }
 
 // src/web/queue.ts
-import fs17 from "node:fs/promises";
-import path16 from "node:path";
+import fs18 from "node:fs/promises";
+import path17 from "node:path";
 
 // src/web/completion.ts
 var NEW_TRACKER = { started: false, runId: null };
@@ -19855,14 +20222,14 @@ var JobQueue = class {
    * it must never be a job that stops running because of it.
    */
   async writeTranscriptChunk(jobId, chunk) {
-    const file = path16.join(this.transcriptDir(), `${jobId}.log`);
+    const file = path17.join(this.transcriptDir(), `${jobId}.log`);
     try {
-      await fs17.appendFile(file, chunk);
+      await fs18.appendFile(file, chunk);
     } catch (error2) {
       if (error2.code !== "ENOENT") return;
       try {
-        await fs17.mkdir(this.transcriptDir(), { recursive: true });
-        await fs17.appendFile(file, chunk);
+        await fs18.mkdir(this.transcriptDir(), { recursive: true });
+        await fs18.appendFile(file, chunk);
       } catch {
       }
     }
@@ -19894,14 +20261,14 @@ var JobQueue = class {
     const dir = this.transcriptDir();
     let names;
     try {
-      names = await fs17.readdir(dir);
+      names = await fs18.readdir(dir);
     } catch {
       return;
     }
     const stamped = await Promise.all(
       names.filter((name) => name.endsWith(".log") && !protectedIds.has(name.slice(0, -".log".length))).map(async (name) => {
-        const file = path16.join(dir, name);
-        const stats = await fs17.stat(file).catch(() => null);
+        const file = path17.join(dir, name);
+        const stats = await fs18.stat(file).catch(() => null);
         return stats === null ? null : { file, mtimeMs: stats.mtimeMs, size: stats.size };
       })
     );
@@ -19923,7 +20290,7 @@ var JobQueue = class {
       toDelete.add(oldest.file);
       total -= oldest.size;
     }
-    await Promise.all([...toDelete].map((file) => fs17.unlink(file).catch(() => {
+    await Promise.all([...toDelete].map((file) => fs18.unlink(file).catch(() => {
     })));
   }
   beginShutdown(active, outcome) {
@@ -19992,8 +20359,8 @@ var JobQueue = class {
 };
 
 // src/web/marker.ts
-import fs18 from "node:fs/promises";
-import path17 from "node:path";
+import fs19 from "node:fs/promises";
+import path18 from "node:path";
 var ServerMarkerSchema = strictObject({
   port: number2().int().positive().max(65535),
   /**
@@ -20014,15 +20381,15 @@ var ServerMarkerSchema = strictObject({
 async function writeServerMarker(projectDir, marker) {
   const file = resolveLoopPaths(projectDir).webServer;
   try {
-    await fs18.mkdir(path17.dirname(file), { recursive: true });
-    await fs18.writeFile(file, `${JSON.stringify(marker, null, 2)}
+    await fs19.mkdir(path18.dirname(file), { recursive: true });
+    await fs19.writeFile(file, `${JSON.stringify(marker, null, 2)}
 `, "utf8");
   } catch {
   }
 }
 async function clearServerMarker(projectDir) {
   try {
-    await fs18.rm(resolveLoopPaths(projectDir).webServer, { force: true });
+    await fs19.rm(resolveLoopPaths(projectDir).webServer, { force: true });
   } catch {
   }
 }
@@ -20031,13 +20398,13 @@ async function clearServerMarker(projectDir) {
 import os2 from "node:os";
 
 // src/ops/plan.ts
-import fs19 from "node:fs/promises";
-import path19 from "node:path";
+import fs20 from "node:fs/promises";
+import path20 from "node:path";
 
 // src/ops/manifest.ts
-import path18 from "node:path";
+import path19 from "node:path";
 function manifestPath(planDir) {
-  return path18.join(planDir, "manifest.json");
+  return path19.join(planDir, "manifest.json");
 }
 async function renderManifest(projectDir, planId, now = () => /* @__PURE__ */ new Date()) {
   const plan = await readPlan(projectDir, planId);
@@ -20054,7 +20421,7 @@ async function renderManifest(projectDir, planId, now = () => /* @__PURE__ */ ne
       status: story.frontmatter.status,
       ui: story.frontmatter.ui,
       depends_on: story.frontmatter.depends_on,
-      file: path18.relative(plan.dir, story.file)
+      file: path19.relative(plan.dir, story.file)
     }))
   });
   await writeJsonAtomic(manifestPath(plan.dir), manifest, { backup: false });
@@ -20134,8 +20501,8 @@ async function storyUpdate(projectDir, storyId, patch, now = () => /* @__PURE__ 
       );
       assertDependenciesResolve(siblings, merged.data);
     }
-    const renamed = path19.join(path19.dirname(current.file), storyFileName(merged.data));
-    if (renamed !== current.file) await fs19.rename(current.file, renamed);
+    const renamed = path20.join(path20.dirname(current.file), storyFileName(merged.data));
+    if (renamed !== current.file) await fs20.rename(current.file, renamed);
     const file = await writeStory(projectDir, { frontmatter: merged.data, body: current.body });
     const manifest = await renderManifest(projectDir, planId, now);
     return { id: storyId, file, manifest };
@@ -20368,17 +20735,17 @@ var spawnPtySession = ({ cwd, command, cols, rows }) => {
 };
 
 // src/web/snapshot.ts
-import fs22 from "node:fs/promises";
-import path22 from "node:path";
+import fs23 from "node:fs/promises";
+import path23 from "node:path";
 
 // src/ops/summary.ts
-import fs20 from "node:fs/promises";
-import path20 from "node:path";
+import fs21 from "node:fs/promises";
+import path21 from "node:path";
 var NO_FINDINGS = { high: 0, medium: 0, low: 0 };
 var MAP_FILE = "map.md";
 async function hasDesignSystem(projectDir) {
   try {
-    return (await fs20.stat(resolveLoopPaths(projectDir).designSystem)).isFile();
+    return (await fs21.stat(resolveLoopPaths(projectDir).designSystem)).isFile();
   } catch {
     return false;
   }
@@ -20386,11 +20753,11 @@ async function hasDesignSystem(projectDir) {
 async function runMap(projectDir, state) {
   if (state.run_id === null || state.track === null) return null;
   try {
-    if (!(await fs20.stat(path20.join(runDirPath(projectDir, state), MAP_FILE))).isFile()) return null;
+    if (!(await fs21.stat(path21.join(runDirPath(projectDir, state), MAP_FILE))).isFile()) return null;
   } catch {
     return null;
   }
-  return path20.join(".mjloop", "runs", runDirName(state), MAP_FILE);
+  return path21.join(".mjloop", "runs", runDirName(state), MAP_FILE);
 }
 async function stateSummary(projectDir) {
   let config2 = null;
@@ -20462,11 +20829,11 @@ async function stateSummary(projectDir) {
 }
 
 // src/web/revision.ts
-import fs21 from "node:fs/promises";
-import path21 from "node:path";
+import fs22 from "node:fs/promises";
+import path22 from "node:path";
 async function stamp(file) {
   try {
-    const stats = await fs21.stat(file);
+    const stats = await fs22.stat(file);
     return `${Math.trunc(stats.mtimeMs)}.${stats.size}`;
   } catch {
     return "-";
@@ -20474,12 +20841,12 @@ async function stamp(file) {
 }
 async function stampDir(dir, documents) {
   const parts = [await stamp(dir)];
-  for (const document of documents) parts.push(await stamp(path21.join(dir, document)));
+  for (const document of documents) parts.push(await stamp(path22.join(dir, document)));
   return parts.join(":");
 }
 async function entries(dir) {
   try {
-    return (await fs21.readdir(dir)).sort();
+    return (await fs22.readdir(dir)).sort();
   } catch {
     return [];
   }
@@ -20491,8 +20858,18 @@ async function stampListing(dir) {
 async function stampTree(dir) {
   const parts = [await stamp(dir)];
   for (const name of await entries(dir)) {
-    const child = path21.join(dir, name);
+    const child = path22.join(dir, name);
     parts.push(`${name}=${await stamp(child)}=${await stampListing(child)}`);
+  }
+  return parts.join("|");
+}
+async function stampProjectSkills(dir) {
+  const parts = [await stamp(dir)];
+  for (const name of await entries(dir)) {
+    const child = path22.join(dir, name);
+    parts.push(
+      `${name}=${await stamp(child)}=${await stampListing(child)}=${await stamp(path22.join(child, "SKILL.md"))}`
+    );
   }
   return parts.join("|");
 }
@@ -20508,13 +20885,13 @@ async function readRevisions(projectDir, tick, running) {
   const planDirs = await entries(paths.plans);
   const plans = {};
   for (const dir of planDirs) {
-    const documents = await stampDir(path21.join(paths.plans, dir), PLAN_DOCUMENTS);
-    const stories = await stamp(path21.join(paths.plans, dir, "stories"));
+    const documents = await stampDir(path22.join(paths.plans, dir), PLAN_DOCUMENTS);
+    const stories = await stamp(path22.join(paths.plans, dir, "stories"));
     const key = /^P\d{3}(?=-|$)/.exec(dir)?.[0] ?? dir;
     const stamped = `${documents}:${stories}`;
     plans[key] = plans[key] === void 0 ? stamped : `${plans[key]}|${stamped}`;
   }
-  const [state, config2, memory, runs, profile, features, acceptances, library] = await Promise.all([
+  const [state, config2, memory, runs, profile, features, acceptances, library, projectSkills] = await Promise.all([
     stamp(paths.state),
     stamp(paths.config),
     stampListing(paths.memory),
@@ -20527,7 +20904,14 @@ async function readRevisions(projectDir, tick, running) {
     (async () => `${await stampDir(paths.profile, ["proposed.json"])}:${await stampTree(paths.profile)}`)(),
     stampTree(paths.features),
     stampTree(paths.skills),
-    stampLibrary(projectDir)
+    stampLibrary(projectDir),
+    // `.claude/skills` is outside `.mjloop/` and outside `paths` on purpose:
+    // it is Claude Code's directory, not this engine's. It is stamped anyway
+    // because the Skills panel now draws it, and a panel that never refreshes
+    // when the thing it draws changes is a panel showing yesterday.
+    // `stampProjectSkills`, not `stampTree`: a `SKILL.md` is a level deeper
+    // than `stampTree` reaches, so an in-place edit needs its own stamp.
+    stampProjectSkills(path22.join(projectDir, ".claude", "skills"))
   ]);
   return {
     state,
@@ -20538,7 +20922,7 @@ async function readRevisions(projectDir, tick, running) {
     memory,
     profile,
     features,
-    skills: `${acceptances}|${library}`
+    skills: `${acceptances}|${library}|${projectSkills}`
   };
 }
 
@@ -20606,14 +20990,14 @@ async function readPlanView(projectDir, id) {
     id,
     // The directory name is the last resort, and it always exists — `findPlanDir`
     // found the plan by it.
-    title: frontmatter?.title ?? manifest?.title ?? path22.basename(dir),
+    title: frontmatter?.title ?? manifest?.title ?? path23.basename(dir),
     approval: frontmatter?.approval?.decision ?? null,
     stories: manifest?.stories ?? []
   };
 }
 async function readPlanFrontmatter(dir) {
   try {
-    const raw = await fs22.readFile(path22.join(dir, "PLAN.md"), "utf8");
+    const raw = await fs23.readFile(path23.join(dir, "PLAN.md"), "utf8");
     const parsed = PlanFrontmatterSchema.safeParse(parseFrontmatter(raw).data);
     if (!parsed.success) return null;
     return { title: parsed.data.title, approval: parsed.data.approval };
@@ -20623,7 +21007,7 @@ async function readPlanFrontmatter(dir) {
 }
 async function readManifest(dir) {
   try {
-    const raw = await fs22.readFile(path22.join(dir, "manifest.json"), "utf8");
+    const raw = await fs23.readFile(path23.join(dir, "manifest.json"), "utf8");
     const parsed = ManifestSchema.safeParse(JSON.parse(raw));
     if (!parsed.success) return null;
     return {
@@ -20642,7 +21026,7 @@ async function readManifest(dir) {
 }
 async function listRuns(projectDir) {
   try {
-    const entries2 = await fs22.readdir(resolveLoopPaths(projectDir).runs, { withFileTypes: true });
+    const entries2 = await fs23.readdir(resolveLoopPaths(projectDir).runs, { withFileTypes: true });
     return entries2.filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort().reverse();
   } catch {
     return [];
@@ -20860,15 +21244,15 @@ async function handleRequest(request, response, token, projectDir) {
     return;
   }
   const requested = url.pathname === "/" ? "/index.html" : url.pathname;
-  const file = path23.resolve(PUBLIC_DIR, `.${requested}`);
+  const file = path24.resolve(PUBLIC_DIR, `.${requested}`);
   if (!file.startsWith(PUBLIC_DIR)) {
     response.writeHead(403).end();
     return;
   }
   try {
-    const body = await fs23.readFile(file);
+    const body = await fs24.readFile(file);
     response.writeHead(200, {
-      "content-type": MIME[path23.extname(file)] ?? "application/octet-stream",
+      "content-type": MIME[path24.extname(file)] ?? "application/octet-stream",
       // The page carries a token in its URL. Keeping it out of caches and
       // referrers is most of what stops it leaking.
       "cache-control": "no-store",
@@ -20900,7 +21284,7 @@ function parseArgs(argv, cwd) {
       case "--dir": {
         const value = argv[++index];
         if (value === void 0) throw new UsageError("--dir needs a path");
-        args.dir = path24.resolve(cwd, value);
+        args.dir = path25.resolve(cwd, value);
         break;
       }
       case "--port": {
@@ -20963,7 +21347,7 @@ ${USAGE}`);
     return 1;
   }
   try {
-    await fs24.stat(resolveLoopPaths(args.dir).root);
+    await fs25.stat(resolveLoopPaths(args.dir).root);
   } catch {
     process.stderr.write(`no .mjloop/ in ${args.dir} \u2014 run /mjloop:init there first.
 `);
