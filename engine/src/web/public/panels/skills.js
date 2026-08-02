@@ -27,6 +27,7 @@ import { draw, register } from '../ui/render.js'
 /** @typedef {import('../../read.js').SkillsView} SkillsView */
 /** @typedef {import('../../../schemas/skill-library.js').SkillPackage} SkillPackage */
 /** @typedef {import('../../../schemas/skill-acceptance.js').ProjectSkillAcceptance} ProjectSkillAcceptance */
+/** @typedef {import('../../../schemas/project-skills.js').ProjectSkillOnDisk} ProjectSkillOnDisk */
 
 /** The three verification commands a component may declare, in record order. */
 const VERIFY_COMMANDS = /** @type {const} */ (['test', 'lint', 'build'])
@@ -71,6 +72,24 @@ export function joinAcceptances(view) {
   }))
 }
 
+/**
+ * Pair every skill on disk with the acceptance that routes it, or with null.
+ *
+ * The null is the interesting half here, exactly as in `joinAcceptances`: a
+ * `SKILL.md` sitting in `.claude/skills/` that no acceptance names is a skill
+ * the session can load and mjloop will never select. Neither list says that
+ * on its own, and `readSkillsView` serves both in one document so the join
+ * costs no second request.
+ *
+ * @param {SkillsView | null} view
+ * @returns {{ skill: ProjectSkillOnDisk, routedBy: ProjectSkillAcceptance | null }[]}
+ */
+export function routeOnDisk(view) {
+  if (view === null) return []
+  const byId = new Map(view.acceptances.map((acceptance) => [acceptance.skillId, acceptance]))
+  return view.onDisk.map((skill) => ({ skill, routedBy: byId.get(skill.name) ?? null }))
+}
+
 export function mountSkills() {
   const node = pick('panel-skills')
 
@@ -78,6 +97,10 @@ export function mountSkills() {
   const profileDrift = pick('skills-profile-drift')
   const profileEmpty = pick('skills-profile-empty')
   const profileHost = pick('skills-profile-list')
+
+  const onDiskEmpty = pick('skills-ondisk-empty')
+  const onDiskHost = pick('skills-ondisk')
+  const onDiskUnreadableHost = pick('skills-ondisk-unreadable')
 
   const acceptancesEmpty = pick('skills-acceptances-empty')
   const acceptancesHost = pick('skills-acceptances')
@@ -119,6 +142,19 @@ export function mountSkills() {
       flag(acceptancesEmpty, 'hidden', view === null || joined.length > 0)
       phrase(acceptancesEmpty, 'skills.acceptancesNone')
       reconcile(acceptancesHost, joined, (entry) => entry.acceptance.skillId, acceptanceCard)
+
+      const onDisk = routeOnDisk(view)
+      // "No skills here" is claimed only once the answer is in — the same rule
+      // the acceptances list above follows.
+      flag(onDiskEmpty, 'hidden', view === null || onDisk.length > 0)
+      phrase(onDiskEmpty, 'skills.onDiskNone')
+      reconcile(onDiskHost, onDisk, (entry) => entry.skill.path, projectSkillCard)
+      reconcile(
+        onDiskUnreadableHost,
+        view?.onDiskUnreadable ?? [],
+        (entry) => entry.path,
+        projectSkillUnreadableRow,
+      )
 
       const packages = view?.packages ?? []
       flag(libraryEmpty, 'hidden', view === null || packages.length > 0)
@@ -328,6 +364,50 @@ export function mountSkills() {
         }
 
         translateStatic(root)
+      },
+    }
+  }
+
+  function projectSkillCard() {
+    const { root, slots } = clone('tpl-project-skill')
+    return {
+      root,
+      /** @param {{ skill: ProjectSkillOnDisk, routedBy: ProjectSkillAcceptance | null }} entry */
+      update(entry) {
+        const name = slots['name']
+        if (name !== undefined) verbatim(name, entry.skill.name)
+        const description = slots['description']
+        if (description !== undefined) verbatim(description, entry.skill.description)
+        const at = slots['path']
+        if (at !== undefined) verbatim(at, entry.skill.path)
+
+        const routing = slots['routing']
+        if (routing !== undefined) {
+          // The one sentence neither list can produce alone. An acceptance
+          // reaching no component routes nothing, whatever else it says, so
+          // that case is drawn as unrouted rather than as a blank list.
+          const components = entry.routedBy?.components ?? []
+          if (components.length === 0) phrase(routing, 'skills.onDiskUnrouted')
+          else phrase(routing, 'skills.onDiskRouted', { components: components.join(' ') })
+        }
+
+        translateStatic(root)
+      },
+    }
+  }
+
+  function projectSkillUnreadableRow() {
+    const { root, slots } = clone('tpl-project-skill-unreadable')
+    return {
+      root,
+      /** @param {SkillsView['onDiskUnreadable'][number]} entry */
+      update(entry) {
+        const at = slots['path']
+        if (at !== undefined) verbatim(at, entry.path)
+        // The walk's own diagnosis, engine-authored, kept verbatim — the same
+        // position `unreadableRow` takes on the library's.
+        const reason = slots['reason']
+        if (reason !== undefined) verbatim(reason, entry.reason)
       },
     }
   }

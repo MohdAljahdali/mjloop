@@ -708,6 +708,14 @@
         </section>
 
         <section class="block">
+          <h2 data-i18n="skills.onDisk"></h2>
+          <p class="hint" data-i18n="skills.onDiskWhy"></p>
+          <p class="empty" id="skills-ondisk-empty" hidden></p>
+          <div id="skills-ondisk"></div>
+          <div id="skills-ondisk-unreadable"></div>
+        </section>
+
+        <section class="block">
           <h2 data-i18n="skills.acceptances"></h2>
           <p class="hint" data-i18n="skills.acceptancesWhy"></p>
           <p class="empty" id="skills-acceptances-empty" hidden></p>
@@ -1529,6 +1537,19 @@
     <!-- One package in this machine's library. `audit.findings` includes the
          sandbox line: `writePackage` is only ever reached from a passed audit,
          so there is no separate import report to draw beside this. -->
+    <template id="tpl-project-skill">
+      <div class="component">
+        <h3 data-slot="name"></h3>
+        <p class="record" data-slot="routing"></p>
+        <p data-slot="description" dir="auto"></p>
+        <p class="hint" data-slot="path"></p>
+      </div>
+    </template>
+
+    <template id="tpl-project-skill-unreadable">
+      <p class="banner warn"><span data-slot="path"></span> — <span data-slot="reason"></span></p>
+    </template>
+
     <template id="tpl-package">
       <div class="component">
         <h3 data-slot="name"></h3>

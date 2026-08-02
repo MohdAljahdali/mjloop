@@ -7,7 +7,7 @@ import { mountPlanDoc } from '../../src/web/public/lib/plandoc.js'
 import { drawRail, mountRail } from '../../src/web/public/ui/rail.js'
 import { collectConfigChanges, mountConfig } from '../../src/web/public/panels/config.js'
 import { mountEvidence } from '../../src/web/public/panels/evidence.js'
-import { joinAcceptances, mountSkills, shortDigest } from '../../src/web/public/panels/skills.js'
+import { joinAcceptances, mountSkills, routeOnDisk, shortDigest } from '../../src/web/public/panels/skills.js'
 import { approvable, mountFeatures } from '../../src/web/public/panels/features.js'
 import { mountPlans, planMemories, planRuns } from '../../src/web/public/panels/plans.js'
 import { mountStories } from '../../src/web/public/panels/stories.js'
@@ -3483,6 +3483,8 @@ describe('skills library', () => {
         packages: [pkg()],
         unreadable: [{ digest: 'd'.repeat(64), reason: 'record does not parse' }],
         acceptances: [acceptance({ skillId: 'gone', digest: 'c'.repeat(64) })],
+        onDisk: [],
+        onDiskUnreadable: [],
       },
     })
 
@@ -3509,5 +3511,34 @@ describe('skills library', () => {
     // Activation is a command. There is nothing on this panel to press.
     expect(document.querySelectorAll('#panel-skills [data-act]')).toHaveLength(0)
     expect(document.querySelectorAll('#panel-skills button, #panel-skills input')).toHaveLength(0)
+  })
+})
+
+describe('the skills a project has on disk', () => {
+  it('pairs each on-disk skill with the acceptance that routes it, or with null', () => {
+    const view = {
+      packages: [],
+      unreadable: [],
+      acceptances: [
+        { skillId: 'brief-writer', digest: 'a'.repeat(64), packageId: 'pkg', status: 'active', compatible: true,
+          components: ['web'], agents: ['builder'], tags: [], updatePolicy: 'review',
+          acceptedBy: 'mohd', acceptedAt: NOW } as unknown as ProjectSkillAcceptance,
+      ],
+      onDisk: [
+        { name: 'brief-writer', description: 'Use when a request needs a brief.', path: '.claude/skills/brief-writer/SKILL.md' },
+        { name: 'lonely', description: 'Use when nothing routes here.', path: '.claude/skills/lonely/SKILL.md' },
+      ],
+      onDiskUnreadable: [],
+    }
+
+    const routed = routeOnDisk(view as never)
+    expect(routed.map((entry) => [entry.skill.name, entry.routedBy?.skillId ?? null])).toEqual([
+      ['brief-writer', 'brief-writer'],
+      ['lonely', null],
+    ])
+  })
+
+  it('answers empty before the fetch has settled', () => {
+    expect(routeOnDisk(null)).toEqual([])
   })
 })
