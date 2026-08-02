@@ -1804,8 +1804,9 @@ describe('runCli skills', () => {
     it('names skills-sh when --source is given with nothing after it', async () => {
       const dir = await makeTmpProject()
       try {
-        const result = await runCli(['skills', 'search', 'react', '--source', '--dir', dir.dir], '')
+        const result = await runCli(['skills', 'search', 'react', '--dir', dir.dir, '--source'], '')
         expect(result.exitCode).toBe(1)
+        expect(result.stdout).toContain('was given with nothing after it')
         expect(result.stdout).toContain('skills-sh')
       } finally {
         await dir.cleanup()
