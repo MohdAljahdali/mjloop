@@ -1789,6 +1789,17 @@ describe('runCli skills', () => {
       expect(exitCode).toBe(1)
       expect(stdout).toContain('--source')
     })
+
+    it('names skills-sh in the --source refusal', async () => {
+      const dir = await makeTmpProject()
+      try {
+        const result = await runCli(['skills', 'search', 'react', '--source', 'nonsense', '--dir', dir.dir], '')
+        expect(result.exitCode).toBe(1)
+        expect(result.stdout).toContain('skills-sh')
+      } finally {
+        await dir.cleanup()
+      }
+    })
   })
 
   describe('inspect', () => {
