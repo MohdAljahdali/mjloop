@@ -2,6 +2,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { HISTORY_DEFAULT_LIMIT } from '../ops/history.js'
 import { preflightEstimate, type Preflight } from '../ops/preflight.js'
+import { readProjectSkills } from '../ops/project-skills.js'
 import { rosterValidity, type RosterValidity } from '../ops/roster.js'
 import { UnknownTrackError } from '../ops/run.js'
 import { readTelemetry, type Telemetry } from '../ops/telemetry.js'
@@ -29,6 +30,7 @@ import { listAcceptances } from '../store/skill-acceptance-store.js'
 import { listPackages, type UnreadablePackage } from '../store/skill-library-store.js'
 import type { ProjectSkillAcceptance } from '../schemas/skill-acceptance.js'
 import type { SkillPackage } from '../schemas/skill-library.js'
+import type { ProjectSkillOnDisk, UnreadableProjectSkill } from '../schemas/project-skills.js'
 import { StateStore } from '../store/state-store.js'
 import type { Config } from '../schemas/config.js'
 import type { ProjectComponent } from '../schemas/project-profile.js'
@@ -220,6 +222,20 @@ export interface SkillsView {
   unreadable: UnreadablePackage[]
   /** This project's own acceptances — digest, components, agents, policy, status. */
   acceptances: ProjectSkillAcceptance[]
+  /**
+   * The skills this project's own checkout holds, in `.claude/skills/`.
+   *
+   * Served beside the acceptances rather than folded into them because the
+   * two answer different questions: this list is what the *session* can load,
+   * the acceptances are what *mjloop* routes work to. A page that had only
+   * the second told a project full of skills that it had none, which is the
+   * defect this field closes. The join between them — is this skill routed? —
+   * is made client-side against `skillId`, the same way `joinAcceptances`
+   * joins an acceptance to its library package.
+   */
+  onDisk: ProjectSkillOnDisk[]
+  /** A `SKILL.md` the walk could not read, and why. Surfaced, never dropped. */
+  onDiskUnreadable: UnreadableProjectSkill[]
 }
 
 /**
@@ -244,8 +260,18 @@ export async function readSkillsView(projectDir: string): Promise<SkillsView> {
   // project's, since the library is machine-wide — from turning this whole
   // read into a 500. `unreadable` carries exactly those entries through to the
   // wire rather than silently dropping them.
-  const [library, acceptances] = await Promise.all([listPackages(projectDir), listAcceptances(projectDir)])
-  return { packages: library.packages, unreadable: library.unreadable, acceptances }
+  const [library, acceptances, onDisk] = await Promise.all([
+    listPackages(projectDir),
+    listAcceptances(projectDir),
+    readProjectSkills(projectDir),
+  ])
+  return {
+    packages: library.packages,
+    unreadable: library.unreadable,
+    acceptances,
+    onDisk: onDisk.skills,
+    onDiskUnreadable: onDisk.unreadable,
+  }
 }
 
 /* ── feature briefs ───────────────────────────────────────────────────────── */

@@ -211,7 +211,7 @@ export async function readRevisions(projectDir: string, tick: number, running: b
     plans[key] = plans[key] === undefined ? stamped : `${plans[key]}|${stamped}`
   }
 
-  const [state, config, memory, runs, profile, features, acceptances, library] = await Promise.all([
+  const [state, config, memory, runs, profile, features, acceptances, library, projectSkills] = await Promise.all([
     stamp(paths.state),
     stamp(paths.config),
     stampListing(paths.memory),
@@ -225,6 +225,11 @@ export async function readRevisions(projectDir: string, tick: number, running: b
     stampTree(paths.features),
     stampTree(paths.skills),
     stampLibrary(projectDir),
+    // `.claude/skills` is outside `.mjloop/` and outside `paths` on purpose:
+    // it is Claude Code's directory, not this engine's. It is stamped anyway
+    // because the Skills panel now draws it, and a panel that never refreshes
+    // when the thing it draws changes is a panel showing yesterday.
+    stampTree(path.join(projectDir, '.claude', 'skills')),
   ])
 
   return {
@@ -236,6 +241,6 @@ export async function readRevisions(projectDir: string, tick: number, running: b
     memory,
     profile,
     features,
-    skills: `${acceptances}|${library}`,
+    skills: `${acceptances}|${library}|${projectSkills}`,
   }
 }

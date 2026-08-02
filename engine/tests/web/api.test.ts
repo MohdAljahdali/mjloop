@@ -316,7 +316,13 @@ describe('handleApi', () => {
     it('is empty at 200 on a machine with no library and a project with no acceptances', async () => {
       const result = await call('/api/skills')
       expect(result?.status).toBe(200)
-      expect(result?.body).toEqual({ packages: [], unreadable: [], acceptances: [] })
+      expect(result?.body).toEqual({
+        packages: [],
+        unreadable: [],
+        acceptances: [],
+        onDisk: [],
+        onDiskUnreadable: [],
+      })
     })
 
     it('reports the library and this project\'s acceptances, and offers no way to change either', async () => {
