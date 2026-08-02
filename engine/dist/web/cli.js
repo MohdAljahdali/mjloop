@@ -19995,8 +19995,20 @@ var JobQueue = class {
 import fs18 from "node:fs/promises";
 import path17 from "node:path";
 var ServerMarkerSchema = strictObject({
-  port: number2().int().positive(),
-  token: string2().min(1),
+  port: number2().int().positive().max(65535),
+  /**
+   * Exactly what `startWebServer` mints: `crypto.randomBytes(32).toString('hex')`.
+   *
+   * Constrained here for the reason `StoryIdSchema` and `IdSchema` are
+   * constrained where they are defined — the value reaches somewhere that
+   * parses it. This one is interpolated into a url that is handed to a browser
+   * launcher, and on Windows that launcher goes through a shell, so a token
+   * carrying `&` would be a command. `z.string().min(1)` made that reachable by
+   * anything able to write one file into the project: this file is not covered
+   * by `PROTECTED_DIRECTORIES`, and an agent running inside the loop can write
+   * it. The exact shape is cheaper than any escaping and cannot be got wrong.
+   */
+  token: string2().regex(/^[0-9a-f]{64}$/),
   pid: number2().int().positive()
 });
 async function writeServerMarker(projectDir, marker) {
@@ -20910,9 +20922,9 @@ function parseArgs(argv, cwd) {
   return args;
 }
 function openBrowser(url) {
-  const command = process.platform === "darwin" ? "open" : process.platform === "win32" ? "start" : "xdg-open";
+  const [command, args] = process.platform === "darwin" ? ["open", [url]] : process.platform === "win32" ? ["cmd.exe", ["/d", "/s", "/c", "start", "", url]] : ["xdg-open", [url]];
   try {
-    spawn(command, [url], { detached: true, stdio: "ignore", shell: process.platform === "win32" }).unref();
+    spawn(command, args, { detached: true, stdio: "ignore" }).unref();
   } catch {
   }
 }

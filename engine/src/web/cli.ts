@@ -56,12 +56,22 @@ export function parseArgs(argv: string[], cwd: string): WebArgs {
 }
 
 function openBrowser(url: string): void {
-  const command =
-    process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open'
+  // No shell, on any platform. `start` is a `cmd.exe` builtin rather than an
+  // executable, which is why this used `shell: true` on Windows — and a shell
+  // turns every metacharacter in `url` into syntax. `cmd.exe` is invoked with a
+  // fixed argv instead, and the empty string after `start` is its title
+  // argument: without it `start` reads the url as the window title and opens
+  // nothing.
+  const [command, args] =
+    process.platform === 'darwin'
+      ? ['open', [url]]
+      : process.platform === 'win32'
+        ? ['cmd.exe', ['/d', '/s', '/c', 'start', '', url]]
+        : ['xdg-open', [url]]
   try {
     // Detached and unref'd: a browser that outlives this process must not keep
-    // it alive, and a machine with no browser at all must not fail the server.
-    spawn(command, [url], { detached: true, stdio: 'ignore', shell: process.platform === 'win32' }).unref()
+    // it alive, and a machine with no browser at all must not fail the caller.
+    spawn(command as string, args as string[], { detached: true, stdio: 'ignore' }).unref()
   } catch {
     /* the url is printed either way */
   }

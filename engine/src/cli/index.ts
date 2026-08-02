@@ -1747,11 +1747,25 @@ function webCliPath(): string {
   return path.join(fileURLToPath(new URL('../../', import.meta.url)), 'dist', 'web', 'cli.js')
 }
 
-/** The browser, the way `web/cli.ts` opens it. Failure is not worth reporting. */
+/**
+ * The browser, the way `web/cli.ts` opens it — no shell, on any platform.
+ *
+ * `start` is a `cmd.exe` builtin rather than an executable, which is the reason
+ * a shell was reached for on Windows in the first place; `cmd.exe` gets a fixed
+ * argv instead, and the empty string after `start` is its title argument. The
+ * url is already provably free of metacharacters — `ServerMarkerSchema` pins
+ * the token to 64 hex characters and the port to a number — so this is the
+ * second of two locks on the same door, not the only one.
+ */
 function openUrl(url: string): void {
-  const command = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open'
+  const [command, args] =
+    process.platform === 'darwin'
+      ? ['open', [url]]
+      : process.platform === 'win32'
+        ? ['cmd.exe', ['/d', '/s', '/c', 'start', '', url]]
+        : ['xdg-open', [url]]
   try {
-    nodeSpawn(command, [url], { detached: true, stdio: 'ignore', shell: process.platform === 'win32' }).unref()
+    nodeSpawn(command as string, args as string[], { detached: true, stdio: 'ignore' }).unref()
   } catch {
     /* the url is in the session's context either way */
   }

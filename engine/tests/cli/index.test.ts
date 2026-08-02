@@ -154,10 +154,14 @@ describe('runCli session-start', () => {
     await initLoop(project.dir, clock)
     const marker = resolveLoopPaths(project.dir).webServer
     await fs.mkdir(path.dirname(marker), { recursive: true })
-    await fs.writeFile(marker, JSON.stringify({ port: 4177, token: 'abc', pid: process.pid }), 'utf8')
+    // A token of the shape the server actually mints — 32 random bytes as hex.
+    // `ServerMarkerSchema` pins that shape, so a fixture cannot use a
+    // convenient short string and still be testing the real path.
+    const token = 'a1'.repeat(32)
+    await fs.writeFile(marker, JSON.stringify({ port: 4177, token, pid: process.pid }), 'utf8')
 
     const { stdout } = await runCli(['session-start'], JSON.stringify({ cwd: project.dir, source: 'startup' }))
-    expect(JSON.parse(stdout).hookSpecificOutput.additionalContext).toContain('http://127.0.0.1:4177/?t=abc')
+    expect(JSON.parse(stdout).hookSpecificOutput.additionalContext).toContain(`http://127.0.0.1:4177/?t=${token}`)
   })
 
   it('ignores a marker whose server is gone', async () => {
@@ -169,10 +173,31 @@ describe('runCli session-start', () => {
     await fs.mkdir(path.dirname(marker), { recursive: true })
     // pid 1 is init and always alive, so a pid that cannot exist is needed: one
     // above the platform maximum is never allocated.
-    await fs.writeFile(marker, JSON.stringify({ port: 4177, token: 'abc', pid: 4_194_305 }), 'utf8')
+    await fs.writeFile(marker, JSON.stringify({ port: 4177, token: 'a1'.repeat(32), pid: 4_194_305 }), 'utf8')
 
     const { stdout } = await runCli(['session-start'], JSON.stringify({ cwd: project.dir, source: 'startup' }))
     expect(JSON.parse(stdout).hookSpecificOutput.additionalContext).not.toContain('already running')
+  })
+
+  it('refuses a marker whose token is not one, rather than handing it to a browser', async () => {
+    // The url is interpolated from this file and then handed to a launcher that
+    // reaches a shell on Windows, so a token carrying `&` would be a command.
+    // Anything able to write one file into the project can write this one — it
+    // is not covered by PROTECTED_DIRECTORIES, and an agent inside the loop can
+    // reach it — so the shape is pinned at parse rather than escaped later.
+    await initLoop(project.dir, clock)
+    const marker = resolveLoopPaths(project.dir).webServer
+    await fs.mkdir(path.dirname(marker), { recursive: true })
+    await fs.writeFile(
+      marker,
+      JSON.stringify({ port: 4177, token: 'a & calc.exe', pid: process.pid }),
+      'utf8',
+    )
+
+    const { stdout } = await runCli(['session-start'], JSON.stringify({ cwd: project.dir, source: 'startup' }))
+    const context = JSON.parse(stdout).hookSpecificOutput.additionalContext
+    expect(context).not.toContain('calc.exe')
+    expect(context).not.toContain('already running')
   })
 
   it('starts nothing when the project turns it off', async () => {
