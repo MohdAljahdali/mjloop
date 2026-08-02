@@ -1,279 +1,106 @@
 # mjloop
 
-A Claude Code plugin. Install once, invoke from any project.
+> Verified development cycles for Claude Code.
 
-`mjloop` runs work as a **cycle**: a leader composes the cycle from a track's agent
-roster, dispatches contract-bound agents in isolated contexts, and judges the result on
-evidence. Execution state lives in `.mjloop/` in the host project and is owned by an MCP
-server, so no agent can corrupt it by hand.
+[![Claude Code plugin](https://img.shields.io/badge/Claude_Code-plugin-6B5CE7?style=flat-square)](https://docs.anthropic.com/en/docs/claude-code)
+[![Node.js 20+](https://img.shields.io/badge/Node.js-20%2B-339933?style=flat-square&logo=nodedotjs&logoColor=white)](https://nodejs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 
-## Status
+**English** · [العربية](README.ar.md) · [简体中文](README.zh-CN.md) · [Español](README.es.md) · [Português (Brasil)](README.pt-BR.md) · [Français](README.fr.md) · [Deutsch](README.de.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [Русский](README.ru.md) · [हिन्दी](README.hi.md) · [Bahasa Indonesia](README.id.md) · [Türkçe](README.tr.md) · [Tiếng Việt](README.vi.md)
 
-All four tracks ship: `plan`, `build`, `fix`, and `edit`, and so do all the guards: the
-cycle cap, the stagnation guard, the repeated-error guard, the reproduction gate, and the
-autonomous `Stop` hook. So do the conditional specialists — `ui-designer`, `ui-critic`,
-`security`, `perf`, and `docs` — with `/mjloop:design-sync` and a `specialists` setting the
-engine enforces in both directions; memory, in `.mjloop/memory/`, so a run can record a
-decision and a later run can find it; extension, so `/mjloop:add` scaffolds an agent, a
-skill, or a track; and the cockpit, `/mjloop:web`, which drives and reads a run in a
-browser.
+**Make coding agents prove they finished.**
 
-Milestone 8 — **the engine runs your verify commands itself.** It executes the copy of the
-`verify:` block the run pinned when it started, keeps the whole log under the cycle, and
-hands the verifier a bounded digest instead of a transcript. The receipt is what changes:
-a `pass` citing a command the engine recorded as failing, killed, or never started is
-refused rather than believed.
+`mjloop` is a Claude Code plugin that turns agent work into bounded, evidence-backed
+cycles. A leader selects the right agents for the task, runs them in isolated contexts,
+and accepts success only after the engine records the result of your project's own
+verification commands.
 
-A run also stops regenerating its own narrative. It keeps a `map.md`, rendered from the
-mapping agent's own result, and a `handoff.md` per cycle — what each agent reported, the
-files it touched, the verification table, the open findings — generated from what the
-cycle already produced, with no extra model call. Later cycles are handed paths to both
-rather than a retyped file list and a growing findings array. `docs` now runs once, after
-the run passes, against the code as it finally stands. And two reports are there when you
-ask for them: which specialists are earning their dispatch, and what a run on a track is
-likely to cost, in cycles, dispatches and minutes — no price table, because the engine
-cannot see which model an agent runs on.
+`request → track → isolated agents → engine verification → evidence-backed result`
 
-See `docs/superpowers/specs/2026-07-28-mjloop-milestone-8-token-economy-design.md`.
+> [!IMPORTANT]
+> `mjloop` currently supports Claude Code. Adapters for other coding agents are not part
+> of the released plugin yet.
 
-Newest — **the project maps itself, and its orchestration policy is a guarded setting.**
-`/mjloop:init` now walks the tree and proposes one component per declared manifest —
-`pubspec.yaml`, `package.json`, `pyproject.toml`, `setup.py`, `setup.cfg` — carrying the
-technology and the verify commands that manifest itself declares, never one inferred from a
-directory name. A proposal activates nothing on its own: the accepted map is an immutable
-numbered revision, and returning to an earlier one means accepting it as a new revision
-rather than rewriting a record a run may have pinned. `mjloop-cli profile show`, `accept`
-and `reject` are where that decision is made — with `--expect` carrying the revision you
-read, so an acceptance built on a screen that has since moved is refused, and
-`accept --from <revision>` reselecting an earlier revision's map without reading the
-proposal at all, which is what makes the rollback reachable rather than merely modelled.
-Never the browser: accepting a map activates routing for every later run, which is the
-class of write the cockpit is permanently denied. Beside it, an `orchestration:` block
-in `.mjloop/config.yaml` carries this project's policy, read and changed through
-`/mjloop:config` and `mjloop-cli config get/set` — a write that compare-and-swaps on the
-file's sha256 revision and re-parses the whole document, neither of which a hand edit does.
-Every key is defaulted and `discovery.mode` defaults to `off`, so an already-provisioned
-project's plan flow is unchanged by any of it. The cockpit's Config tab edits the block and
-shows the accepted component map read-only.
+## Why mjloop?
 
-Newer still — **a feature request can be interviewed before it is planned.** With
-`orchestration.discovery.mode` set to `always` — or to `ask`, which puts the choice to the
-user once and honours a no — `/mjloop:plan` runs the `mjloop-feature-discovery` skill first:
-it reads the accepted component map, the config, and the project's own documentation for
-itself rather than asking, then puts one decision at a time to the user — each with a
-recommended answer — up to `discovery.question_budget` questions, marking whatever the budget
-left unresolved as unresolved instead of guessing it. It stops at a draft brief for a person
-to approve, and plans against the brief they approved. It plans nothing, routes nothing, and
-starts nothing itself: the fit-check and the human approval gate still stand behind it,
-against the plan. The brief it writes is a record on disk rather than a paragraph in a chat —
-see below — and the mode defaults to `off`, so `/mjloop:plan` in an existing project is
-unchanged.
+- **Evidence, not confidence** — a passing claim cannot override a failing or missing
+  engine receipt.
+- **State agents cannot rewrite** — run state and generated manifests are owned by the
+  MCP server, not edited by agents.
+- **Bounded autonomy** — cycle, stagnation, and repeated-error guards stop work that is
+  no longer making progress.
+- **A workflow for each job** — use a short edit cycle, a multi-cycle build, a
+  reproduction-first fix, or a reviewed planning flow.
 
-Then — **an approved brief is evidence, and it is immutable.** A feature brief lives in
-`.mjloop/features/F###-<slug>/` as numbered revision files. A draft is written into place
-as the interview goes, so an interrupted interview resumes instead of being re-asked;
-approval freezes that revision, and the store refuses every later write to it rather than
-trusting the caller. Approving is compare-and-swap on the revision the approver was shown —
-a brief that moved in the meantime is refused outright — and it records who approved, when,
-and their own words if they gave any, with the cockpit's approver taken from the machine's
-own account rather than from anything the page can type. It refuses a brief with no
-acceptance criteria, because that is what every later story is judged against. Changing
-an approved brief mints a successor draft carrying its content forward, and rollback is
-approving an earlier revision's content as a new one, so no record a run may have pinned is
-rewritten or deleted. `superseded` is derived when a record is read — a revision is
-superseded once a higher one exists — and never stored, since storing it would mean writing
-to the file the rule exists to protect. `.mjloop/features/` is engine-owned like
-`.mjloop/profile/`: `Write` and `Edit` are denied inside it, and briefs are created, read,
-updated and approved through the four `mjloop_feature_*` operations. Once a brief is
-approved, `orchestration.discovery.completion` decides what follows — `auto-plan` opens the
-plan track against it, `review` records it and stops, `save-only` treats the brief itself as
-the deliverable. The cockpit may read a brief with its revision history and approve the
-revision it read; it may not create, edit, supersede, route, or execute one.
+## Quick start
 
-Latest — **an approved brief can also tell the loop which skills to bring, without inventing a
-new agent to hold them.** A run built against one routes each of `planner`, `builder`, `critic`,
-and `verifier` to the project's own accepted skills — never to a permanent per-technology
-variant: there is no `flutter-builder`, and there never will be, because a role is fixed and only
-the guidance it receives for one task changes. Selection joins the brief's affected component ids
-against a skill's tags, matching either the component's own technology-derived tags or a tag the
-brief declares for itself — declared by a person during discovery, never inferred from the
-brief's prose, which is exactly the free-form guess this design refuses to make on anyone's
-behalf. The whole routing decision, and a proof-or-fallback verdict on whether this run's
-components can run in parallel at all, is computed once and pinned into `skill-selection.json`
-beside `verify-pinned.json`, so a later change to the project's skill library cannot rewrite what
-a task already in flight was told; a cycle's handoff renders the selections and the reasons
-behind them beside everything else it already records. Independence is only ever proven from
-disjoint component roots and no shared verify command — never guessed — and anything short of
-that falls to `orchestration.execution.uncertain_concurrency`, sequential by default. No skill
-library exists yet, so every selection this manifest can produce today is empty; that is the
-next story.
-
-Latest — **the skill library now exists, per machine, shared by every project on it.** It
-lives outside any checkout — `~/.local/share/mjloop` by default, `MJLOOP_DATA_HOME` to point
-it elsewhere — because a library nested in a project would eventually get committed, and a
-package two projects share would then live inside one of them. A package is stored
-content-addressed by the sha-256 digest of its content, so importing one source at two
-revisions is two packages, never one overwriting the other. A project accepts a **digest**,
-never a path: the acceptance record in `.mjloop/skills/<skillId>.json` travels in the repo,
-the package itself stays on the machine that fetched it, and a teammate whose library lacks
-it is skipped by name rather than failing the run. Acceptance is per project, and removing
-one project's acceptance touches nothing else — not the package, not another project's
-record. `mjloop-cli skills list|accept|disable|enable|remove` is the one route in; the
-cockpit's `/api/skills` only ever reports the library and this project's acceptances and
-never activates one. `skills accept` refuses any package whose audit has not passed —
-discovery, static audit, and the sandbox below are what finally lets one earn that state.
-
-Latest — **a discovered package can now earn a passed audit, or be told exactly why not.**
-The whole pipeline is a sequence of refusals. `mjloop-cli skills search <query> [--source
-github|registry|web]` returns metadata-only candidates — where a package claims to live, not
-its content — from `orchestration.skills.sources` (`[github]` by default); a source the
-project has not enabled is refused before a single request goes out, naming the setting and
-`mjloop-cli config set orchestration.skills.sources ...` as the fix. General web search stays
-off until a project opts in itself. `mjloop-cli skills inspect <url>` pins the candidate's ref
-to an immutable commit sha through the API before fetching a single byte, then fetches its
-tree under hard caps — entry count, per-file and total bytes, path depth — each an outright
-refusal naming the cap, never a silent truncation; refuses a traversing or absolute path the
-moment its name first appears; requires `SKILL.md` to parse into a name and description; and
-blocks on a missing license exactly as it blocks on a missing `SKILL.md`. Executable content —
-a shebang, an executable extension, a `package.json` with `scripts` — is classified by reading
-it, never by running it, and can only earn `'passed'` by running its own declared
-`mjloop.smoke` checks inside a real isolation backend this machine can detect, `sandbox-exec`
-on darwin or `bwrap` on linux; **a bare scrubbed child process is not that backend**, and with
-neither tool present the package is `'unavailable'` and refused outright, never run
-unsandboxed to find out. `mjloop-cli skills import <url>` writes a passed package into the
-library — it still does not accept it into the project, which stays `skills accept
-<digest>`'s job — and `mjloop-cli skills check-updates` reports an upstream change as a new
-candidate, never moving an already-accepted digest and never importing or accepting it on its
-own. A failed candidate offers exactly one thing to do next: a user-initiated search for a
-different one.
-
-## Install
+You need Claude Code, Node.js 20 or newer, and Git.
 
 ```bash
-cd engine && npm install && npm run build
+git clone https://github.com/MohdAljahdali/mjloop.git
+cd mjloop/engine
+npm install
+npm run build
+cd ..
+claude plugin marketplace add "$PWD"
+claude plugin install mjloop@mjloop
 ```
 
-Then add this repository as a plugin marketplace or local plugin in Claude Code.
+Then open Claude Code in a project and run:
 
-## Use
-
-```
-/mjloop:init                               provision .mjloop/ and detect verify commands
-/mjloop:edit <what to change>              one-cycle scoped change
-/mjloop:plan <idea>                        idea to approved plan to stories
-/mjloop:build <goal | P001-S02 | --next>   multi-cycle build, optionally against a story
-/mjloop:fix <what is broken>               reproduce first, then fix the root cause
-/mjloop:status                             where the run stands, and what is not earning it
-/mjloop:stop [reason]                      halt the run and write a report
-/mjloop:resume                             continue an interrupted run
-/mjloop:design-sync                        extract the design system the UI agents read
-/mjloop:config [get | set <key> <value>]   read or change this project's orchestration settings
-/mjloop:web                                cockpit: drive and read a run in a browser
-/mjloop:add agent|skill|track <name>       scaffold a new element
-/mjloop:release [major|minor|patch]        bump, tag, and publish a plugin release
+```text
+/mjloop:init
+/mjloop:edit add input validation to the signup form
 ```
 
-## How a cycle is composed
+> [!NOTE]
+> A fresh clone must be built once because the MCP server and hook CLI run from
+> `engine/dist/`. See the [complete installation guide](docs/install.md) for verification,
+> updates, and troubleshooting.
 
-Each track declares a `required` set the leader cannot drop and an `available` set it
-draws from as the task warrants. Before running, the leader writes `roster.json` naming
-what it chose and why each omission was safe. Every agent a track marks `required` is a
-hard invariant — on `edit`, `build`, and `fix` that includes `verifier`, and no success is
-declared without its evidence. The `plan` track has no verifier: there is no suite to run
-against a document, so its verdict comes from `fit-checker`, the approval gate, and the
-story reviews.
+## Pick the right track
 
-That evidence is the engine's own. The verifier calls `mjloop_verify_run`, the engine runs
-the command the run pinned at its start, writes the whole log under the cycle, and records
-what it executed — so a `pass` citing a command the engine watched exit non-zero is
-refused, and an edit to `verify:` mid-run is reported rather than obeyed.
+| Command | Best for | Built-in rule |
+|---|---|---|
+| `/mjloop:edit <request>` | Small, focused changes | One cycle; escalate if the scope grows |
+| `/mjloop:build <goal>` | Features and larger implementation | Repeat verified cycles until done or halted |
+| `/mjloop:fix <problem>` | Defects and regressions | Reproduce the failure before accepting a fix |
+| `/mjloop:plan <idea>` | Turning an idea into buildable stories | Fit check and approval before story creation |
 
-A track can also declare a `closing` set: agents that run once, after the run has passed,
-and never inside a working cycle — which the engine refuses. On `build` that is `docs`,
-because documentation drafted in cycle 2 describes code cycle 4 replaces. A closing agent's
-result is recorded beside the run and changes no verdict.
+Use `/mjloop:status` to inspect the current run, `/mjloop:resume` to continue an
+interrupted run, `/mjloop:stop` to halt it, and `/mjloop:web` to open the browser cockpit.
 
-Change a track, cap, or forced specialist in `.mjloop/config.yaml`.
+## What happens in a cycle?
 
-## Extending it
+1. The leader composes a roster from the selected track and records why each optional
+   specialist was included or omitted.
+2. Contract-bound agents work in isolated contexts with focused responsibilities.
+3. The engine runs the verification commands pinned when the run started and stores the
+   full log outside the agent's narrative.
+4. Failed verification becomes input to the next cycle; a passing receipt can close the
+   run.
+5. Safety guards halt cycles that hit their limit, stagnate, or repeat the same failure.
 
-A track is data. Adding one is a few lines in `.mjloop/config.yaml`, and the leader never
-changes: it does not know agent names ahead of time, it reads them from the track.
+## More than execution
 
-```yaml
-tracks:
-  refactor:
-    required:  [builder, verifier]
-    available: [scout, critic, perf]
-    closing:   [docs]
-    max_cycles: 5
-```
+- **Feature discovery** — the `mjloop-feature-discovery` skill interviews one decision at
+  a time and stops at a brief a person can approve.
+- **Project-aware routing** — accepted component maps and skills guide fixed agent roles
+  without changing an in-flight run.
+- **Browser cockpit** — inspect runs, plans, stories, evidence, configuration, and memory
+  with `/mjloop:web`.
+- **Extensible tracks** — add an agent, skill, or track with `/mjloop:add`.
 
-`/mjloop:add agent|skill|track <name>` scaffolds any of the three. New agents land in
-`.claude/agents/`, which is where Claude Code reads project subagents from — the scaffold
-refuses a name that would shadow one this plugin ships.
+> [!TIP]
+> Start with `/mjloop:edit` for a real, contained change. It is the quickest way to see
+> the verification contract without paying for a multi-cycle run.
 
-The `mjloop-tracks` and `mjloop-extend` skills explain the whole system: what `required`,
-`available` and `closing` guarantee, the two kinds of gate, the three specialist modes, and
-what a new agent must return.
+## Read next
 
-## Plans and stories
+- [Why mjloop exists](docs/about.md)
+- [Installation and troubleshooting](docs/install.md)
+- [Commands, configuration, and workflows](docs/usage.md)
+- [Arabic documentation](docs/about.ar.md)
 
-A plan lives in `.mjloop/plans/P001-<slug>/`: `PLAN.md`, a `stories/` directory, and a
-generated `manifest.json`. Each story is a markdown file that carries its own id, status,
-acceptance criteria, dependencies, and — once it passes — the path to the run that proved
-it.
-
-The story file is the source of truth. `manifest.json` is derived from the story files
-and `.mjloop/INDEX.md` is derived from the manifests, so nothing is ever edited in two
-places. Every `mjloop_story_*` write regenerates its plan's manifest; `.mjloop/INDEX.md` is
-regenerated by `mjloop_index_render`, which the leader calls after writing a story back.
-Write stories through the `mjloop_story_*` tools rather than by hand.
-
-## Specialists
-
-A build cycle can draw on six optional agents beyond `builder` and `verifier`: `scout`,
-`critic`, `ui-designer`, `ui-critic`, `security`, and `perf`. The leader drafts what the
-change calls for and must record a reason for every one it leaves out. `docs` is the
-seventh and it closes the run instead of joining a cycle.
-
-`/mjloop:status` prints one line about any specialist this project has drafted five or
-more times without a single high or medium finding to show for it. It is a report and
-never a rule: nothing in the engine drafts or skips an agent because of it, and a
-specialist with a zero hit rate may be exactly why the project has no findings of that
-kind.
-
-`specialists` in `.mjloop/config.yaml` overrides that judgement in both directions:
-
-```yaml
-specialists:
-  security: always     # in every cycle, whatever the leader thinks
-  perf: never          # a roster that drafts it is rejected
-  docs: auto           # the leader decides — the default
-```
-
-The UI pair reads `.mjloop/design-system.md`, which `/mjloop:design-sync` extracts from your
-code. Without it they stop rather than invent a design.
-
-## Running unattended
-
-Set `autonomous: true` in `.mjloop/config.yaml` and a `Stop` hook keeps the turn going
-between cycles, so a run continues without somebody pressing enter.
-
-It extends nothing. The cycle cap, the stagnation guard, and the repeated-error guard end
-the run exactly where they would have with a person there — the hook only removes the
-pause, and it goes quiet the moment the run is no longer running.
-
-It removes one pause per turn, not all of them: Claude Code marks a stop it has already
-continued from, and the hook yields on that mark rather than blocking its own
-continuation. A long run can therefore come to rest with cycles still to go — `/mjloop:resume`
-picks it up from exactly where it stopped.
-
-## Development
-
-Building the engine, running the tests, and what a reviewable pull request looks like:
-[CONTRIBUTING.md](CONTRIBUTING.md).
-
-## License
-
-MIT — see [LICENSE](LICENSE).
+If `mjloop` solves a problem you recognize, consider starring the repository so other
+developers can find it.

@@ -30,3 +30,11 @@ CLAUDE.md
 .idea/
 .vscode/
 *.swp
+
+# Skills installed into this checkout by a third-party manager, not project
+# content: `skills-lock.json` pins a `SKILL.md` fetched from another repository.
+# A plugin that ships to other people should not carry somebody else's skill
+# along with it. Delete these three lines to track them.
+.agents/
+.claude/
+skills-lock.json
