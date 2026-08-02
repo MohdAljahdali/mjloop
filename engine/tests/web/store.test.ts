@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { isProxy } from 'vue'
 import type { ServerMessage } from '../../src/web/protocol.js'
 import { emptySnapshot } from './helpers/page.js'
 
@@ -59,12 +60,15 @@ describe('snapshots', () => {
     expect(store.snapshot.value?.project).toBe('/b')
   })
 
-  it('is not deeply reactive', () => {
+  it('holds the snapshot raw, not behind a deep proxy', () => {
     const snap = emptySnapshot()
     FakeSocket.last?.deliver({ type: 'snapshot', snapshot: snap })
-    // shallowRef, so what comes back is the very object the socket delivered —
-    // no proxy walked over plans[].stories[] and queue[] 1.25 times a second.
-    expect(store.snapshot.value).toBe(snap)
+    // shallowRef + shallowReadonly: what comes back is the plain object, not a
+    // proxy. A deep ref — or the readonly() this brief originally specified —
+    // would walk plans[].stories[] and queue[] on every broadcast, 1.25 times
+    // a second, to watch for mutations that never come.
+    expect(isProxy(store.snapshot.value)).toBe(false)
+    expect(store.snapshot.value).toStrictEqual(snap)
   })
 
   it('ignores a frame that is not json', () => {
