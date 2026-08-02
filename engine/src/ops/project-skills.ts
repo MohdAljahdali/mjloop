@@ -47,7 +47,16 @@ export async function readProjectSkills(projectDir: string): Promise<ProjectSkil
   const unreadable: UnreadableProjectSkill[] = []
 
   for (const entry of entries) {
-    if (!entry.isDirectory()) continue
+    // A symlink counts. `isDirectory()` is false for one even when it resolves
+    // to a directory, and linking is how a whole family of projects populates
+    // this directory at all: the skills live somewhere agent-agnostic —
+    // `.agents/skills/` — and are linked into `.claude/skills/`, which is the
+    // shape this very repository uses. Claude Code follows those links and
+    // loads those skills, so a walk that skipped them answered "no skills"
+    // about a project whose skills all work. Nothing further is stat'ed here:
+    // a link to a file, or to nothing at all, fails the `SKILL.md` read below
+    // and is skipped there like any other directory that holds no skill.
+    if (!entry.isDirectory() && !entry.isSymbolicLink()) continue
     const at = repoRelative(entry.name)
     const file = path.join(root, entry.name, 'SKILL.md')
 

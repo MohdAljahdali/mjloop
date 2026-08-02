@@ -12899,7 +12899,7 @@ var FeatureDiscoveryModeSchema = _enum(["always", "ask", "off"]);
 var DiscoveryCompletionSchema = _enum(["auto-plan", "review", "save-only"]);
 var UncertainConcurrencySchema = _enum(["sequential", "ask", "parallel"]);
 var AfterPlanApprovalSchema = _enum(["auto", "manual"]);
-var SkillSourceSchema = _enum(["github", "registry", "web"]);
+var SkillSourceSchema = _enum(["github", "registry", "web", "skills-sh"]);
 var SkillUpdateModeSchema = _enum(["auto", "review", "pinned"]);
 var OrchestrationSchema = strictObject({
   profile: strictObject({
@@ -14722,6 +14722,14 @@ var WebSearchUnavailableError = class extends Error {
     this.name = "WebSearchUnavailableError";
   }
 };
+var SkillsShTokenMissingError = class extends Error {
+  constructor() {
+    super(
+      'searching skills.sh needs a Vercel OIDC token, and neither SKILLS_SH_TOKEN nor VERCEL_OIDC_TOKEN is set \u2014 https://skills.sh/api/v1/ answers 401 "authentication_required" without one. Set one of the two in this shell (see https://skills.sh/docs/api#authentication), or search "github", which needs no token.'
+    );
+    this.name = "SkillsShTokenMissingError";
+  }
+};
 var REQUEST_TIMEOUT_MS = 3e4;
 var MAX_RESPONSE_BYTES = 1e6;
 var MAX_CANDIDATES = 20;
@@ -14772,6 +14780,46 @@ async function searchGithub(query, deps) {
   }
   return candidates;
 }
+var SKILLS_SH_ORIGIN = "https://skills.sh";
+var SKILLS_SH_SEARCH_URL = `${SKILLS_SH_ORIGIN}/api/v1/skills/search`;
+async function searchSkillsSh(query, deps) {
+  const env = deps.env ?? process.env;
+  const token = env["SKILLS_SH_TOKEN"] ?? env["VERCEL_OIDC_TOKEN"] ?? null;
+  if (token === null || token.length === 0) throw new SkillsShTokenMissingError();
+  const url = `${SKILLS_SH_SEARCH_URL}?q=${encodeURIComponent(query)}&limit=${MAX_CANDIDATES}`;
+  const body = await fetchJson(url, deps, {
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${token}`,
+      "User-Agent": "mjloop-skill-discovery"
+    }
+  });
+  const items = isRecord(body) && Array.isArray(body.data) ? body.data : [];
+  const candidates = [];
+  for (const item of items.slice(0, MAX_CANDIDATES)) {
+    if (!isRecord(item)) continue;
+    const slug = typeof item.slug === "string" ? item.slug : typeof item.name === "string" ? item.name : null;
+    const repository = typeof item.source === "string" ? item.source : null;
+    const href = typeof item.url === "string" ? item.url : null;
+    if (slug === null || repository === null || href === null) continue;
+    const absolute = href.startsWith("/") ? `${SKILLS_SH_ORIGIN}${href}` : href;
+    const installs = typeof item.installs === "number" ? item.installs : null;
+    const described = typeof item.description === "string" && item.description.length > 0 ? item.description : installs === null ? "No description in the skills.sh search index \u2014 open the candidate page before importing it." : `No description in the skills.sh search index; ${installs} installs reported. Open the candidate page before importing it.`;
+    const parsed = SkillCandidateSchema.safeParse({
+      source: "skills-sh",
+      url: absolute,
+      repository,
+      // The index reports no ref. `HEAD` is the honest placeholder: a
+      // candidate makes no immutability promise anyway, and `inspectCandidate`
+      // is what resolves a ref to a pinned sha before fetching anything.
+      ref: "HEAD",
+      skillName: slug,
+      description: described
+    });
+    if (parsed.success) candidates.push(parsed.data);
+  }
+  return candidates;
+}
 async function searchOneRegistry(registry2, query, deps) {
   const url = `${registry2.replace(/\/$/, "")}/search?q=${encodeURIComponent(query)}`;
   const body = await fetchJson(url, deps, { headers: { Accept: "application/json" } });
@@ -14801,6 +14849,8 @@ async function discoverCandidates(projectDir, options, deps = defaultDeps) {
       return searchGithub(options.query, deps);
     case "registry":
       return searchRegistries(options.query, config2.orchestration.skills.trusted_registries, deps);
+    case "skills-sh":
+      return searchSkillsSh(options.query, deps);
     case "web":
       throw new WebSearchUnavailableError();
   }
@@ -15672,7 +15722,7 @@ var USAGE = `usage: mjloop-cli <command>
   skills remove <skillId> [--dir <path>]
                                        remove this project's acceptance only \u2014 the package and every
                                        other project's acceptance are untouched
-  skills search <query> [--source github|registry|web] [--dir <path>] [--json]
+  skills search <query> [--source github|registry|web|skills-sh] [--dir <path>] [--json]
                                        metadata-only candidates from an allowed source \u2014 nothing is
                                        written, and no candidate becomes active on its own
   skills inspect <url> [--ref <ref>] [--dir <path>] [--json]
@@ -15893,7 +15943,7 @@ var FLAG_VALUES = {
   "--components": "a comma-separated list of component ids from the accepted map",
   "--agents": "a comma-separated list of agent roles (planner, builder, critic, verifier)",
   "--policy": "auto, review or pinned",
-  "--source": "github, registry or web",
+  "--source": "github, registry, web or skills-sh",
   "--ref": "a branch, tag, or commit sha to pin"
 };
 function refuseEmptyFlag(empty) {
@@ -16447,12 +16497,12 @@ async function skillsSearchCommand(args, deps) {
   if (refusal !== null) return refusal;
   const [query] = positional;
   if (query === void 0) {
-    return fail("skills search needs a query: mjloop-cli skills search <query> [--source github|registry|web] [--dir <path>]");
+    return fail("skills search needs a query: mjloop-cli skills search <query> [--source github|registry|web|skills-sh] [--dir <path>]");
   }
   let parsedSource = "github";
   if (source !== void 0) {
     const result = SkillSourceSchema.safeParse(source);
-    if (!result.success) return fail(`--source takes github, registry or web \u2014 got "${source}"`);
+    if (!result.success) return fail(`--source takes github, registry, web or skills-sh \u2014 got "${source}"`);
     parsedSource = result.data;
   }
   try {

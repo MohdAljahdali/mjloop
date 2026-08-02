@@ -38,6 +38,40 @@ describe('readProjectSkills', () => {
     ])
   })
 
+  it('follows a symlinked skill directory, which is how a linked skill layout reaches .claude/skills', async () => {
+    // The shape this repository itself uses: the skills live in `.agents/skills/`
+    // and are linked into `.claude/skills/`, so every entry in the directory the
+    // walk reads is a symlink and none of them is a directory. Claude Code loads
+    // these, so a walk that skipped them reported "no skills" about a project
+    // whose skills all work.
+    const target = path.join(project.dir, '.agents', 'skills', 'linked')
+    await fs.mkdir(target, { recursive: true })
+    await fs.writeFile(
+      path.join(target, 'SKILL.md'),
+      '---\nname: linked\ndescription: Use when linked.\n---\n\nBody.\n',
+      'utf8',
+    )
+    await fs.mkdir(path.join(project.dir, '.claude', 'skills'), { recursive: true })
+    await fs.symlink(
+      path.join('..', '..', '.agents', 'skills', 'linked'),
+      path.join(project.dir, '.claude', 'skills', 'linked'),
+    )
+
+    const { skills, unreadable } = await readProjectSkills(project.dir)
+    expect(unreadable).toEqual([])
+    // Reported at the path a reader would look for it, not at the link's target.
+    expect(skills).toEqual([
+      { name: 'linked', description: 'Use when linked.', path: '.claude/skills/linked/SKILL.md' },
+    ])
+  })
+
+  it('ignores a symlink that does not resolve to a skill directory', async () => {
+    await fs.mkdir(path.join(project.dir, '.claude', 'skills'), { recursive: true })
+    await fs.symlink(path.join('..', '..', 'nowhere'), path.join(project.dir, '.claude', 'skills', 'dangling'))
+
+    await expect(readProjectSkills(project.dir)).resolves.toEqual({ skills: [], unreadable: [] })
+  })
+
   it('reports a skill it could not read rather than dropping it or throwing', async () => {
     await writeSkill(project.dir, 'good', '---\nname: good\ndescription: Use when fine.\n---\n\nBody.\n')
     await writeSkill(project.dir, 'nofrontmatter', 'Just a body, no frontmatter at all.\n')

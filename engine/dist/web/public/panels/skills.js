@@ -18,7 +18,7 @@
  * one join, and they were two tabs apart.
  */
 import { clone, flag, phrase, translateStatic, verbatim } from '../ui/dom.js'
-import { feed } from '../lib/api.js'
+import { feed, get } from '../lib/api.js'
 import { stamp } from '../lib/fmt.js'
 import { reconcile } from '../ui/list.js'
 import { draw, register } from '../ui/render.js'
@@ -27,6 +27,8 @@ import { draw, register } from '../ui/render.js'
 /** @typedef {import('../../read.js').SkillsView} SkillsView */
 /** @typedef {import('../../../schemas/skill-library.js').SkillPackage} SkillPackage */
 /** @typedef {import('../../../schemas/skill-acceptance.js').ProjectSkillAcceptance} ProjectSkillAcceptance */
+/** @typedef {import('../../../schemas/project-skills.js').ProjectSkillOnDisk} ProjectSkillOnDisk */
+/** @typedef {import('../../../schemas/skill-import.js').SkillCandidate} SkillCandidate */
 
 /** The three verification commands a component may declare, in record order. */
 const VERIFY_COMMANDS = /** @type {const} */ (['test', 'lint', 'build'])
@@ -71,6 +73,60 @@ export function joinAcceptances(view) {
   }))
 }
 
+/**
+ * The last search's answer, held here rather than in a `feed`.
+ *
+ * A `feed` re-fetches when a revision moves, which is right for a document
+ * that describes the project and wrong for this: a search is a question a
+ * person asked once, and re-asking it every time `.mjloop/` changes would
+ * turn one keystroke into an unbounded stream of outbound requests.
+ *
+ * @type {{ candidates: SkillCandidate[], code: string | null, asked: boolean }}
+ */
+const search = { candidates: [], code: null, asked: false }
+
+/**
+ * Counts every call to `searchSkills`, so a response for a query nobody is
+ * waiting for any more can tell itself apart from the current one.
+ *
+ * The same guard `feed()` (`lib/api.js`) applies to its own generation
+ * counter, for the same reason: fire a second search before the first
+ * answer lands, and without this the first answer can resolve *after* the
+ * second and overwrite it — the panel would then show results for a query
+ * that is no longer in the input.
+ */
+let generation = 0
+
+/**
+ * Run the search the form is holding. Exported so `app.js` can register it as
+ * the `skills-search` action and so the panel test can await it.
+ *
+ * @returns {Promise<void>}
+ */
+export async function searchSkills() {
+  const q = /** @type {HTMLInputElement | null} */ (document.getElementById('skills-search-q'))?.value.trim() ?? ''
+  const source = /** @type {HTMLSelectElement | null} */ (document.getElementById('skills-search-source'))?.value ?? 'github'
+  // The same floor the route enforces, checked here so a one-character query
+  // is a no-op rather than a round trip that comes back 400.
+  if (q.length < 2) return
+
+  const mine = ++generation
+  const answer = await get(`/api/skills/search?q=${encodeURIComponent(q)}&source=${encodeURIComponent(source)}`)
+  // A later search already started; this answer belongs to a query nobody is
+  // waiting for any more and must be dropped rather than drawn.
+  if (mine !== generation) return
+
+  search.asked = true
+  if (answer.ok) {
+    search.candidates = Array.isArray(answer.body?.candidates) ? answer.body.candidates : []
+    search.code = null
+  } else {
+    search.candidates = []
+    search.code = answer.code
+  }
+  draw()
+}
+
 export function mountSkills() {
   const node = pick('panel-skills')
 
@@ -78,6 +134,14 @@ export function mountSkills() {
   const profileDrift = pick('skills-profile-drift')
   const profileEmpty = pick('skills-profile-empty')
   const profileHost = pick('skills-profile-list')
+
+  const onDiskEmpty = pick('skills-ondisk-empty')
+  const onDiskHost = pick('skills-ondisk')
+  const onDiskUnreadableHost = pick('skills-ondisk-unreadable')
+
+  const searchError = pick('skills-search-error')
+  const searchEmpty = pick('skills-search-empty')
+  const searchResults = pick('skills-search-results')
 
   const acceptancesEmpty = pick('skills-acceptances-empty')
   const acceptancesHost = pick('skills-acceptances')
@@ -119,6 +183,27 @@ export function mountSkills() {
       flag(acceptancesEmpty, 'hidden', view === null || joined.length > 0)
       phrase(acceptancesEmpty, 'skills.acceptancesNone')
       reconcile(acceptancesHost, joined, (entry) => entry.acceptance.skillId, acceptanceCard)
+
+      const onDisk = view?.onDisk ?? []
+      // "No skills here" is claimed only once the answer is in — the same rule
+      // the acceptances list above follows.
+      flag(onDiskEmpty, 'hidden', view === null || onDisk.length > 0)
+      phrase(onDiskEmpty, 'skills.onDiskNone')
+      reconcile(onDiskHost, onDisk, (skill) => skill.path, projectSkillCard)
+      reconcile(
+        onDiskUnreadableHost,
+        view?.onDiskUnreadable ?? [],
+        (entry) => entry.path,
+        projectSkillUnreadableRow,
+      )
+
+      // Nothing is claimed before a question was asked: an empty result line
+      // on first paint would answer a query nobody typed.
+      flag(searchError, 'hidden', search.code === null)
+      if (search.code !== null) phrase(searchError, search.code)
+      flag(searchEmpty, 'hidden', !search.asked || search.code !== null || search.candidates.length > 0)
+      if (search.asked) phrase(searchEmpty, 'skills.searchNone')
+      reconcile(searchResults, search.candidates, (candidate) => candidate.url, candidateCard)
 
       const packages = view?.packages ?? []
       flag(libraryEmpty, 'hidden', view === null || packages.length > 0)
@@ -328,6 +413,65 @@ export function mountSkills() {
         }
 
         translateStatic(root)
+      },
+    }
+  }
+
+  function projectSkillCard() {
+    const { root, slots } = clone('tpl-project-skill')
+    return {
+      root,
+      /** @param {ProjectSkillOnDisk} skill */
+      update(skill) {
+        const name = slots['name']
+        if (name !== undefined) verbatim(name, skill.name)
+        const description = slots['description']
+        if (description !== undefined) verbatim(description, skill.description)
+        const at = slots['path']
+        if (at !== undefined) verbatim(at, skill.path)
+
+        translateStatic(root)
+      },
+    }
+  }
+
+  function candidateCard() {
+    const { root, slots } = clone('tpl-candidate')
+    return {
+      root,
+      /** @param {SkillCandidate} candidate */
+      update(candidate) {
+        const skillName = slots['skillName']
+        if (skillName !== undefined) verbatim(skillName, candidate.skillName)
+        const description = slots['description']
+        if (description !== undefined) verbatim(description, candidate.description)
+        const repository = slots['repository']
+        if (repository !== undefined) verbatim(repository, candidate.repository)
+        const source = slots['source']
+        if (source !== undefined) verbatim(source, candidate.source)
+        // The next step, spelled out. A result with no way forward reads as a
+        // button somebody forgot to wire up; the way forward is a command,
+        // because importing executes a package's smoke checks.
+        const next = slots['next']
+        if (next !== undefined) phrase(next, 'skills.searchNext', { url: candidate.url })
+
+        translateStatic(root)
+      },
+    }
+  }
+
+  function projectSkillUnreadableRow() {
+    const { root, slots } = clone('tpl-project-skill-unreadable')
+    return {
+      root,
+      /** @param {SkillsView['onDiskUnreadable'][number]} entry */
+      update(entry) {
+        const at = slots['path']
+        if (at !== undefined) verbatim(at, entry.path)
+        // The walk's own diagnosis, engine-authored, kept verbatim — the same
+        // position `unreadableRow` takes on the library's.
+        const reason = slots['reason']
+        if (reason !== undefined) verbatim(reason, entry.reason)
       },
     }
   }
