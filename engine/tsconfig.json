@@ -14,5 +14,13 @@
     "sourceMap": true,
     "skipLibCheck": true
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts"],
+  /*
+   * `src/web/app/**` is the Vue page: it typechecks through `vue-tsc` and
+   * `tsconfig.web.json`, which carries the DOM lib this config does not. Left
+   * included here, a file that touches a DOM global (`location`, `document`)
+   * fails this pass with "Cannot find name" even though the pass that actually
+   * owns that directory is clean.
+   */
+  "exclude": ["src/web/app"]
 }
