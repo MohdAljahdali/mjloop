@@ -102,6 +102,14 @@
   "skills.onDiskRouted": "‏mjloop يوجّهها إلى: {components}",
   "skills.onDiskUnrouted": "موجودة، ولا يوجّهها شيء — لن يختارها mjloop أبداً. القبول أمرٌ يُنفَّذ: ‏mjloop-cli skills accept‏.",
 
+  "skills.search": "ابحث عن مهارة",
+  "skills.searchWhy": "ابحث في مصدرٍ سمح به هذا المشروع. النتائج بيانات وصفية فقط — لا يُنزَّل شيء، ولا يُكتب شيء، ولا شيء منها مُفعَّل. الاستيراد أمرٌ يُنفَّذ: ‏mjloop-cli skills inspect‏ ثم ‏mjloop-cli skills import‏.",
+  "skills.searchQuery": "الاستعلام",
+  "skills.searchSource": "المصدر",
+  "skills.searchGo": "ابحث",
+  "skills.searchNone": "لا مرشّح يطابق هذا الاستعلام في هذا المصدر.",
+  "skills.searchNext": "افحصها قبل استيرادها: ‏mjloop-cli skills inspect {url}‏",
+
   "skills.acceptances": "مهارات هذا المشروع",
   "skills.acceptancesWhy": "ما قبله هذا المشروع، وأي المكوّنات والأدوار تبلغها كل مهارة. القبول والتعطيل والإزالة أوامر: ‏mjloop-cli skills accept | disable | enable | remove‏.",
   "skills.acceptancesNone": "لم يقبل هذا المشروع أي مهارة، فلا شيء يُوجَّه بواحدة.",

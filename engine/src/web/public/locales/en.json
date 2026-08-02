@@ -94,6 +94,14 @@
   "skills.onDiskRouted": "Routed by mjloop to: {components}",
   "skills.onDiskUnrouted": "Present, and routed by nothing — mjloop never selects it. Accepting is a command: mjloop-cli skills accept.",
 
+  "skills.search": "Find a skill",
+  "skills.searchWhy": "Search a source this project has allowed. Results are metadata only — nothing is downloaded, nothing is written, and none of these is active. Importing one is a command: mjloop-cli skills inspect, then mjloop-cli skills import.",
+  "skills.searchQuery": "Query",
+  "skills.searchSource": "Source",
+  "skills.searchGo": "Search",
+  "skills.searchNone": "No candidate matched that query on that source.",
+  "skills.searchNext": "Look before importing: mjloop-cli skills inspect {url}",
+
   "skills.acceptances": "This project's skills",
   "skills.acceptancesWhy": "What this project has accepted, and which components and agents each one reaches. Accepting, disabling and removing are commands: mjloop-cli skills accept | disable | enable | remove.",
   "skills.acceptancesNone": "This project has accepted no skill, so nothing is routed by one.",

@@ -716,6 +716,30 @@
         </section>
 
         <section class="block">
+          <h2 data-i18n="skills.search"></h2>
+          <p class="hint" data-i18n="skills.searchWhy"></p>
+          <form id="skills-search" data-act="skills-search">
+            <label>
+              <span data-i18n="skills.searchQuery"></span>
+              <input id="skills-search-q" name="q" type="search" autocomplete="off" data-i18n-label="skills.searchQuery" />
+            </label>
+            <label>
+              <span data-i18n="skills.searchSource"></span>
+              <select id="skills-search-source" name="source" data-i18n-label="skills.searchSource">
+                <option value="github">github</option>
+                <option value="skills-sh">skills.sh</option>
+                <option value="registry">registry</option>
+                <option value="web">web</option>
+              </select>
+            </label>
+            <button type="submit" data-i18n="skills.searchGo"></button>
+          </form>
+          <p class="banner warn" id="skills-search-error" hidden></p>
+          <p class="empty" id="skills-search-empty" hidden></p>
+          <div id="skills-search-results"></div>
+        </section>
+
+        <section class="block">
           <h2 data-i18n="skills.acceptances"></h2>
           <p class="hint" data-i18n="skills.acceptancesWhy"></p>
           <p class="empty" id="skills-acceptances-empty" hidden></p>
@@ -1548,6 +1572,18 @@
 
     <template id="tpl-project-skill-unreadable">
       <p class="banner warn"><span data-slot="path"></span> — <span data-slot="reason"></span></p>
+    </template>
+
+    <!-- One search result. Metadata only — nothing here is downloaded, written
+         or active — so the way forward is a command line, not a button:
+         importing runs a package's declared smoke checks. -->
+    <template id="tpl-candidate">
+      <div class="component">
+        <h3 data-slot="skillName"></h3>
+        <p data-slot="description" dir="auto"></p>
+        <p class="record"><span data-slot="repository"></span> · <span data-slot="source"></span></p>
+        <p class="hint" data-slot="next"></p>
+      </div>
     </template>
 
     <template id="tpl-package">

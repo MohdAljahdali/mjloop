@@ -7,7 +7,7 @@ import { mountPlanDoc } from '../../src/web/public/lib/plandoc.js'
 import { drawRail, mountRail } from '../../src/web/public/ui/rail.js'
 import { collectConfigChanges, mountConfig } from '../../src/web/public/panels/config.js'
 import { mountEvidence } from '../../src/web/public/panels/evidence.js'
-import { joinAcceptances, mountSkills, routeOnDisk, shortDigest } from '../../src/web/public/panels/skills.js'
+import { joinAcceptances, mountSkills, routeOnDisk, searchSkills, shortDigest } from '../../src/web/public/panels/skills.js'
 import { approvable, mountFeatures } from '../../src/web/public/panels/features.js'
 import { mountPlans, planMemories, planRuns } from '../../src/web/public/panels/plans.js'
 import { mountStories } from '../../src/web/public/panels/stories.js'
@@ -3508,9 +3508,16 @@ describe('skills library', () => {
     // `skills import` can write, it is as likely to be an interrupted import.
     expect(document.querySelectorAll('#skills-unreadable .grid-row')).toHaveLength(1)
 
-    // Activation is a command. There is nothing on this panel to press.
-    expect(document.querySelectorAll('#panel-skills [data-act]')).toHaveLength(0)
-    expect(document.querySelectorAll('#panel-skills button, #panel-skills input')).toHaveLength(0)
+    // Activation is a command. There is nothing on this panel to press —
+    // except the search form (Task 7): querying a source and drawing
+    // candidates back is not a write, so it is deliberately excluded here.
+    const outsideSearch = (selector: string): Element[] =>
+      [...document.querySelectorAll(`#panel-skills ${selector}`)].filter(
+        (node) => node.closest('#skills-search') === null,
+      )
+    expect(outsideSearch('[data-act]')).toHaveLength(0)
+    expect(outsideSearch('button')).toHaveLength(0)
+    expect(outsideSearch('input')).toHaveLength(0)
   })
 })
 
@@ -3540,5 +3547,92 @@ describe('the skills a project has on disk', () => {
 
   it('answers empty before the fetch has settled', () => {
     expect(routeOnDisk(null)).toEqual([])
+  })
+})
+
+describe('searching for a skill from the cockpit', () => {
+  it('sends the query and the source, and draws each candidate', async () => {
+    // Answers 404 for both feeds this panel also mounts, which `feed()` treats
+    // as a settled "nothing" (`view` stays null) rather than the `{}` the
+    // default stub would hand back as a 200 — a 200 the panel's own
+    // `joinAcceptances` cannot parse and would throw on before ever reaching
+    // this block's own draw.
+    serve({})
+    reveal('panel-skills')
+    mountSkills()
+    draw(emptySnapshot())
+
+    const asked: string[] = []
+    vi.spyOn(globalThis, 'fetch').mockImplementation((async (at: string) => {
+      asked.push(String(at))
+      return new Response(
+        JSON.stringify({
+          candidates: [
+            {
+              source: 'skills-sh',
+              url: 'https://skills.sh/a/b/c',
+              repository: 'a/b',
+              ref: 'HEAD',
+              skillName: 'c',
+              description: 'Use when c.',
+            },
+          ],
+        }),
+        { status: 200 },
+      )
+    }) as never)
+
+    const input = document.getElementById('skills-search-q') as HTMLInputElement
+    input.value = 'react'
+    document.getElementById('skills-search-source')?.dispatchEvent(new Event('change'))
+
+    await searchSkills()
+
+    expect(asked[0]).toContain('/api/skills/search?q=react')
+    expect(document.getElementById('skills-search-results')?.textContent).toContain('a/b')
+    expect(document.getElementById('skills-search-results')?.textContent).toContain('Use when c.')
+  })
+
+  it('shows the refusal code as a sentence, and draws no results', async () => {
+    // Answers 404 for both feeds this panel also mounts, which `feed()` treats
+    // as a settled "nothing" (`view` stays null) rather than the `{}` the
+    // default stub would hand back as a 200 — a 200 the panel's own
+    // `joinAcceptances` cannot parse and would throw on before ever reaching
+    // this block's own draw.
+    serve({})
+    reveal('panel-skills')
+    mountSkills()
+    draw(emptySnapshot())
+
+    // 503, not the brief's 409: the route (Task 6) splits discovery's three
+    // refusals across 403 (source not allowed), 503 (missing skills.sh
+    // token) and 501 (no general web search provider) — never 409.
+    vi.spyOn(globalThis, 'fetch').mockImplementation((async () =>
+      new Response(JSON.stringify({ error: { code: 'error.skillsShTokenMissing' } }), { status: 503 })) as never)
+
+    const input = document.getElementById('skills-search-q') as HTMLInputElement
+    input.value = 'react'
+    await searchSkills()
+
+    expect((document.getElementById('skills-search-error') as HTMLElement).hidden).toBe(false)
+    expect(document.getElementById('skills-search-results')?.children.length).toBe(0)
+  })
+
+  it('asks nothing at all for a query under two characters', async () => {
+    // Answers 404 for both feeds this panel also mounts, which `feed()` treats
+    // as a settled "nothing" (`view` stays null) rather than the `{}` the
+    // default stub would hand back as a 200 — a 200 the panel's own
+    // `joinAcceptances` cannot parse and would throw on before ever reaching
+    // this block's own draw.
+    serve({})
+    reveal('panel-skills')
+    mountSkills()
+    draw(emptySnapshot())
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch')
+    const input = document.getElementById('skills-search-q') as HTMLInputElement
+    input.value = 'a'
+    await searchSkills()
+    expect(fetchSpy).not.toHaveBeenCalled()
   })
 })
