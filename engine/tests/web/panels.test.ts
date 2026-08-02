@@ -3509,15 +3509,24 @@ describe('skills library', () => {
     expect(document.querySelectorAll('#skills-unreadable .grid-row')).toHaveLength(1)
 
     // Activation is a command. There is nothing on this panel to press —
-    // except the search form (Task 7): querying a source and drawing
-    // candidates back is not a write, so it is deliberately excluded here.
+    // except the search form's three sanctioned controls (Task 7): querying a
+    // source and drawing candidates back is not a write. An allowlist rather
+    // than "outside #skills-search", so a control added anywhere else inside
+    // the form — or inside the search block but outside the form — still
+    // fails this assertion instead of passing unnoticed.
+    const sanctioned = new Set([
+      // The form itself, registered as the `skills-search` action — not a
+      // fourth control, but the one `data-act` this panel is allowed to have.
+      ...document.querySelectorAll(
+        '#skills-search, #skills-search-q, #skills-search-source, #skills-search button[type="submit"]',
+      ),
+    ])
     const outsideSearch = (selector: string): Element[] =>
-      [...document.querySelectorAll(`#panel-skills ${selector}`)].filter(
-        (node) => node.closest('#skills-search') === null,
-      )
+      [...document.querySelectorAll(`#panel-skills ${selector}`)].filter((node) => !sanctioned.has(node))
     expect(outsideSearch('[data-act]')).toHaveLength(0)
     expect(outsideSearch('button')).toHaveLength(0)
     expect(outsideSearch('input')).toHaveLength(0)
+    expect(outsideSearch('select')).toHaveLength(0)
   })
 })
 
