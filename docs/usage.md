@@ -392,7 +392,7 @@ orchestration:
 | `execution.repair_attempts` | `1` | a whole number, 0–5; `0` is a real setting and means never repair |
 | `quality.independent_plan_review` | `false` | `true` / `false` |
 | `quality.independent_verification` | `false` | `true` / `false` |
-| `skills.sources` | `[github]` | any subset of `github`, `registry`, `web`; the empty list means nothing may be discovered from outside this project |
+| `skills.sources` | `[github]` | any subset of `github`, `registry`, `web`, `skills-sh`; the empty list means nothing may be discovered from outside this project |
 | `skills.trusted_registries` | `[]` | `https://` URLs — plain `http://` is refused at the schema |
 | `skills.update_mode` | `review` | `auto` / `review` / `pinned` |
 
@@ -681,6 +681,35 @@ acceptances — with no new write kind and no new locale string, because accepti
 is a decision that changes what every later run is told, which is exactly the class of
 write the browser is permanently denied everywhere else in this system too.
 
+The Skills page answers four questions, in order: what this project is made of (the component
+map), **what skills this checkout holds** (`.claude/skills/`, read straight off disk, each one
+marked with whether mjloop routes work to it), what this project has accepted, and what this
+machine's library holds. A skill can be present and unrouted — that is a normal state, and the
+page says which.
+
+To find a new one, search — from the cockpit's Skills page with the search box on that page, or
+from a terminal with:
+
+```
+mjloop-cli skills search <query> --source github|registry|web|skills-sh
+```
+
+`skills-sh` searches <https://skills.sh>. Two things it needs first, whichever way the search
+is made:
+
+1. The project must allow it — add `skills-sh` to `orchestration.skills.sources` in
+   `.mjloop/config.yaml`. The default is `[github]` and no source is ever enabled on a
+   project's behalf.
+2. Its API requires a Vercel OIDC token. Set `SKILLS_SH_TOKEN` or `VERCEL_OIDC_TOKEN` in the
+   shell (see <https://skills.sh/docs/api>). Without one, the search refuses and says so — it
+   never reports an empty result for a missing token. The cockpit reads the environment of the
+   shell it was started from, so set the variable before `/mjloop:web`.
+
+Search is metadata only. Nothing is downloaded and nothing is activated by it —
+`mjloop-cli skills inspect <url>` looks at a candidate, and `mjloop-cli skills import <url>`
+is what writes one into the library after a passed audit. Import stays a command; it is not
+offered from the cockpit.
+
 **`acceptSkill` refuses any package whose audit state is not `passed`.** Discovery, static
 inspection, and the sandbox — the next section — are what finally let a package earn that
 state; before they existed, the library was empty on every machine and `skills accept` had
@@ -697,7 +726,7 @@ have.
 ### Which sources are allowed, and how to change it
 
 `orchestration.skills.sources` (above) is the allowlist: any subset of `github`, `registry`,
-`web`, defaulting to `[github]`. Every command that reaches outside this project —
+`web`, `skills-sh`, defaulting to `[github]`. Every command that reaches outside this project —
 `skills search`, `skills inspect`, `skills import` and `skills check-updates` — refuses a
 source this project has not enabled, before a single request goes out, naming the setting and
 the command that changes it:
@@ -713,10 +742,13 @@ refused with that reason stated plainly rather than a result faked to look real.
 draws on `orchestration.skills.trusted_registries` (`https://` only; the schema already
 refuses `registry` with an empty list, see above).
 
+`skills-sh` is the fourth source, detailed in the Skills page section above: the same opt-in,
+plus a Vercel OIDC token, and a refusal stating why when either is missing.
+
 ### A candidate is a search result, and nothing more
 
 ```
-skills search <query> [--source github|registry|web] [--dir <path>] [--json]
+skills search <query> [--source github|registry|web|skills-sh] [--dir <path>] [--json]
 ```
 
 returns metadata only — `{ source, url, repository, ref, skillName, description, stars? }` —
@@ -726,6 +758,10 @@ project can use runs through `skills inspect` and then a passed sandbox. A conne
 follows a redirect to a different host than the one it requested — the candidate's own
 `url`/`repository`/`ref` are what this pipeline trusts, never wherever a response claims to
 have been redirected to.
+
+The same search is available from the cockpit's Skills page, in the search box described
+below, as `GET /api/skills/search` — reachable without touching a terminal, but subject to
+exactly the same source allowlist and, for `skills-sh`, the same token requirement.
 
 ### Pin first, then fetch
 
