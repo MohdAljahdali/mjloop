@@ -13,6 +13,7 @@ import {
   known as knownKey,
   loadFallback,
   locale as currentLocale,
+  localeEpoch,
   pickLocale,
   setLocale,
   t as translate,
@@ -35,7 +36,13 @@ export const LOCALES: LocaleRegistry = {
 }
 export const FALLBACK = 'en'
 
-/** Bumped on every locale change; every reactive read below depends on it. */
+/**
+ * Mirrors `lib/i18n.ts`'s own `localeEpoch()` rather than keeping a second,
+ * independent counter — `setLocale` bumps the lib's epoch, not this one, so a
+ * caller that reaches past `applyLocale` and calls `setLocale` directly must
+ * still repaint. Do not call `setLocale` directly from a component: `applyLocale`
+ * is the only door, because it is what refreshes this ref.
+ */
 const epoch = ref(0)
 
 export function useI18n() {
@@ -67,7 +74,7 @@ export async function applyLocale(code: string): Promise<void> {
   await setLocale(code)
   document.documentElement.lang = currentLocale()
   document.documentElement.dir = currentDirection()
-  epoch.value += 1
+  epoch.value = localeEpoch()
 }
 
 /** The opening locale: `?lang=`, then the remembered choice, then the browser. */
