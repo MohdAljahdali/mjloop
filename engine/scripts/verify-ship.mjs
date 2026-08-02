@@ -13,10 +13,13 @@ import { spawn } from 'node:child_process'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
+import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import { build as viteBuild } from 'vite'
-import { VENDOR_FILES } from './vendor.mjs'
+import { VENDOR, VENDOR_FILES } from './vendor.mjs'
 import { referencedAssets } from './assets.mjs'
+
+const require = createRequire(import.meta.url)
 
 /**
  * The extensions `server.ts`'s MIME map (`server.ts:34`) knows how to serve.
@@ -159,6 +162,14 @@ async function checkPage(page) {
   const unservable = shipped.filter((relative) => !SERVABLE_EXTENSIONS.has(path.extname(relative)))
   check('dist ships only file types the server can serve', unservable.length === 0, unservable.join(', '))
 
+  // `.map` is legitimately servable — `server.ts` knows the MIME type — so the
+  // check above cannot be what keeps one out. `dist` is committed to git and a
+  // sourcemap doubles every diff for a user with no source to map it against,
+  // which is why `vite.config.ts` binds `sourcemap: false` rather than leaving
+  // this to review.
+  const sourcemaps = shipped.filter((relative) => relative.endsWith('.map'))
+  check('dist ships no sourcemap', sourcemaps.length === 0, sourcemaps.join(', '))
+
   const { missing, dynamic, reached } = await walkImports(page)
   check('every import and asset reference resolves', missing.length === 0, missing.join(', '))
   check('the page uses no dynamic import', dynamic.length === 0, dynamic.join(', '))
@@ -188,6 +199,33 @@ async function checkPage(page) {
   }
   check('dist matches a fresh build of the current source', stale.length === 0, stale.join(', '))
   await fs.rm(rebuilt, { recursive: true, force: true })
+
+  // The two things the rebuild above never touches: `build.mjs` copies these
+  // into `dist` by hand rather than routing them through Vite, so a source
+  // edit here with no rebuild would ship the old bytes clean through every
+  // check above — the same failure class the rebuild comparison exists to
+  // catch, just outside the part of the tree Vite compiles.
+  const localesSource = path.join(root, 'src', 'web', 'app', 'locales')
+  const localeFiles = await walk(localesSource)
+  const staleLocales = []
+  for (const relative of localeFiles) {
+    const [source, staged] = await Promise.all([
+      fs.readFile(path.join(localesSource, relative)).catch(() => null),
+      fs.readFile(path.join(page, 'locales', relative)).catch(() => null),
+    ])
+    if (source === null || staged === null || !source.equals(staged)) staleLocales.push(relative)
+  }
+  check('dist locales match src/web/app/locales byte for byte', staleLocales.length === 0, staleLocales.join(', '))
+
+  const staleVendor = []
+  for (const [specifier, name] of VENDOR) {
+    const [source, staged] = await Promise.all([
+      fs.readFile(require.resolve(specifier)).catch(() => null),
+      fs.readFile(path.join(page, 'vendor', name)).catch(() => null),
+    ])
+    if (source === null || staged === null || !source.equals(staged)) staleVendor.push(name)
+  }
+  check('dist vendor bundles match node_modules byte for byte', staleVendor.length === 0, staleVendor.join(', '))
 }
 
 /** Every file under `dir`, as forward-slash relative paths. */
