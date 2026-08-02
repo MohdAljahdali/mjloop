@@ -349,6 +349,30 @@ describe('handleApi', () => {
     })
   })
 
+  describe('GET /api/skills/search', () => {
+    it('is a 400 without a query of at least two characters', async () => {
+      for (const path of ['/api/skills/search', '/api/skills/search?q=', '/api/skills/search?q=a']) {
+        expect((await call(path))?.status, path).toBe(400)
+      }
+    })
+
+    it('is a 400 for a source that is not in the enum', async () => {
+      const result = await call('/api/skills/search?q=react&source=nonsense')
+      expect(result?.status).toBe(400)
+    })
+
+    it('answers a code, never a sentence, when the project has not allowed the source', async () => {
+      const result = await call('/api/skills/search?q=react&source=skills-sh')
+      expect(result?.status).toBe(403)
+      expect(result?.body).toEqual({ error: { code: 'error.skillSourceDisabled' } })
+    })
+
+    it('stays a 405 for a POST', async () => {
+      const result = await call('/api/skills/search?q=react', 'POST')
+      expect(result?.status).toBe(405)
+    })
+  })
+
   it('answers for a project that has raised no feature without describing it', async () => {
     // An empty list, not a 404: unlike the component map, whose absence changes
     // how every later run is routed, no feature yet is the ordinary state of a

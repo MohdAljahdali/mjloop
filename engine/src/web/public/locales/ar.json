@@ -633,6 +633,9 @@
   "error.notFound": "غير موجود.",
   "error.unreadable": "تعذّرت القراءة — راجع الطرفيّة التي شُغّل منها الخادم.",
   "error.badRequest": "لم يُفهم هذا الطلب.",
+  "error.skillSourceDisabled": "لم يسمح هذا المشروع بهذا المصدر للمهارات. أضِفه إلى orchestration.skills.sources في ‎.mjloop/config.yaml‎ أولاً.",
+  "error.skillsShTokenMissing": "البحث في ‏skills.sh‏ يحتاج رمز ‏Vercel OIDC‏. عيّن ‏SKILLS_SH_TOKEN‏ أو ‏VERCEL_OIDC_TOKEN‏ في الصدفة التي شُغّل منها الـ ‏cockpit‏ ثم أعِد تشغيله.",
+  "error.webSearchUnavailable": "لا يحتوي هذا الإصدار على مزوّد بحث عام على الويب. ابحث في ‏github‏ أو ‏skills.sh‏ بدلاً من ذلك.",
 
   "roster.cycle": "هذا التشكيل لدورة غير الدورة الجارية الآن.",
   "roster.required": "«{agent}» مطلوب في مسار {track} ولا يمكن إسقاطه.",

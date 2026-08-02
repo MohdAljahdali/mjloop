@@ -27,6 +27,13 @@ import {
   readTelemetryReport,
   readTranscript,
 } from './read.js'
+import {
+  discoverCandidates,
+  SkillsShTokenMissingError,
+  SkillSourceDisabledError,
+  WebSearchUnavailableError,
+} from '../ops/skill-discovery.js'
+import { SkillSourceSchema } from '../schemas/config.js'
 
 /**
  * The read side: everything with a body.
@@ -263,8 +270,34 @@ async function route(projectDir: string, segments: readonly string[], query: URL
       // class of write `web/writes.ts`'s header permanently denies the
       // browser. `mjloop-cli skills accept|disable|enable|remove` is where
       // that decision is made.
-      if (segments.length !== 1) break
-      return ok(await readSkillsView(projectDir))
+      if (segments.length === 1) return ok(await readSkillsView(projectDir))
+
+      // `search` is the one sub-route, and it is a read: it returns search
+      // *results* and writes nothing anywhere. The three refusals below are
+      // policy answers rather than faults, so each gets its own code — a
+      // disabled source, a missing token and an unwired provider need three
+      // different next steps from the person reading the screen.
+      if (segments.length === 2 && first === 'search') {
+        const q = query.get('q') ?? ''
+        if (q.length < 2) return fail(400, 'error.badRequest')
+        const source = SkillSourceSchema.safeParse(query.get('source') ?? 'github')
+        if (!source.success) return fail(400, 'error.badRequest')
+        try {
+          return ok({ candidates: await discoverCandidates(projectDir, { query: q, source: source.data }) })
+        } catch (error) {
+          // 403 rather than the file's usual 400/404/405/500: none of those
+          // fits a well-formed request refused by this project's own policy,
+          // and 403 is already this server's vocabulary for a policy refusal
+          // (`server.ts`'s token check answers the same code for the same
+          // reason — a request understood and rejected, not malformed or
+          // missing).
+          if (error instanceof SkillSourceDisabledError) return fail(403, 'error.skillSourceDisabled')
+          if (error instanceof SkillsShTokenMissingError) return fail(403, 'error.skillsShTokenMissing')
+          if (error instanceof WebSearchUnavailableError) return fail(403, 'error.webSearchUnavailable')
+          throw error
+        }
+      }
+      break
   }
 
   return fail(404, 'error.notFound')

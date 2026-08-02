@@ -593,6 +593,9 @@
   "error.notFound": "Not found.",
   "error.unreadable": "Could not read that — see the terminal the server was started from.",
   "error.badRequest": "That request was not understood.",
+  "error.skillSourceDisabled": "This project has not allowed that skill source. Add it to orchestration.skills.sources in .mjloop/config.yaml first.",
+  "error.skillsShTokenMissing": "Searching skills.sh needs a Vercel OIDC token. Set SKILLS_SH_TOKEN or VERCEL_OIDC_TOKEN in the shell the cockpit was started from, then restart it.",
+  "error.webSearchUnavailable": "This build has no general web search provider. Search github or skills.sh instead.",
 
   "roster.cycle": "That composition is for a different cycle than the one running now.",
   "roster.required": "“{agent}” is required by the {track} track and cannot be dropped.",
