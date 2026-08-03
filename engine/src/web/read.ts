@@ -28,7 +28,7 @@ import { resolveLoopPaths } from '../store/paths.js'
 import { findPlanDir, listStories, type Story } from '../store/plan-store.js'
 import { readAcceptedProfile, readProposedProfile } from '../store/project-profile-store.js'
 import { listAgents, projectAgentsDir, type AgentDoc } from '../store/agent-store.js'
-import { listAcceptances } from '../store/skill-acceptance-store.js'
+import { acceptanceDigest, listAcceptances } from '../store/skill-acceptance-store.js'
 import { listPackages, type UnreadablePackage } from '../store/skill-library-store.js'
 import type { ProjectSkillAcceptance } from '../schemas/skill-acceptance.js'
 import type { SkillPackage } from '../schemas/skill-library.js'
@@ -202,6 +202,20 @@ function componentFingerprint(components: readonly ProjectComponent[]): string {
 
 /* ── the shared skill library and this project's acceptances ─────────────── */
 
+/**
+ * One acceptance, plus the compare-and-swap token the `skill.agents` write
+ * door checks it against.
+ *
+ * Not a field on `ProjectSkillAcceptanceSchema` itself: the schema is what
+ * `acceptSkill` validates and persists, and `acceptanceDigest` is a hash *over*
+ * that record, computed the same way `configRevision` is computed over
+ * `config.yaml`'s raw text — a field that recorded its own hash would have to
+ * be excluded from the hash it recorded, which is the kind of self-reference
+ * `acceptanceDigest`'s own doc comment already rejected a counter revision to
+ * avoid.
+ */
+export type AcceptanceView = ProjectSkillAcceptance & { digest: string }
+
 export interface SkillsView {
   /**
    * Every package this machine's library holds — source, revision, license,
@@ -223,8 +237,13 @@ export interface SkillsView {
    * being another project's problem.
    */
   unreadable: UnreadablePackage[]
-  /** This project's own acceptances — digest, components, agents, policy, status. */
-  acceptances: ProjectSkillAcceptance[]
+  /**
+   * This project's own acceptances — digest, components, agents, policy,
+   * status — each carrying its own `digest` (`AcceptanceView`, above), which
+   * `skill.agents` hands back unmodified as the token proving which acceptance
+   * the click was made against.
+   */
+  acceptances: AcceptanceView[]
   /**
    * The skills this project's own checkout holds, in `.claude/skills/`.
    *
@@ -271,7 +290,7 @@ export async function readSkillsView(projectDir: string): Promise<SkillsView> {
   return {
     packages: library.packages,
     unreadable: library.unreadable,
-    acceptances,
+    acceptances: acceptances.map((record) => ({ ...record, digest: acceptanceDigest(record) })),
     onDisk: onDisk.skills,
     onDiskUnreadable: onDisk.unreadable,
   }

@@ -86,6 +86,13 @@ export const WEB_CODES = [
   'write.refused.agent.inUse',
   'write.refused.running',
   'write.ok.agent',
+
+  /* the skill.agents door. `write.refused.running` above already covers the
+     while-a-run-is-open refusal — it joined the agent doors' guarded set
+     rather than growing a code of its own — so this pair is only the two a
+     compare-and-swap write always needs: the digest moved, or it landed. */
+  'write.stale.skill',
+  'write.ok.skill',
 ] as const
 
 export type WebCode = (typeof WEB_CODES)[number]

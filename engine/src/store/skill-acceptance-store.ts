@@ -18,6 +18,7 @@
  * filesystem would treat specially, which is what makes validating *before*
  * the join the entire traversal guard.
  */
+import crypto from 'node:crypto'
 import type { Dirent } from 'node:fs'
 import fs from 'node:fs/promises'
 import path from 'node:path'
@@ -30,8 +31,10 @@ import {
 } from '../schemas/skill-acceptance.js'
 import { IdSchema } from '../schemas/state.js'
 import { writeJsonAtomic } from './atomic.js'
+import { ConfigMissingError, loadConfig } from './config-store.js'
 import { withLock } from './lock.js'
 import { resolveLoopPaths } from './paths.js'
+import { StalePreconditionError } from './precondition.js'
 import { readAcceptedProfile } from './project-profile-store.js'
 import { readPackage } from './skill-library-store.js'
 import type { Clock } from './state-store.js'
@@ -108,13 +111,20 @@ export class UnknownAcceptanceComponentError extends Error {
   }
 }
 
-/** `acceptSkill` was asked to route a skill to an agent role dynamic skill selection never dispatches. */
+/**
+ * `acceptSkill`/`setAcceptanceAgents` was asked to route a skill to an agent no
+ * track in this project's `config.yaml` names — the routable set computed by
+ * `routableAgents`, below, and passed in here rather than re-read, since the
+ * caller already has it.
+ */
 export class UnknownAcceptanceAgentError extends Error {
-  constructor(readonly unknown: readonly string[]) {
+  constructor(
+    readonly unknown: readonly string[],
+    readonly known: readonly string[],
+  ) {
     super(
-      `${quoted(unknown)} is not one of the fixed agent roles dynamic skill selection routes to ` +
-        `(${SKILL_ACCEPTANCE_AGENTS.join(', ')}) — an unknown role here would select a skill for a dispatch that ` +
-        'never happens.',
+      `${quoted(unknown)} is not an agent any track in this project's config.yaml names ` +
+        `(${known.join(', ')}) — an unknown role here would select a skill for a dispatch that never happens.`,
     )
     this.name = 'UnknownAcceptanceAgentError'
   }
@@ -129,6 +139,39 @@ export class SkillAlreadyAcceptedError extends Error {
     )
     this.name = 'SkillAlreadyAcceptedError'
   }
+}
+
+/**
+ * The agent names this project's own tracks name, or the fixed floor when it
+ * declares none.
+ *
+ * Exported so `tests/store/skill-acceptance-store.test.ts` can assert this
+ * stays in step with the two other places that restate the identical rule —
+ * `ops/run.ts`'s `skillSelectionAgents` and `web/app/lib/stories.ts`'s
+ * `routableAgentSet` — each forced to its own copy by the same layering this
+ * function cannot cross itself.
+ *
+ * Read from the config on every call rather than cached: an acceptance is
+ * checked against the tracks that exist *now*, and a cached set is one that is
+ * wrong exactly when a track has just gained the agent somebody is accepting a
+ * skill for.
+ *
+ * A project with no `config.yaml` at all — one `/mjloop:init` has not reached
+ * yet — falls to the same floor as one whose config declares no tracks,
+ * rather than throwing `ConfigMissingError`: accepting a skill is not a loop
+ * command, and it must not start demanding a file the acceptance store never
+ * needed before this rule existed.
+ */
+export async function routableAgents(projectDir: string): Promise<Set<string>> {
+  const config = await loadConfig(projectDir).catch((error) => {
+    if (error instanceof ConfigMissingError) return null
+    throw error
+  })
+  const names =
+    config === null
+      ? []
+      : Object.values(config.tracks).flatMap((track) => [...track.required, ...(track.available ?? []), ...(track.closing ?? [])])
+  return names.length === 0 ? new Set(SKILL_ACCEPTANCE_AGENTS) : new Set(names)
 }
 
 /** Parse and validate a skill id before it is ever joined into a path. */
@@ -260,11 +303,10 @@ export async function acceptSkill(
     const components = input.components ?? (accepted?.components ?? []).map((component) => component.id)
     await assertKnownComponents(projectDir, components)
 
-    const agents = input.agents ?? [...SKILL_ACCEPTANCE_AGENTS]
-    const unknownAgents = agents.filter(
-      (agent) => !SKILL_ACCEPTANCE_AGENTS.includes(agent as (typeof SKILL_ACCEPTANCE_AGENTS)[number]),
-    )
-    if (unknownAgents.length > 0) throw new UnknownAcceptanceAgentError(unknownAgents)
+    const routable = await routableAgents(projectDir)
+    const agents = input.agents ?? [...routable]
+    const unknownAgents = agents.filter((agent) => !routable.has(agent))
+    if (unknownAgents.length > 0) throw new UnknownAcceptanceAgentError(unknownAgents, [...routable])
 
     // The one case no default can rescue: a project with no accepted component
     // map has no component to name, so the acceptance is inert whatever this
@@ -306,6 +348,45 @@ export async function setAcceptanceStatus(
     const parsed = ProjectSkillAcceptanceSchema.parse({ ...current, status })
     await writeJsonAtomic(acceptanceFile(projectDir, skillId), parsed, { backup: false })
     return parsed
+  })
+}
+
+/**
+ * sha256 over the serialised record.
+ *
+ * A counter revision was the alternative and was rejected: it would oblige
+ * every acceptance already on disk to grow a field, and it answers no question
+ * this one does not. Same shape and same job as `configRevision`.
+ */
+export function acceptanceDigest(record: ProjectSkillAcceptance): string {
+  return crypto.createHash('sha256').update(JSON.stringify(record)).digest('hex')
+}
+
+/**
+ * The one field of an acceptance the dashboard may set.
+ *
+ * Not the status, not the components, not the update policy: those change what
+ * a skill *is* to this project, and `mjloop-cli skills accept|disable` is where
+ * that is decided. Which agents a skill is offered to is the routing question
+ * the Agents tab exists to answer.
+ */
+export async function setAcceptanceAgents(
+  projectDir: string,
+  skillId: string,
+  agents: string[],
+  expectDigest: string,
+): Promise<void> {
+  const routable = await routableAgents(projectDir)
+  const unknown = agents.filter((agent) => !routable.has(agent))
+  if (unknown.length > 0) throw new UnknownAcceptanceAgentError(unknown, [...routable])
+  await locked(projectDir, async () => {
+    const current = await readAcceptance(projectDir, skillId)
+    if (current === null) throw new SkillAcceptanceNotFoundError(skillId, resolveLoopPaths(projectDir).skills)
+    if (acceptanceDigest(current) !== expectDigest) {
+      throw new StalePreconditionError('skill', skillId, acceptanceDigest(current))
+    }
+    const parsed = ProjectSkillAcceptanceSchema.parse({ ...current, agents })
+    await writeJsonAtomic(acceptanceFile(projectDir, skillId), parsed, { backup: false })
   })
 }
 

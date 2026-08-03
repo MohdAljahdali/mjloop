@@ -628,6 +628,8 @@
   "write.refused.agent.inUse": "A track still names this agent. Edit the track first.",
   "write.refused.running": "A run is active right now — agents cannot be edited until it ends.",
   "write.ok.agent": "Agent saved.",
+  "write.stale.skill": "That skill's acceptance moved in the meantime — nothing was changed.",
+  "write.ok.skill": "Skill agents updated.",
   "write.undo": "Undo",
 
   "toast.dismiss": "Dismiss",

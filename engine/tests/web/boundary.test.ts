@@ -112,6 +112,11 @@ describe('the engine surface the browser can reach', () => {
     }
   })
 
+  it('reaches the skill acceptance store\'s one writer for this door from exactly one file', () => {
+    const importers = files.filter((file) => imported(read(file)).has('setAcceptanceAgents'))
+    expect(importers).toEqual(['writes.ts'])
+  })
+
   it('keeps the server itself unable to write', () => {
     // `server.ts` routes a frame to `applyWrite` and holds no engine write of
     // its own, so widening the door means editing the file whose whole header

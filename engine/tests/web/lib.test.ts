@@ -350,17 +350,26 @@ describe('skill inspection (C7)', () => {
     ])
   })
 
-  it("narrows drafted agents to the roles an acceptance's own `agents` field can ever name, dropping the ones the CLI refuses", () => {
+  it("narrows drafted agents to the agents an acceptance's own `agents` field can ever name, project-wide rather than to the old fixed four", () => {
     // `track()` mirrors the project's real default `build` track shape
-    // (required builder/verifier, available scout/critic) — not a
-    // hand-narrowed fixture, which is how C7 shipped this unnoticed.
-    expect(routableAgents(track())).toEqual(['builder', 'verifier', 'critic'])
-    // `scout` is drafted (`available`) but `acceptSkill` throws
-    // `UnknownAcceptanceAgentError` for any `agents` entry outside
-    // `SKILL_ACCEPTANCE_AGENTS` (`store/skill-acceptance-store.ts:263-266`) —
-    // no acceptance can ever name it, so it never draws a row.
-    expect(routableAgents(track())).not.toContain('scout')
-    expect(routableAgents(undefined)).toEqual([])
+    // (required builder/verifier, available scout/critic, closing docs) — not
+    // a hand-narrowed fixture, which is how C7 shipped this unnoticed.
+    //
+    // `scout` is drafted (`available`) and used to be dropped no matter what,
+    // because the old rule was a fixed four regardless of what any track
+    // named. It is routable now: this track is itself one of `config.yaml`'s
+    // own tracks, so anything it drafts (or closes with) is named by *some*
+    // track — exactly `store/skill-acceptance-store.ts`'s `routableAgents`.
+    expect(routableAgents(track(), { build: track() })).toEqual(['builder', 'verifier', 'scout', 'critic'])
+
+    // The floor still applies when the config names no tracks at all — the
+    // one case `store/skill-acceptance-store.ts`'s `routableAgents` falls
+    // back to `SKILL_ACCEPTANCE_AGENTS` for, and `scout` is not one of the
+    // fixed four.
+    expect(routableAgents(track(), {})).toEqual(['builder', 'verifier', 'critic'])
+    expect(routableAgents(track(), {})).not.toContain('scout')
+
+    expect(routableAgents(undefined, { build: track() })).toEqual([])
   })
 
   it('keeps only the acceptances that name a drafted agent, plus every acceptance that names none at all', () => {

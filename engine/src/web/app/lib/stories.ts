@@ -249,34 +249,57 @@ export function draftedAgents(track: Track | undefined): string[] {
 }
 
 /**
- * The fixed agent roles dynamic skill selection ever routes to.
+ * The floor `routableAgents` falls back to when this project's `config.yaml`
+ * names no tracks at all — the fixed four this whole thing used to be, before
+ * a skill could be routed to any agent a track names.
  *
- * Mirrors `SKILL_ACCEPTANCE_AGENTS` in `schemas/skill-acceptance.ts:30`
+ * Mirrors `SKILL_ACCEPTANCE_AGENTS` in `schemas/skill-acceptance.ts:18-25`
  * exactly, and cannot import it: that file is parsed for both the CLI and
- * this browser bundle, but its own header (`schemas/skill-acceptance.ts:20-29`)
- * already restates `ops/run.ts`'s identical list rather than import across a
- * layer boundary, and the browser bundle draws the same line again rather
- * than reach into `schemas/` for one constant. Used to keep the per-agent
- * rows this page draws to the agents an acceptance's own `agents` field could
- * ever name — see `routableAgents`, below. If `SKILL_ACCEPTANCE_AGENTS`
- * changes in `schemas/skill-acceptance.ts`, this list must change with it.
+ * this browser bundle, but its own header already restates `ops/run.ts`'s
+ * identical list rather than import across a layer boundary, and the browser
+ * bundle draws the same line again rather than reach into `schemas/` for one
+ * constant. If `SKILL_ACCEPTANCE_AGENTS` changes in
+ * `schemas/skill-acceptance.ts`, this list must change with it.
  */
 export const SKILL_ACCEPTANCE_AGENTS = ['planner', 'builder', 'critic', 'verifier']
 
 /**
  * The drafted agents this page has any reason to draw a skills row for —
- * `draftedAgents` narrowed to the roles `acceptSkill` (`store/skill-acceptance-store.ts:263-266`)
- * will ever let an `agents` entry name. `acceptSkill` throws
- * `UnknownAcceptanceAgentError` for anything outside `SKILL_ACCEPTANCE_AGENTS`,
- * so a drafted agent this filter drops — `scout`, `ui-designer`, `ui-critic`,
- * `security`, `perf` on the default `build` track — can *never* hold an
- * acceptance; a row for one is not "nothing accepted yet", it is an
- * impossibility the CLI refuses, and inviting a reader to go accept a skill
- * for it would be exactly that lie.
+ * `draftedAgents` narrowed to the agents `acceptSkill`
+ * (`store/skill-acceptance-store.ts`'s `routableAgents`) will ever let an
+ * `agents` entry name today: whichever agents *any* track in this project's
+ * `config.yaml` names, project-wide, falling back to the fixed four above
+ * only when the config names no tracks at all. `tracks` is the whole
+ * `config.tracks` map the config feed already carries — not `track` alone —
+ * because the store's own rule is project-wide: an agent a *different* track
+ * drafts is routable here even if this story's own track never drafts it,
+ * exactly as `acceptSkill` would accept it.
+ *
+ * `acceptSkill` throws `UnknownAcceptanceAgentError` for anything outside that
+ * set, so a drafted agent this filter drops can *never* hold an acceptance; a
+ * row for one is not "nothing accepted yet", it is an impossibility the CLI
+ * refuses, and inviting a reader to go accept a skill for it would be exactly
+ * that lie.
  */
-export function routableAgents(track: Track | undefined): string[] {
-  const routable = new Set(SKILL_ACCEPTANCE_AGENTS)
+export function routableAgents(track: Track | undefined, tracks: Record<string, Track> | undefined): string[] {
+  const routable = routableAgentSet(tracks)
   return draftedAgents(track).filter((agent) => routable.has(agent))
+}
+
+/**
+ * The project-wide routable set on its own, split out of `routableAgents` so
+ * a test can compare it directly against the identical rule restated in
+ * `store/skill-acceptance-store.ts`'s `routableAgents` and `ops/run.ts`'s
+ * `skillSelectionAgents` — this page's own copy of the same derivation,
+ * unfiltered by any one track's drafted list.
+ */
+export function routableAgentSet(tracks: Record<string, Track> | undefined): Set<string> {
+  const names = Object.values(tracks ?? {}).flatMap((entry) => [
+    ...entry.required,
+    ...(entry.available ?? []),
+    ...(entry.closing ?? []),
+  ])
+  return new Set(names.length === 0 ? SKILL_ACCEPTANCE_AGENTS : names)
 }
 
 /**

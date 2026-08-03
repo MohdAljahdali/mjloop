@@ -3,6 +3,7 @@ import path from 'node:path'
 import * as z from 'zod'
 import { findTrack, type Config } from '../schemas/config.js'
 import { AgentResultSchema, RosterSchema, type AgentResult } from '../schemas/contract.js'
+import { SKILL_ACCEPTANCE_AGENTS } from '../schemas/skill-acceptance.js'
 import {
   SkillManifestSchema,
   type AcceptedProjectSkill,
@@ -195,19 +196,38 @@ async function pinVerifyBlock(projectDir: string, state: State, config: Config, 
 }
 
 /**
- * The fixed agent roles a run's pinned skill manifest routes for.
+ * The agent roles a run's pinned skill manifest routes for.
  *
- * Locked to exactly the four roles this story extends — `agents/planner.md`,
- * `builder.md`, `critic.md`, `verifier.md` — because "dynamic skill selection
- * for fixed agent roles" is the whole shape of the story: the roles never
- * change, only the guidance handed to one of them does, and there is no
- * per-technology agent anywhere this list could grow into. A given cycle's
- * roster may dispatch fewer of these four; the manifest still carries a
- * selection for every one, because which agents a cycle composes is decided
- * fresh each cycle and this is decided once, at run start, before any cycle
- * exists to compose one.
+ * Used to be locked to the fixed four — `agents/planner.md`, `builder.md`,
+ * `critic.md`, `verifier.md` — on the theory that "dynamic skill selection for
+ * fixed agent roles" was the whole shape of the story. It no longer is: this
+ * mirrors `SKILL_ACCEPTANCE_AGENTS` in `schemas/skill-acceptance.ts:18-25`
+ * exactly — whichever agents this project's own tracks name in `config.yaml`,
+ * with the fixed four kept as the floor for a config that declares no tracks
+ * at all — because a manifest pinning selections for a role no track ever
+ * drafts would waste every one of them, and a project that has added an agent
+ * to a track has already said dynamic skill selection should route to it too.
+ * Computed from the `config` this function already loaded rather than a second
+ * `loadConfig` call, the same config `skillSelectionAgents` is handed below.
+ *
+ * A given cycle's roster may dispatch fewer than this whole set; the manifest
+ * still carries a selection for every one, because which agents a cycle
+ * composes is decided fresh each cycle and this is decided once, at run
+ * start, before any cycle exists to compose one.
+ *
+ * Exported so `tests/store/skill-acceptance-store.test.ts` can assert this
+ * stays in step with the two other places that restate the identical rule —
+ * `store/skill-acceptance-store.ts`'s `routableAgents` and
+ * `web/app/lib/stories.ts`'s `routableAgentSet`.
  */
-const SKILL_SELECTION_AGENTS = ['planner', 'builder', 'critic', 'verifier'] as const
+export function skillSelectionAgents(config: Config): string[] {
+  const names = Object.values(config.tracks).flatMap((track) => [
+    ...track.required,
+    ...(track.available ?? []),
+    ...(track.closing ?? []),
+  ])
+  return names.length === 0 ? [...SKILL_ACCEPTANCE_AGENTS] : [...new Set(names)]
+}
 
 /**
  * The basename of the run's frozen skill routing decision.
@@ -298,7 +318,7 @@ async function resolveSkillManifest(
   if (profile === null) return null
 
   const { skills: acceptedSkills } = await readAcceptedProjectSkills(projectDir)
-  const selections: SkillSelection[] = SKILL_SELECTION_AGENTS.flatMap((agent) =>
+  const selections: SkillSelection[] = skillSelectionAgents(config).flatMap((agent) =>
     selectSkills({ brief: record.brief, profile, acceptedSkills, agent }),
   ).sort(compareSelections)
 
@@ -365,10 +385,11 @@ async function writeSkillManifest(projectDir: string, state: State, manifest: Sk
 }
 
 /**
- * Component id, then agent — merging `SKILL_SELECTION_AGENTS`' four separate
- * `selectSkills` calls back into the one order the manifest promises. Each
- * call already returns its own selections sorted by component, so this only
- * has to break ties across agents for the same component.
+ * Component id, then agent — merging `skillSelectionAgents`' separate
+ * `selectSkills` calls, one per routable agent, back into the one order the
+ * manifest promises. Each call already returns its own selections sorted by
+ * component, so this only has to break ties across agents for the same
+ * component.
  */
 function compareSelections(a: SkillSelection, b: SkillSelection): number {
   if (a.component !== b.component) return a.component < b.component ? -1 : 1

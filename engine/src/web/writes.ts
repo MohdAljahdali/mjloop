@@ -3,6 +3,7 @@ import * as z from 'zod'
 import { AgentNameSchema } from '../schemas/contract.js'
 import { FeatureIdSchema } from '../schemas/feature.js'
 import { ApprovalDecisionSchema, PlanIdSchema, StoryIdSchema, StoryStatusSchema } from '../schemas/plan.js'
+import { IdSchema } from '../schemas/state.js'
 import { gateSet } from '../ops/plan.js'
 import { storyUpdate } from '../ops/plan.js'
 import { halt } from '../ops/run.js'
@@ -27,8 +28,9 @@ import {
   writeAgent,
   type AgentWriteFailure,
 } from '../store/agent-store.js'
+import { setAcceptanceAgents } from '../store/skill-acceptance-store.js'
 import { PLUGIN_AGENTS_DIR } from './read.js'
-import { StalePreconditionError } from '../store/precondition.js'
+import { StalePreconditionError, type PreconditionSubject } from '../store/precondition.js'
 import type { WebCode } from './codes.js'
 
 /**
@@ -37,7 +39,7 @@ import type { WebCode } from './codes.js'
  *
  * Everything else on the page either reads, or composes a loop command and
  * enqueues it — there is one execution model and not a second, weaker one
- * beside it. Eight doors reach past that model. The original four cannot be
+ * beside it. Nine doors reach past that model. The original four cannot be
  * expressed as a command, and each is something a person is stuck on today:
  *
  *  - **Plan approval.** `gates.plan_approval` defaults to `human` and the build
@@ -111,6 +113,21 @@ import type { WebCode } from './codes.js'
  *    them; a check made before calling `deleteAgent` would be reading the
  *    config outside the very lock `agent-store.ts` takes to prevent that.
  *
+ * **The fourth door**, `skill.agents`, is `setAcceptanceAgents`'s only caller
+ * and sets exactly the one field that store function lets it set — an
+ * acceptance's `agents`, never its status, its components, its update policy
+ * or the digest of the package it pins. It joins the two agent-door refusals
+ * above rather than getting a fresh pair: `GUARDED_WHILE_RUNNING` (renamed
+ * from `AGENT_KINDS` for exactly this reason) now names all four kinds this
+ * class shares, so it is refused while a run is open the same way an agent
+ * edit is — a run's pinned skill manifest is frozen at `runStart`, so an
+ * acceptance's routing edited mid-run would make what a cycle was actually
+ * offered and what is recorded two different things, the identical hazard an
+ * agent file edited mid-run is refused for. It has no in-use guard of its own:
+ * unlike deleting an agent a track still names, narrowing which agents a
+ * skill routes to never leaves a track pointing at a file that stopped
+ * existing.
+ *
  * These are also the first writes anywhere in this server to land outside
  * `.mjloop/` at all — into `.claude/agents/`. That is confined at exactly one
  * seam: the name arrives typed as `AgentNameSchema` (`schemas/contract.ts`),
@@ -133,10 +150,11 @@ import type { WebCode } from './codes.js'
  *     rejected before `applyWrite` is reached.
  *  3. **An import allowlist**, asserted from source text: this file may import
  *     the three original ops, the guarded config mutator, the agent store's
- *     two writers (`writeAgent`, `deleteAgent`), and the two reads the agent
- *     doors need above (`stateSummary`, `loadConfig`) — the last two already
- *     imported elsewhere under `src/web/` with no single-importer assertion to
- *     widen; `server.ts` may import none.
+ *     two writers (`writeAgent`, `deleteAgent`), the skill acceptance store's
+ *     one writer for this door (`setAcceptanceAgents`), and the two reads the
+ *     agent doors need above (`stateSummary`, `loadConfig`) — the last two
+ *     already imported elsewhere under `src/web/` with no single-importer
+ *     assertion to widen; `server.ts` may import none.
  *  4. **A forbidden list**, asserted to appear nowhere under `src/web/`.
  */
 
@@ -235,6 +253,13 @@ export const WriteSchema = z.discriminatedUnion('kind', [
     name: AgentNameSchema,
     digest: z.string().regex(/^[a-f0-9]{64}$/),
   }),
+  z.strictObject({
+    kind: z.literal('skill.agents'),
+    skill: IdSchema,
+    /** `AcceptanceView.digest` (`web/read.ts`) — the compare-and-swap token this write checks inside the store's lock. */
+    digest: z.string().regex(/^[a-f0-9]{64}$/),
+    agents: z.array(AgentNameSchema).max(50),
+  }),
 ])
 
 export type Write = z.infer<typeof WriteSchema>
@@ -258,8 +283,14 @@ function decidedBy(): string {
   return `dashboard:${who}`
 }
 
-/** Every agent door, and only those. */
-const AGENT_KINDS: readonly Write['kind'][] = ['agent.create', 'agent.update', 'agent.delete']
+/**
+ * Every write kind refused while a run is open — the three agent doors, and
+ * `skill.agents` beside them for the identical reason: a run's roster and its
+ * pinned skill manifest are both frozen at `runStart`, so any of the four
+ * edited mid-run would make what a cycle actually ran and what is recorded
+ * two different things.
+ */
+const GUARDED_WHILE_RUNNING: readonly Write['kind'][] = ['agent.create', 'agent.update', 'agent.delete', 'skill.agents']
 
 /**
  * The plugin's own agent names — a project agent may not shadow one of these.
@@ -392,13 +423,20 @@ const HANDLERS: Handlers = {
       },
     })
   },
+  'skill.agents': async (projectDir, write) => {
+    // The one field this door may set. Not the status, the components, the
+    // update policy, or the digest of the package it pins — those are
+    // `mjloop-cli skills accept|disable`'s decisions, not the dashboard's.
+    await setAcceptanceAgents(projectDir, write.skill, write.agents, write.digest)
+  },
 }
 
 export async function applyWrite(projectDir: string, write: Write): Promise<WriteResult> {
-  if (AGENT_KINDS.includes(write.kind)) {
+  if (GUARDED_WHILE_RUNNING.includes(write.kind)) {
     // Refused while a run is open, for a reason the config editor does not
-    // have: the roster is pinned and the briefs are already sent, so an agent
-    // edited mid-run makes what ran and what is recorded two different things.
+    // have: the roster and the skill manifest are both pinned once a run
+    // starts, so an agent or a skill's routing edited mid-run makes what ran
+    // and what is recorded two different things.
     const state = await stateSummary(projectDir)
     if (state.status === 'running') return { ok: false, code: 'write.refused.running' }
   }
@@ -471,4 +509,5 @@ const STALE = {
   plan: 'write.stale.plan',
   story: 'write.stale.story',
   run: 'write.stale.run',
-} as const satisfies Record<string, WebCode>
+  skill: 'write.stale.skill',
+} as const satisfies Record<PreconditionSubject, WebCode>

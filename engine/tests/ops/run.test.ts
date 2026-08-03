@@ -980,7 +980,7 @@ describe('the run skill manifest', () => {
     expect(await manifestExists(state)).toBe(false)
   })
 
-  it('pins a manifest for every fixed agent role when the brief and profile are both there', async () => {
+  it('pins a manifest for every routable agent role when the brief and profile are both there', async () => {
     await acceptComponents([component('mobile', { technology: 'flutter', skillTags: ['flutter'] })])
     const feature = await approvedFeature({ affectedComponents: ['mobile'] })
 
@@ -992,12 +992,13 @@ describe('the run skill manifest', () => {
     expect(manifest.sourceBrief).toEqual({ id: feature.id, revision: feature.revision })
     expect(manifest.profileRevision).toBe(1)
 
-    // No skill has ever been accepted by this project, so every fixed role
-    // still gets a selection recorded, each naming no skill at all — the
-    // additive guarantee: a project that accepts nothing pins exactly what it
-    // pinned before a library existed.
-    expect(manifest.selections).toHaveLength(4)
-    expect(manifest.selections.map((s: any) => s.agent)).toEqual(['builder', 'critic', 'planner', 'verifier'])
+    // No skill has ever been accepted by this project, so every agent this
+    // project's own tracks name still gets a selection recorded, each naming
+    // no skill at all — the additive guarantee: a project that accepts
+    // nothing pins exactly what it would have, whatever its tracks name.
+    const routedAgents = [...new Set(Object.values((await loadConfig(project.dir)).tracks).flatMap((t) => [...t.required, ...t.available, ...t.closing]))].sort()
+    expect(manifest.selections).toHaveLength(routedAgents.length)
+    expect(manifest.selections.map((s: any) => s.agent)).toEqual(routedAgents)
     for (const selection of manifest.selections) {
       expect(selection.component).toBe('mobile')
       expect(selection.skillIds).toEqual([])
@@ -1066,15 +1067,12 @@ describe('the run skill manifest', () => {
     const state = await runStart(project.dir, { track: 'edit', goal: 'Add link login', feature: feature.id }, clock)
     const manifest = await readManifest(state)
 
+    // Component id, then agent — every agent this project's own tracks name,
+    // not the old fixed four.
+    const routedAgents = [...new Set(Object.values((await loadConfig(project.dir)).tracks).flatMap((t) => [...t.required, ...t.available, ...t.closing]))].sort()
     expect(manifest.selections.map((s: any) => `${s.component}:${s.agent}`)).toEqual([
-      'admin:builder',
-      'admin:critic',
-      'admin:planner',
-      'admin:verifier',
-      'mobile:builder',
-      'mobile:critic',
-      'mobile:planner',
-      'mobile:verifier',
+      ...routedAgents.map((agent) => `admin:${agent}`),
+      ...routedAgents.map((agent) => `mobile:${agent}`),
     ])
     // Independence is provable here — disjoint roots, no shared verify command
     // — so the pinned decision is parallel on an untouched `config.yaml`.

@@ -251,7 +251,7 @@ const skillsFeed = useFeed<SkillsView>({
 
 const track = computed(() => configFeed.value.value?.parsed?.tracks?.[STORY_TRACK])
 const drafted = computed(() => draftedAgents(track.value))
-const routable = computed(() => routableAgents(track.value))
+const routable = computed(() => routableAgents(track.value, configFeed.value.value?.parsed?.tracks))
 const skillAcceptances = computed(() => relevantAcceptances(skillsFeed.value.value?.acceptances ?? [], routable.value))
 const warned = computed(() =>
   skillAcceptances.value

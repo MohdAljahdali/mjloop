@@ -11,7 +11,7 @@
  * check below is evaluated *inside* the lock the op already takes, leaving no
  * read-then-write window anywhere above it.
  */
-export type PreconditionSubject = 'plan' | 'story' | 'run'
+export type PreconditionSubject = 'plan' | 'story' | 'run' | 'skill'
 
 export class StalePreconditionError extends Error {
   constructor(
