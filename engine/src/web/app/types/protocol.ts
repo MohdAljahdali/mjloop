@@ -32,6 +32,7 @@ export type {
   RunSummary,
   MemoryView,
   SkillsView,
+  ProfileView,
   FeatureDetail,
   FeatureRevisionView,
 } from '../../read.js'
@@ -41,3 +42,8 @@ export type { Preflight } from '../../../ops/preflight.js'
 export type { SkillManifest, SkillSelection } from '../../../schemas/skill-selection.js'
 export type { ProjectSkillAcceptance } from '../../../schemas/skill-acceptance.js'
 export type { Finding, HistoryEntry } from '../../../schemas/state.js'
+export type { ProjectComponent } from '../../../schemas/project-profile.js'
+export type { SkillPackage } from '../../../schemas/skill-library.js'
+export type { ProjectSkillOnDisk, UnreadableProjectSkill } from '../../../schemas/project-skills.js'
+export type { SkillCandidate } from '../../../schemas/skill-import.js'
+export type { UnreadablePackage } from '../../../store/skill-library-store.js'

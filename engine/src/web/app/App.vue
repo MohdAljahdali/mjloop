@@ -19,6 +19,7 @@ import Toasts from './components/Toasts.vue'
 import Features from './panels/Features.vue'
 import Plans from './panels/Plans.vue'
 import Run from './panels/Run.vue'
+import Skills from './panels/Skills.vue'
 import Stories from './panels/Stories.vue'
 import { bootPane } from './composables/usePane.js'
 import { useHalt } from './composables/useHalt.js'
@@ -158,6 +159,7 @@ const highCount = computed(() => snapshot.value?.state.findings.high ?? 0)
       <Plans v-else-if="active === 'plans'" />
       <Stories v-else-if="active === 'stories'" />
       <Features v-else-if="active === 'features'" />
+      <Skills v-else-if="active === 'skills'" />
     </KeepAlive>
   </main>
 
