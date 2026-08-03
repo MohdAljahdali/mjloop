@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onBeforeUnmount } from 'vue'
 import { installAnnouncer, online, onNotice, snapshot } from './stores/session.js'
 import { useI18n } from './composables/useI18n.js'
 import { startTabs, useTabs } from './composables/useTabs.js'
@@ -24,7 +24,7 @@ bootPane()
 const { notify } = useToasts()
 installAnnouncer(notify)
 // Server-pushed notices become toasts too; NoticeFeed keeps its own copy.
-onNotice((message) => notify(message))
+onBeforeUnmount(onNotice((message) => notify(message)))
 
 /**
  * The two navigation counts.

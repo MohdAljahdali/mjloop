@@ -19,7 +19,7 @@ describe('Toasts', () => {
     const { notify } = useToasts()
     notify({ code: 'write.ok.halt' })
     const wrapper = mount(Toasts)
-    expect(wrapper.text()).toBe(english['write.ok.halt'])
+    expect(wrapper.get('.toast > span').text()).toBe(english['write.ok.halt'])
   })
 
   it('runs an offered action and then clears the toast', async () => {

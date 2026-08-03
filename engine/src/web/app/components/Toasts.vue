@@ -23,16 +23,7 @@ function act(id: number, run: () => void): void {
       >
         {{ t(toast.action.code) }}
       </button>
-      <button type="button" class="icon toast-dismiss" :aria-label="t('toast.dismiss')" @click="dismiss(toast.id)"></button>
+      <button type="button" class="icon toast-dismiss" :aria-label="t('toast.dismiss')" @click="dismiss(toast.id)">×</button>
     </div>
   </div>
 </template>
-
-<style scoped>
-/* The glyph is decorative — `aria-label` above is what a screen reader
-   announces — and kept out of the text node so a toast's rendered text is
-   exactly its message, the way `toasts-vue.test.ts` asserts it. */
-.toast-dismiss::before {
-  content: '\00d7';
-}
-</style>
