@@ -23,7 +23,20 @@ export type { Write } from '../../writes.js'
 export type { WebCode } from '../../codes.js'
 export type { Revisions } from '../../revision.js'
 export type { StateSummary } from '../../../ops/summary.js'
-export type { StateView, RunDetail, ConfigView, PlanDetail, StoryDetail, RunSummary, MemoryView, SkillsView } from '../../read.js'
+export type {
+  StateView,
+  RunDetail,
+  ConfigView,
+  PlanDetail,
+  StoryDetail,
+  RunSummary,
+  MemoryView,
+  SkillsView,
+  FeatureDetail,
+  FeatureRevisionView,
+} from '../../read.js'
+export type { FeatureSummary } from '../../../store/feature-store.js'
+export type { FeatureBrief, Decision } from '../../../schemas/feature.js'
 export type { Preflight } from '../../../ops/preflight.js'
 export type { SkillManifest, SkillSelection } from '../../../schemas/skill-selection.js'
 export type { ProjectSkillAcceptance } from '../../../schemas/skill-acceptance.js'

@@ -6,19 +6,23 @@ import { useSelection } from './composables/useSelection.js'
 import { startTabs, useTabs } from './composables/useTabs.js'
 import { useToasts } from './composables/useToasts.js'
 import { mountPlanDoc } from './lib/plandoc.js'
+import { mountFeatureDoc, opened as openedFeature } from './lib/featuredoc.js'
 import { ready } from './lib/stories.js'
 import Banners from './components/Banners.vue'
 import Bdi from './components/Bdi.vue'
+import FeatureApproveDialog from './components/FeatureApproveDialog.vue'
 import HaltDialog from './components/HaltDialog.vue'
 import LanguagePicker from './components/LanguagePicker.vue'
 import Pane from './components/Pane.vue'
 import Rail from './components/Rail.vue'
 import Toasts from './components/Toasts.vue'
+import Features from './panels/Features.vue'
 import Plans from './panels/Plans.vue'
 import Run from './panels/Run.vue'
 import Stories from './panels/Stories.vue'
 import { bootPane } from './composables/usePane.js'
 import { useHalt } from './composables/useHalt.js'
+import { useFeatureApprove } from './composables/useFeatureApprove.js'
 
 const { t, tn } = useI18n()
 const { tabs, active, show } = useTabs()
@@ -26,6 +30,9 @@ startTabs()
 // The dialog itself is a sibling of `<main>`, not inside it — see
 // `useHalt.ts` for why it cannot live inside a kept-alive panel.
 const { open: haltOpen, closeHalt } = useHalt()
+// Same shape, for the one other write on this page a stale click must not
+// land on — see `useFeatureApprove.ts`.
+const { open: featureApproveOpen, closeApprove } = useFeatureApprove()
 // Applies the pane mode already read from storage, but only once the
 // terminal underneath it has mounted into a laid-out box — a child's
 // `onMounted` fires before its parent's, so calling this from here rather
@@ -60,6 +67,23 @@ watch(
   [snapshot, activePlan],
   ([current]) => {
     if (current !== null) planDocFeed.update(current)
+  },
+  { immediate: true },
+)
+
+/**
+ * The open feature's brief — `lib/featuredoc.ts`'s own document, pumped from
+ * here for the same reason `planDocFeed` above is: `Features.vue` and
+ * `FeatureApproveDialog.vue` both read it, and a feed ticked from inside a
+ * panel that only exists behind `v-if` would stop moving the moment that
+ * panel's tab is not the one on screen — exactly what would let a stale
+ * confirmation dialog approve a brief nobody can see any more.
+ */
+const featureDocFeed = mountFeatureDoc()
+watch(
+  [snapshot, openedFeature],
+  ([current]) => {
+    if (current !== null) featureDocFeed.update(current)
   },
   { immediate: true },
 )
@@ -133,6 +157,7 @@ const highCount = computed(() => snapshot.value?.state.findings.high ?? 0)
       <Run v-if="active === 'run'" />
       <Plans v-else-if="active === 'plans'" />
       <Stories v-else-if="active === 'stories'" />
+      <Features v-else-if="active === 'features'" />
     </KeepAlive>
   </main>
 
@@ -142,4 +167,6 @@ const highCount = computed(() => snapshot.value?.state.findings.high ?? 0)
 
   <!-- Outside the `<KeepAlive>` on purpose — see `useHalt.ts`. -->
   <HaltDialog :open="haltOpen" :run-id="snapshot?.state.run_id ?? null" @close="closeHalt()" />
+  <!-- Same reason — see `useFeatureApprove.ts`. -->
+  <FeatureApproveDialog :open="featureApproveOpen" @close="closeApprove()" />
 </template>
