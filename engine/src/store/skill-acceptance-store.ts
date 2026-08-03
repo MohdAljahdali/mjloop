@@ -162,15 +162,22 @@ export class SkillAlreadyAcceptedError extends Error {
  * command, and it must not start demanding a file the acceptance store never
  * needed before this rule existed.
  *
- * Both callers read this *before* taking the project lock (`acceptSkill` and
- * `setAcceptanceAgents` below), not inside it — `config.yaml` is a different
- * file under a different lock than the acceptance record either of them then
- * writes, so joining this read to that lock would buy no atomicity. The gap
- * this leaves is benign: a `config.patch` landing in between can only make the
- * check stale by one edit either way — an agent a track *just* gained is
+ * The two callers do not place this call the same way relative to the project
+ * lock, and neither placement matters. `acceptSkill` calls it *inside* its own
+ * `locked(...)` block, alongside the write that block guards.
+ * `setAcceptanceAgents` calls it *before* taking the lock, so its check and its
+ * write are two separate reads with a gap between them. Both are fine for the
+ * same reason: `config.yaml` is a different file under a different lock than
+ * the acceptance record either of them writes, so reading it here was never
+ * what made either write atomic — that comes from the acceptance file's own
+ * lock around the write itself, regardless of when this call happens to run
+ * relative to it. The only thing either placement can cost is staleness by one
+ * edit: a `config.patch` landing in the gap `setAcceptanceAgents` leaves (or,
+ * for `acceptSkill`, in the instant between `loadConfig`'s own file read here
+ * and the lock already held around it) means an agent a track *just* gained is
  * rejected until the caller retries, or one a track *just* lost is written and
- * self-corrects the next time anything reads it — never a write that outruns
- * a check meant to stop it.
+ * self-corrects the next time anything reads it — never a write that outruns a
+ * check meant to stop it.
  */
 export async function routableAgents(projectDir: string): Promise<Set<string>> {
   const config = await loadConfig(projectDir).catch((error) => {
