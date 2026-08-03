@@ -53,7 +53,12 @@ const highCount = computed(() => snapshot.value?.state.findings.high ?? 0)
          a refused upgrade. `snapshot` is nullable on `Banners` for exactly
          that; only the banners that need snapshot data gate on having one. -->
     <Banners :snapshot="snapshot" :online="online" />
-    <Rail v-if="snapshot !== null" :snapshot="snapshot" />
+    <!-- Unconditional for the same reason: `Rail`'s `snapshot` is nullable
+         too, so `.rail` — and the notice toggle living inside it — is always
+         there, the same as `index.html:47-96`'s static markup. Gating this on
+         `snapshot !== null` was the regression finding 5's fix introduced:
+         the same defect as the banner above, one component over. -->
+    <Rail :snapshot="snapshot" />
   </header>
 
   <nav class="tabs" :aria-label="t('tabs.label')">

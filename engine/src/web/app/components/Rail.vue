@@ -19,31 +19,37 @@ import { useI18n } from '../composables/useI18n.js'
 import Bdi from './Bdi.vue'
 import NoticeFeed from './NoticeFeed.vue'
 
-const props = defineProps<{ snapshot: Snapshot }>()
+// `snapshot` is nullable, the same reason `Banners`' is: `index.html:47-96`
+// and `ui/rail.js` — the `.rail` element, its pill and the notice toggle are
+// static markup that exists before any snapshot ever arrives (mountRail()
+// happens at boot; drawRail() is only ever called once a snapshot is in
+// hand). Only the values inside — the pill's status and the whole detail
+// block — depend on having one; the structure itself does not.
+const props = defineProps<{ snapshot: Snapshot | null }>()
 const { t } = useI18n()
 
-const state = computed(() => props.snapshot.state)
+const state = computed(() => props.snapshot?.state ?? null)
 // `rail.js:36-37` — the whole detail block, not just the run bit, is gated on
 // status, not on `run_id`.
-const running = computed(() => state.value.status !== 'idle' && state.value.status !== 'uninitialised')
+const running = computed(() => state.value !== null && state.value.status !== 'idle' && state.value.status !== 'uninitialised')
 
-const target = computed(() => state.value.story ?? state.value.plan)
-const cycleText = computed(() => `${state.value.cycle}/${state.value.max_cycles ?? '?'}`)
+const target = computed(() => state.value?.story ?? state.value?.plan ?? null)
+const cycleText = computed(() => `${state.value?.cycle ?? 0}/${state.value?.max_cycles ?? '?'}`)
 
-const findings = computed(() => state.value.findings)
+const findings = computed(() => state.value?.findings ?? { high: 0, medium: 0, low: 0 })
 const findingsTotal = computed(() => findings.value.high + findings.value.medium + findings.value.low)
 
-const guards = computed(() => props.snapshot.guards)
+const guards = computed(() => props.snapshot?.guards ?? null)
 const strikes = computed(() => guards.value?.strikes ?? 0)
 const strikesText = computed(() => `${strikes.value}/${guards.value?.strikesAllowed ?? '?'}`)
 
-const reproduction = computed(() => state.value.reproduction)
+const reproduction = computed(() => state.value?.reproduction ?? null)
 </script>
 
 <template>
   <div class="rail">
-    <span class="pill" :data-status="state.status">{{ t(`status.${state.status}`) }}</span>
-    <span v-if="running" class="rail-detail">
+    <span class="pill" :data-status="state?.status">{{ state !== null ? t(`status.${state.status}`) : '' }}</span>
+    <span v-if="running && state !== null" class="rail-detail">
       <span class="bit">
         <span class="k">{{ t('rail.track') }}</span>
         <span class="v"><Bdi :value="state.track ?? '—'" /></span>
@@ -72,7 +78,9 @@ const reproduction = computed(() => state.value.reproduction)
          `LanguagePicker`'s `margin-inline-start: auto` (`10-layout.css:76`)
          pushes anything after it in `.brand` to the far right — putting this
          button there visibly moves it to a different row than the shipped
-         page, at both sides of the 900px breakpoint. -->
+         page, at both sides of the 900px breakpoint. Unconditional, like the
+         old page's static toggle: a dead server or a bad token at load must
+         not also take away the reader's way to open their notice history. -->
     <NoticeFeed />
   </div>
 </template>

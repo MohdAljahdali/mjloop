@@ -67,6 +67,27 @@ describe('Rail', () => {
     const wrapper = mount(Rail, { props: { snapshot: emptySnapshot({ state: { ...emptySnapshot().state, status: 'running' } }) } })
     expect(wrapper.find('.pill').attributes('data-status')).toBe('running')
   })
+
+  it('still renders .rail and the notice toggle with no snapshot at all — the same failure mode as the offline banner, one component over', () => {
+    // `index.html:47-96` / `ui/rail.js`: `.rail`'s static markup, its pill,
+    // and the notice toggle inside it exist at boot, before any snapshot has
+    // arrived — `drawRail()` only ever fills in values once one is in hand.
+    // Gating the whole `<Rail>` behind `snapshot !== null` (as `App.vue` used
+    // to) meant a dead server or a bad token at load left the reader with no
+    // rail and no way to open their notice history — finding 5's fix
+    // introduced this by moving the notice toggle inside that gate.
+    const wrapper = mount(Rail, { props: { snapshot: null } })
+    expect(wrapper.find('.rail').exists()).toBe(true)
+    const toggle = wrapper.find('#notice-toggle')
+    expect(toggle.exists()).toBe(true)
+    expect(toggle.element.closest('.rail')).not.toBeNull()
+
+    // The pill exists but carries no status yet, and the detail block — which
+    // needs a running snapshot — is absent.
+    expect(wrapper.find('.pill').exists()).toBe(true)
+    expect(wrapper.find('.pill').attributes('data-status')).toBeUndefined()
+    expect(wrapper.find('.rail-detail').exists()).toBe(false)
+  })
 })
 
 describe('Banners', () => {
