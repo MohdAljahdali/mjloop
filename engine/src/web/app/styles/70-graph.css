@@ -39,15 +39,56 @@
   gap: 12px;
 }
 
+/* A tab strip, not two buttons that happen to sit together: a shared rule
+ * under the row, and the selected tab breaking it. That shape is what a
+ * reader recognises as "two views of one thing" without reading either
+ * label — the previous look, two ordinary secondary buttons with a coloured
+ * border on the active one, is why the graph went unfound. */
 .track-view-toggle {
   display: flex;
-  gap: 8px;
+  gap: 4px;
   margin-block-end: 12px;
+  border-block-end: 1px solid var(--line);
 }
 
-.track-view-toggle button[aria-pressed='true'] {
-  border-color: var(--accent);
+.track-view-toggle button {
+  border: 0;
+  background: none;
+  border-radius: 0;
+  padding: 8px 14px;
+  /* Reserves the selected tab's rule on every tab, so selecting one does not
+   * shift the row by a pixel. */
+  border-block-end: 2px solid transparent;
+  margin-block-end: -1px;
+  color: var(--dim);
+  /* `app.css`'s own `button` rule puts a raised-gradient shadow under every
+   * button; a tab is flat by design (`border: 0`/`background: none` above),
+   * so the shadow has to be cleared here too or an unselected tab still
+   * reads as a raised control floating over the strip. */
+  box-shadow: none;
+}
+
+/* Two cues, not one: the colour and the rule under the label. Colour alone
+ * would be the only carrier of the selected state for a reader who cannot
+ * separate it — `aria-selected` covers the assistive path, this covers the
+ * visual one. */
+.track-view-toggle button[aria-selected='true'] {
+  border-block-end-color: var(--accent);
   color: var(--accent);
+}
+
+/* `app.css`'s own `button:hover:not(:disabled)` is (0,2,1) and outranks the
+ * base `.track-view-toggle button` rule above (0,1,1), so without a rule at
+ * least as specific, hovering an UNSELECTED tab would restore the raised
+ * gradient background this strip deliberately has none of, and tint the
+ * bottom border with the hover rule's `border-color` — borrowing the exact
+ * cue that is supposed to mark only the selected tab. Scoped to
+ * `:not([aria-selected='true'])` so this never fights the selected tab's own
+ * rule above when that tab is hovered too; `:not(:disabled)` is kept purely
+ * to match `app.css`'s specificity — these buttons are never disabled. */
+.track-view-toggle button:hover:not(:disabled):not([aria-selected='true']) {
+  background: none;
+  border-block-end-color: transparent;
 }
 
 /* One node per agent. The colour names the list it is drawn from — the same

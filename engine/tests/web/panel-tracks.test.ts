@@ -93,6 +93,27 @@ async function boot(snapshot: Snapshot = emptySnapshot()) {
   return { store, Tracks, Config, TrackGraph, socket: FakeSocket.last as FakeSocket }
 }
 
+/**
+ * The panel is loaded once the document it fetched has drawn a track. Which
+ * element that is depends on the view showing, and the view showing is a
+ * product decision that has already moved once — so this probe accepts
+ * either rather than pinning the suite to whichever one is currently the
+ * default.
+ */
+async function ready(wrapper: ReturnType<typeof mount>): Promise<void> {
+  await vi.waitFor(() => expect(wrapper.find('.track-editor, .track-graph').exists()).toBe(true))
+}
+
+/** Loaded, and showing the list — for every assertion about the list editor. */
+async function readyList(wrapper: ReturnType<typeof mount>): Promise<void> {
+  await ready(wrapper)
+  if (!wrapper.find('#config-track-editors').exists()) {
+    await wrapper.get('#tracks-view-list').trigger('click')
+    await nextTick()
+  }
+  await vi.waitFor(() => expect(wrapper.find('.track-editor').exists()).toBe(true))
+}
+
 const control = (wrapper: ReturnType<typeof mount>, id: string) => wrapper.get(`#${id}`).element as HTMLInputElement & HTMLSelectElement
 
 describe('Tracks.vue', () => {
@@ -110,6 +131,12 @@ describe('Tracks.vue', () => {
     const { Tracks } = await boot()
     const wrapper = mount(Tracks)
     await vi.waitFor(() => expect(wrapper.get('#tracks-editor-state').text()).toBe(english['config.editorInvalid']))
+
+    // The document never parsed, so it seeds zero tracks — `readyList`'s own
+    // "wait for `.track-editor` to exist" would hang forever here. Switch to
+    // the list view directly; there is nothing to wait for beyond the click.
+    await wrapper.get('#tracks-view-list').trigger('click')
+    await nextTick()
 
     // The tracks: fieldset's own chrome survives — no cards, but the legend,
     // hint, add box and warning are all still there, disabled rather than
@@ -139,7 +166,7 @@ describe('Tracks.vue', () => {
       })
       const { Tracks, socket } = await boot()
       const wrapper = mount(Tracks)
-      await vi.waitFor(() => expect(wrapper.find('.track-editor').exists()).toBe(true))
+      await readyList(wrapper)
 
       // A structured specialist rule.
       await wrapper.get('#config-specialist-new').setValue('security')
@@ -181,7 +208,7 @@ describe('Tracks.vue', () => {
       })
       const { Tracks, socket } = await boot()
       const wrapper = mount(Tracks)
-      await vi.waitFor(() => expect(wrapper.find('.track-editor').exists()).toBe(true))
+      await readyList(wrapper)
 
       await wrapper.get('#config-specialist-new').setValue('security')
       await wrapper.get('.rule-add button').trigger('click')
@@ -215,7 +242,7 @@ describe('Tracks.vue', () => {
       serve({ '/api/config': configView() })
       const { Tracks } = await boot()
       const wrapper = mount(Tracks)
-      await vi.waitFor(() => expect(wrapper.find('.track-editor').exists()).toBe(true))
+      await readyList(wrapper)
 
       await wrapper.get('#config-specialist-new').setValue('security')
       await wrapper.get('.rule-add button').trigger('click')
@@ -240,7 +267,8 @@ describe('Tracks.vue', () => {
       serve({ '/api/config': configView({ tracks: { build: { required: ['builder'], max_cycles: 5 } } }) })
       const { Tracks } = await boot()
       const wrapper = mount(Tracks)
-      await vi.waitFor(() => expect(wrapper.findAll('.track-editor')).toHaveLength(1))
+      await readyList(wrapper)
+      expect(wrapper.findAll('.track-editor')).toHaveLength(1)
 
       await wrapper.get('#config-track-new').setValue('review')
       await wrapper.get('#config-track-editors ~ .rule-add button').trigger('click')
@@ -265,7 +293,7 @@ describe('Tracks.vue', () => {
       })
       const { Tracks } = await boot()
       const wrapper = mount(Tracks)
-      await vi.waitFor(() => expect(wrapper.find('.track-editor').exists()).toBe(true))
+      await readyList(wrapper)
 
       const row = wrapper.findAll('.track-order-agent').find((node) => node.attributes('data-agent') === 'verifier')
       expect(row, 'no order row for verifier').toBeDefined()
@@ -286,7 +314,7 @@ describe('Tracks.vue', () => {
       serve({ '/api/config': configView({ tracks: { mine: { required: ['alpha'], max_cycles: 3 } } }) })
       const { Tracks } = await boot()
       const wrapper = mount(Tracks)
-      await vi.waitFor(() => expect(wrapper.find('.track-editor').exists()).toBe(true))
+      await readyList(wrapper)
 
       const list = wrapper.findAll('.track-list')[0]
       const remove = list?.get('.chips button')
@@ -304,7 +332,7 @@ describe('Tracks.vue', () => {
       })
       const { Tracks } = await boot()
       const wrapper = mount(Tracks)
-      await vi.waitFor(() => expect(wrapper.find('.track-editor').exists()).toBe(true))
+      await readyList(wrapper)
 
       expect(wrapper.findAll('.track-preview-item')).toHaveLength(0)
       expect(wrapper.find('.track-list-empty').exists()).toBe(true)
@@ -326,7 +354,7 @@ describe('Tracks.vue', () => {
       })
       const { Tracks } = await boot()
       const wrapper = mount(Tracks)
-      await vi.waitFor(() => expect(wrapper.find('.track-editor').exists()).toBe(true))
+      await readyList(wrapper)
 
       const card = wrapper.get('.track-editor')
       expect(card.find('.track-gate').exists(), 'gate body hidden before the checkbox is on').toBe(false)
@@ -365,7 +393,7 @@ describe('Tracks.vue', () => {
       })
       const { Tracks } = await boot()
       const wrapper = mount(Tracks)
-      await vi.waitFor(() => expect(wrapper.find('.track-editor').exists()).toBe(true))
+      await readyList(wrapper)
 
       const card = wrapper.get('.track-editor')
       const requiredList = wrapper.findAll('.track-list')[0]
@@ -387,7 +415,7 @@ describe('Tracks.vue', () => {
       })
       const { Tracks } = await boot()
       const wrapper = mount(Tracks)
-      await vi.waitFor(() => expect(wrapper.find('.track-editor').exists()).toBe(true))
+      await readyList(wrapper)
 
       const card = wrapper.get('.track-editor')
       expect(card.find('.track-map').exists()).toBe(false)
@@ -416,7 +444,7 @@ describe('Tracks.vue', () => {
       serve({ '/api/config': configView({ tracks: { build: { required: ['alpha'], max_cycles: 5 } } }) })
       const { Tracks } = await boot()
       const wrapper = mount(Tracks)
-      await vi.waitFor(() => expect(wrapper.find('.track-editor').exists()).toBe(true))
+      await readyList(wrapper)
 
       const cycles = wrapper.get('.track-cycles input')
       ;(cycles.element as HTMLInputElement).value = '7'
@@ -437,7 +465,7 @@ describe('Tracks.vue', () => {
       serve({ '/api/config': configView({ tracks: { build: { required: ['alpha'], max_cycles: 5 } } }) })
       const { Tracks, socket } = await boot()
       const wrapper = mount(Tracks)
-      await vi.waitFor(() => expect(wrapper.find('.track-editor').exists()).toBe(true))
+      await readyList(wrapper)
 
       const cycles = wrapper.get('.track-cycles input').element as HTMLInputElement
       // A valid edit first, so the draft actually differs from the
@@ -476,7 +504,7 @@ describe('Tracks.vue', () => {
       })
       const { Tracks } = await boot()
       const wrapper = mount(Tracks)
-      await vi.waitFor(() => expect(wrapper.find('.track-editor').exists()).toBe(true))
+      await readyList(wrapper)
 
       expect(wrapper.find('.track-preview-comments').exists()).toBe(false)
 
@@ -497,7 +525,7 @@ describe('Tracks.vue', () => {
       })
       const { Tracks } = await boot()
       const wrapper = mount(Tracks)
-      await vi.waitFor(() => expect(wrapper.find('.track-editor').exists()).toBe(true))
+      await readyList(wrapper)
 
       const requiredList = wrapper.findAll('.track-list')[0]
       const removeAlpha = requiredList?.findAll('.chips li').find((chip) => chip.text().includes('alpha'))
@@ -523,7 +551,7 @@ describe('Tracks.vue', () => {
       })
       const { Tracks } = await boot()
       const wrapper = mount(Tracks)
-      await vi.waitFor(() => expect(wrapper.find('.track-editor').exists()).toBe(true))
+      await readyList(wrapper)
 
       const options = wrapper.get('#config-agent-names').findAll('option').map((option) => option.attributes('value'))
       expect(options).toEqual(['alpha', 'beta', 'zeta'])
@@ -538,7 +566,7 @@ describe('Tracks.vue', () => {
       serve({ '/api/config': configView({ tracks: { build: { required: ['alpha'], max_cycles: 5 } } }) })
       const { Tracks } = await boot()
       const wrapper = mount(Tracks)
-      await vi.waitFor(() => expect(wrapper.find('.track-editor').exists()).toBe(true))
+      await readyList(wrapper)
 
       const root = wrapper.get('#panel-tracks')
       expect(root.classes()).toContain('panel')
@@ -580,7 +608,7 @@ describe('Tracks.vue', () => {
       const { Tracks, Config, socket } = await boot()
       const tracksWrapper = mount(Tracks)
       const configWrapper = mount(Config)
-      await vi.waitFor(() => expect(tracksWrapper.find('.track-editor').exists()).toBe(true))
+      await readyList(tracksWrapper)
       await vi.waitFor(() => expect(control(configWrapper, 'config-max-parallel-input').disabled).toBe(false))
 
       // Both tabs start dirty against the same revision — the race the split
@@ -631,6 +659,82 @@ describe('Tracks.vue', () => {
    * into the child's own internals.
    */
   describe('the graph view (TrackGraph.vue)', () => {
+    it('opens on the graph, so the reader sees it without finding a toggle first', async () => {
+      serve({ '/api/config': configView({ tracks: { build: { required: ['builder'], max_cycles: 5 } } }) })
+      const { Tracks } = await boot()
+      const wrapper = mount(Tracks)
+      await vi.waitFor(() => expect(wrapper.find('.track-graph').exists()).toBe(true))
+
+      // Not merely "the graph is present": the list is the thing that used to
+      // be here, and its absence is what proves the default moved rather than
+      // both views rendering at once.
+      expect(wrapper.find('#config-track-editors').exists()).toBe(false)
+    })
+
+    it('names the two views as tabs, with the graph selected first', async () => {
+      serve({ '/api/config': configView({ tracks: { build: { required: ['builder'], max_cycles: 5 } } }) })
+      const { Tracks } = await boot()
+      const wrapper = mount(Tracks)
+      await ready(wrapper)
+
+      const strip = wrapper.get('.track-view-toggle')
+      expect(strip.attributes('role')).toBe('tablist')
+      // Source order is the reading order a screen reader and a Tab press
+      // both follow, so "graph first" is an assertion about the markup, not
+      // only about which one is selected.
+      expect(strip.findAll('[role="tab"]').map((tab) => tab.attributes('id'))).toEqual([
+        'tracks-view-graph',
+        'tracks-view-list',
+      ])
+      expect(wrapper.get('#tracks-view-graph').attributes('aria-selected')).toBe('true')
+      expect(wrapper.get('#tracks-view-list').attributes('aria-selected')).toBe('false')
+      // Roving tabindex: one stop in the tab order, not two.
+      expect(wrapper.get('#tracks-view-graph').attributes('tabindex')).toBe('0')
+      expect(wrapper.get('#tracks-view-list').attributes('tabindex')).toBe('-1')
+      expect(wrapper.get('#tracks-graph-view').attributes('role')).toBe('tabpanel')
+      expect(wrapper.get('#tracks-graph-view').attributes('aria-labelledby')).toBe('tracks-view-graph')
+      // aria-controls follows whichever panel is actually mounted — only one
+      // is, so the unselected tab must not point at an absent id.
+      expect(wrapper.get('#tracks-view-graph').attributes('aria-controls')).toBe('tracks-graph-view')
+      expect(wrapper.get('#tracks-view-list').attributes('aria-controls')).toBeUndefined()
+
+      await wrapper.get('#tracks-view-list').trigger('click')
+      await nextTick()
+      expect(wrapper.get('#tracks-view-list').attributes('aria-controls')).toBe('config-track-editors')
+      expect(wrapper.get('#tracks-view-graph').attributes('aria-controls')).toBeUndefined()
+    })
+
+    it('moves between the two tabs on an arrow key, in whichever direction the page runs', async () => {
+      serve({ '/api/config': configView({ tracks: { build: { required: ['builder'], max_cycles: 5 } } }) })
+      const { Tracks } = await boot()
+      const wrapper = mount(Tracks, { attachTo: document.body })
+      try {
+        await ready(wrapper)
+
+        // ltr: the list sits after the graph, so ArrowRight reaches it.
+        document.documentElement.dir = 'ltr'
+        await wrapper.get('.track-view-toggle').trigger('keydown', { key: 'ArrowRight' })
+        await nextTick()
+        expect(wrapper.get('#tracks-view-list').attributes('aria-selected')).toBe('true')
+        expect(wrapper.find('#config-track-editors').exists()).toBe(true)
+        expect(document.activeElement?.id).toBe('tracks-view-list')
+
+        // rtl: the same physical key now walks the other way, because the strip
+        // is laid out the other way. This is the whole reason the handler reads
+        // `dir` instead of hard-coding a direction — the page ships in Arabic.
+        document.documentElement.dir = 'rtl'
+        await wrapper.get('.track-view-toggle').trigger('keydown', { key: 'ArrowRight' })
+        await nextTick()
+        expect(wrapper.get('#tracks-view-graph').attributes('aria-selected')).toBe('true')
+      } finally {
+        // Always restored, even when an assertion above throws — otherwise a
+        // failing run leaves the document `rtl` with a mount still attached
+        // to `document.body` for whichever test runs next.
+        document.documentElement.dir = 'ltr'
+        wrapper.unmount()
+      }
+    })
+
     it('draws one node per agent in the track, in required, available, closing order', async () => {
       serve({
         '/api/config': configView({
@@ -639,10 +743,7 @@ describe('Tracks.vue', () => {
       })
       const { Tracks } = await boot()
       const wrapper = mount(Tracks)
-      await vi.waitFor(() => expect(wrapper.find('.track-editor').exists()).toBe(true))
-
-      await wrapper.get('#tracks-view-graph').trigger('click')
-      await nextTick()
+      await ready(wrapper)
       expect(wrapper.findAll('[data-graph-node]').map((node) => node.attributes('data-graph-node'))).toEqual([
         'builder',
         'critic',
@@ -657,9 +758,7 @@ describe('Tracks.vue', () => {
       })
       const { Tracks, TrackGraph } = await boot()
       const wrapper = mount(Tracks)
-      await vi.waitFor(() => expect(wrapper.find('.track-editor').exists()).toBe(true))
-      await wrapper.get('#tracks-view-graph').trigger('click')
-      await nextTick()
+      await ready(wrapper)
 
       expect(control(wrapper, 'tracks-save').disabled).toBe(true)
       await wrapper.findComponent(TrackGraph).vm.$emit('connect', { source: 'builder', target: 'critic' })
@@ -677,9 +776,7 @@ describe('Tracks.vue', () => {
       })
       const { Tracks, TrackGraph } = await boot()
       const wrapper = mount(Tracks)
-      await vi.waitFor(() => expect(wrapper.find('.track-editor').exists()).toBe(true))
-      await wrapper.get('#tracks-view-graph').trigger('click')
-      await nextTick()
+      await ready(wrapper)
 
       // `critic` already runs after `builder` — closing the loop the other way.
       await wrapper.findComponent(TrackGraph).vm.$emit('connect', { source: 'critic', target: 'builder' })
@@ -694,15 +791,18 @@ describe('Tracks.vue', () => {
       serve({ '/api/config': configView({ tracks: { build: { required: ['builder'], max_cycles: 5 } } }) })
       const { Tracks } = await boot()
       const wrapper = mount(Tracks)
-      await vi.waitFor(() => expect(wrapper.find('.track-editor').exists()).toBe(true))
+      await ready(wrapper)
 
-      await wrapper.get('#tracks-view-graph').trigger('click')
-      await nextTick()
       expect(wrapper.find('#config-track-editors').exists()).toBe(false)
 
       await wrapper.get('#tracks-view-list').trigger('click')
       await nextTick()
       expect(wrapper.find('#config-track-editors').exists()).toBe(true)
+
+      // And back — the graph is not a one-way door either.
+      await wrapper.get('#tracks-view-graph').trigger('click')
+      await nextTick()
+      expect(wrapper.find('.track-graph').exists()).toBe(true)
     })
   })
 
@@ -724,7 +824,7 @@ describe('Tracks.vue', () => {
         sent.push(JSON.parse(data))
       }
       const wrapper = mount(Tracks)
-      await vi.waitFor(() => expect(wrapper.find('.track-editor').exists()).toBe(true))
+      await readyList(wrapper)
       return wrapper
     }
 

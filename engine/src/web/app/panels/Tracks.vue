@@ -30,7 +30,7 @@
  * collector — does not exist here: `draft` below is already the object
  * `collectTrackChanges` reads, because Vue's own reactivity is the seam.
  */
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from '../composables/useI18n.js'
 import { useFeed } from '../composables/useFeed.js'
 import { submit } from '../stores/session.js'
@@ -117,22 +117,72 @@ function mutate(change: (model: Draft) => boolean | void): void {
 const agentNames = computed(() => (draft.value === null ? [] : knownAgents(draft.value)))
 
 /**
- * List or graph — a second lens on the same `tracks:` half of the draft, not
+ * Graph or list — a second lens on the same `tracks:` half of the draft, not
  * a second editor. Switching does not touch `draft` itself, only which
  * component reads it, which is why `#config-track-editors` reappears intact
- * the moment this flips back to `'list'`: nothing here ever unmounts the
- * list's own state, `Tracks.vue`'s draft it reads.
+ * the moment this flips to `'list'`: nothing here ever unmounts the list's
+ * own state, `Tracks.vue`'s draft it reads.
  *
- * The graph has no keyboard path — a drag canvas cannot get one the way a
- * button or a combobox can — so the list stays the complete editor and the
- * graph stays a second, drag-driven way to write the same edges, never a
- * replacement for it. See `discipline.test.ts`'s own "keyboard before
- * pointer" describe block.
+ * The panel opens on the graph because a track *is* a graph — layers, order
+ * edges and a gate — and a reader answering "what shape is this track" gets
+ * it in one look rather than from three chip rows. The graph itself still
+ * has no keyboard path; a drag canvas cannot get one the way a button or a
+ * combobox can. What makes that acceptable as a default is the tablist
+ * below: it is the first focusable control in this region, it carries
+ * `role="tab"` so a screen reader announces both views, and one arrow key
+ * from it reaches the list, which remains the complete editor. See
+ * `discipline.test.ts`'s own "keyboard before pointer" describe block.
+ *
+ * Held in the component, not the hash: `App.vue` keeps every panel under
+ * `<KeepAlive>`, so the reader's choice survives a trip through another tab
+ * without a router entry that would make "which lens" as linkable as "which
+ * tab", which it is not.
  */
-const trackView = ref<'list' | 'graph'>('list')
+const trackView = ref<'graph' | 'list'>('graph')
+const viewToggleEl = ref<HTMLElement | null>(null)
 function setView(next: typeof trackView.value): void {
   trackView.value = next
   graphRefusal.value = null
+}
+
+const VIEWS = ['graph', 'list'] as const
+
+/**
+ * Arrow, Home and End across the two view tabs — the pattern `Stories.vue`'s
+ * own `onStripKeydown` already uses for the work-tab strip, on a fixed pair
+ * instead of a live list.
+ *
+ * The arrows are read through `dir` rather than mapped to fixed views: the
+ * strip is laid out by the document's direction, so in Arabic the tab that
+ * is physically to the right of the graph is the one *before* it. A handler
+ * that hard-coded `ArrowRight -> list` would move the selection away from
+ * the key the reader pressed on half the locales this page ships in.
+ *
+ * Activation follows focus, as it does in `Stories.vue`: with two panels and
+ * no fetch behind either, there is nothing for a deferred activation to
+ * save.
+ */
+function onViewKeydown(event: KeyboardEvent): void {
+  const rtl = document.documentElement.dir === 'rtl'
+  const forward = rtl ? 'ArrowLeft' : 'ArrowRight'
+  const back = rtl ? 'ArrowRight' : 'ArrowLeft'
+  const at = VIEWS.indexOf(trackView.value)
+
+  let next: (typeof VIEWS)[number] | undefined
+  if (event.key === forward) next = VIEWS[(at + 1) % VIEWS.length]
+  else if (event.key === back) next = VIEWS[(at - 1 + VIEWS.length) % VIEWS.length]
+  else if (event.key === 'Home') next = VIEWS[0]
+  else if (event.key === 'End') next = VIEWS[VIEWS.length - 1]
+  else return
+
+  event.preventDefault()
+  if (next === undefined) return
+  const target = next
+  setView(target)
+  void nextTick(() => {
+    const node = viewToggleEl.value?.querySelector(`#tracks-view-${target}`)
+    if (node instanceof HTMLElement) node.focus()
+  })
 }
 
 // `Draft['tracks']` indexes as `Track | undefined` under
@@ -299,18 +349,55 @@ function reset(): void {
            and `TrackEditors.vue`'s own comments. -->
       <SpecialistEditor :draft="draft" :agent-names="agentNames" :enabled="enabled" :mutate="mutate" />
 
-      <!-- List and graph both read the same draft; switching never unmounts
-           it, so `#config-track-editors` is exactly as complete after a
-           round trip through the graph as it was before — see `view`'s own
-           comment. -->
-      <div class="track-view-toggle" role="group" :aria-label="t('config.trackView')">
-        <button type="button" id="tracks-view-list" :aria-pressed="trackView === 'list'" @click="setView('list')">{{ t('config.viewList') }}</button>
-        <button type="button" id="tracks-view-graph" :aria-pressed="trackView === 'graph'" @click="setView('graph')">{{ t('config.viewGraph') }}</button>
+      <!-- A tablist, not two toggle buttons: these switch which of two
+           panels is rendered, which is what `role="tab"` means and what
+           `aria-pressed` does not. Graph first, because it is the view the
+           panel opens in and source order is what both a Tab press and a
+           screen reader follow. `aria-controls` is conditional, not static:
+           only one panel is ever mounted (`v-if`/`v-else` below, not a
+           visibility toggle), so the unselected tab omits the attribute
+           rather than pointing at an id that is briefly absent from the
+           document. List and graph both read the same draft, and switching
+           never unmounts either's state — `TrackEditors.vue` owns
+           `#config-track-editors` and keeps it exactly as complete on a
+           round trip back from the graph as it was on the way in; see
+           `trackView`'s own comment for why the graph is what a reader lands
+           on first. -->
+      <div class="track-view-toggle" ref="viewToggleEl" role="tablist" :aria-label="t('config.trackView')" @keydown="onViewKeydown">
+        <button
+          type="button"
+          id="tracks-view-graph"
+          role="tab"
+          :aria-selected="trackView === 'graph'"
+          :aria-controls="trackView === 'graph' ? 'tracks-graph-view' : undefined"
+          :tabindex="trackView === 'graph' ? 0 : -1"
+          @click="setView('graph')"
+        >
+          {{ t('config.viewGraph') }}
+        </button>
+        <button
+          type="button"
+          id="tracks-view-list"
+          role="tab"
+          :aria-selected="trackView === 'list'"
+          :aria-controls="trackView === 'list' ? 'config-track-editors' : undefined"
+          :tabindex="trackView === 'list' ? 0 : -1"
+          @click="setView('list')"
+        >
+          {{ t('config.viewList') }}
+        </button>
       </div>
 
       <TrackEditors v-if="trackView === 'list'" :draft="draft" :baseline="baseline" :raw-text="rawText" :enabled="enabled" :mutate="mutate" />
 
-      <section v-else id="tracks-graph-view" class="track-graphs" :aria-label="t('config.viewGraph')">
+      <section
+        v-else
+        id="tracks-graph-view"
+        class="track-graphs"
+        role="tabpanel"
+        tabindex="0"
+        aria-labelledby="tracks-view-graph"
+      >
         <!-- Deliberately no live-region role or aria-live attribute here —
              #tracks-editor-state above (this same panel) is a banner
              without one too, and the page already keeps exactly two live
