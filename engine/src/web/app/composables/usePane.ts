@@ -6,8 +6,9 @@
  * is what clips xterm's measuring span, which it parks at `left:-9999em` — in an
  * RTL document that span otherwise gives the entire page a horizontal scrollbar.
  */
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { read as prefs, write as remember } from '../lib/local.js'
+import { activeJob, onOutput } from '../stores/session.js'
 
 export type PaneMode = 'collapsed' | 'docked' | 'full'
 const ORDER: readonly PaneMode[] = ['collapsed', 'docked', 'full']
@@ -16,6 +17,30 @@ const mode = ref<PaneMode>(prefs().pane)
 const view = ref<'session' | 'queue'>('session')
 /** True once the reader has chosen a height themselves; nothing may override it after. */
 let chosen = false
+
+/**
+ * The job whose transcript is on screen. Not always the running one — a
+ * finished transcript is worth reading, and the queue must not yank the
+ * reader out of it the moment the next job starts.
+ *
+ * Mirrors `ui/pane.js`'s own module-level `shown`, and — separately —
+ * `Terminal.vue`'s private copy of the same rule: that component owns what
+ * xterm is actually shown and must not be touched (its scrollback, selection
+ * and pty geometry are the one thing the server cannot replay), so this is a
+ * second tracker rather than a shared one. Both watch the identical inputs
+ * (`activeJob`, and a `'replace'` output frame) with the identical rule, in
+ * the same reactive flush, so the two never disagree.
+ */
+const shown = ref<string | null>(null)
+
+watch(activeJob, (next, previous) => {
+  if (next !== null && next !== previous && (shown.value === previous || shown.value === null)) {
+    shown.value = next
+  }
+})
+onOutput((frame) => {
+  if (frame.kind === 'replace') shown.value = frame.jobId
+})
 
 function apply(next: PaneMode): void {
   mode.value = next
@@ -53,6 +78,7 @@ export function usePane() {
   return {
     mode,
     view,
+    shown,
     set(next: PaneMode) {
       chosen = true
       apply(next)
@@ -60,6 +86,11 @@ export function usePane() {
     cycle() {
       chosen = true
       apply(ORDER[(ORDER.indexOf(mode.value) + 1) % ORDER.length] ?? 'docked')
+    },
+    /** Collapsed <-> docked. `pane.fullscreen`'s button; distinct from `cycle()`'s three-way rotation. */
+    toggleFull() {
+      chosen = true
+      apply(mode.value === 'full' ? 'docked' : 'full')
     },
     /** Work opens the pane it needs — but never over a height the reader set. */
     follow() {

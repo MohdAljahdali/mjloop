@@ -8,8 +8,8 @@ import { ready } from './lib/stories.js'
 import Banners from './components/Banners.vue'
 import Bdi from './components/Bdi.vue'
 import LanguagePicker from './components/LanguagePicker.vue'
+import Pane from './components/Pane.vue'
 import Rail from './components/Rail.vue'
-import Terminal from './components/Terminal.vue'
 import Toasts from './components/Toasts.vue'
 import { bootPane } from './composables/usePane.js'
 
@@ -83,18 +83,7 @@ const highCount = computed(() => snapshot.value?.state.findings.high ?? 0)
   <!-- Panels arrive in the second plan; the shell must build and ship first. -->
   <main class="panel"></main>
 
-  <!-- The rest of the pane — view tabs, the queue, the command form — arrives
-       with the components that drive them; the terminal is the one piece that
-       must never be inside a re-rendered container, so it mounts here alone.
-       `.pane-body` still has to wrap it: `body[data-pane="collapsed"]
-       .pane-body { display: none }` is what hides the terminal on the boot
-       state, and without this wrapper an empty terminal box is on screen from
-       the first paint. -->
-  <section class="pane">
-    <div class="pane-body">
-      <Terminal />
-    </div>
-  </section>
+  <Pane />
 
   <Toasts />
 </template>
