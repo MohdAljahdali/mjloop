@@ -93,6 +93,21 @@ describe('Banners', () => {
     const wrapper = mount(Banners, { props: { snapshot: snap, online: true } })
     expect(wrapper.find('.banner.note').exists()).toBe(false)
   })
+
+  it('still shows the offline banner with no snapshot at all — the server down, a bad token, or a refused upgrade at load', () => {
+    // `App.vue` used to gate the whole `<Banners>` component behind
+    // `v-if="snapshot !== null"`, so this is exactly the state that made the
+    // banner unreachable: no snapshot ever arrived, and the reader was left
+    // looking at a bare header forever. `app.js:273`'s `onStatus` drives this
+    // banner off socket status alone, independent of any snapshot.
+    const wrapper = mount(Banners, { props: { snapshot: null, online: false } })
+    expect(wrapper.find('.banner.offline').exists()).toBe(true)
+  })
+
+  it('shows nothing else with no snapshot, since stale and design-system both need one', () => {
+    const wrapper = mount(Banners, { props: { snapshot: null, online: true } })
+    expect(wrapper.findAll('.banner')).toHaveLength(0)
+  })
 })
 
 describe('App', () => {
@@ -162,5 +177,100 @@ describe('App', () => {
     const highBadge = wrapper.find('#tab-run .nav-count')
     expect(highBadge.exists()).toBe(true)
     expect(highBadge.classes()).toContain('warnish')
+  })
+
+  it('puts the notice toggle inside .rail, not .brand — `index.html:69-96`\'s position', async () => {
+    // Finding 5: `LanguagePicker`'s `margin-inline-start: auto` pushes
+    // anything after it in `.brand` to the far right, so a `.brand`-hosted
+    // toggle visibly sits on a different row than the shipped page. This is
+    // the structural assertion no `.text()` check could have caught.
+    vi.resetModules()
+    const freshI18n = await import('../../src/web/app/lib/i18n.ts')
+    freshI18n.installForTest({ code: 'en', strings: english })
+    const store = await import('../../src/web/app/stores/session.ts')
+    const { default: App } = await import('../../src/web/app/App.vue')
+
+    class FakeSocket {
+      static last: FakeSocket | null = null
+      readyState = 1
+      listeners = new Map<string, (event: unknown) => void>()
+      constructor(public url: string) {
+        FakeSocket.last = this
+      }
+      addEventListener(type: string, fn: (event: unknown) => void) {
+        this.listeners.set(type, fn)
+      }
+      send(): void {}
+      deliver(message: unknown): void {
+        this.listeners.get('message')?.({ data: JSON.stringify(message) })
+      }
+    }
+    store.connect({ token: 'tok', socketFactory: (url) => new FakeSocket(url) as unknown as WebSocket })
+    FakeSocket.last?.deliver({ type: 'snapshot', snapshot: emptySnapshot() })
+
+    const wrapper = mount(App)
+    expect(wrapper.find('.rail #notice-toggle').exists()).toBe(true)
+    expect(wrapper.find('.brand #notice-toggle').exists()).toBe(false)
+  })
+})
+
+describe('NoticeFeed', () => {
+  // `notifications.js:130-131`: the badge counts *unread* notices and resets
+  // to zero when the panel is opened — not the total feed length forever.
+  async function freshWithNotices(...messages: { type: 'notice'; message: { code: string } }[]) {
+    vi.resetModules()
+    const freshI18n = await import('../../src/web/app/lib/i18n.ts')
+    freshI18n.installForTest({ code: 'en', strings: english })
+    const store = await import('../../src/web/app/stores/session.ts')
+    const { default: NoticeFeed } = await import('../../src/web/app/components/NoticeFeed.vue')
+
+    class FakeSocket {
+      static last: FakeSocket | null = null
+      readyState = 1
+      listeners = new Map<string, (event: unknown) => void>()
+      constructor(public url: string) {
+        FakeSocket.last = this
+      }
+      addEventListener(type: string, fn: (event: unknown) => void) {
+        this.listeners.set(type, fn)
+      }
+      send(): void {}
+      deliver(message: unknown): void {
+        this.listeners.get('message')?.({ data: JSON.stringify(message) })
+      }
+    }
+    store.connect({ token: 'tok', socketFactory: (url) => new FakeSocket(url) as unknown as WebSocket })
+
+    const wrapper = mount(NoticeFeed)
+    for (const message of messages) FakeSocket.last?.deliver(message)
+    await wrapper.vm.$nextTick()
+    return wrapper
+  }
+
+  it('badges the unread count, in digits routed through t(), not the raw feed length', async () => {
+    const wrapper = await freshWithNotices(
+      { type: 'notice', message: { code: 'write.ok.halt' } },
+      { type: 'notice', message: { code: 'write.ok.halt' } },
+    )
+    const badge = wrapper.find('.nav-count')
+    expect(badge.exists()).toBe(true)
+    expect(badge.text()).toBe('2')
+  })
+
+  it('resets the unread count to zero when the panel is opened', async () => {
+    const wrapper = await freshWithNotices(
+      { type: 'notice', message: { code: 'write.ok.halt' } },
+      { type: 'notice', message: { code: 'write.ok.halt' } },
+    )
+    await wrapper.get('#notice-toggle').trigger('click')
+    expect(wrapper.find('.nav-count').exists()).toBe(false)
+
+    // The full feed is still there — only the unread count reset, not the log.
+    expect(wrapper.findAll('.notice-row')).toHaveLength(2)
+  })
+
+  it('sets the toggle\'s title from the notice.unreadCount plural, keyed the same as tabs.readyCount and tabs.highCount', async () => {
+    const wrapper = await freshWithNotices({ type: 'notice', message: { code: 'write.ok.halt' } })
+    expect(wrapper.get('#notice-toggle').attributes('title')).toBe(english['notice.unreadCount.one'].replace('{count}', '1'))
   })
 })

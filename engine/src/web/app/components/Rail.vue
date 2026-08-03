@@ -17,6 +17,7 @@ import { computed } from 'vue'
 import type { Snapshot } from '../../protocol.js'
 import { useI18n } from '../composables/useI18n.js'
 import Bdi from './Bdi.vue'
+import NoticeFeed from './NoticeFeed.vue'
 
 const props = defineProps<{ snapshot: Snapshot }>()
 const { t } = useI18n()
@@ -66,5 +67,12 @@ const reproduction = computed(() => state.value.reproduction)
       </span>
       <span v-if="reproduction !== null" class="bit">{{ t(reproduction.proven ? 'rail.gate.open' : 'rail.gate.shut') }}</span>
     </span>
+    <!-- `index.html:69-96`: the notice toggle and its panel are the rail's own
+         trailing controls, siblings of the detail block, not the brand line's.
+         `LanguagePicker`'s `margin-inline-start: auto` (`10-layout.css:76`)
+         pushes anything after it in `.brand` to the far right — putting this
+         button there visibly moves it to a different row than the shipped
+         page, at both sides of the 900px breakpoint. -->
+    <NoticeFeed />
   </div>
 </template>

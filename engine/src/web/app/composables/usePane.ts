@@ -24,17 +24,28 @@ function apply(next: PaneMode): void {
 }
 
 /**
- * Stamps `body.dataset.pane` with the mode already read from storage.
+ * Reads storage and stamps `body.dataset.pane` with the mode it holds.
  *
- * `index.html`'s static markup opens on `data-pane="collapsed"`, and nothing
- * else writes the attribute until a reader acts — so a reader who left the
- * pane docked reloads to a page that looks collapsed until they touch it.
- * `ui/pane.js`'s `mountPane()` closes the same gap by opening with
- * `setPane(prefs().pane)`. Distinct from `set()`: applying a remembered
- * height at boot is not the reader choosing one just now, so `chosen` stays
- * false and `follow()` can still open a collapsed pane once work starts.
+ * `index.html`'s static markup opens on `data-pane="docked"` (see the comment
+ * there), and nothing else writes the attribute until a reader acts — so a
+ * reader who left the pane collapsed reloads to a page that looks docked
+ * until they touch it. `ui/pane.js`'s `mountPane()` closes the same gap by
+ * opening with `setPane(prefs().pane)`.
+ *
+ * This must re-read storage rather than trust `mode`'s module-load value:
+ * `main.ts` imports `App.vue` — and with it `usePane.ts`, whose module body
+ * runs `ref(prefs().pane)` immediately — *before* `installStorage()` runs.
+ * At that point `local.ts`'s `store` is still null, `safeGet()` returns null,
+ * and `mode` would be pinned to the `'collapsed'` default forever. Reading
+ * again here, after storage is installed and once the terminal has mounted
+ * (`App.vue` calls this from `onMounted`), is what actually restores it.
+ *
+ * Distinct from `set()`: applying a remembered height at boot is not the
+ * reader choosing one just now, so `chosen` stays false and `follow()` can
+ * still open a collapsed pane once work starts.
  */
 export function bootPane(): void {
+  mode.value = prefs().pane
   document.body.dataset['pane'] = mode.value
 }
 

@@ -8,10 +8,22 @@
     <!-- Inline so the page pulls in nothing external and asks for no favicon.ico. -->
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='6' fill='none' stroke='%2358a6ff' stroke-width='2'/%3E%3C/svg%3E" />
     <link rel="stylesheet" href="vendor/xterm.css" />
-    <script type="module" crossorigin src="./assets/index-BJ3i9huU.js"></script>
+    <script type="module" crossorigin src="./assets/index-hidLxZnl.js"></script>
     <link rel="stylesheet" crossorigin href="./assets/style-Ov0aLyfc.css">
   </head>
-  <body data-pane="collapsed">
+  <!--
+    `data-pane` opens on "docked", not the remembered default of "collapsed":
+    xterm measures cell geometry at `open()`, and a `display:none` box (which
+    is what `collapsed` is) gives it nothing to measure. `App.vue` mounts the
+    terminal into this laid-out box first and only then calls `bootPane()`
+    (from `onMounted`, so it runs after the child terminal's own `onMounted`)
+    to apply whatever mode storage actually holds — matching `public/index.html`'s
+    own order (`app.js`'s `mountTerminal()` before its `mountPane()`). Setting
+    this attribute to "collapsed" "fixes" the boot state for a reader who
+    left the pane collapsed, but breaks it for everyone else, permanently,
+    by opening xterm into a box with no layout.
+  -->
+  <body data-pane="docked">
     <div id="app"></div>
     <script src="vendor/xterm.js"></script>
     <script src="vendor/addon-fit.js"></script>

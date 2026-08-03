@@ -11,17 +11,45 @@ import type { Message } from '../../protocol.js'
 export type ToastAction = { code: string; run: () => void }
 export type Toast = { id: number; message: Message; action: ToastAction | null }
 
+/**
+ * How long an actionless toast stays. `public/ui/toasts.js:16,56` — long
+ * enough to read a sentence, short enough not to stack.
+ */
+const LIFETIME_MS = 8000
+
 const held = ref<Toast[]>([])
 let counter = 0
+/** Pending self-removal timers, keyed on toast id — cancelled on manual dismiss. */
+const timers = new Map<number, ReturnType<typeof setTimeout>>()
+
+function remove(id: number): void {
+  const timer = timers.get(id)
+  if (timer !== undefined) {
+    clearTimeout(timer)
+    timers.delete(id)
+  }
+  held.value = held.value.filter((toast) => toast.id !== id)
+}
 
 export function useToasts() {
   return {
     toasts: readonly(held) as Readonly<typeof held>,
     notify(message: Message, action?: ToastAction) {
-      held.value = [...held.value, { id: ++counter, message, action: action ?? null }]
+      const id = ++counter
+      held.value = [...held.value, { id, message, action: action ?? null }]
+      // A toast that only *says* something goes away on its own. One that
+      // offers an action stays until it is used or dismissed: an Undo the
+      // reader has to notice, read and reach for in eight seconds is an
+      // Undo that is not really there — `toasts.js:53-56`'s own reasoning.
+      if (action === undefined) {
+        timers.set(
+          id,
+          setTimeout(() => remove(id), LIFETIME_MS),
+        )
+      }
     },
     dismiss(id: number) {
-      held.value = held.value.filter((toast) => toast.id !== id)
+      remove(id)
     },
   }
 }

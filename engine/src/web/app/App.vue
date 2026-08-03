@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount } from 'vue'
+import { computed, onBeforeUnmount, onMounted } from 'vue'
 import { installAnnouncer, online, onNotice, snapshot } from './stores/session.js'
 import { useI18n } from './composables/useI18n.js'
 import { startTabs, useTabs } from './composables/useTabs.js'
@@ -8,7 +8,6 @@ import { ready } from './lib/stories.js'
 import Banners from './components/Banners.vue'
 import Bdi from './components/Bdi.vue'
 import LanguagePicker from './components/LanguagePicker.vue'
-import NoticeFeed from './components/NoticeFeed.vue'
 import Rail from './components/Rail.vue'
 import Terminal from './components/Terminal.vue'
 import Toasts from './components/Toasts.vue'
@@ -17,9 +16,15 @@ import { bootPane } from './composables/usePane.js'
 const { t, tn } = useI18n()
 const { tabs, active, show } = useTabs()
 startTabs()
-// Applies the pane mode already read from storage — the static markup opens
-// collapsed, and nothing else stamps `body.dataset.pane` before this runs.
-bootPane()
+// Applies the pane mode already read from storage, but only once the
+// terminal underneath it has mounted into a laid-out box — a child's
+// `onMounted` fires before its parent's, so calling this from here rather
+// than from setup reproduces `app.js`'s `mountTerminal()` then `mountPane()`
+// order. See `index.html`'s comment on `data-pane="docked"` for why that
+// order matters.
+onMounted(() => {
+  bootPane()
+})
 
 const { notify } = useToasts()
 installAnnouncer(notify)
@@ -42,9 +47,12 @@ const highCount = computed(() => snapshot.value?.state.findings.high ?? 0)
       <h1>{{ t('app.title') }}</h1>
       <span class="project"><Bdi :value="snapshot?.project ?? ''" /></span>
       <LanguagePicker />
-      <NoticeFeed />
     </div>
-    <Banners v-if="snapshot !== null" :snapshot="snapshot" :online="online" />
+    <!-- Unconditional: the offline banner is the one that matters most when
+         the server never sent a snapshot at all — down at load, a bad token,
+         a refused upgrade. `snapshot` is nullable on `Banners` for exactly
+         that; only the banners that need snapshot data gate on having one. -->
+    <Banners :snapshot="snapshot" :online="online" />
     <Rail v-if="snapshot !== null" :snapshot="snapshot" />
   </header>
 
