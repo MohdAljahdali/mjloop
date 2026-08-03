@@ -241,12 +241,6 @@ function save(): void {
   // out-of-range required box sit on screen with Save enabled, silently
   // sending whatever `onCyclesChange` last accepted rather than the value
   // the box currently (and visibly) shows.
-  // `TrackEditor.vue`'s `max_cycles` box is `required min="1"` — the one
-  // native-validated control this half of the document carries. `Config.vue`
-  // gates on this same check; a form with no such gate lets an empty or
-  // out-of-range required box sit on screen with Save enabled, silently
-  // sending whatever `onCyclesChange` last accepted rather than the value
-  // the box currently (and visibly) shows.
   if (formEl.value !== null && !formEl.value.reportValidity()) return
   if (draft.value === null) return
   const changes = collectTrackChanges(draft.value, baseline.value)

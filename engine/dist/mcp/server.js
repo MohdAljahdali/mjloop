@@ -30982,6 +30982,7 @@ This project uses the \`mjloop\` plugin. Execution state lives in \`.mjloop/\`.
 - \`/mjloop:plan <idea>\` \u2014 turn an idea into an approved plan broken into stories
 - \`/mjloop:build <what to build | P001-S02 | --next>\` \u2014 multi-cycle build, optionally against a story
 - \`/mjloop:fix <problem>\` \u2014 reproduce a defect, find the root cause, fix it
+- \`/mjloop:run <track> <goal>\` \u2014 run any track by name, including one created in the cockpit's Tracks tab
 - \`/mjloop:status\` \u2014 current track, cycle, and latest evidence
 - \`/mjloop:stop [reason]\` \u2014 halt the run and write a report
 - \`/mjloop:resume\` \u2014 continue a run that was interrupted

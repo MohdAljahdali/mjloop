@@ -102,8 +102,15 @@ export async function listAgents(
   return { agents, unreadable }
 }
 
+// Routed through `agentFile` so it is genuinely true, not just documented,
+// that `agentFile` is the one place a name is ever joined onto a path — this
+// used to join it here instead, with no `AgentNameSchema` check of its own.
+// A name that fails the schema now throws `AgentWriteError('invalid')`, same
+// as every other caller of `agentFile`: an invalid name is a caller bug, not
+// an absent file, and should not be answered the same way as one. A name
+// that parses but has no file on disk still answers `null`, unchanged.
 export async function readAgent(projectDir: string, name: string): Promise<AgentDoc | null> {
-  const file = path.join(projectAgentsDir(projectDir), `${name}.md`)
+  const file = agentFile(projectDir, name)
   let raw: string
   try {
     raw = await fs.readFile(file, 'utf8')

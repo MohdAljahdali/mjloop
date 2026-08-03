@@ -19357,7 +19357,7 @@ async function listAgents(dir, source) {
   return { agents, unreadable };
 }
 async function readAgent(projectDir, name) {
-  const file = path16.join(projectAgentsDir(projectDir), `${name}.md`);
+  const file = agentFile(projectDir, name);
   let raw;
   try {
     raw = await fs17.readFile(file, "utf8");

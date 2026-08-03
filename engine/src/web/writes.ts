@@ -132,7 +132,7 @@ import type { WebCode } from './codes.js'
  * `.mjloop/` at all — into `.claude/agents/`. That is confined at exactly one
  * seam: the name arrives typed as `AgentNameSchema` (`schemas/contract.ts`),
  * which admits only `[A-Za-z0-9_-]`, and `agent-store.ts`'s `agentFile`
- * (`agent-store.ts:143-148`) is the only place that name is ever joined onto
+ * (`agent-store.ts:150-155`) is the only place that name is ever joined onto
  * a path, and only onto the agents directory — `.` and `/` sit outside the
  * schema's character class, so `..` and `a/b` can never reach it. A project
  * agent may also shadow a plugin agent of the same name; `reservedAgentNames`

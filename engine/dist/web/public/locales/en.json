@@ -688,7 +688,7 @@
   "write.refused.agent.shadow": "That name shadows a plugin agent — pick another.",
   "write.refused.agent.inUse": "A track still names this agent. Edit the track first.",
   "write.refused.running": "A run is active right now — agents cannot be edited until it ends.",
-  "write.ok.agent": "Agent saved.",
+  "write.ok.agent": "Agent change applied.",
   "write.stale.skill": "That skill's acceptance moved in the meantime — nothing was changed.",
   "write.ok.skill": "Skill agents updated.",
   "write.undo": "Undo",

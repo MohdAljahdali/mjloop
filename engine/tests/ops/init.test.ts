@@ -114,6 +114,7 @@ describe('initLoop', () => {
       '/mjloop:plan',
       '/mjloop:build',
       '/mjloop:fix',
+      '/mjloop:run',
       '/mjloop:status',
       '/mjloop:stop',
       // The orchestration settings are only reachable through a command, and

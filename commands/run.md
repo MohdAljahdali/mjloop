@@ -7,10 +7,9 @@ Run the track named in the first word of $ARGUMENTS, for the rest of it: $ARGUME
 
 ## 1. Check the track exists
 
-Call `mjloop_state_get` and read the config it reports. If the first word is not a key
-under `tracks:`, **stop and say so**, listing the tracks that do exist. Do not guess at
-the nearest name: running the wrong track spends a whole run producing the wrong kind of
-work.
+Read `.mjloop/config.yaml`. If the first word is not a key under `tracks:`, **stop and say
+so**, listing the tracks that do exist. Do not guess at the nearest name: running the
+wrong track spends a whole run producing the wrong kind of work.
 
 If the first word names one of `edit`, `build`, `fix` or `plan`, say that
 `/mjloop:<name>` is the command for it and carries guidance this one does not — then run
