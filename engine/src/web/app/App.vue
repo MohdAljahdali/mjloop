@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted } from 'vue'
+import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
 import { installAnnouncer, online, onNotice, snapshot } from './stores/session.js'
 import { useI18n } from './composables/useI18n.js'
+import { useSelection } from './composables/useSelection.js'
 import { startTabs, useTabs } from './composables/useTabs.js'
 import { useToasts } from './composables/useToasts.js'
+import { mountPlanDoc } from './lib/plandoc.js'
 import { ready } from './lib/stories.js'
 import Banners from './components/Banners.vue'
 import Bdi from './components/Bdi.vue'
@@ -37,6 +39,30 @@ const { notify } = useToasts()
 installAnnouncer(notify)
 // Server-pushed notices become toasts too; NoticeFeed keeps its own copy.
 onBeforeUnmount(onNotice((message) => notify(message)))
+
+/**
+ * The open plan's document — `PLAN.md`, `REVIEW.md`, the decision, and its
+ * stories' own frontmatter — pumped from here rather than from `Plans.vue`.
+ *
+ * `lib/plandoc.ts`'s own comment says "who pumps it is the caller's problem",
+ * and a panel is the wrong owner: Plans and (later) Stories both read it, a
+ * panel only exists behind `v-if` while its own tab is open, and
+ * `mountPlanDoc()` resets the module's listener set on every call — a second
+ * panel calling it after the first would silently drop the first panel's own
+ * subscription (`plandoc.ts:47-52`'s own warning). `App.vue`'s `setup` runs
+ * once, before either panel is ever instantiated, which is what the ordering
+ * that comment asks for actually requires. Panels only `subscribe()` and
+ * read `value()`.
+ */
+const { activePlan } = useSelection()
+const planDocFeed = mountPlanDoc()
+watch(
+  [snapshot, activePlan],
+  ([current]) => {
+    if (current !== null) planDocFeed.update(current)
+  },
+  { immediate: true },
+)
 
 /**
  * The two navigation counts.

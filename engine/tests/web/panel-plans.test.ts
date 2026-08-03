@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
-import { defineComponent, h, nextTick } from 'vue'
+import { defineComponent, h, nextTick, watch } from 'vue'
 import type { Snapshot } from '../../src/web/protocol.js'
 import type { MemoryView, RunSummary } from '../../src/web/read.js'
 import { emptySnapshot, readLocale } from './helpers/page.js'
@@ -58,9 +58,15 @@ beforeEach(() => {
  * Boots a fresh module graph, seeds storage, connects a `FakeSocket`, and
  * delivers a snapshot — the same order `App.vue`'s own `onMounted` follows.
  *
+ * Also reproduces `App.vue`'s own plan-document pump (`mountPlanDoc()`
+ * driven by `watch([snapshot, activePlan], …)`), since fix round 1 moved that
+ * ownership out of `Plans.vue` — a panel only `subscribe()`s and reads
+ * `value()` now. This has to run before `Plans.vue`'s own module graph is
+ * exercised, the same ordering `plandoc.ts:47-52` requires in production.
+ *
  * @param seed What `mjloop.prefs` already holds — the persisted plan
- *   selection tests need this seeded *before* `Plans.vue`'s module graph
- *   loads, since `openId` is read from it at component setup.
+ *   selection tests need this seeded *before* `useSelection.ts`'s module
+ *   graph loads, since its ref is read from it at first import.
  */
 async function boot(snapshot: Snapshot = emptySnapshot(), seed?: string) {
   const freshI18n = await import('../../src/web/app/lib/i18n.ts')
@@ -71,6 +77,17 @@ async function boot(snapshot: Snapshot = emptySnapshot(), seed?: string) {
   local.installStorage({ getItem: (key) => held.get(key) ?? null, setItem: (key, value) => void held.set(key, value) })
   const store = await import('../../src/web/app/stores/session.ts')
   store.connect({ token: 'tok', socketFactory: (url) => new FakeSocket(url) as unknown as WebSocket })
+  const selection = await import('../../src/web/app/composables/useSelection.ts')
+  const plandoc = await import('../../src/web/app/lib/plandoc.ts')
+  const { activePlan } = selection.useSelection()
+  const docFeed = plandoc.mountPlanDoc()
+  watch(
+    [store.snapshot, activePlan],
+    ([current]) => {
+      if (current !== null) docFeed.update(current)
+    },
+    { immediate: true },
+  )
   const { default: Plans } = await import('../../src/web/app/panels/Plans.vue')
   // Toasts (and the undo action they offer) live in a sibling component in
   // production (`App.vue`) — installed here the same way, so a test can press
@@ -125,7 +142,24 @@ describe('Plans.vue', () => {
 
     expect(wrapper.get('#plans-workspace').attributes('data-detail-open')).toBe('true')
     expect(document.activeElement).toBe(document.getElementById('plan-detail-title'))
+    // The button itself flips too — not only the section it controls.
+    expect(wrapper.get('.plan button').attributes('aria-expanded')).toBe('true')
     wrapper.unmount()
+  })
+
+  it('closes the detail from its own back button, the same as toggling the row closed', async () => {
+    serve({ '/api/plans/P001': planDetail({ id: 'P001' }) })
+    const { Plans } = await boot(
+      emptySnapshot({ plans: [planFixture({ id: 'P001' })] }),
+      JSON.stringify({ activePlan: 'P001' }),
+    )
+    const wrapper = mount(Plans)
+    await vi.waitFor(() => expect(wrapper.get('#plan-detail').attributes('hidden')).toBeUndefined())
+
+    await wrapper.get('.plan-back').trigger('click')
+    expect(wrapper.get('#plan-detail').attributes('hidden')).toBeDefined()
+    expect(wrapper.get('#plans-workspace').attributes('data-detail-open')).toBe('false')
+    expect(wrapper.get('.plan button').attributes('aria-expanded')).toBe('false')
   })
 
   it('opens the plan the reader left open, with no click', async () => {
@@ -516,6 +550,26 @@ describe('structure (60-panels.css)', () => {
     expect(row.get('.plan-head').exists()).toBe(true)
     expect(row.get('.progress').get('.bar').attributes('style')).toContain('100%')
     expect(row.get('.plan-title').exists()).toBe(true)
+  })
+
+  it('carries the state/approval family classes 60-panels.css keys colour on', async () => {
+    const { Plans } = await boot(
+      emptySnapshot({
+        plans: [
+          planFixture({
+            id: 'P001',
+            approval: 'changes_requested',
+            stories: [storyFixture({ id: 'P001-S01', status: 'doing' })],
+          }),
+        ],
+      }),
+    )
+    const wrapper = mount(Plans)
+    await nextTick()
+
+    const row = wrapper.get('#plans-list .plan')
+    expect(row.get('[data-slot="state"]').classes()).toEqual(expect.arrayContaining(['tag', 'planstate-doing']))
+    expect(row.get('[data-slot="approval"]').classes()).toEqual(expect.arrayContaining(['tag', 'approval-changes_requested']))
   })
 
   it('marks Plan Evidence rows ".run" inside a ".runs" list, and Plan Memory rows ".memory" inside a ".memories" list', async () => {

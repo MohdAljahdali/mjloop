@@ -13,7 +13,11 @@
  * The list rides the snapshot. The open plan's body, its review, and its
  * stories' acceptance criteria and evidence are documents, so they are
  * fetched through `lib/plandoc.ts` — `PlanDetail` deliberately is not on
- * `PlanView`.
+ * `PlanView`. The feed itself is pumped from `App.vue`, not here: this panel
+ * only mounts while its own tab is open, and (later) Stories reads the same
+ * document — see `App.vue`'s own comment for why the single caller that
+ * satisfies `plandoc.ts`'s mount-before-subscribe ordering has to sit above
+ * both.
  *
  * This is also the first panel to submit a write with an inverse: a gate
  * decision that replaces a *previous* decision is reversible, and
@@ -26,10 +30,10 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from '../composables/useI18n.js'
 import { useFeed } from '../composables/useFeed.js'
-import { mountPlanDoc, subscribe as subscribePlanDoc, value as planDocValue } from '../lib/plandoc.js'
+import { useSelection } from '../composables/useSelection.js'
+import { subscribe as subscribePlanDoc, value as planDocValue } from '../lib/plandoc.js'
 import { stamp } from '../lib/fmt.js'
 import { planMemories, planRuns } from '../lib/plans.js'
-import { activePlan, setActivePlan } from '../lib/selection.js'
 import { planProgress, tally } from '../lib/stories.js'
 import { send, snapshot, submit } from '../stores/session.js'
 import type { MemoryView, RunSummary, Write } from '../types/protocol.js'
@@ -47,44 +51,26 @@ const plans = computed(() => snapshot.value?.plans ?? [])
 const shownPlans = computed(() => plans.value.slice(0, CAP))
 const counts = computed(() => tally(plans.value))
 
-/**
- * The plan whose detail is open, or null.
- *
- * `lib/selection.ts` is per-browser storage, not a Vue ref, so it is mirrored
- * into one here — the only writer of it is this panel, until Stories opens
- * a second one.
- */
-const openId = ref<string | null>(activePlan())
+/** The plan whose detail is open, or null — shared with `App.vue`'s document pump. */
+const { activePlan: openId, setActivePlan } = useSelection()
 /** The plan opened by a user action and waiting for its fetched detail. */
 const focusPending = ref<string | null>(null)
 
 function toggle(id: string): void {
   const closing = openId.value === id
-  openId.value = closing ? null : id
-  setActivePlan(openId.value)
+  setActivePlan(closing ? null : id)
   focusPending.value = closing ? null : id
 }
 
 function closeDetail(): void {
-  openId.value = null
   setActivePlan(null)
   focusPending.value = null
 }
 
-// The document is fetched in `lib/plandoc.ts`, driven from here: this panel
-// is its only reader so far, and `ui/render.js`'s "a hidden panel's feed goes
-// stale" rule carries the same way — nothing pumps it while this panel is
-// not the mounted one under `<KeepAlive>`.
-const planDocFeed = mountPlanDoc()
+// `App.vue` owns fetching it — see this file's own header comment and
+// `App.vue`'s, for why the pump has to sit above every panel that reads it.
 const docTick = ref(0)
 subscribePlanDoc(() => void docTick.value++)
-watch(
-  [snapshot, openId],
-  ([current]) => {
-    if (current !== null) planDocFeed.update(current)
-  },
-  { immediate: true },
-)
 const planDoc = computed(() => (docTick.value, planDocValue()))
 
 /**
@@ -191,7 +177,7 @@ function submitNewPlan(): void {
             <template v-if="planDoc !== null">
               <header class="plan-detail-head">
                 <button type="button" class="plan-back" @click="closeDetail">{{ t('plans.back') }}</button>
-                <h2 id="plan-detail-title" ref="detailTitleEl" tabindex="-1"><Bdi :value="planDoc.id" /> — <Bdi :value="planDoc.title" /></h2>
+                <h2 id="plan-detail-title" ref="detailTitleEl" tabindex="-1"><Bdi :value="`${planDoc.id} — ${planDoc.title}`" /></h2>
               </header>
 
               <section class="plan-detail-sub" id="plan-progress" :hidden="progress === null">

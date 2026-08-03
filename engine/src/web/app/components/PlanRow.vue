@@ -43,7 +43,7 @@ const percent = computed(() => (breakdown.value.total === 0 ? 0 : Math.round((br
       <span class="bar" data-slot="bar" :style="{ inlineSize: `${percent}%` }"></span>
     </div>
     <p class="plan-meta">
-      <span class="count" data-slot="count">{{ breakdown.completed }}/{{ breakdown.total }}</span>
+      <span class="count" data-slot="count"><Bdi :value="`${breakdown.completed}/${breakdown.total}`" /></span>
       <span class="ready-note" data-slot="ready" :hidden="breakdown.ready === 0">{{ t('plans.readyHere', { n: breakdown.ready }) }}</span>
       <span class="waits" data-slot="blocked" :hidden="breakdown.blocked === 0">{{ t('plans.blockedHere', { n: breakdown.blocked }) }}</span>
       <span class="empty" data-slot="empty" :hidden="plan.stories.length > 0">{{ t('story.listEmpty') }}</span>

@@ -29,7 +29,7 @@ function kindWord(kind: string): string {
     <code class="memory-id" data-slot="id"><Bdi :value="props.memory.id" /></code>
     <span class="tag" data-slot="kind">{{ kindWord(props.memory.kind) }}</span>
     <strong data-slot="title"><Bdi :value="props.memory.title" /></strong>
-    <span class="when" data-slot="at">{{ stamp(props.memory.at) }}</span>
+    <span class="when" data-slot="at"><Bdi :value="stamp(props.memory.at)" /></span>
     <ul class="chips" data-slot="tags">
       <li v-for="tag in props.memory.tags" :key="tag" class="chip"><Bdi :value="tag" /></li>
     </ul>
