@@ -1,49 +1,14 @@
 <script setup lang="ts">
-import { onBeforeUnmount, ref } from 'vue'
-import type { Message } from '../types/protocol.js'
-import { onNotice } from '../stores/session.js'
+/**
+ * A pure renderer over `useNotices.ts`'s module state — see that file for
+ * where an entry actually gets recorded and from which of its three doors.
+ */
 import { useI18n } from '../composables/useI18n.js'
+import { useNotices } from '../composables/useNotices.js'
 import Tx from './Tx.vue'
 
-/** Bounded: this is a feed, not a log, and it is rendered. */
-const LIMIT = 50
-
 const { t, tn } = useI18n()
-const open = ref(false)
-const feed = ref<{ id: number; message: Message }[]>([])
-/** `notifications.js:130-131`: unread, not total — and it resets to zero on open. */
-const unread = ref(0)
-let counter = 0
-
-/**
- * The one place an entry is recorded, whatever door it came through:
- * `onNotice` below for a server-pushed `{type:'notice'}` frame, and `push` —
- * exposed to `App.vue` — for a write receipt. `notifications.js:15`'s "the
- * ephemeral toast and the durable log can never disagree" is why a receipt
- * must land here through the same recording logic a queue notice already
- * uses, not a second one that could drift from it.
- */
-function record(message: Message): void {
-  feed.value = [{ id: ++counter, message }, ...feed.value].slice(0, LIMIT)
-  if (!open.value) unread.value += 1
-}
-
-const off = onNotice(record)
-onBeforeUnmount(off)
-
-function toggle(): void {
-  open.value = !open.value
-  if (open.value) unread.value = 0
-}
-
-/**
- * `App.vue` calls this from the same installed announcer that toasts a write
- * receipt — the single door restored, one call site, two surfaces. The store
- * itself never sees this component; it only ever calls the announcer
- * function `App.vue` installs, which is what keeps `session.ts` free of any
- * component import.
- */
-defineExpose({ push: record })
+const { open, feed, unread, toggle } = useNotices()
 </script>
 
 <template>

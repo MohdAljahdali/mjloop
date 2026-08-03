@@ -13,8 +13,8 @@
  * so the shipped CSS (`20-rail.css`, keyed off `.pill[data-status]`,
  * `.rail-detail`, `.bit`, `.warnish`) keeps applying unchanged.
  */
-import { computed, ref } from 'vue'
-import type { Message, Snapshot } from '../types/protocol.js'
+import { computed } from 'vue'
+import type { Snapshot } from '../types/protocol.js'
 import { useI18n } from '../composables/useI18n.js'
 import { useHalt } from '../composables/useHalt.js'
 import { send } from '../stores/session.js'
@@ -49,18 +49,6 @@ const reproduction = computed(() => state.value?.reproduction ?? null)
 
 const session = computed(() => props.snapshot?.session ?? null)
 const { openHalt } = useHalt()
-
-/**
- * Forwarded to `App.vue`'s installed announcer, so a write receipt can reach
- * the notice log the same call that toasts it — `NoticeFeed` lives inside
- * `.rail` (see the comment on the element below), so `App.vue` has no direct
- * template ref to it and reaches it through this one.
- */
-const noticeFeedRef = ref<InstanceType<typeof NoticeFeed> | null>(null)
-function pushNotice(message: Message): void {
-  noticeFeedRef.value?.push(message)
-}
-defineExpose({ pushNotice })
 </script>
 
 <template>
@@ -98,7 +86,7 @@ defineExpose({ pushNotice })
          page, at both sides of the 900px breakpoint. Unconditional, like the
          old page's static toggle: a dead server or a bad token at load must
          not also take away the reader's way to open their notice history. -->
-    <NoticeFeed ref="noticeFeedRef" />
+    <NoticeFeed />
     <!-- Halt and Stop, side by side and labelled distinctly — `rail.js:99,103`.
          Conflating them is the obvious mistake: Stop kills the pty and leaves
          `state.json` saying `running` with no `HALT.md`, which is not a halt.
