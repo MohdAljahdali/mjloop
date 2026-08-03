@@ -680,7 +680,7 @@ Expected: FAIL — المسار 404، و`revisions.agents` غير معرّف
  * `ENGINE_DIR`: three levels up from this module lands on the plugin root
  * both from `src/web/` under vitest and from `dist/web/` in a build.
  */
-export const PLUGIN_AGENTS_DIR = fileURLToPath(new URL('../../agents/', import.meta.url))
+export const PLUGIN_AGENTS_DIR = fileURLToPath(new URL('../../../agents/', import.meta.url))
 
 /**
  * The two agent directories, side by side and never merged.
