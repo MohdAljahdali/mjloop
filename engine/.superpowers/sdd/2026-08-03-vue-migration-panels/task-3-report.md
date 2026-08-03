@@ -81,3 +81,17 @@ Every key used already exists in `src/web/app/locales/en.json` — none invented
 **Worth knowing, not a defect (as flagged):** under `<KeepAlive>` a deactivated `Run` panel's feeds keep updating on every broadcast — `useFeed`'s `watchEffect` watches the store's `snapshot` ref directly, which has no notion of "this component is currently hidden." The old page's `register()`/`draw()` skipped a hidden panel's `update()` entirely. Traded deliberately for now (a feed watcher gated on visibility would also need to catch back up the moment the tab reopens, which is a second thing to get right), but it means a cached, invisible Run panel is still issuing conditional GETs and holding reactive state in memory for as long as the app is open. Left for whoever revisits panel memory/network cost across all eight panels, since it is a `<KeepAlive>`-wide question and not particular to Run.
 
 Commands re-run after the fix: `npx vitest run tests/web/panel-run.test.ts` — 25 passed. `npx vitest run tests/web/shell.test.ts` — 17 passed. `npx vitest run` — 89 files / 2127 tests passed, one run, no retry needed, no unhandled-rejection noise. `npm run typecheck` — exit 0. `npm run build` — exit 0. `node scripts/verify-ship.mjs` — all `ok`. `git status` — clean after the commit.
+
+## Fix round 2
+
+**Important (late run-id read) — fixed.** `HaltDialog.vue` now has a `subject` ref, written from `props.runId` only inside the `isOpen` branch of the `watch(() => props.open, …)` — `dialog.js:27`'s own `subject`, and the same moment `app.js:256`'s `haltDialog.open(currentRun)` captures it. `confirm()` reads `subject.value`, never `props.runId`, and clears nothing on close (the next open overwrites it, same as the old page never resetting `subject` to `null` either).
+
+Three tests added to `panel-run.test.ts`'s halt describe block, each driving the *live* prop away from what it was at open time via `wrapper.setProps({ runId: … })` while the dialog stays open — the retargeted round-1 tests all held `runId` static, which is exactly why this shipped uncaught:
+- *"halts the run that was on screen when the dialog opened, not whatever run is current when it is confirmed"* — opens with `run-A`, moves the prop to `run-B` mid-dialog, confirms, asserts the write still names `run-A`.
+- *"still halts the run captured at open, even if the live run id had gone null by the time the dialog is confirmed"* — opens with `run-A`, moves the prop to `null` mid-dialog, confirms, asserts the write still names `run-A` rather than silently sending nothing (the worst of the three outcomes the live-read version could produce, since a reader who just pressed "Halt the run" would otherwise believe something happened).
+
+**Structural assertions added** (`panel-run.test.ts`, `describe('structure')`): *"carries class=\"panel\" and aria-labelledby, the two markers every future panel must copy"* — asserts `#panel-run` has class `panel`, `aria-labelledby="panel-run-title"`, and that `#panel-run-title` is an actual `<h1>`. Nothing pinned either before this round.
+
+Nothing else touched — the rail, the dialog's placement in `App.vue`, and the `.panel` relocation are unchanged from round 1.
+
+Commands re-run after this fix: `npx vitest run tests/web/panel-run.test.ts` — 28 passed. `npx vitest run` — 89 files / 2130 tests passed, one run, no retry needed. `npm run typecheck` — exit 0. `npm run build` — exit 0. `node scripts/verify-ship.mjs` — all `ok`. `git status` — clean after the commit below.

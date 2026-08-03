@@ -22,7 +22,7 @@ import { submit } from '../stores/session.js'
 
 const props = defineProps<{
   open: boolean
-  /** The run this dialog is about, captured when it opened. Null halts nothing. */
+  /** The run this dialog is about. Read only at the moment it opens — see `subject`. */
   runId: string | null
 }>()
 const emit = defineEmits<{ close: [] }>()
@@ -34,10 +34,26 @@ const reasonInput = ref<HTMLInputElement | null>(null)
 // for the rest of its life, the same as the old page's `reason.value = ''`.
 const reason = ref('')
 
+/**
+ * The run this confirmation actually halts, frozen the moment the dialog
+ * opens — `dialog.js:27`'s own `subject`, and `app.js:256`'s
+ * `haltDialog.open(currentRun)` passing it in rather than the dialog reading
+ * a live value later.
+ *
+ * `props.runId` tracks `snapshot.state.run_id` live: reading it at confirm
+ * time instead would let the run end and a new one start *while the dialog
+ * is still open*, and a press of "Halt the run" would silently halt
+ * whatever run happens to be current by then — or, if `run_id` had gone
+ * `null` in between, send nothing at all while the reader believes they
+ * just halted something.
+ */
+const subject = ref<string | null>(null)
+
 watch(
   () => props.open,
   (isOpen) => {
     if (isOpen) {
+      subject.value = props.runId
       reason.value = ''
       dialog.value?.showModal()
       // `dialog.js:33` — a keyboard user's focus must land on the field a
@@ -55,9 +71,10 @@ function cancel(): void {
 
 function confirm(): void {
   const text = reason.value.trim()
+  const run = subject.value
   emit('close')
-  if (props.runId === null || text.length === 0) return
-  submit({ kind: 'halt', run: props.runId, reason: text })
+  if (run === null || text.length === 0) return
+  submit({ kind: 'halt', run, reason: text })
 }
 </script>
 

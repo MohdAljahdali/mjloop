@@ -483,6 +483,65 @@ describe('Run.vue', () => {
       expect(document.activeElement).toBe(document.getElementById('halt-reason'))
       wrapper.unmount()
     })
+
+    it('halts the run that was on screen when the dialog opened, not whatever run is current when it is confirmed', async () => {
+      // `dialog.js:27`'s `subject`, captured at `open()`. `HaltDialog`'s
+      // `runId` prop tracks `snapshot.state.run_id` live — reading it at
+      // confirm time instead would let a run end and a new one start while
+      // the dialog is still open, and this exact test would then halt the
+      // *new* run, not the one the reader was looking at when they pressed
+      // Halt.
+      const first = runningState({ run_id: 'run-A' })
+      const { HaltHost, socket } = await boot(emptySnapshot({ state: first }))
+      const wrapper = mount(HaltHost, {
+        props: { snapshot: emptySnapshot({ state: first }), runId: 'run-A' },
+        attachTo: document.body,
+      })
+      await nextTick()
+
+      await wrapper.get('.rail button.danger').trigger('click')
+      expect((document.getElementById('halt-dialog') as HTMLDialogElement).open).toBe(true)
+
+      // The run this dialog opened for ends, and a second one starts — the
+      // same live change `App.vue`'s `:run-id="snapshot?.state.run_id"`
+      // would make on the next broadcast, with the dialog still open.
+      await wrapper.setProps({ runId: 'run-B' })
+
+      await wrapper.get('#halt-reason').setValue('still about the first run')
+      await wrapper.get('#halt-form').trigger('submit')
+      await nextTick()
+
+      expect(socket.sent).toEqual([
+        { type: 'write', id: expect.any(String), write: { kind: 'halt', run: 'run-A', reason: 'still about the first run' } },
+      ])
+      wrapper.unmount()
+    })
+
+    it('still halts the run captured at open, even if the live run id had gone null by the time the dialog is confirmed', async () => {
+      // The worst of the three outcomes the old, live-read version could
+      // produce: `props.runId === null` at confirm time made `confirm()`
+      // silently return, sending nothing while the reader believed they had
+      // just halted something. The frozen `subject` cannot go null under it.
+      const first = runningState({ run_id: 'run-A' })
+      const { HaltHost, socket } = await boot(emptySnapshot({ state: first }))
+      const wrapper = mount(HaltHost, {
+        props: { snapshot: emptySnapshot({ state: first }), runId: 'run-A' },
+        attachTo: document.body,
+      })
+      await nextTick()
+
+      await wrapper.get('.rail button.danger').trigger('click')
+      await wrapper.setProps({ runId: null })
+      await wrapper.get('#halt-reason').setValue('a reason')
+      await wrapper.get('#halt-form').trigger('submit')
+      await nextTick()
+
+      // Still `run-A`: the dialog holds the run it opened for, not `null`.
+      expect(socket.sent).toEqual([
+        { type: 'write', id: expect.any(String), write: { kind: 'halt', run: 'run-A', reason: 'a reason' } },
+      ])
+      wrapper.unmount()
+    })
   })
 
   describe('the stalled banner (Banners.vue)', () => {
@@ -506,6 +565,22 @@ describe('Run.vue', () => {
 })
 
 describe('structure (60-panels.css)', () => {
+  it('carries class="panel" and aria-labelledby, the two markers every future panel must copy', async () => {
+    // `10-layout.css:100-108`: `.panel` is the capped, centred column and the
+    // `panel-in` fade — Task 2's regression put it on `<main>` instead, where
+    // it fired once at boot rather than on every tab switch. `aria-labelledby`
+    // is the a11y link to the panel's own `<h1>`, dropped when the section's
+    // `id`/`class` were first ported. Neither is visible to a `.text()` check.
+    const { Run } = await boot(emptySnapshot({ state: runningState() }))
+    const wrapper = mount(Run)
+    await nextTick()
+
+    const panel = wrapper.get('#panel-run')
+    expect(panel.classes()).toContain('panel')
+    expect(panel.attributes('aria-labelledby')).toBe('panel-run-title')
+    expect(wrapper.get('#panel-run-title').element.tagName).toBe('H1')
+  })
+
   it('gives the aside its own grid track only through `.panel-side`, and never a per-panel id', async () => {
     const { Run } = await boot(emptySnapshot({ state: runningState(), roster: { cycle: 1, selected: [], landed: [] } }))
     const wrapper = mount(Run)
