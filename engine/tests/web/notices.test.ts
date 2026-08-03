@@ -177,6 +177,16 @@ describe('useNotices', () => {
     expect(feed.value).toHaveLength(2)
   })
 
+  it('bounds the feed itself at 50, newest first — ported from notifications.test.ts, this is a feed and not a log', () => {
+    const { feed, record } = notices.useNotices()
+    for (let index = 0; index < 60; index += 1) record({ code: 'write.ok.halt', params: { n: index } })
+    expect(feed.value).toHaveLength(50)
+    // Newest first, and the oldest ten fell off the end rather than the newest
+    // ten being refused.
+    expect(feed.value[0]?.message.params).toEqual({ n: 59 })
+    expect(feed.value.at(-1)?.message.params).toEqual({ n: 10 })
+  })
+
   it('gives every NoticeCode a key in every shipped locale — the other half of the guard WEB_CODES gets from locales.test.ts', async () => {
     const codes = (await fs.readdir(APP_LOCALES_DIR)).filter((name) => name.endsWith('.json')).map((name) => name.replace(/\.json$/, ''))
     expect(codes).toContain('en')

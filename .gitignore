@@ -17,6 +17,14 @@ engine/.ts-out/
 # Test output
 coverage/
 
+# `server.ts`'s `PUBLIC_DIR` is fixed relative to its own file and cannot be
+# overridden; it resolves to `dist/web/public/` in the shipped bundle. Task 12
+# deleted the hand-written `src/web/public/` this path used to be, in source —
+# `tests/web/server.test.ts` now mirrors a fresh copy of `dist/web/public`
+# here itself, once per run, so a server started by importing `src/web/
+# server.ts` directly (unbundled) has something real to serve.
+engine/src/web/public/
+
 # Logs
 *.log
 npm-debug.log*

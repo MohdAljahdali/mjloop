@@ -1,9 +1,40 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import fs from 'node:fs/promises'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { WebSocket } from 'ws'
 import { initLoop } from '../../src/ops/init.js'
 import { startServer, tokenMatches, type RunningServer } from '../../src/web/server.js'
 import { fakeSessions, type FakeSessions } from '../helpers/fake-session.js'
 import { makeTmpProject, type TmpProject } from '../helpers/tmp-project.js'
+
+/**
+ * `server.ts` is off-limits to this whole migration: its `PUBLIC_DIR` is
+ * `fileURLToPath(new URL('./public/', import.meta.url))`, fixed relative to
+ * its own file, not overridable. In the shipped bundle that resolves to
+ * `dist/web/public/` — the sibling `./public/` esbuild and `build.mjs` put
+ * next to `dist/web/cli.js` — which is why `verify-ship.mjs` runs cleanly
+ * with no source tree at all. This suite instead imports `src/web/server.ts`
+ * directly, unbundled, for speed, so the same `./public/` resolves to
+ * `src/web/public/` — the tree Task 12 deleted.
+ *
+ * Rather than fixture files that only coincidentally look like the page (and
+ * drift from it silently), this suite over its own local copy of the actual
+ * build output: `dist/web/public`, mirrored once per run into `src/web/public`
+ * — gitignored, `npm run build`'s responsibility to keep fresh, the same
+ * precondition `layout.test.ts` and `discipline.test.ts`'s server-MIME check
+ * already carry.
+ */
+const ENGINE = fileURLToPath(new URL('../../', import.meta.url))
+const DIST_PUBLIC = path.join(ENGINE, 'dist', 'web', 'public')
+const SRC_PUBLIC = path.join(ENGINE, 'src', 'web', 'public')
+
+beforeAll(async () => {
+  const built = await fs.stat(DIST_PUBLIC).catch(() => null)
+  if (built === null) throw new Error('dist/web/public is missing — run `npm run build` first')
+  await fs.rm(SRC_PUBLIC, { recursive: true, force: true })
+  await fs.cp(DIST_PUBLIC, SRC_PUBLIC, { recursive: true })
+})
 
 let project: TmpProject
 let server: RunningServer

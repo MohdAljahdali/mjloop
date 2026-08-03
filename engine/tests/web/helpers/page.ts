@@ -3,39 +3,21 @@ import path from 'node:path'
 import type { Snapshot } from '../../../src/web/protocol.js'
 
 /**
- * The tests load the **real** `index.html`, not a fixture.
- *
- * A fixture is a second copy of the templates that drifts from the shipped one,
- * and every guarantee in this suite — that a row's node survives a tick, that a
- * status transition leaves one class — is a guarantee about the markup the user
- * actually gets.
- */
-/**
  * Resolved from the working directory rather than from `import.meta.url`: under
  * `happy-dom` the global `URL` is the DOM one and resolves a module specifier
  * against `http://localhost/`, so `fileURLToPath` throws. vitest runs from the
  * engine root.
+ *
+ * Task 12 deleted `src/web/public/` — the old page's hand-written tree this
+ * used to point at — along with the tests (`render`, `list`, `bus`, `panels`,
+ * `boot`, `notifications`, `toasts`) that mounted `loadPage()`'s real
+ * `index.html`. What is left reads locales only, which the Vue app still ships
+ * from `src/web/app/locales/`.
  */
-export const PUBLIC_DIR = path.resolve(process.cwd(), 'src', 'web', 'public')
-
-export async function loadPage(): Promise<void> {
-  const html = await fs.readFile(path.join(PUBLIC_DIR, 'index.html'), 'utf8')
-  const inner = html
-    .replace(/^[\s\S]*?<html[^>]*>/, '')
-    .replace(/<\/html>[\s\S]*$/, '')
-    // Stylesheets and vendor scripts are dropped: happy-dom would go and fetch
-    // them over the network, and none of the guarantees under test are about
-    // paint. The structure — templates, slots, ids, `hidden` — is the subject.
-    .replace(/<link\b[^>]*rel="stylesheet"[^>]*>/g, '')
-    .replace(/<script\b[\s\S]*?<\/script>/g, '')
-  document.documentElement.innerHTML = inner
-}
+export const APP_LOCALES_DIR = path.resolve(process.cwd(), 'src', 'web', 'app', 'locales')
 
 export async function readLocale(code: string): Promise<Record<string, string>> {
-  return JSON.parse(await fs.readFile(path.join(PUBLIC_DIR, 'locales', `${code}.json`), 'utf8')) as Record<
-    string,
-    string
-  >
+  return JSON.parse(await fs.readFile(path.join(APP_LOCALES_DIR, `${code}.json`), 'utf8')) as Record<string, string>
 }
 
 /** A snapshot with everything at its zero value; tests override what they mean. */

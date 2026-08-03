@@ -491,6 +491,72 @@ describe('App', () => {
     expect(wrapper.get('#plan-detail-title').text()).toContain('Left open before reload')
     wrapper.unmount()
   })
+
+  it('keeps the open plan current while the Plans panel is never mounted — ported from boot.test.ts, the reason planDocFeed is pumped from App.vue and not from Plans.vue', async () => {
+    // `App.vue`'s own comment: "a panel only exists behind `v-if` — `mountPlanDoc()`
+    // resets the module's listener set on every call". Unlike the old page's
+    // `hidden`-attribute panels, a Vue panel that is not the active tab is not
+    // in the document at all, so a document ticked from inside `Plans.vue`
+    // would simply stop the moment the reader looked at another tab. This test
+    // never opens the Plans tab and asserts the fetch still happens.
+    //
+    // The previous test leaves `#plans` in `location.hash` — happy-dom's
+    // `location` persists across tests in this file — so it is reset to the
+    // default tab explicitly here, or this test would inherit that hash and
+    // mount `Plans.vue` itself, which is exactly what it must not do.
+    location.hash = ''
+    vi.resetModules()
+    const freshI18n = await import('../../src/web/app/lib/i18n.ts')
+    freshI18n.installForTest({ code: 'en', strings: english })
+    const store = await import('../../src/web/app/stores/session.ts')
+    const { default: App } = await import('../../src/web/app/App.vue')
+    const local = await import('../../src/web/app/lib/local.ts')
+    local.installStorage({
+      getItem: (key) => (key === 'mjloop.prefs' ? JSON.stringify({ activePlan: 'P001' }) : null),
+      setItem: () => {},
+    })
+
+    class FakeSocket {
+      static last: FakeSocket | null = null
+      readyState = 1
+      listeners = new Map<string, (event: unknown) => void>()
+      constructor(public url: string) {
+        FakeSocket.last = this
+      }
+      addEventListener(type: string, fn: (event: unknown) => void) {
+        this.listeners.set(type, fn)
+      }
+      send(): void {}
+      deliver(message: unknown): void {
+        this.listeners.get('message')?.({ data: JSON.stringify(message) })
+      }
+    }
+    store.connect({ token: 'tok', socketFactory: (url) => new FakeSocket(url) as unknown as WebSocket })
+
+    let fetches = 0
+    vi.stubGlobal('fetch', (url: string) => {
+      if (url.split('?')[0] !== '/api/plans/P001') return Promise.resolve(new Response('null', { status: 200 }))
+      fetches += 1
+      return Promise.resolve(
+        new Response(JSON.stringify({ id: 'P001', title: `rev ${fetches}`, approval: null, body: '', review: null, stories: [] }), { status: 200 }),
+      )
+    })
+
+    const at = (key: string) => ({ ...emptySnapshot().revisions, plans: { P001: key } })
+    const plans = [{ id: 'P001', title: 'A plan', approval: null, stories: [] }]
+    FakeSocket.last?.deliver({ type: 'snapshot', snapshot: emptySnapshot({ plans, revisions: at('a') }) })
+
+    // Stay on `run` — the default tab — so `Plans.vue` never mounts.
+    const wrapper = mount(App, { attachTo: document.body })
+    expect(wrapper.find('#panel-plans').exists()).toBe(false)
+    await vi.waitFor(() => expect(fetches).toBe(1))
+
+    FakeSocket.last?.deliver({ type: 'snapshot', snapshot: emptySnapshot({ plans, revisions: at('b') }) })
+    await vi.waitFor(() => expect(fetches).toBe(2))
+    expect(wrapper.find('#panel-plans').exists()).toBe(false)
+
+    wrapper.unmount()
+  })
 })
 
 describe('NoticeFeed', () => {

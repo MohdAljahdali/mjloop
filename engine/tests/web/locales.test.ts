@@ -10,7 +10,7 @@ import { SkillPackageSchema } from '../../src/schemas/skill-library.js'
 import { ProjectSkillAcceptanceSchema } from '../../src/schemas/skill-acceptance.js'
 import { ConcurrencyDecisionSchema } from '../../src/schemas/skill-selection.js'
 import { WEB_CODES } from '../../src/web/codes.js'
-import { FILTERS } from '../../src/web/public/lib/stories.js'
+import { FILTERS } from '../../src/web/app/lib/stories.js'
 
 /**
  * The guard that keeps fifteen languages maintainable.
@@ -20,17 +20,17 @@ import { FILTERS } from '../../src/web/public/lib/stories.js'
  * in testing and half-English in use. Around 200 keys stay reviewable through
  * four conventions, each enforced below — a namespace whitelist, ordered parity,
  * plural stems checked against each language's own categories, and a bidi rule.
+ *
+ * Task 12 retired `src/web/public/` and with it this file's own second half —
+ * the "locale drift between the two shipped copies" describe block that kept
+ * `app/locales` and `public/locales` byte-identical. `app/locales` is now the
+ * only copy, so what is left below is only what actually reads it: the guards
+ * above, repointed at `app/**` instead of `index.html`/`app.js`, and nothing
+ * that compared it to a tree that no longer exists.
  */
 const ENGINE = fileURLToPath(new URL('../../', import.meta.url))
-const PUBLIC_DIR = path.join(ENGINE, 'src', 'web', 'public')
-const LOCALES_DIR = path.join(PUBLIC_DIR, 'locales')
-/**
- * `build.mjs` ships this copy, not `LOCALES_DIR` — the old page above still
- * serves from `public/`, so the two directories hold the same files on
- * purpose until the second plan retires `public/`. Everything above this
- * guards `public/`'s copy; nothing above needs repointing.
- */
-const APP_LOCALES_DIR = path.join(ENGINE, 'src', 'web', 'app', 'locales')
+const APP_DIR = path.join(ENGINE, 'src', 'web', 'app')
+const LOCALES_DIR = path.join(APP_DIR, 'locales')
 
 async function readLocale(code: string): Promise<Record<string, string>> {
   return JSON.parse(await fs.readFile(path.join(LOCALES_DIR, `${code}.json`), 'utf8')) as Record<string, string>
@@ -116,10 +116,6 @@ function pluralStems(dictionary: Record<string, string>): Map<string, string[]> 
 
 /* ── what the page actually asks for ──────────────────────────────────────── */
 
-const pageFiles = await walk(PUBLIC_DIR)
-const scripts = pageFiles.filter((name) => name.endsWith('.js') && !name.startsWith('vendor/'))
-const html = await fs.readFile(path.join(PUBLIC_DIR, 'index.html'), 'utf8')
-
 async function walk(dir: string, prefix = ''): Promise<string[]> {
   const entries = await fs.readdir(dir, { withFileTypes: true })
   const out: string[] = []
@@ -131,11 +127,36 @@ async function walk(dir: string, prefix = ''): Promise<string[]> {
   return out
 }
 
+const appFiles = await walk(APP_DIR)
 /**
- * Every dotted string literal the page holds, plus the keys named in the
- * markup's `data-i18n*` attributes.
+ * Every source file that can hold a translated string: every SFC template
+ * (`.vue`) and every plain module (`.ts`, not `.d.ts`) — `lib/notifications.ts`
+ * declares `NOTICE_CODES` as a literal string array, not inside a component,
+ * and a sweep of `.vue` files alone would call every one of those eight keys
+ * dead. Test files are excluded on purpose: a key a *test* asks for but no
+ * shipped file does is still a dead key in production.
+ */
+const scripts = appFiles.filter(
+  (name) => (name.endsWith('.vue') || (name.endsWith('.ts') && !name.endsWith('.d.ts'))) && !name.endsWith('.test.ts'),
+)
+
+/**
+ * Every dotted string literal the page holds, plus the static half of `Tx`'s
+ * own `key-name`/`:key-name` attribute — the four shapes a key is ever asked
+ * for in this tree: a `t('x.y')` or `tn('x.y', …)` call (a single-quoted JS
+ * string literal, which reaches into a template attribute too — Vue compiles
+ * `:aria-label="t('config.remove')"` to source text that still contains the
+ * literal `'config.remove'`), `<Tx key-name="x.y">` (a bare double-quoted HTML
+ * attribute, not a JS string, so it needs its own pattern), and a template
+ * literal whose prefix is fixed and whose tail is chosen at runtime — either
+ * `` t(`status.${state.status}`) `` or `` <Tx :key-name="`features.record.${…}`"> ``,
+ * both matched by the same prefix regex since Vue's compiled attribute text
+ * still carries the backtick literally. A `:key-name="someVariable"` binding
+ * (`toast.message.code`, `problem.key`, …) names a code chosen fully at
+ * runtime — those are exactly `WebCode`/`NoticeCode` values, harvested below
+ * from `WEB_CODES` and (in `notices.test.ts`) `NOTICE_CODES` instead.
  *
- * Deliberately broader than "the first argument of a `phrase()` call": half the
+ * Deliberately broader than "the first argument of a `t()` call": half the
  * keys on this page are chosen by a ternary, and a sweep that only understood
  * one call shape would quietly declare the other branch dead.
  */
@@ -143,13 +164,9 @@ const literals = new Set<string>()
 /** `` `status.${state.status}` `` — a family whose members are chosen at runtime. */
 const prefixes = new Set<string>()
 
-for (const attribute of ['data-i18n', 'data-i18n-label', 'data-i18n-placeholder']) {
-  for (const match of html.matchAll(new RegExp(`${attribute}="([\\w.]+)"`, 'g'))) literals.add(match[1] ?? '')
-}
-
 for (const name of scripts) {
   // Comments stripped, so a key named in prose cannot keep a dead one alive.
-  const body = (await fs.readFile(path.join(PUBLIC_DIR, name), 'utf8'))
+  const body = (await fs.readFile(path.join(APP_DIR, name), 'utf8'))
     .replace(/\/\*[\s\S]*?\*\//g, '')
     .replace(/^\s*\/\/.*$/gm, '')
     // A write's `kind` is a wire discriminant, not a locale key, and
@@ -163,6 +180,13 @@ for (const name of scripts) {
     const key = match[1] ?? ''
     if (NAMESPACES.includes(key.split('.')[0] ?? '')) literals.add(key)
   }
+  // `<Tx key-name="x.y">` / `<Tx v-else key-name="x.y">` — a bare HTML
+  // attribute, double-quoted, so the single-quote pattern above never sees
+  // it. The lookbehind is whitespace, not a word boundary: `:key-name="…"`
+  // (a *bound*, runtime-chosen code — `toast.message.code`, `problem.key`)
+  // has a word boundary too, right after the `:`, and is deliberately not a
+  // static key this sweep can — or should — resolve.
+  for (const match of body.matchAll(/(?<=\s)key-name="([a-z]\w*(?:\.[\w]+)+)"/g)) literals.add(match[1] ?? '')
   // A plural is asked for by its stem; the categories are the language's own.
   for (const match of body.matchAll(/\b(?:tn|pluralKey)\('([\w.]+)'/g)) prefixes.add(`${match[1] ?? ''}.`)
   for (const match of body.matchAll(/`([\w.]+\.)\$\{/g)) prefixes.add(match[1] ?? '')
@@ -295,31 +319,14 @@ describe('locales', () => {
 
   it('registers every locale file in the page', async () => {
     // A file nobody registered is a translation the user cannot pick.
-    const app = await fs.readFile(path.join(PUBLIC_DIR, 'app.js'), 'utf8')
-    const registry = /const LOCALES = \{([\s\S]*?)\n\}/.exec(app)?.[1] ?? ''
+    // `useI18n.ts`, not `app.js`: that is where `LOCALES` and the call to
+    // `installLocales` live now — `app.js` and the page it booted are gone.
+    const useI18n = await fs.readFile(path.join(APP_DIR, 'composables', 'useI18n.ts'), 'utf8')
+    const registry = /export const LOCALES: LocaleRegistry = \{([\s\S]*?)\n\}/.exec(useI18n)?.[1] ?? ''
     const registered = [...registry.matchAll(/^\s{2}(\w+):/gm)].map((match) => match[1] ?? '')
     expect(registered.sort()).toEqual(codes.sort())
     // …and the registry has to be the one the page actually installs, or the
     // grep above is reading a dead literal.
-    expect(app).toContain('installLocales(LOCALES')
-  })
-})
-
-describe('locale drift between the two shipped copies', () => {
-  // `src/web/public/locales/` is what the old page (still live) serves and
-  // every test above guards. `src/web/app/locales/` is what `build.mjs` ships
-  // now — a copy made once, by hand, when the Vue app tree was created. The
-  // two are byte-identical today; nothing keeps them that way but this test.
-  it('src/web/app/locales holds the same files as src/web/public/locales', async () => {
-    const [publicNames, appNames] = await Promise.all([fs.readdir(LOCALES_DIR), fs.readdir(APP_LOCALES_DIR)])
-    expect(appNames.sort()).toEqual(publicNames.sort())
-  })
-
-  it.each(codes)('%s is byte-identical between the two locale directories', async (code) => {
-    const [publicBytes, appBytes] = await Promise.all([
-      fs.readFile(path.join(LOCALES_DIR, `${code}.json`)),
-      fs.readFile(path.join(APP_LOCALES_DIR, `${code}.json`)).catch(() => null),
-    ])
-    expect(appBytes !== null && appBytes.equals(publicBytes)).toBe(true)
+    expect(useI18n).toContain('installLocales(LOCALES')
   })
 })

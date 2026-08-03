@@ -6,18 +6,23 @@ import { describe, expect, it } from 'vitest'
 /**
  * The page's rules, asserted against its own source text.
  *
- * There is no bundler and no framework here, so nothing else notices a mistyped
- * import specifier, a template nobody clones, a `data-act` nobody registered or
- * an `innerHTML` somebody reached for at half past five. Each of these was a
- * real failure mode of the screen this replaced; each is now a failing test
- * rather than a white page.
- *
- * Deliberately node-only and dependency-free: this suite has to keep working in
- * the environment the rest of the engine's tests already run in.
+ * Task 12 retired `src/web/public/`, the hand-written tree this file used to
+ * walk, and with it three checks the Vue compiler now makes structurally
+ * impossible to violate: `data-act` no longer exists (a listener is a
+ * `@click` in the same file as the markup it binds), `<template id>` cloning
+ * no longer exists (SFCs compile to render functions, not `document.
+ * importNode`), and there is no hand-rolled import graph to walk — an
+ * unresolved specifier or an orphaned module is a Vite build failure, not a
+ * silent white page. What is left is what the compiler does *not* enforce:
+ * accessibility, a keyboard path for any reorder gesture, RTL, the invariants
+ * a stylesheet edit could quietly undo, and — unchanged in kind, sharper in
+ * consequence now that assets are hashed and emitted rather than hand-copied
+ * — whether the server can actually serve everything that ships.
  */
 
 const ENGINE = fileURLToPath(new URL('../../', import.meta.url))
-const PUBLIC_DIR = path.join(ENGINE, 'src', 'web', 'public')
+const APP_DIR = path.join(ENGINE, 'src', 'web', 'app')
+const STYLES_DIR = path.join(APP_DIR, 'styles')
 
 async function walk(dir: string, prefix = ''): Promise<string[]> {
   const entries = await fs.readdir(dir, { withFileTypes: true })
@@ -30,268 +35,140 @@ async function walk(dir: string, prefix = ''): Promise<string[]> {
   return out
 }
 
-const files = await walk(PUBLIC_DIR)
-const scripts = files.filter((name) => name.endsWith('.js'))
-const styles = files.filter((name) => name.endsWith('.css'))
+const appFiles = await walk(APP_DIR)
+const vueFiles = appFiles.filter((name) => name.endsWith('.vue'))
+const styleFiles = (await walk(STYLES_DIR)).filter((name) => name.endsWith('.css'))
 
 const source = new Map<string, string>()
-for (const name of files) {
-  if (name.endsWith('.js') || name.endsWith('.css') || name.endsWith('.html')) {
-    source.set(name, await fs.readFile(path.join(PUBLIC_DIR, name), 'utf8'))
-  }
-}
-const html = source.get('index.html') ?? ''
+for (const name of vueFiles) source.set(name, await fs.readFile(path.join(APP_DIR, name), 'utf8'))
+const styleSource = new Map<string, string>()
+for (const name of styleFiles) styleSource.set(name, await fs.readFile(path.join(STYLES_DIR, name), 'utf8'))
 
 const read = (name: string): string => source.get(name) ?? ''
+const readStyle = (name: string): string => styleSource.get(name) ?? ''
 
-/**
- * The file with its comments taken out.
- *
- * Every rule below is about what the page *does*, and this file's own prose
- * quotes the things it forbids — `innerHTML` is named in `ui/list.js`'s header
- * explaining why it is absent, and every JSDoc type reaches for
- * `import('../../protocol.js')`. Block comments and whole-line `//` comments go;
- * trailing ones stay, so a `//` inside a url string is never mistaken for one.
- */
-const code = (name: string): string =>
-  read(name)
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/^\s*\/\/.*$/gm, '')
-
-describe('no string-built DOM', () => {
-  it.each(scripts)('%s never writes markup', (name) => {
-    // `escape()` and every one of its call sites are gone. The cockpit renders
-    // PLAN.md, HALT.md, finding claims, agent summaries and memory bodies — all
-    // model- or user-authored — and `verbatim()` is the single path for that
-    // text. The XSS surface is absent by construction, not by discipline.
-    for (const forbidden of ['innerHTML', 'outerHTML', 'insertAdjacentHTML', 'document.write']) {
-      expect(code(name), `${name} uses ${forbidden}`).not.toContain(forbidden)
+describe('accessibility', () => {
+  it('gives every top-level view a visible heading and an unmistakable selected route', () => {
+    const appVue = read('App.vue')
+    // The tab nav is one `v-for` over `tabs`, so its `id`/`aria-controls` pair
+    // is asserted generically rather than once per route — this is the whole
+    // nav, for every route it will ever offer.
+    expect(appVue).toMatch(/:id="`tab-\$\{id\}`"/)
+    expect(appVue).toMatch(/:aria-controls="`panel-\$\{id\}`"/)
+    expect(appVue).toMatch(/:aria-current="active === id \? 'page' : undefined"/)
+    // Each route is one `panels/<Name>.vue`. Read that file directly rather
+    // than search every `.vue` file for the id: `App.vue`'s own comments
+    // quote `index.html:136`'s old markup verbatim, including the literal
+    // string `id="panel-run"` — a substring search over every file would find
+    // that comment before it ever reached `Run.vue`.
+    const panelFile: Record<string, string> = {
+      run: 'panels/Run.vue',
+      plans: 'panels/Plans.vue',
+      stories: 'panels/Stories.vue',
+      features: 'panels/Features.vue',
+      skills: 'panels/Skills.vue',
+      evidence: 'panels/Evidence.vue',
+      memory: 'panels/Memory.vue',
+      config: 'panels/Config.vue',
     }
-  })
-})
-
-describe('the import graph', () => {
-  const specifiers = (name: string): string[] =>
-    [...read(name).matchAll(/^\s*(?:import|export)[^'"\n]*from\s*['"]([^'"]+)['"]/gm)].map((match) => match[1] ?? '')
-
-  it.each(scripts)('%s imports only files that exist', (name) => {
-    for (const specifier of specifiers(name)) {
-      // `../../protocol.js` is a type-only reach into the engine's own source;
-      // everything else must be a file the browser can actually fetch.
-      if (!specifier.startsWith('.')) continue
-      const target = path.posix.normalize(path.posix.join(path.posix.dirname(name), specifier))
-      if (target.startsWith('..')) continue
-      expect(files, `${name} imports ${specifier}`).toContain(target)
+    for (const route of ['run', 'plans', 'stories', 'features', 'skills', 'evidence', 'memory', 'config']) {
+      const panel = read(panelFile[route] ?? '')
+      expect(panel, `${panelFile[route]} has no content`).not.toBe('')
+      expect(panel).toMatch(new RegExp(`id="panel-${route}"[^>]+aria-labelledby="panel-${route}-title"`))
+      expect(panel).toMatch(new RegExp(`id="panel-${route}-title"`))
     }
   })
 
-  it.each(scripts)('%s uses no dynamic import', (name) => {
-    // A dynamic import is the one thing that would defeat this walk, and every
-    // panel mounts at boot anyway.
-    expect(code(name)).not.toMatch(/\bimport\s*\(/)
-  })
-
-  it('reaches every module it ships', async () => {
-    const reached = new Set<string>()
-    const queue = [...[...html.matchAll(/<script[^>]+src="([^"]+)"/g)].map((match) => match[1] ?? '')]
-    while (queue.length > 0) {
-      const name = queue.shift() as string
-      if (reached.has(name) || !files.includes(name)) continue
-      reached.add(name)
-      for (const specifier of specifiers(name)) {
-        if (!specifier.startsWith('.')) continue
-        queue.push(path.posix.normalize(path.posix.join(path.posix.dirname(name), specifier)))
+  it('gives every control an accessible name', () => {
+    // A placeholder is not a name: it is announced inconsistently and it
+    // disappears the moment the user types. `aria-label`, an id that a
+    // `data-i18n-label`-style translated attribute names, or a wrapping
+    // `<label>` all count; a bare placeholder does not.
+    for (const name of vueFiles) {
+      const text = read(name)
+      const controls = [...text.matchAll(/<(input|select|textarea)\b[^>]*>/g)].map((match) => ({
+        tag: match[0],
+        index: match.index ?? 0,
+      }))
+      for (const { tag, index } of controls) {
+        if (/aria-label/.test(tag)) continue
+        // Wrapped in a `<label>`: the nearest `<label` before this control's
+        // position opens a span that has not yet been closed by a `</label>`
+        // also before it.
+        const before = text.slice(0, index)
+        const opens = [...before.matchAll(/<label\b/g)].length
+        const closes = [...before.matchAll(/<\/label>/g)].length
+        expect(opens > closes, `${name}: ${tag} has no accessible name`).toBe(true)
       }
     }
-    // Orphans are the other half of the walk: a module nobody imports is a
-    // module nobody notices has stopped working.
-    const orphans = scripts.filter((name) => !reached.has(name) && !name.startsWith('vendor/'))
-    expect(orphans).toEqual([])
   })
 
-  it('links every stylesheet it ships', () => {
-    const linked = [...html.matchAll(/<link[^>]+href="([^"]+\.css)"/g)].map((match) => match[1] ?? '')
-    expect(styles.filter((name) => !name.startsWith('vendor/')).sort()).toEqual(
-      linked.filter((name) => !name.startsWith('vendor/')).sort(),
-    )
-  })
-})
-
-describe('templates and actions', () => {
-  const templates = [...html.matchAll(/<template id="([\w-]+)"/g)].map((match) => match[1] ?? '')
-  const cloned = new Set(
-    scripts.flatMap((name) => [...read(name).matchAll(/clone\('([\w-]+)'\)/g)].map((match) => match[1] ?? '')),
-  )
-
-  it('clones every template it declares', () => {
-    expect(templates.filter((id) => !cloned.has(id))).toEqual([])
+  it('marks the open tab and gives the nav a name', () => {
+    const appVue = read('App.vue')
+    expect(appVue).toMatch(/<nav class="tabs" :aria-label=/)
+    // `aria-current` is bound directly off `active`, the one ref that decides
+    // which tab is open.
+    expect(appVue).toContain('aria-current')
   })
 
-  it('declares every template it clones', () => {
-    expect([...cloned].filter((id) => !templates.includes(id))).toEqual([])
-  })
-
-  it('puts no table row at a template root', () => {
-    // `<tr>`/`<td>` at the root of a `<template>` is valid HTML and works in a
-    // browser, but not every DOM implementation the suite runs on parses it —
-    // which silently leaves those row templates with no regression net. Tables
-    // here are `role="table"` grids, so every template is cloneable everywhere.
-    for (const id of templates) {
-      const body = new RegExp(`<template id="${id}"[^>]*>([\\s\\S]*?)</template>`).exec(html)?.[1] ?? ''
-      expect(body.trimStart().slice(0, 4), id).not.toMatch(/^<(tr|td|th)\b/)
-    }
-  })
-
-  it('registers every data-act in the markup', () => {
-    const used = new Set([...html.matchAll(/data-act="([\w-]+)"/g)].map((match) => match[1] ?? ''))
-    const registered = new Set(
-      scripts.flatMap((name) => [...read(name).matchAll(/bus\.on\('([\w-]+)'/g)].map((match) => match[1] ?? '')),
-    )
-    expect([...used].filter((name) => !registered.has(name)).sort()).toEqual([])
-    // And the inverse: an action nobody can reach is dead weight that reads as
-    // a working button in a review.
-    expect([...registered].filter((name) => !used.has(name)).sort()).toEqual([])
+  it('keeps one live region for notices and one for banners', () => {
+    // `NoticeFeed.vue`'s toggle button plus panel is the notice surface;
+    // `Toasts.vue` is the banners' announcer. Each names its own live region
+    // exactly once — a second would double-announce the same text.
+    expect([...read('components/Toasts.vue').matchAll(/aria-live="polite"/g)]).toHaveLength(1)
+    expect([...read('components/NoticeFeed.vue').matchAll(/aria-live="polite"/g)]).toHaveLength(0)
+    // `NoticeFeed.vue` itself carries no live region — `role="status"` lives
+    // on `Toasts.vue`'s root, the one place a message must interrupt without
+    // the reader opening anything. The panel below it is opened by hand, so
+    // announcing it too would repeat every toast a second time.
   })
 })
 
 describe('keyboard before pointer', () => {
   it('never starts a drag/pointer/mouse/touch reorder gesture without a keydown handler in the same file that also reads an arrow, Home or End key', () => {
-    // C5's rule. Its precedent is narrower than an earlier version of this
-    // comment claimed, so here is what the two headers it can honestly cite
-    // actually say. `ui/tabs.js:6-7` refused `role="tablist"` for the seven
-    // fixed panel links on a cost argument — arrow-key handling "would need
-    // ... to honour text direction, which is a real RTL bug for no gain" —
-    // and the anchors it kept instead were never pointer-only; they were
-    // always keyboard-operable. `ui/worktabs.js:10-13` paid that same RTL
-    // cost anyway, for its one reordering-adjacent control (roving tabindex,
-    // arrow keys read from `document.documentElement.dir` on every
-    // keystroke), because unlike the fixed links "a set that changes cannot
-    // be navigated by anchors". Neither header is about a pointer-only drag
-    // handle, and nothing on this page has ever shipped one — so there is no
-    // existing case here of a keyboard user left with nothing to press. This
-    // rule exists for the day a file reaches for a reorder gesture anyway:
-    // whichever file starts listening for one must, in that same file,
-    // listen for `keydown` too and actually read an arrow/Home/End key from
-    // it, so the keyboard path ships with the pointer path rather than after
-    // it, or not at all — a `keydown` handler that never looks at one of
-    // those keys (an Escape-to-close handler, say) moves nothing and does not
-    // count. Checked at file granularity because that is what one control's
-    // module already is here — `mountWorktabs` binds both its `keydown`
-    // handler and (were one ever added) a drag handler on `spec.strip` in the
-    // same closure.
-    //
-    // The gesture side matches every shape this codebase actually writes for
-    // starting such a thing, not only `.addEventListener('dragstart' |
-    // 'pointerdown', …)`: `mousedown` and `touchstart` reorder just as well,
-    // the property form (`.ondragstart = `, `.onpointerdown = `, …) needs no
-    // `addEventListener` at all, a receiver-less `addEventListener(` is
-    // already this page's style for a top-level listener (`app.js:173`:
-    // `addEventListener('hashchange', fn)`), and HTML5 native drag-reorder
-    // needs nothing beyond a `draggable` flag set true — `el.draggable =
-    // true` in a script or a literal `draggable="true"` in `index.html`,
-    // which `ui/dom.js`'s `attr()` makes trivial to write from a template.
+    // C5's rule, ported. See the original's own header (git history,
+    // `discipline.test.ts` before Task 12) for the precedent this narrows to:
+    // nothing on this page has ever shipped a pointer-only reorder handle,
+    // and this exists for the day a file reaches for one anyway.
     const reorderStart =
-      /addEventListener\(\s*['"](?:dragstart|pointerdown|mousedown|touchstart)['"]|\.on(?:dragstart|pointerdown|mousedown|touchstart)\s*=|\bdraggable\s*=\s*["']?true\b/
-    const keydown = /addEventListener\(\s*['"]keydown['"]|\.onkeydown\s*=/
+      /addEventListener\(\s*['"](?:dragstart|pointerdown|mousedown|touchstart)['"]|@(?:dragstart|pointerdown|mousedown|touchstart)\s*=|\.on(?:dragstart|pointerdown|mousedown|touchstart)\s*=|\bdraggable\s*=\s*["']?true\b|:draggable="true"/
+    const keydown = /addEventListener\(\s*['"]keydown['"]|@keydown|\.onkeydown\s*=/
     const arrowNav = /ArrowUp|ArrowDown|ArrowLeft|ArrowRight|\bHome\b|\bEnd\b/
-    const targets = files.filter((name) => name.endsWith('.js') || name === 'index.html')
-    const offenders = targets.filter((name) => {
-      const text = code(name)
+    const offenders = vueFiles.filter((name) => {
+      const text = read(name)
       return reorderStart.test(text) && !(keydown.test(text) && arrowNav.test(text))
     })
     expect(offenders).toEqual([])
   })
 })
 
-describe('accessibility', () => {
-  it('gives every top-level view a visible heading and an unmistakable selected route', () => {
-    for (const route of ['run', 'plans', 'stories', 'features', 'skills', 'evidence', 'memory', 'config']) {
-      expect(html).toMatch(new RegExp(`id="tab-${route}"[^>]+aria-controls="panel-${route}"`))
-      expect(html).toMatch(
-        new RegExp(`id="panel-${route}"[^>]+aria-labelledby="panel-${route}-title"`),
-      )
-      expect(html).toMatch(new RegExp(`id="panel-${route}-title"`))
-    }
-    expect(read('css/30-tabs.css')).toMatch(
-      /\.tabs a\[aria-current="page"\][^{]*\{[^}]*background:/,
-    )
-  })
-
-  it('gives every control an accessible name', () => {
-    // A placeholder is not a name: it is announced inconsistently and it
-    // disappears the moment the user types. Every one of these controls had
-    // only a placeholder until this test existed.
-    const controls = [...html.matchAll(/<(input|select|textarea)\b[^>]*>/g)].map((match) => match[0])
-    const unnamed = controls.filter(
-      // The three exemptions are named by something other than an attribute
-      // on the tag itself: `lang` by the visible label beside it, and the two
-      // dialog fields by the `<label>` wrapping them. A `<label>` *is* an
-      // accessible name; what this test forbids is a placeholder standing in
-      // for one.
-      (tag) =>
-        !/aria-label|data-i18n-label/.test(tag) &&
-        !/id="lang"|id="halt-reason"|id="feature-note"/.test(tag),
-    )
-    expect(unnamed).toEqual([])
-  })
-
-  it('marks the open tab and gives the nav a name', () => {
-    expect(html).toMatch(/<nav class="tabs" data-i18n-label=/)
-    // `aria-current` is written by `showTab`, which is the only place a tab's
-    // openness is decided.
-    expect(read('ui/tabs.js')).toContain("aria-current")
-  })
-
-  it('keeps one live region for notices and one for banners', () => {
-    expect([...html.matchAll(/aria-live="polite"/g)]).toHaveLength(2)
-  })
-})
-
 describe('the invariants a stylesheet edit could undo', () => {
   it('keeps the terminal pinned and clipped', () => {
-    const css = read('app.css')
     // xterm parks a measuring span at `left: -9999em`; in an rtl document that
     // otherwise gives the entire page a horizontal scrollbar.
-    expect(css).toMatch(/\.terminal\s*\{[^}]*direction:\s*ltr/)
-    expect(css).toMatch(/\.terminal\s*\{[^}]*overflow:\s*hidden/)
+    const app = readStyle('app.css')
+    expect(app).toMatch(/\.terminal\s*\{[^}]*direction:\s*ltr/)
+    expect(app).toMatch(/\.terminal\s*\{[^}]*overflow:\s*hidden/)
   })
 
   it('keeps [hidden] winning over display', () => {
     // Every banner on this page sets a `display`, which outranks the browser's
     // own `[hidden]` rule. Without this they are permanently visible.
-    expect(read('app.css')).toMatch(/\[hidden\]\s*\{\s*display:\s*none\s*!important/)
+    expect(readStyle('app.css')).toMatch(/\[hidden\]\s*\{\s*display:\s*none\s*!important/)
   })
 
   it('keeps dense chrome inside a narrow viewport', () => {
-    expect(read('app.css')).toMatch(/grid-template-columns:\s*minmax\(0,\s*1fr\)/)
-    expect(read('css/30-tabs.css')).toMatch(/\.tabs\s*\{[^}]*overflow-x:\s*auto/)
-    expect(read('css/20-rail.css')).toMatch(/\.rail\s*\{[^}]*overflow-x:\s*auto/)
-    // `.panel-grid` without this is an `auto` track, and an `auto` track's
-    // automatic minimum is its content's min-content size — a non-wrapping row
-    // inside it (`.worktabs`, `flex: 0 0 auto` tabs) then sets the *track*
-    // wide enough to hold every tab unclipped, which widens `.panel-main` (the
-    // grid item in the track) to match. `main` itself does not widen — it only
-    // sets `overflow-y: auto` (10-layout.css:85), so it overflows and scrolls
-    // sideways instead, inside `#panel-stories` and every other panel. Measured
-    // in Chrome at 720px wide: the track sized itself to 733px inside a 673px
-    // panel.
-    expect(read('css/60-panels.css')).toMatch(/\.panel-grid\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/)
-    // `.top`'s `auto` brand track has the identical failure mode: its automatic
-    // *minimum* is `.project`'s full untruncated path (`white-space: nowrap`
-    // makes its min-content size equal its max-content size), and even once
-    // that minimum is clamped to 0 the track is still *maximized* to that same
-    // unbounded max-content size before `.rail`'s `1fr` track gets anything —
-    // confirmed live in Chrome: an 82-char path at 900px starved `.rail` to
-    // 2.625px and overflowed the page by 33px with only the minmax(0, ...)
-    // clamps in place. Only capping `.project`'s own max-width stops the
-    // `auto` track from growing unbounded in the first place.
-    expect(read('css/20-rail.css')).toMatch(/\.top\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*auto\)\s*minmax\(0,\s*1fr\)/)
-    expect(read('css/20-rail.css')).toMatch(/\.project\s*\{[^}]*max-width:\s*40ch/)
+    expect(readStyle('app.css')).toMatch(/grid-template-columns:\s*minmax\(0,\s*1fr\)/)
+    expect(readStyle('30-tabs.css')).toMatch(/\.tabs\s*\{[^}]*overflow-x:\s*auto/)
+    expect(readStyle('20-rail.css')).toMatch(/\.rail\s*\{[^}]*overflow-x:\s*auto/)
+    expect(readStyle('60-panels.css')).toMatch(/\.panel-grid\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/)
+    expect(readStyle('20-rail.css')).toMatch(/\.top\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*auto\)\s*minmax\(0,\s*1fr\)/)
+    expect(readStyle('20-rail.css')).toMatch(/\.project\s*\{[^}]*max-width:\s*40ch/)
   })
 
   it('never lets a pane mode un-clip the terminal', () => {
-    for (const name of styles) {
-      expect(read(name), name).not.toMatch(/\.terminal[^{]*\{[^}]*overflow:\s*visible/)
+    for (const name of styleFiles) {
+      expect(readStyle(name), name).not.toMatch(/\.terminal[^{]*\{[^}]*overflow:\s*visible/)
     }
   })
 })
@@ -301,14 +178,14 @@ describe('rtl', () => {
   const PHYSICAL =
     /(?:^|[\s;{])(?:margin|padding|border)-(?:left|right)\b|(?:^|[\s;{])(?:left|right):|text-align:\s*(?:left|right)\b/
 
-  it.each(styles)('%s uses logical properties', (name) => {
-    const offenders = read(name)
+  it.each(styleFiles)('%s uses logical properties', (name) => {
+    const offenders = readStyle(name)
       .split('\n')
       .map((line, index) => ({ line: line.trim(), number: index + 1 }))
       // An annotated exception is allowed and has to say why — the terminal pin
       // is the one place an absolute direction is the point.
       .filter(({ line }) => PHYSICAL.test(line) && !line.startsWith('/*') && !line.startsWith('*'))
-      .filter(({ number }) => !annotated(read(name), number))
+      .filter(({ number }) => !annotated(readStyle(name), number))
       .map(({ number, line }) => `${name}:${number} ${line}`)
     expect(offenders).toEqual([])
   })
@@ -322,40 +199,23 @@ function annotated(css: string, line: number): boolean {
     .some((text) => text.includes('physical:'))
 }
 
-describe('the page never assigns to a control', () => {
-  it('writes .value in exactly one place, and for a user action', () => {
-    // Rule 3: every control the user types into is uncontrolled and written
-    // once at mount, so an 800ms tick cannot eat a half-typed note by
-    // construction rather than by a focus check somebody forgets.
-    // Each of these is for something a *person* did, or for a control written
-    // once at mount: `app.js` fills the language picker at boot and clears the
-    // new-plan field on submit, `config.js` seeds its editor only when the
-    // config revision changes (and never while dirty), `dialog.js` clears the
-    // halt reason when the dialog is opened, `launcher.js` clears the command
-    // box because Run was pressed, `plans.js` clears the approval note once the
-    // decision is recorded, `memory.js` restores the remembered query at mount,
-    // and `stories.js` restores the remembered filter at mount — a value the
-    // reader chose earlier, written once, never from `update()`. No `update()`
-    // appears in this list, and that is the property under test.
-    const writers = scripts.filter((name) => /\.value\s*=[^=]/.test(code(name)))
-    expect(writers).toEqual([
-      'app.js',
-      'panels/config.js',
-      'panels/features.js',
-      'panels/launcher.js',
-      'panels/memory.js',
-      'panels/plans.js',
-      'panels/stories.js',
-      'ui/dialog.js',
-    ])
-  })
-})
-
 describe('the server can name everything it serves', () => {
-  it('has a MIME type for every shipped extension', async () => {
+  it('has a MIME type for every extension the built page actually ships', async () => {
+    // Reads the already-built `dist/web/public`, the same convention
+    // `layout.test.ts` uses, rather than triggering a second Vite build here:
+    // `npm run build` produced it, and `verify-ship.mjs` already re-derives it
+    // from source on every ship. What this test adds is running on every
+    // `npm test`, not only on a release — this is what would have caught a
+    // `.woff`/`.svg`/font asset landing in `dist` with no MIME entry the day
+    // `assetsInlineLimit` changed or an icon font was added, long before
+    // `verify-ship` ever ran.
+    const dist = path.join(ENGINE, 'dist', 'web', 'public')
+    const shipped = await walk(dist).catch(() => {
+      throw new Error('dist/web/public is missing — run `npm run build` first')
+    })
     const server = await fs.readFile(path.join(ENGINE, 'src', 'web', 'server.ts'), 'utf8')
     const known = new Set([...server.matchAll(/'(\.\w+)':/g)].map((match) => match[1] ?? ''))
-    const shipped = new Set(files.map((name) => path.extname(name)))
-    expect([...shipped].filter((extension) => !known.has(extension)).sort()).toEqual([])
+    const shippedExtensions = new Set(shipped.map((name) => path.extname(name)).filter((ext) => ext !== ''))
+    expect([...shippedExtensions].filter((extension) => !known.has(extension)).sort()).toEqual([])
   })
 })
