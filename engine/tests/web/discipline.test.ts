@@ -77,6 +77,28 @@ describe('accessibility', () => {
       expect(panel).toMatch(new RegExp(`id="panel-${route}"[^>]+aria-labelledby="panel-${route}-title"`))
       expect(panel).toMatch(new RegExp(`id="panel-${route}-title"`))
     }
+    // The open tab needs a visible cue, not only `aria-current` — the old
+    // test asserted this against `css/30-tabs.css`; `30-tabs.css` carries
+    // across unchanged, only moved under `app/styles/`.
+    expect(readStyle('30-tabs.css')).toMatch(/\.tabs a\[aria-current="page"\][^{]*\{[^}]*background:/)
+  })
+
+  it('links every stylesheet it ships', () => {
+    // The old version of this check walked `index.html`'s `<link>` tags
+    // against the files on disk. There is no `<link>` tag any more — Vite
+    // imports `app/styles/index.css` from `main.ts`, and `index.css` itself
+    // `@import`s every numbered sheet — so what stood in for "shipped" is now
+    // "reachable from `index.css`'s own `@import` graph". Without this, a
+    // stylesheet that ships nothing (an `@import` deleted, or a new file never
+    // added to `index.css`) still passes every other stylesheet-invariant test
+    // below, because those read files off disk by name rather than asking
+    // whether the page actually loads them — exactly the false confidence the
+    // deleted "links every stylesheet it ships" test existed to rule out.
+    const indexCss = readStyle('index.css')
+    const imported = [...indexCss.matchAll(/@import\s+['"]\.\/([\w.-]+\.css)['"]/g)].map((match) => match[1] ?? '')
+    const shipped = styleFiles.filter((name) => name !== 'index.css')
+    expect(shipped.filter((name) => !imported.includes(name)).sort()).toEqual([])
+    expect(imported.filter((name) => !shipped.includes(name)).sort()).toEqual([])
   })
 
   it('gives every control an accessible name', () => {
@@ -112,15 +134,21 @@ describe('accessibility', () => {
   })
 
   it('keeps one live region for notices and one for banners', () => {
-    // `NoticeFeed.vue`'s toggle button plus panel is the notice surface;
-    // `Toasts.vue` is the banners' announcer. Each names its own live region
-    // exactly once — a second would double-announce the same text.
-    expect([...read('components/Toasts.vue').matchAll(/aria-live="polite"/g)]).toHaveLength(1)
-    expect([...read('components/NoticeFeed.vue').matchAll(/aria-live="polite"/g)]).toHaveLength(0)
-    // `NoticeFeed.vue` itself carries no live region — `role="status"` lives
-    // on `Toasts.vue`'s root, the one place a message must interrupt without
-    // the reader opening anything. The panel below it is opened by hand, so
-    // announcing it too would repeat every toast a second time.
+    // Counted across every `.vue` file, not just `Toasts.vue` and
+    // `NoticeFeed.vue` — the old test counted `aria-live="polite"` page-wide
+    // against the single `index.html`, and the point of "exactly two" is that
+    // a *third* one anywhere would double-announce a message. A check that
+    // only reads the two files it already expects the answer from would never
+    // see a third added somewhere else — `Banners.vue`, which actually holds
+    // the second region, included.
+    const total = vueFiles.reduce((sum, name) => sum + [...read(name).matchAll(/aria-live="polite"/g)].length, 0)
+    expect(total).toBe(2)
+    // `NoticeFeed.vue` itself still carries no live region of its own —
+    // `role="status"` lives on `Toasts.vue`'s root, the one place a message
+    // must interrupt without the reader opening anything. The panel below it
+    // is opened by hand, so announcing it too would repeat every toast a
+    // second time.
+    expect(read('components/NoticeFeed.vue')).not.toMatch(/aria-live="polite"/)
   })
 })
 

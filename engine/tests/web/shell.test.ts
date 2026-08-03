@@ -392,6 +392,58 @@ describe('App', () => {
     wrapper.unmount()
   })
 
+  it('logs a refused write too, not only an accepted one — ported from boot.test.ts', async () => {
+    // `session.ts`'s `settle()` calls the same `announce()` on both branches
+    // (`ok: true` and `ok: false`), so this is low risk in principle — but
+    // `store.test.ts:126` only exercises `settle(ok:false)` at the store
+    // layer, without a mounted `NoticeFeed`/`Toasts` to look at, and the test
+    // above this one only ever delivers `ok: true`. Nothing end-to-end
+    // proved a refusal reaches the toast and the log the same way an
+    // acceptance does, until this.
+    vi.resetModules()
+    const freshI18n = await import('../../src/web/app/lib/i18n.ts')
+    freshI18n.installForTest({ code: 'en', strings: english })
+    const store = await import('../../src/web/app/stores/session.ts')
+    const { default: App } = await import('../../src/web/app/App.vue')
+
+    class FakeSocket {
+      static last: FakeSocket | null = null
+      readyState = 1
+      listeners = new Map<string, (event: unknown) => void>()
+      sent: string[] = []
+      constructor(public url: string) {
+        FakeSocket.last = this
+      }
+      addEventListener(type: string, fn: (event: unknown) => void) {
+        this.listeners.set(type, fn)
+      }
+      send(data: string): void {
+        this.sent.push(data)
+      }
+      deliver(message: unknown): void {
+        this.listeners.get('message')?.({ data: JSON.stringify(message) })
+      }
+    }
+    store.connect({ token: 'tok', socketFactory: (url) => new FakeSocket(url) as unknown as WebSocket })
+    FakeSocket.last?.deliver({ type: 'snapshot', snapshot: emptySnapshot() })
+
+    const wrapper = mount(App, { attachTo: document.body })
+
+    store.submit({ kind: 'gate', run: 'run-1', open: true })
+    const id = JSON.parse((FakeSocket.last as FakeSocket).sent[0] as string).id
+    FakeSocket.last?.deliver({ type: 'receipt', id, ok: false, code: 'write.stale.plan' })
+    await nextTick()
+
+    expect(wrapper.get('.toast > span').text()).toBe(english['write.stale.plan'])
+    expect(wrapper.get('#notice-toggle .nav-count').text()).toBe('1')
+    await wrapper.get('#notice-toggle').trigger('click')
+    const rows = wrapper.findAll('.notice-row')
+    expect(rows).toHaveLength(1)
+    expect(rows[0]?.text()).toBe(english['write.stale.plan'])
+
+    wrapper.unmount()
+  })
+
   it('points every tab anchor\'s aria-controls at the panel that is actually in the document once that tab is active', async () => {
     vi.resetModules()
     const freshI18n = await import('../../src/web/app/lib/i18n.ts')
