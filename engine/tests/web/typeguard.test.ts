@@ -247,3 +247,123 @@ describe('findBoundaryViolations', () => {
     expect(findBoundaryViolations(appDir, fromFile, source)).toEqual([])
   })
 })
+
+/**
+ * `lib/local.ts`'s `read` (commonly imported `as prefs`) — and every getter
+ * `lib/selection.ts` wraps it in (`activePlan`, `storyFilter`, `activeStory`,
+ * `openStories`, `recentlyClosed`) — must never be called to seed a
+ * module-scope binding.
+ *
+ * `main.ts`'s very first statement, `import App from './App.vue'`, pulls in
+ * every composable and panel `App.vue` imports transitively — and ES module
+ * imports are evaluated before the importing module's own body runs, so that
+ * whole graph is evaluated *before* `main.ts` reaches its own
+ * `installStorage(localStorage)` call. A `const x = ref(read().field)` at
+ * module scope therefore always reads `lib/local.ts`'s `DEFAULTS` — storage
+ * is not installed yet — and pins `x` to a default forever, because nothing
+ * ever re-reads it. `useSelection.ts` shipped exactly this bug (fix round 2
+ * of the Plans panel) — not as a direct call to `read`, but one hop out
+ * through `lib/selection.ts`'s `activePlan`, which is why that module's own
+ * getters are guarded here too, by name, rather than trying to trace an
+ * arbitrary call graph. `usePane.ts` shipped the direct form earlier still
+ * (Task 2) and survives only because `bootPane()` deliberately re-reads and
+ * corrects it from `App.vue`'s `onMounted` — see the exemption below. The
+ * fix in every case is the same: read storage lazily, from inside a function
+ * a caller invokes after `installStorage()` has run, never at import time.
+ */
+function findLocalScopeSeeds(text: string): string[] {
+  const violations: string[] = []
+  const aliases = new Set<string>()
+  // `lib/selection.ts`'s own getters, every one of them a thin wrapper over
+  // `local.ts`'s `read()` — see this function's header for why a name list
+  // stands in for tracing the call graph through a second file.
+  const selectionGetters = new Set(['activePlan', 'storyFilter', 'activeStory', 'openStories', 'recentlyClosed'])
+
+  for (const clause of extractClauses(text)) {
+    const specifier = specifierOf(clause)
+    if (specifier === undefined) continue
+    const guardLocal = specifier.endsWith('/local.js')
+    const guardSelection = specifier.endsWith('/selection.js')
+    if (!guardLocal && !guardSelection) continue
+    const named = clause.match(/\{([\s\S]*)\}/)?.[1] ?? ''
+    for (const entry of named.split(',')) {
+      const trimmed = entry.trim()
+      if (trimmed === '') continue
+      const asMatch = trimmed.match(/^(\w+)\s+as\s+(\w+)$/)
+      const imported = asMatch?.[1] ?? trimmed
+      const local = asMatch?.[2] ?? trimmed
+      if (guardLocal && imported === 'read') aliases.add(local)
+      if (guardSelection && selectionGetters.has(imported)) aliases.add(local)
+    }
+  }
+  if (aliases.size === 0) return violations
+
+  // A line at column 0 is a top-level statement — nothing under this
+  // codebase's 2-space-indent convention puts a function or composable
+  // body's own statements there. A continuation line of a top-level
+  // statement (an initializer that wraps) is a known gap this scan does not
+  // see, the same class of limitation `findBoundaryViolations`'s own header
+  // documents for its own scan.
+  for (const [index, line] of text.split('\n').entries()) {
+    if (/^\s/.test(line) || line.trim() === '') continue
+    for (const alias of aliases) {
+      if (new RegExp(`\\b${alias}\\s*\\(`).test(line)) {
+        violations.push(`line ${index + 1}: ${line.trim()}`)
+      }
+    }
+  }
+  return violations
+}
+
+describe('findLocalScopeSeeds', () => {
+  const flagged: Array<[string, string]> = [
+    ['a plain module-scope call', `import { read } from '../lib/local.js'\nconst x = read().pane`],
+    ['an aliased module-scope call', `import { read as prefs } from '../lib/local.js'\nconst mode = ref(prefs().pane)`],
+    [
+      'an aliased call inside a single-line const, regardless of what wraps it',
+      `import { read as prefs } from '../lib/local.js'\nconst DEFAULTS = { pane: prefs().pane }`,
+    ],
+  ]
+  it.each(flagged)('flags %s', (_name, source) => {
+    expect(findLocalScopeSeeds(source)).not.toEqual([])
+  })
+
+  const safe: Array<[string, string]> = [
+    ['a lazy seed inside a function body', `import { read as prefs } from '../lib/local.js'\nfunction boot() {\n  return ref(prefs().pane)\n}`],
+    [
+      'a lazy seed inside an exported composable',
+      `import { read as prefs } from '../lib/local.js'\nexport function useThing() {\n  return prefs().pane\n}`,
+    ],
+    ['no import of read at all', `import { write } from '../lib/local.js'\nconst x = write({ pane: 'docked' })`],
+    [
+      'write called at module scope alongside an unrelated read import — only the read/prefs alias is guarded',
+      `import { read as prefs, write } from '../lib/local.js'\nfunction boot() {\n  return prefs().pane\n}\nconst x = write({ pane: 'docked' })`,
+    ],
+  ]
+  it.each(safe)('does not flag %s', (_name, source) => {
+    expect(findLocalScopeSeeds(source)).toEqual([])
+  })
+})
+
+describe('the app/local-storage boundary', () => {
+  it('never seeds a module-scope binding from lib/local.ts', async () => {
+    // `usePane.ts`'s own module-scope `ref(prefs().pane)` (line 16) is the
+    // one instance that predates this guard. It is not the bug this guard
+    // exists to catch a third time: `'collapsed'` is a legitimate default
+    // for a first-time visitor (this file's own header, "Collapsed on a
+    // first visit, not docked"), and `bootPane()` — called from `App.vue`'s
+    // `onMounted` — corrects it to a returning visitor's real preference
+    // before the terminal's first meaningful paint. `useSelection.ts`'s
+    // equivalent line had no such correction and silently broke persistence
+    // forever, which is the failure mode this guard is for.
+    const allowed = new Set([path.join(APP_DIR, 'composables', 'usePane.ts')])
+    const files = await walk(APP_DIR)
+    const violations: string[] = []
+    for (const file of files) {
+      if (allowed.has(file)) continue
+      const text = await fs.readFile(file, 'utf8')
+      for (const violation of findLocalScopeSeeds(text)) violations.push(`${file}: ${violation}`)
+    }
+    expect(violations).toEqual([])
+  })
+})

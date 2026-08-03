@@ -305,6 +305,67 @@ describe('App', () => {
     ])
     wrapper.unmount()
   })
+
+  it('reopens the plan the reader left open, on a mount that reproduces production import order — the module graph loaded, then storage installed', async () => {
+    // Fix round 2 of the Plans panel: `main.ts`'s very first statement,
+    // `import App from './App.vue'`, pulls `useSelection.ts` in through
+    // App's own import graph — and ES module imports are evaluated before
+    // the importing module's own body runs, so that whole graph loads
+    // *before* `main.ts` reaches `installStorage(localStorage)`. A test that
+    // installs storage before importing `App.vue` (as every other test in
+    // this file does, for unrelated reasons) cannot see that ordering bug —
+    // it is the exact inverse of production. This one imports `App.vue`
+    // first and installs storage after, the only sequence that actually
+    // exercises it, and would fail if `useSelection.ts`'s ref were seeded at
+    // module scope again.
+    vi.resetModules()
+    const freshI18n = await import('../../src/web/app/lib/i18n.ts')
+    freshI18n.installForTest({ code: 'en', strings: english })
+    const store = await import('../../src/web/app/stores/session.ts')
+    const { default: App } = await import('../../src/web/app/App.vue')
+    const local = await import('../../src/web/app/lib/local.ts')
+    local.installStorage({
+      getItem: (key) => (key === 'mjloop.prefs' ? JSON.stringify({ activePlan: 'P001' }) : null),
+      setItem: () => {},
+    })
+
+    class FakeSocket {
+      static last: FakeSocket | null = null
+      readyState = 1
+      listeners = new Map<string, (event: unknown) => void>()
+      constructor(public url: string) {
+        FakeSocket.last = this
+      }
+      addEventListener(type: string, fn: (event: unknown) => void) {
+        this.listeners.set(type, fn)
+      }
+      send(): void {}
+      deliver(message: unknown): void {
+        this.listeners.get('message')?.({ data: JSON.stringify(message) })
+      }
+    }
+    store.connect({ token: 'tok', socketFactory: (url) => new FakeSocket(url) as unknown as WebSocket })
+
+    vi.stubGlobal('fetch', (url: string) => {
+      const body =
+        url.split('?')[0] === '/api/plans/P001'
+          ? { id: 'P001', title: 'Left open before reload', approval: null, body: '', review: null, stories: [] }
+          : null
+      return Promise.resolve(new Response(JSON.stringify(body), { status: 200 }))
+    })
+
+    const snap = emptySnapshot({
+      plans: [{ id: 'P001', title: 'Left open before reload', approval: null, stories: [] }],
+    })
+    FakeSocket.last?.deliver({ type: 'snapshot', snapshot: snap })
+
+    const wrapper = mount(App)
+    location.hash = '#plans'
+    window.dispatchEvent(new Event('hashchange'))
+    await vi.waitFor(() => expect(wrapper.find('#plan-detail').attributes('hidden')).toBeUndefined())
+    expect(wrapper.get('#plan-detail-title').text()).toContain('Left open before reload')
+    wrapper.unmount()
+  })
 })
 
 describe('NoticeFeed', () => {

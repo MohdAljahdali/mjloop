@@ -28,6 +28,15 @@ export function activePlan(): string | null {
   return read().activePlan
 }
 
+/**
+ * `../composables/useSelection.ts`'s `setActivePlan` is the only door a
+ * component should use — it keeps that module's reactive mirror in step with
+ * this write. Calling this one directly from a panel would move storage
+ * without moving the ref anything is `watch()`ing, the same class of bug
+ * `useI18n.ts`'s own comment on `applyLocale` guards against for `setLocale`.
+ * This export exists for `useSelection.ts` itself and for tests that read or
+ * seed raw storage.
+ */
 export function setActivePlan(id: string | null): void {
   if (read().activePlan === id) return
   write({ activePlan: id })
