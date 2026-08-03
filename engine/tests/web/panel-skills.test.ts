@@ -275,8 +275,12 @@ describe('Skills.vue — the shared library and this project\'s acceptances', ()
 
     // Nothing is interactive on this panel except the search form's three
     // sanctioned controls: querying a source and drawing candidates back is
-    // not a write.
-    const sanctioned = new Set(wrapper.get('#skills-search').findAll('input, select, button[type="submit"]').map((n) => n.element))
+    // not a write. Built from ids rather than "outside #skills-search", so a
+    // fourth control added anywhere else inside the form — not only outside
+    // it — still fails this assertion instead of passing unnoticed.
+    const sanctioned = new Set(
+      wrapper.get('#panel-skills').findAll('#skills-search-q, #skills-search-source, #skills-search button[type="submit"]').map((n) => n.element),
+    )
     const outside = (selector: string) => wrapper.get('#panel-skills').findAll(selector).filter((n) => !sanctioned.has(n.element))
     expect(outside('button')).toHaveLength(0)
     expect(outside('input')).toHaveLength(0)
@@ -351,11 +355,15 @@ describe('Skills.vue — searching for a skill from the cockpit', () => {
       )
     }) as never)
 
+    // Exercises the source select's own `v-model`, not just the query
+    // input's.
+    await wrapper.get('#skills-search-source').setValue('skills-sh')
     await wrapper.get('#skills-search-q').setValue('react')
     await wrapper.get('#skills-search').trigger('submit')
     await flushPromises()
 
     expect(asked[0]).toContain('/api/skills/search?q=react')
+    expect(asked[0]).toContain('source=skills-sh')
     expect(wrapper.get('#skills-search-results').text()).toContain('a/b')
     expect(wrapper.get('#skills-search-results').text()).toContain('Use when c.')
   })
@@ -377,6 +385,27 @@ describe('Skills.vue — searching for a skill from the cockpit', () => {
     await flushPromises()
 
     expect(wrapper.get('#skills-search-error').attributes('hidden')).toBeUndefined()
+    expect(wrapper.get('#skills-search-results').element.children.length).toBe(0)
+  })
+
+  it('says no candidate matched once a query settled with none, and stays quiet before any query was asked', async () => {
+    serve({})
+    const { Skills } = await boot()
+    const wrapper = mount(Skills)
+    await nextTick()
+
+    // Nothing is claimed before a question was asked: an empty result line
+    // on first paint would answer a query nobody typed.
+    expect(wrapper.get('#skills-search-empty').attributes('hidden')).toBeDefined()
+
+    vi.spyOn(globalThis, 'fetch').mockImplementation((async () => new Response(JSON.stringify({ candidates: [] }), { status: 200 })) as never)
+
+    await wrapper.get('#skills-search-q').setValue('react')
+    await wrapper.get('#skills-search').trigger('submit')
+    await flushPromises()
+
+    expect(wrapper.get('#skills-search-empty').attributes('hidden')).toBeUndefined()
+    expect(wrapper.get('#skills-search-empty').text()).toBe(english['skills.searchNone'])
     expect(wrapper.get('#skills-search-results').element.children.length).toBe(0)
   })
 
