@@ -3,6 +3,7 @@ import { onBeforeUnmount, ref } from 'vue'
 import type { Message } from '../types/protocol.js'
 import { onNotice } from '../stores/session.js'
 import { useI18n } from '../composables/useI18n.js'
+import Tx from './Tx.vue'
 
 /** Bounded: this is a feed, not a log, and it is rendered. */
 const LIMIT = 50
@@ -51,7 +52,10 @@ function toggle(): void {
     <p v-if="feed.length === 0" class="empty">{{ t('notice.empty') }}</p>
     <ul v-else id="notice-list">
       <li v-for="entry in feed" :key="entry.id" class="notice-row">
-        <span>{{ t(entry.message.code, entry.message.params) }}</span>
+        <!-- Server-sent `{code, params}` — 45 locale keys here carry ids,
+             agent names, tracks, paths and digests, so this is `Tx`, not
+             `t()`, unconditionally. -->
+        <span><Tx :key-name="entry.message.code" :params="entry.message.params" /></span>
       </li>
     </ul>
   </section>

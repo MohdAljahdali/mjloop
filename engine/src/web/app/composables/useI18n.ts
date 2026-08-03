@@ -14,6 +14,7 @@ import {
   loadFallback,
   locale as currentLocale,
   localeEpoch,
+  parts as translateParts,
   pickLocale,
   setLocale,
   t as translate,
@@ -49,6 +50,10 @@ export function useI18n() {
   return {
     t: (key: string, params?: Params) => (epoch.value, translate(key, params)),
     tn: (stem: string, count: number, params?: Params) => (epoch.value, translatePlural(stem, count, params)),
+    // The content-position counterpart to `t()` — `Tx.vue` is built on this,
+    // for the same reason `t` itself is wrapped rather than imported
+    // directly: a locale switch must invalidate every render that read it.
+    parts: (key: string, params?: Params) => (epoch.value, translateParts(key, params)),
     known: (key: string) => (epoch.value, knownKey(key)),
     locale: computed(() => (epoch.value, currentLocale())),
     direction: computed(() => (epoch.value, currentDirection())),

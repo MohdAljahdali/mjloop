@@ -18,6 +18,7 @@ import { computed } from 'vue'
 import { useI18n } from '../composables/useI18n.js'
 import type { Decision } from '../types/protocol.js'
 import Bdi from './Bdi.vue'
+import Tx from './Tx.vue'
 
 const props = defineProps<{ decision: Decision }>()
 
@@ -36,7 +37,8 @@ const showRecommendation = computed(
       <Bdi v-else :value="decision.answer" />
     </p>
     <p class="hint" data-slot="recommendation" :hidden="!showRecommendation">
-      {{ showRecommendation ? t('features.recommended', { what: decision.recommendation ?? '' }) : '' }}
+      <!-- `what` is free interview prose, not an enum — `Tx`, not `t()`. -->
+      <Tx v-if="showRecommendation" key-name="features.recommended" :params="{ what: decision.recommendation ?? '' }" />
     </p>
   </div>
 </template>

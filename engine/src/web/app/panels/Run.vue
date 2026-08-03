@@ -28,6 +28,7 @@ import { preflightFacts, preflightPast, runDirName } from '../composables/useRun
 import { stamp } from '../lib/fmt.js'
 import type { ConfigView, Preflight, RunDetail, SkillManifest, Snapshot, StateView } from '../types/protocol.js'
 import Bdi from '../components/Bdi.vue'
+import Tx from '../components/Tx.vue'
 import FactRow from '../components/FactRow.vue'
 import Chip from '../components/Chip.vue'
 import RosterAgentChip from '../components/RosterAgentChip.vue'
@@ -237,7 +238,11 @@ const lastCycle = computed(() => summary.value?.last_cycle ?? null)
         <section v-if="full !== null && hasGate" id="run-gate-block" class="block">
           <h2>{{ t('run.gatePanel') }}</h2>
           <p id="run-gate-state">
-            {{ gateProof === null ? t('run.gateState.shut') : t('run.gateState.provenBy', { agent: gateProof.agent, cycle: gateProof.cycle }) }}
+            <!-- `agent` is a Latin agent name; `cycle` is a prose count, but
+                 `tx()` wraps every hole regardless — matched here rather than
+                 hand-picking which one actually needs it. -->
+            <template v-if="gateProof === null">{{ t('run.gateState.shut') }}</template>
+            <Tx v-else key-name="run.gateState.provenBy" :params="{ agent: gateProof.agent, cycle: gateProof.cycle }" />
           </p>
           <!-- The `<p>` always renders; only the `<code>` inside it hides —
                `run.js:469` hides `run-gate-ref` itself, not its wrapper, and

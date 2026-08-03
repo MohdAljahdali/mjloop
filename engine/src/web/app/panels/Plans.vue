@@ -38,6 +38,7 @@ import { planProgress, tally } from '../lib/stories.js'
 import { send, snapshot, submit } from '../stores/session.js'
 import type { MemoryView, RunSummary, Write } from '../types/protocol.js'
 import Bdi from '../components/Bdi.vue'
+import Tx from '../components/Tx.vue'
 import PlanRow from '../components/PlanRow.vue'
 import PlanEvidenceRow from '../components/PlanEvidenceRow.vue'
 import PlanMemoryRow from '../components/PlanMemoryRow.vue'
@@ -196,16 +197,21 @@ function submitNewPlan(): void {
                 <h3>{{ t('plans.decisionTitle') }}</h3>
                 <p class="hint">{{ t('plans.decisionHint') }}</p>
                 <p class="record" id="plan-approval-record">
-                  {{
-                    planDoc.approval === null
-                      ? t('plans.noDecision')
-                      : t('plans.decidedBy', {
-                          decision: t(`plans.approval.${planDoc.approval.decision}`),
-                          by: planDoc.approval.by,
-                          at: stamp(planDoc.approval.at),
-                          note: planDoc.approval.note ?? '—',
-                        })
-                  }}
+                  <template v-if="planDoc.approval === null">{{ t('plans.noDecision') }}</template>
+                  <!-- `by` is an agent name and `note` is the reader's own
+                       prose — both go through `Tx`, matching `tx()` exactly,
+                       rather than the plain `t()` a phrase in content
+                       position must never use (`lib/i18n.ts:148`). -->
+                  <Tx
+                    v-else
+                    key-name="plans.decidedBy"
+                    :params="{
+                      decision: t(`plans.approval.${planDoc.approval.decision}`),
+                      by: planDoc.approval.by,
+                      at: stamp(planDoc.approval.at),
+                      note: planDoc.approval.note ?? '—',
+                    }"
+                  />
                 </p>
 
                 <div class="approve">

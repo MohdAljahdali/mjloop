@@ -31,6 +31,7 @@ import { useI18n } from '../composables/useI18n.js'
 import { approvable } from '../lib/features.js'
 import { value as featureDocValue } from '../lib/featuredoc.js'
 import { submit } from '../stores/session.js'
+import Tx from './Tx.vue'
 
 const props = defineProps<{ open: boolean }>()
 const emit = defineEmits<{ close: [] }>()
@@ -94,7 +95,10 @@ function confirm(): void {
       <h2>{{ t('features.confirmTitle') }}</h2>
       <p class="hint">{{ t('features.confirmExplain') }}</p>
       <p class="record" id="feature-dialog-subject">
-        {{ subject === null ? '' : t('features.confirmSubject', { id: subject.id, revision: String(subject.revision), n: subject.n }) }}
+        <!-- `revision` stays a number — see `Features.vue`'s own comment on
+             `features.record.*` for why `String(...)` here would be a
+             visible change in Arabic. `id` is the Latin brief id. -->
+        <Tx v-if="subject !== null" key-name="features.confirmSubject" :params="{ id: subject.id, revision: subject.revision, n: subject.n }" />
       </p>
       <label>
         <span>{{ t('features.note') }}</span>

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from '../composables/useI18n.js'
 import { useToasts } from '../composables/useToasts.js'
+import Tx from './Tx.vue'
 
 const { t } = useI18n()
 const { toasts, dismiss } = useToasts()
@@ -14,7 +15,9 @@ function act(id: number, run: () => void): void {
 <template>
   <div class="toasts" id="toasts" role="status" aria-live="polite">
     <div v-for="toast in toasts" :key="toast.id" class="toast">
-      <span>{{ t(toast.message.code, toast.message.params) }}</span>
+      <!-- Server-sent `{code, params}`, same as `NoticeFeed.vue` — `Tx`,
+           unconditionally, for the same reason. -->
+      <span><Tx :key-name="toast.message.code" :params="toast.message.params" /></span>
       <button
         v-if="toast.action !== null"
         type="button"

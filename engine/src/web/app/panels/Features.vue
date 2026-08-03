@@ -46,6 +46,7 @@ import { closeFeature, opened, subscribe as subscribeFeatureDoc, toggleFeature, 
 import { stamp } from '../lib/fmt.js'
 import type { FeatureSummary } from '../types/protocol.js'
 import Bdi from '../components/Bdi.vue'
+import Tx from '../components/Tx.vue'
 import FeatureRow from '../components/FeatureRow.vue'
 import FeatureAcceptanceRow from '../components/FeatureAcceptanceRow.vue'
 import FeatureDecisionRow from '../components/FeatureDecisionRow.vue'
@@ -127,7 +128,14 @@ function ask(): void {
             <h2 id="feature-detail-title" ref="detailTitleEl" tabindex="-1"><Bdi :value="brief.brief.title" /></h2>
           </header>
           <p class="record" id="feature-record">
-            {{ t(`features.record.${brief.status}`, { id: brief.brief.id, revision: String(brief.brief.revision) }) }}
+            <!-- `revision` stays a number, not `String(...)`: the old page
+                 passed `brief.revision` straight through `phrase()` →
+                 `renderParam` → `Intl.NumberFormat('ar')`, rendering
+                 "المراجعة ١" in Arabic. A `String()` here would render "١"
+                 as the Latin "1" instead — a visible change the user must
+                 not see. `id` is the Latin brief id, which does need `Tx`'s
+                 isolation. -->
+            <Tx :key-name="`features.record.${brief.status}`" :params="{ id: brief.brief.id, revision: brief.brief.revision }" />
           </p>
           <p class="banner warn" id="feature-blocked" :hidden="gate.why === null">{{ gate.why === null ? '' : t(gate.why) }}</p>
 
