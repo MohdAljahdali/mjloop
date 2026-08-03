@@ -96,6 +96,26 @@ describe('Banners', () => {
 })
 
 describe('App', () => {
+  beforeEach(() => {
+    // App.vue now mounts Terminal, which touches the xterm globals `vendor/`
+    // installs on `window` in production — this test's ReferenceError without
+    // them is the same seam `terminal.test.ts` fills with a recording double.
+    ;(globalThis as any).Terminal = class {
+      cols = 80
+      rows = 24
+      loadAddon() {}
+      open() {}
+      onData() {}
+      write() {}
+      reset() {}
+    }
+    ;(globalThis as any).FitAddon = { FitAddon: class { fit() {} } }
+    ;(globalThis as any).ResizeObserver = class {
+      observe() {}
+      disconnect() {}
+    }
+  })
+
   it('marks the pill, every tab anchor, and the nav counts with the hooks the shipped CSS keys off', async () => {
     // A fresh module graph, the same technique `store.test.ts` uses: the
     // store is a module-level singleton, so a snapshot has to be delivered to

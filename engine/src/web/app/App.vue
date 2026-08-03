@@ -8,6 +8,7 @@ import Banners from './components/Banners.vue'
 import Bdi from './components/Bdi.vue'
 import LanguagePicker from './components/LanguagePicker.vue'
 import Rail from './components/Rail.vue'
+import Terminal from './components/Terminal.vue'
 
 const { t, tn } = useI18n()
 const { tabs, active, show } = useTabs()
@@ -55,4 +56,11 @@ const highCount = computed(() => snapshot.value?.state.findings.high ?? 0)
 
   <!-- Panels arrive in the second plan; the shell must build and ship first. -->
   <main class="panel"></main>
+
+  <!-- The rest of the pane — view tabs, the queue, the command form — arrives
+       with the components that drive them; the terminal is the one piece that
+       must never be inside a re-rendered container, so it mounts here alone. -->
+  <section class="pane">
+    <Terminal />
+  </section>
 </template>

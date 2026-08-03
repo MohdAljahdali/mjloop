@@ -153,3 +153,8 @@ function settle(receipt: Receipt): void {
   heldWrite.settled?.(receipt)
   announceRefusal({ code: receipt.code })
 }
+
+/** Test seam: production drives `emit` from a socket frame. */
+export function __emitForTest(frame: OutputFrame): void {
+  emit(frame)
+}
