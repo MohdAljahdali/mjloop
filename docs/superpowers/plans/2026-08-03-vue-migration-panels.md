@@ -34,6 +34,7 @@ Tasks 3-10 are the same task eight times over different subject matter. Rather t
 
 **Deliverables.**
 - `src/web/app/panels/<Name>.vue`, plus one child SFC per repeated row that had its own `<template>` in the old markup.
+- The panel's root is `<section id="panel-<id>" class="panel" aria-labelledby="panel-<id>-title">`, matching its counterpart in `index.html`. **`class="panel"` belongs on the panel, not on `<main>`** — `<main>` is the `overflow-y: auto` scroller (`10-layout.css:83-88`) and `.panel` carries the max-width, the auto margins and the `panel-in` animation. Putting it on `<main>` moves the scrollbar off the window edge, narrows the content by the scroller's padding, and plays the fade-in once at boot instead of on every tab switch. That mistake was made once already and was invisible until a panel rendered; the structure block must assert both the class and the `aria-labelledby`.
 - Any panel-only derivation as a composable under `src/web/app/composables/`, only when it is genuinely reusable or genuinely needs testing without a DOM. Derivations that already exist in `app/lib/` are imported, never re-implemented.
 - `tests/web/panel-<name>.test.ts`, carrying every behaviour the old `describe` block asserted, plus the structural assertions above.
 - `App.vue` renders it behind `v-if="active === '<id>'"` inside `<KeepAlive>`.
