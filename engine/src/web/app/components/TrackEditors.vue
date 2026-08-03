@@ -9,6 +9,22 @@
  * warning — `index.html` ships this fieldset unconditionally, and
  * `config.js`'s `drawStructured` only ever empties `#config-track-editors`
  * on its `model === null` branch, never the section around it.
+ *
+ * `#config-track-editors` below is a `tabpanel`, but the tab that names it
+ * lives one component up: `#tracks-view-list`, the second button of
+ * `Tracks.vue`'s own tablist, is what `aria-labelledby` here points at. The
+ * pairing is cross-file and easy to break silently — renaming either id
+ * without the other leaves this panel with a dangling accessible name — so
+ * treat the two ids as one seam even though nothing in this file otherwise
+ * mentions the strip that owns the other half of it.
+ *
+ * That root also carries no `tabindex`, unlike the graph panel it alternates
+ * with (`Tracks.vue`'s `#tracks-graph-view`). The APG recipe puts
+ * `tabindex="0"` on a tabpanel only when the panel itself holds nothing
+ * focusable, which is the graph's situation and the opposite of this one:
+ * every track card below is a run of its own inputs and buttons, so a tab
+ * stop on the panel root would sit in front of the first real field as a
+ * second, empty stop a keyboard reader has to skip past.
  */
 import { computed, ref } from 'vue'
 import { useI18n } from '../composables/useI18n.js'
@@ -43,7 +59,7 @@ function add(): void {
   <fieldset>
     <legend>{{ t('config.tracks') }}</legend>
     <p class="hint">{{ t('config.tracksHelp') }}</p>
-    <div id="config-track-editors" class="track-editors" role="tabpanel" tabindex="0" aria-labelledby="tracks-view-list">
+    <div id="config-track-editors" class="track-editors" role="tabpanel" aria-labelledby="tracks-view-list">
       <template v-if="props.draft !== null">
         <TrackEditor
           v-for="name in names"

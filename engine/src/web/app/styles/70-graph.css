@@ -61,6 +61,11 @@
   border-block-end: 2px solid transparent;
   margin-block-end: -1px;
   color: var(--dim);
+  /* `app.css`'s own `button` rule puts a raised-gradient shadow under every
+   * button; a tab is flat by design (`border: 0`/`background: none` above),
+   * so the shadow has to be cleared here too or an unselected tab still
+   * reads as a raised control floating over the strip. */
+  box-shadow: none;
 }
 
 /* Two cues, not one: the colour and the rule under the label. Colour alone
@@ -70,6 +75,20 @@
 .track-view-toggle button[aria-selected='true'] {
   border-block-end-color: var(--accent);
   color: var(--accent);
+}
+
+/* `app.css`'s own `button:hover:not(:disabled)` is (0,2,1) and outranks the
+ * base `.track-view-toggle button` rule above (0,1,1), so without a rule at
+ * least as specific, hovering an UNSELECTED tab would restore the raised
+ * gradient background this strip deliberately has none of, and tint the
+ * bottom border with the hover rule's `border-color` — borrowing the exact
+ * cue that is supposed to mark only the selected tab. Scoped to
+ * `:not([aria-selected='true'])` so this never fights the selected tab's own
+ * rule above when that tab is hovered too; `:not(:disabled)` is kept purely
+ * to match `app.css`'s specificity — these buttons are never disabled. */
+.track-view-toggle button:hover:not(:disabled):not([aria-selected='true']) {
+  background: none;
+  border-block-end-color: transparent;
 }
 
 /* One node per agent. The colour names the list it is drawn from — the same

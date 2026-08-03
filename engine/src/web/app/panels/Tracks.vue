@@ -139,6 +139,7 @@ const agentNames = computed(() => (draft.value === null ? [] : knownAgents(draft
  * tab", which it is not.
  */
 const trackView = ref<'graph' | 'list'>('graph')
+const viewToggleEl = ref<HTMLElement | null>(null)
 function setView(next: typeof trackView.value): void {
   trackView.value = next
   graphRefusal.value = null
@@ -179,7 +180,7 @@ function onViewKeydown(event: KeyboardEvent): void {
   const target = next
   setView(target)
   void nextTick(() => {
-    const node = document.getElementById(`tracks-view-${target}`)
+    const node = viewToggleEl.value?.querySelector(`#tracks-view-${target}`)
     if (node instanceof HTMLElement) node.focus()
   })
 }
@@ -348,10 +349,6 @@ function reset(): void {
            and `TrackEditors.vue`'s own comments. -->
       <SpecialistEditor :draft="draft" :agent-names="agentNames" :enabled="enabled" :mutate="mutate" />
 
-      <!-- List and graph both read the same draft; switching never unmounts
-           it, so `#config-track-editors` is exactly as complete after a
-           round trip through the graph as it was before — see `view`'s own
-           comment. -->
       <!-- A tablist, not two toggle buttons: these switch which of two
            panels is rendered, which is what `role="tab"` means and what
            `aria-pressed` does not. Graph first, because it is the view the
@@ -360,8 +357,13 @@ function reset(): void {
            only one panel is ever mounted (`v-if`/`v-else` below, not a
            visibility toggle), so the unselected tab omits the attribute
            rather than pointing at an id that is briefly absent from the
-           document. -->
-      <div class="track-view-toggle" role="tablist" :aria-label="t('config.trackView')" @keydown="onViewKeydown">
+           document. List and graph both read the same draft, and switching
+           never unmounts either's state — `TrackEditors.vue` owns
+           `#config-track-editors` and keeps it exactly as complete on a
+           round trip back from the graph as it was on the way in; see
+           `trackView`'s own comment for why the graph is what a reader lands
+           on first. -->
+      <div class="track-view-toggle" ref="viewToggleEl" role="tablist" :aria-label="t('config.trackView')" @keydown="onViewKeydown">
         <button
           type="button"
           id="tracks-view-graph"

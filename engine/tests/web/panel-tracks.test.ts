@@ -708,26 +708,31 @@ describe('Tracks.vue', () => {
       serve({ '/api/config': configView({ tracks: { build: { required: ['builder'], max_cycles: 5 } } }) })
       const { Tracks } = await boot()
       const wrapper = mount(Tracks, { attachTo: document.body })
-      await ready(wrapper)
+      try {
+        await ready(wrapper)
 
-      // ltr: the list sits after the graph, so ArrowRight reaches it.
-      document.documentElement.dir = 'ltr'
-      await wrapper.get('.track-view-toggle').trigger('keydown', { key: 'ArrowRight' })
-      await nextTick()
-      expect(wrapper.get('#tracks-view-list').attributes('aria-selected')).toBe('true')
-      expect(wrapper.find('#config-track-editors').exists()).toBe(true)
-      expect(document.activeElement?.id).toBe('tracks-view-list')
+        // ltr: the list sits after the graph, so ArrowRight reaches it.
+        document.documentElement.dir = 'ltr'
+        await wrapper.get('.track-view-toggle').trigger('keydown', { key: 'ArrowRight' })
+        await nextTick()
+        expect(wrapper.get('#tracks-view-list').attributes('aria-selected')).toBe('true')
+        expect(wrapper.find('#config-track-editors').exists()).toBe(true)
+        expect(document.activeElement?.id).toBe('tracks-view-list')
 
-      // rtl: the same physical key now walks the other way, because the strip
-      // is laid out the other way. This is the whole reason the handler reads
-      // `dir` instead of hard-coding a direction — the page ships in Arabic.
-      document.documentElement.dir = 'rtl'
-      await wrapper.get('.track-view-toggle').trigger('keydown', { key: 'ArrowRight' })
-      await nextTick()
-      expect(wrapper.get('#tracks-view-graph').attributes('aria-selected')).toBe('true')
-
-      document.documentElement.dir = 'ltr'
-      wrapper.unmount()
+        // rtl: the same physical key now walks the other way, because the strip
+        // is laid out the other way. This is the whole reason the handler reads
+        // `dir` instead of hard-coding a direction — the page ships in Arabic.
+        document.documentElement.dir = 'rtl'
+        await wrapper.get('.track-view-toggle').trigger('keydown', { key: 'ArrowRight' })
+        await nextTick()
+        expect(wrapper.get('#tracks-view-graph').attributes('aria-selected')).toBe('true')
+      } finally {
+        // Always restored, even when an assertion above throws — otherwise a
+        // failing run leaves the document `rtl` with a mount still attached
+        // to `document.body` for whichever test runs next.
+        document.documentElement.dir = 'ltr'
+        wrapper.unmount()
+      }
     })
 
     it('draws one node per agent in the track, in required, available, closing order', async () => {
