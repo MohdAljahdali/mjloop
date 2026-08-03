@@ -13,6 +13,14 @@
  * (possibly still-live) object — so a snapshot arriving afterward, while the
  * confirmation sits open, can update `AgentCard.vue`'s own props all it wants
  * without ever moving what this dialog is about to send.
+ *
+ * `open` and its `subject` are one ref, the same collapse `useAgentEditor.ts`
+ * makes and for the identical reason — see that file's own header. This one
+ * never had the runtime guard the editor's `watch` needed (`AgentDeleteDialog.vue`
+ * calls `showModal()` unconditionally and reads `subject` through a `v-if`
+ * in its template), but the same two-independent-refs shape was still one a
+ * future caller could set out of step; the discriminated union below makes
+ * "open with no subject" unrepresentable here too, not merely unencountered.
  */
 import { ref } from 'vue'
 import type { AgentView } from '../types/protocol.js'
@@ -22,17 +30,16 @@ export interface AgentDeleteSubject {
   digest: string
 }
 
-const open = ref(false)
-const subject = ref<AgentDeleteSubject | null>(null)
+export type AgentDeleteState = { open: false } | { open: true; subject: AgentDeleteSubject }
+
+const state = ref<AgentDeleteState>({ open: false })
 
 export function useAgentDelete() {
   return {
-    open,
-    subject,
+    state,
     askDelete: (agent: AgentView): void => {
-      subject.value = { name: agent.name, digest: agent.digest }
-      open.value = true
+      state.value = { open: true, subject: { name: agent.name, digest: agent.digest } }
     },
-    closeDelete: (): void => void (open.value = false),
+    closeDelete: (): void => void (state.value = { open: false }),
   }
 }

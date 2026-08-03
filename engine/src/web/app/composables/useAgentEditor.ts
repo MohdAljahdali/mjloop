@@ -18,11 +18,21 @@
  * Unlike `useHalt.ts`'s `runId` (a plain prop `App.vue` binds from the live
  * snapshot), there is no single live field this dialog's subject reduces to,
  * so the subject itself — which agent, which mode, and (for `create`) the
- * name pool `copyName` needs — lives here as a second module ref, set once by
- * whichever handler is still mounted when the button is pressed
- * (`Agents.vue`). `AgentEditor.vue` still freezes its own working copy of it
- * in a `watch(open)`, the same shape `HaltDialog.vue` freezes `subject` from
- * `runId` in: read once, when the dialog opens, never re-read afterward.
+ * name pool `copyName` needs — lives here, set once by whichever handler is
+ * still mounted when the button is pressed (`Agents.vue`).
+ *
+ * **`open` and its `subject` are one ref, not two.** A round-2 fix added a
+ * runtime guard in `AgentEditor.vue` for `open === true` with `subject ===
+ * null` — reachable only if some future caller set one without the other,
+ * which today's two setters never do, but nothing enforced that pairing
+ * beyond the two of them agreeing to write both at once. A round-3 review
+ * called that a trap that self-heals one tick late, not a fix that makes the
+ * bad state unrepresentable. `AgentEditorState` below is a discriminated
+ * union: the `open: false` member carries no `subject` field at all, and the
+ * `open: true` member requires one, so "open with no subject" is not a value
+ * this type can hold — `AgentEditor.vue` narrows on `.open` and the compiler
+ * proves `.subject` exists on the other side, the same way it already proves
+ * it inside `openEdit`/`openDerive` below.
  */
 import { ref } from 'vue'
 import type { AgentView } from '../types/protocol.js'
@@ -34,21 +44,19 @@ export interface AgentEditSubject {
   takenNames: readonly string[]
 }
 
-const open = ref(false)
-const subject = ref<AgentEditSubject | null>(null)
+export type AgentEditorState = { open: false } | { open: true; subject: AgentEditSubject }
+
+const state = ref<AgentEditorState>({ open: false })
 
 export function useAgentEditor() {
   return {
-    open,
-    subject,
+    state,
     openEdit: (agent: AgentView, takenNames: readonly string[]): void => {
-      subject.value = { mode: 'update', agent, takenNames }
-      open.value = true
+      state.value = { open: true, subject: { mode: 'update', agent, takenNames } }
     },
     openDerive: (agent: AgentView, takenNames: readonly string[]): void => {
-      subject.value = { mode: 'create', agent, takenNames }
-      open.value = true
+      state.value = { open: true, subject: { mode: 'create', agent, takenNames } }
     },
-    closeEditor: (): void => void (open.value = false),
+    closeEditor: (): void => void (state.value = { open: false }),
   }
 }

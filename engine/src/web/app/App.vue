@@ -64,9 +64,11 @@ const { open: featureApproveOpen, closeApprove } = useFeatureApprove()
 // Same shape again, for the agent editor and its delete confirmation — both
 // opened from `AgentCard.vue`, inside the kept-alive `Agents` panel, and both
 // needing to survive a tab switch while open. See `useAgentEditor.ts`'s own
-// header for why a round-1 review moved these two out of that panel.
-const { open: agentEditorOpen, subject: agentEditorSubject, closeEditor } = useAgentEditor()
-const { open: agentDeleteOpen, subject: agentDeleteSubject, closeDelete } = useAgentDelete()
+// header for why a round-1 review moved these two out of that panel, and its
+// round-3 note for why each is a single `state` ref rather than an
+// `open`/`subject` pair.
+const { state: agentEditorState, closeEditor } = useAgentEditor()
+const { state: agentDeleteState, closeDelete } = useAgentDelete()
 // Applies the pane mode already read from storage, but only once the
 // terminal underneath it has mounted into a laid-out box — a child's
 // `onMounted` fires before its parent's, so calling this from here rather
@@ -220,6 +222,6 @@ const highCount = computed(() => snapshot.value?.state.findings.high ?? 0)
   <!-- Same reason — see `useFeatureApprove.ts`. -->
   <FeatureApproveDialog :open="featureApproveOpen" @close="closeApprove()" />
   <!-- Same reason again — see `useAgentEditor.ts`/`useAgentDelete.ts`. -->
-  <AgentEditor :open="agentEditorOpen" :subject="agentEditorSubject" @close="closeEditor()" />
-  <AgentDeleteDialog :open="agentDeleteOpen" :subject="agentDeleteSubject" @close="closeDelete()" />
+  <AgentEditor :state="agentEditorState" @close="closeEditor()" />
+  <AgentDeleteDialog :state="agentDeleteState" @close="closeDelete()" />
 </template>

@@ -20,22 +20,33 @@
  * `v-if`/`:key` pair inside the panel that opens it.
  *
  * One document, not a shared draft: every field here is a plain `ref`, reset
- * from `props.subject` exactly once per open, in the `watch(open)` handler
- * below — the same moment `HaltDialog.vue` resets its own `reason` and
- * `FeatureApproveDialog.vue` its own `note`. `Config.vue` needs
+ * from `props.state.subject` exactly once per open, in the `watch(state)`
+ * handler below — the same moment `HaltDialog.vue` resets its own `reason`
+ * and `FeatureApproveDialog.vue` its own `note`. `Config.vue` needs
  * `mutate()`/`draft`/`dirty` because many controls accumulate changes into
  * one document before a single save; this form has exactly one control
  * surface and calls `submit()` exactly once, from exactly one place, the
  * moment it is pressed.
+ *
+ * **Round-3 fix.** `open` and `subject` used to be two separate props, and
+ * this file carried a runtime guard for the case where a caller set one
+ * without the other — reachable only by a bug in `useAgentEditor.ts`'s two
+ * setters, never by anything this component itself could do, but a review
+ * correctly called that a self-healing trap rather than a fix that made the
+ * bad state impossible to represent. `AgentEditorState` is now one
+ * discriminated union (`useAgentEditor.ts`), so `props.state.open === true`
+ * is the only condition under which `.subject` even exists on the type — the
+ * guard below is gone because the compiler, not a runtime check, is what
+ * rules the invalid pair out.
  */
 import { ref, watch } from 'vue'
 import { useI18n } from '../composables/useI18n.js'
 import { validAgent } from '../lib/config.js'
 import { copyName, hasContract } from '../lib/agents.js'
 import { submit } from '../stores/session.js'
-import type { AgentEditSubject } from '../composables/useAgentEditor.js'
+import type { AgentEditorState } from '../composables/useAgentEditor.js'
 
-const props = defineProps<{ open: boolean; subject: AgentEditSubject | null }>()
+const props = defineProps<{ state: AgentEditorState }>()
 const emit = defineEmits<{ close: [] }>()
 const { t } = useI18n()
 
@@ -69,27 +80,16 @@ const nameProblem = ref(false)
 const descriptionProblem = ref(false)
 
 watch(
-  () => props.open,
-  (isOpen) => {
-    if (!isOpen) {
+  () => props.state,
+  (current) => {
+    if (!current.open) {
       dialog.value?.close()
       return
     }
-    const subject = props.subject
-    // `open` and `subject` are only ever set together, by `openEdit`/
-    // `openDerive` (`useAgentEditor.ts`) — but a round-2 review found this
-    // branch trusted that pairing rather than enforcing it: the old code
-    // `return`ed here *before* `showModal()`, which — had `open` ever gone
-    // `true` with a `null` subject — would have left `open === true` with no
-    // visible dialog and no way back, since a later `open = true` is a no-op
-    // to a `watch` that never sees it change. Emitting `close` instead makes
-    // that state self-correct in the one frame it could ever occur, rather
-    // than relying on `useAgentEditor.ts`'s two setters never being called
-    // out of step.
-    if (subject === null) {
-      emit('close')
-      return
-    }
+    // `current.subject` exists on the type here — `AgentEditorState`'s
+    // `open: true` member requires it — so there is no null case left to
+    // guard against; see this file's own header.
+    const subject = current.subject
     mode.value = subject.mode
     originalName.value = subject.agent.name
     name.value = subject.mode === 'create' ? copyName(subject.takenNames, subject.agent.name) : subject.agent.name

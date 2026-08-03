@@ -18,16 +18,24 @@
  * `name`/`digest` out of the pressed card's `AgentView` into a fresh object
  * at the moment of the click, and this component — now a single
  * always-mounted instance hosted in `App.vue`, outside `<KeepAlive>` — freezes
- * its own `subject` from that copy in the `watch(open)` below, the same
+ * its own `subject` from that copy in the `watch(state)` below, the same
  * moment `HaltDialog.vue` freezes its own `subject` from `props.runId`.
+ *
+ * **Round-3 fix.** `open`/`subject` collapsed into one `AgentDeleteState`
+ * union, the same move `useAgentEditor.ts` makes and for the identical
+ * reason — see that composable's own header. This component never carried
+ * the runtime null-guard `AgentEditor.vue` did (it called `showModal()`
+ * unconditionally and gated the `Tx` sentence on `subject !== null`), but the
+ * underlying two-independent-refs shape was the same latent hazard; the
+ * union makes "open with no subject" a value this type cannot hold, here too.
  */
 import { ref, watch } from 'vue'
 import { useI18n } from '../composables/useI18n.js'
 import { submit } from '../stores/session.js'
-import type { AgentDeleteSubject } from '../composables/useAgentDelete.js'
+import type { AgentDeleteState, AgentDeleteSubject } from '../composables/useAgentDelete.js'
 import Tx from './Tx.vue'
 
-const props = defineProps<{ open: boolean; subject: AgentDeleteSubject | null }>()
+const props = defineProps<{ state: AgentDeleteState }>()
 const emit = defineEmits<{ close: [] }>()
 const { t } = useI18n()
 
@@ -38,10 +46,10 @@ const cancelButton = ref<HTMLButtonElement | null>(null)
 const subject = ref<AgentDeleteSubject | null>(null)
 
 watch(
-  () => props.open,
-  (isOpen) => {
-    if (isOpen) {
-      subject.value = props.subject
+  () => props.state,
+  (current) => {
+    if (current.open) {
+      subject.value = current.subject
       dialog.value?.showModal()
       cancelButton.value?.focus()
     } else {

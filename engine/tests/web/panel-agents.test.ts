@@ -100,8 +100,8 @@ async function bootWithHost(snapshot: Snapshot) {
     setup: () => () =>
       h('div', [
         h(Agents),
-        h(AgentEditor, { open: editor.open.value, subject: editor.subject.value, onClose: editor.closeEditor }),
-        h(AgentDeleteDialog, { open: del.open.value, subject: del.subject.value, onClose: del.closeDelete }),
+        h(AgentEditor, { state: editor.state.value, onClose: editor.closeEditor }),
+        h(AgentDeleteDialog, { state: del.state.value, onClose: del.closeDelete }),
       ]),
   })
 

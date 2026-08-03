@@ -339,10 +339,22 @@ describe('App', () => {
     // review found this exact test class had never been applied to:
     // `AgentEditor.vue` and `AgentDeleteDialog.vue` used to live inside
     // `Agents.vue`, itself inside `<KeepAlive>` — see `useAgentEditor.ts`'s
-    // own header. Opened straight through the composables rather than a
-    // click: `AgentCard.vue` needs a fetched `/api/agents` feed to render a
-    // button at all, and this test is only about the dialogs' own survival.
+    // own header. Opened *while `#agents` is the active tab* — the one panel
+    // that would have embedded them under the old shape — and not from
+    // `#run`: a round-3 review found the first version of this fold opened
+    // them before ever switching to `#agents`, so a mutation reproducing the
+    // old shape failed on the opening assertion itself (the dialog did not
+    // exist yet, because the panel that used to embed it was not mounted),
+    // never reaching the tab-switch assertions below at all. Opening them
+    // here, on the tab that would embed them, and only then switching away,
+    // is what actually exercises "detached by `<KeepAlive>`" rather than
+    // "not mounted yet regardless of `<KeepAlive>`".
     vi.stubGlobal('fetch', () => Promise.resolve(new Response('null', { status: 200 })))
+    location.hash = '#agents'
+    window.dispatchEvent(new Event('hashchange'))
+    await nextTick()
+    expect(wrapper.find('#panel-agents').exists()).toBe(true)
+
     const { useAgentEditor } = await import('../../src/web/app/composables/useAgentEditor.ts')
     const { useAgentDelete } = await import('../../src/web/app/composables/useAgentDelete.ts')
     const fixtureAgent = { name: 'scribe', source: 'project' as const, description: 'Writes notes.', tools: null, model: null, extra: {}, body: 'x', digest: 'a'.repeat(64) }
@@ -354,22 +366,20 @@ describe('App', () => {
     expect(editorDialog.open).toBe(true)
     expect(deleteDialog.open).toBe(true)
 
-    location.hash = '#agents'
-    window.dispatchEvent(new Event('hashchange'))
-    await nextTick()
-    expect(wrapper.find('#panel-agents').exists()).toBe(true)
-    expect(editorDialog.isConnected).toBe(true)
-    expect(deleteDialog.isConnected).toBe(true)
-    expect(document.querySelector('#panel-agents #agent-editor')).toBeNull()
-    expect(document.querySelector('#panel-agents .agent-delete-dialog')).toBeNull()
-
     location.hash = '#plans'
     window.dispatchEvent(new Event('hashchange'))
     await nextTick()
+    expect(wrapper.find('#panel-agents').exists()).toBe(false)
+    // The load-bearing pair, same reasoning as the halt dialog's own comment
+    // above: `isConnected` is what actually catches a dialog detached along
+    // with its former panel's subtree — `.open` alone stays `true` on a
+    // detached element too, under happy-dom.
     expect(editorDialog.isConnected).toBe(true)
     expect(deleteDialog.isConnected).toBe(true)
     expect(editorDialog.open).toBe(true)
     expect(deleteDialog.open).toBe(true)
+    expect(document.querySelector('#panel-agents #agent-editor')).toBeNull()
+    expect(document.querySelector('#panel-agents .agent-delete-dialog')).toBeNull()
 
     wrapper.unmount()
   })
