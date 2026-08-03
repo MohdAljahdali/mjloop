@@ -10,6 +10,8 @@ export type {
   Snapshot,
   PlanView,
   StoryView,
+  AgentView,
+  AgentsView,
   Job,
   JobStatus,
   SessionView,
