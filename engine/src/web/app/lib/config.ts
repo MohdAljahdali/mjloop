@@ -610,16 +610,28 @@ export function trackCommentLoss(raw: string | null, track: string): number | nu
   return count
 }
 
-/** `commandRows`/`policyRows` — the `verify:` block split into "commands run" and "everything else". */
+/** Every verify command row — `commandRows`, ported. */
 export function commandRows(verify: Config['verify']): { key: string; value: string | null }[] {
   return VERIFY_COMMANDS.map((slot) => ({ key: `verify.${slot}`, value: verify[slot] }))
 }
 
+/**
+ * Everything in `verify:` that is not a command, as its own block — not
+ * merely for reading ease. `verify:` also carries `timeout_ms`,
+ * `lock_timeout_ms` and `failure_patterns`, none of which is a command the
+ * engine runs. A row built from `Object.entries(verify)` would put all three
+ * under "Verify commands" — three lines claiming the engine executes a
+ * number. See `Config.vue`'s own `config.currentVerify`/`config.verifyPolicy`
+ * sections, which are two `<dl class="facts">` for exactly this reason.
+ */
 export function policyRows(verify: Config['verify']): { key: string; value: string | null }[] {
   const rows: { key: string; value: string | null }[] = [
     { key: 'verify.timeout_ms', value: String(verify.timeout_ms) },
     { key: 'verify.lock_timeout_ms', value: String(verify.lock_timeout_ms) },
   ]
+  // Only the slots that override the defaults. An empty array is the
+  // schema's own value and says nothing a reader of `config.yaml` did not
+  // already know.
   for (const slot of VERIFY_COMMANDS) {
     const values = verify.failure_patterns[slot]
     if (values.length > 0) rows.push({ key: `verify.failure_patterns.${slot}`, value: values.join('  ') })

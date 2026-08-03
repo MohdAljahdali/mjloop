@@ -110,6 +110,15 @@ const conflict = ref(false)
 const form = ref<ConfigFormValues>({ ...BLANK_FORM })
 const draft = ref<Draft | null>(null)
 
+// No `seedEpoch` here, unlike `config.js`'s own `max_cycles` box: that
+// counter existed purely to stop its imperative renderer from clobbering a
+// caret mid-keystroke by re-running `cycles.value = String(track.max_cycles)`
+// on every redraw, poll included. Vue's own patcher already only writes a
+// bound `.value` when it actually differs from the DOM's current one, and
+// the reseed guard just below (`revision !== editorRevision`, skipped while
+// dirty and not conflicting) is what stops the poll from reaching a draft a
+// reader is mid-edit on — the two together make the epoch redundant rather
+// than merely hidden.
 watch(
   view,
   (current) => {
@@ -432,21 +441,15 @@ const flaggedKey = computed(() => (locale.value, pluralKey('telemetry.flagged', 
         </div>
       </fieldset>
 
-      <SpecialistEditor
-        :specialists="draft?.specialists ?? {}"
-        :agent-names="agentNames"
-        :enabled="enabled"
-        :mutate="mutate"
-      />
+      <!-- `draft` is passed through as-is, not defaulted to an empty
+           document: `null` and "the document has zero specialists/tracks"
+           are two different states `config.js` distinguishes on purpose, and
+           collapsing them here would make an unparseable `config.yaml` read
+           as a project with no rules at all. See `SpecialistEditor.vue`'s
+           and `TrackEditors.vue`'s own comments. -->
+      <SpecialistEditor :draft="draft" :agent-names="agentNames" :enabled="enabled" :mutate="mutate" />
 
-      <TrackEditors
-        v-if="draft !== null"
-        :draft="draft"
-        :baseline="baseline"
-        :raw-text="rawText"
-        :enabled="enabled"
-        :mutate="mutate"
-      />
+      <TrackEditors :draft="draft" :baseline="baseline" :raw-text="rawText" :enabled="enabled" :mutate="mutate" />
 
       <datalist id="config-agent-names">
         <option v-for="name in agentNames" :key="name" :value="name"></option>

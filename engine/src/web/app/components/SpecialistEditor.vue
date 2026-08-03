@@ -12,7 +12,7 @@ import { validAgent, type Draft } from '../lib/config.js'
 import SpecialistRuleRow from './SpecialistRuleRow.vue'
 
 const props = defineProps<{
-  specialists: Record<string, string>
+  draft: Draft | null
   agentNames: string[]
   enabled: boolean
   mutate: (change: (model: Draft) => boolean | void) => void
@@ -22,11 +22,23 @@ const { t } = useI18n()
 // `?? 'auto'` for the type checker rather than for the data: the keys come
 // from this very object, so the lookup cannot miss — but an index signature
 // says `string | undefined`.
-const rules = computed(() =>
-  Object.keys(props.specialists)
+const rules = computed(() => {
+  const specialists = props.draft?.specialists
+  if (specialists === undefined) return []
+  return Object.keys(specialists)
     .sort()
-    .map((agent) => ({ agent, mode: props.specialists[agent] ?? 'auto' })),
-)
+    .map((agent) => ({ agent, mode: specialists[agent] ?? 'auto' }))
+})
+
+// `config.specialistsEmpty` says "no rules — the leader composes every cycle
+// on its own", which is a claim about the *document*. A `draft === null`
+// config never made that claim; it made none at all, because it never
+// parsed. `config.js`'s own `drawStructured` keeps this hidden in exactly
+// that case (`flag(specialistEmpty, 'hidden', true)` on its `model === null`
+// branch) rather than defaulting to the empty-document message — see
+// `Config.vue`'s own comment on why `draft === null` is carried rather than
+// defaulted away.
+const showEmpty = computed(() => props.draft !== null && rules.value.length === 0)
 
 const newAgent = ref('')
 function add(): void {
@@ -56,7 +68,7 @@ function remove(agent: string): void {
   <fieldset>
     <legend>{{ t('config.specialists') }}</legend>
     <p class="hint">{{ t('config.specialistsHelp') }}</p>
-    <p v-if="rules.length === 0" id="config-specialists-empty" class="empty">{{ t('config.specialistsEmpty') }}</p>
+    <p v-if="showEmpty" id="config-specialists-empty" class="empty">{{ t('config.specialistsEmpty') }}</p>
     <div id="config-specialist-rules" class="rules">
       <SpecialistRuleRow
         v-for="rule in rules"

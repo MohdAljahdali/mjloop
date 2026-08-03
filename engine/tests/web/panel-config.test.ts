@@ -160,6 +160,40 @@ describe('Config.vue', () => {
     expect(control(wrapper, 'config-max-parallel-input').disabled).toBe(true)
   })
 
+  it("keeps the specialists:/tracks: fieldsets — legend, hint, add box — on screen for an unparseable config.yaml, rather than removing the sections, and hides the specialists-empty message rather than defaulting a null draft to an empty document", async () => {
+    // `draft === null` and "the document has zero specialists/tracks" are two
+    // different states `config.js`'s own `drawStructured` distinguishes:
+    // its `model === null` branch empties the card hosts but leaves
+    // `specialistEmpty` hidden (`flag(specialistEmpty, 'hidden', true)`) —
+    // the opposite of what a genuinely empty document shows. `index.html`
+    // ships both fieldsets unconditionally; a garbled file must not remove
+    // them.
+    serve({
+      '/api/config': { raw: 'tracks: [this is not valid', revision: null, parsed: null, invalid: true },
+    })
+    const { Config } = await boot()
+    const wrapper = mount(Config)
+    await vi.waitFor(() => expect(wrapper.get('#config-editor-state').text()).toBe(english['config.editorInvalid']))
+
+    // The tracks: fieldset's own chrome survives — no cards, but the legend,
+    // hint, add box and warning are all still there, disabled rather than
+    // gone.
+    expect(wrapper.find('#config-track-editors').exists()).toBe(true)
+    expect(wrapper.findAll('.track-editor')).toHaveLength(0)
+    expect(wrapper.find('#config-track-new').exists()).toBe(true)
+    expect(control(wrapper, 'config-track-new').disabled).toBe(true)
+    expect(wrapper.text()).toContain(english['config.tracks'])
+    expect(wrapper.text()).toContain(english['config.trackNewWarning'])
+
+    // The specialists: fieldset survives the same way, and its "no rules"
+    // message — a claim about the document — does not fire for a document
+    // that never parsed at all.
+    expect(wrapper.find('#config-specialist-rules').exists()).toBe(true)
+    expect(wrapper.find('#config-specialists-empty').exists()).toBe(false)
+    expect(wrapper.find('#config-specialist-new').exists()).toBe(true)
+    expect(control(wrapper, 'config-specialist-new').disabled).toBe(true)
+  })
+
   it('renders one row per verify command and the rest of the block as policy, with unset shown as a phrase', async () => {
     serve({
       '/api/config': configView({
@@ -440,6 +474,192 @@ describe('Config.vue', () => {
 
       const items = wrapper.findAll('.track-preview-item').map((node) => node.text())
       expect(items.some((text) => text.includes('alpha') && text.includes('gamma'))).toBe(true)
+    })
+
+    it('toggles the gate on with a seeded proven_by, edits it through the select, and toggles it off', async () => {
+      serve({
+        '/api/config': configView({
+          tracks: { build: { required: ['alpha', 'beta'], max_cycles: 5 } },
+        }),
+      })
+      const { Config } = await boot()
+      const wrapper = mount(Config)
+      await vi.waitFor(() => expect(wrapper.find('.track-editor').exists()).toBe(true))
+
+      const card = wrapper.get('.track-editor')
+      expect(card.find('.track-gate').exists(), 'gate body hidden before the checkbox is on').toBe(false)
+
+      const gateCheckbox = card.get('[data-field="gate-enabled"]')
+      await gateCheckbox.setValue(true)
+      // Seeded from the first required/available/closing agent.
+      expect((card.get('.track-gate select').element as HTMLSelectElement).value).toBe('alpha')
+
+      // The gate's own `blocks` list — the one place `bucketOf`'s
+      // `list === 'blocks'` branch is exercised, since that bucket lives one
+      // level deeper (`entry.gate?.blocks`) than the other three.
+      const blocksList = card.get('.track-gate .track-list')
+      await blocksList.get('input').setValue('beta')
+      await blocksList.get('.rule-add button').trigger('click')
+      expect(blocksList.get('.chips').text()).toContain('beta')
+
+      await card.get('.track-gate select').setValue('beta')
+      expect((card.get('.track-gate select').element as HTMLSelectElement).value).toBe('beta')
+
+      await gateCheckbox.setValue(false)
+      expect(card.find('.track-gate').exists()).toBe(false)
+    })
+
+    it("keeps a gate's stale proven_by visible and selectable even once the track no longer runs that agent", async () => {
+      // `offered()`: dropping a value the track no longer runs would
+      // silently rewrite the config to whatever option happened to be
+      // first — the problem list (`config.problem.gateUnknown`) is what
+      // says it is wrong, not a control that quietly discards it.
+      serve({
+        '/api/config': configView({
+          tracks: {
+            build: { required: ['alpha', 'beta'], max_cycles: 5, gate: { proven_by: 'alpha', blocks: ['beta'] } },
+          },
+        }),
+      })
+      const { Config } = await boot()
+      const wrapper = mount(Config)
+      await vi.waitFor(() => expect(wrapper.find('.track-editor').exists()).toBe(true))
+
+      const card = wrapper.get('.track-editor')
+      const requiredList = wrapper.findAll('.track-list')[0]
+      const removeAlpha = requiredList?.findAll('.chips li').find((chip) => chip.text().includes('alpha'))
+      await removeAlpha?.get('button').trigger('click')
+
+      const provenSelect = card.get('.track-gate select')
+      const options = provenSelect.findAll('option').map((option) => option.attributes('value'))
+      expect(options, 'alpha stays offered even though it left required').toContain('alpha')
+      expect((provenSelect.element as HTMLSelectElement).value).toBe('alpha')
+      expect(wrapper.text()).toContain((english['config.problem.gateUnknown'] ?? '').replace('{agent}', 'alpha'))
+    })
+
+    it('toggles the map on with a seeded drafted_by, and edits it through the select', async () => {
+      serve({
+        '/api/config': configView({
+          tracks: { build: { required: ['alpha'], available: ['beta'], max_cycles: 5 } },
+        }),
+      })
+      const { Config } = await boot()
+      const wrapper = mount(Config)
+      await vi.waitFor(() => expect(wrapper.find('.track-editor').exists()).toBe(true))
+
+      const card = wrapper.get('.track-editor')
+      expect(card.find('.track-map').exists()).toBe(false)
+
+      const mapCheckbox = card.get('[data-field="map-enabled"]')
+      await mapCheckbox.setValue(true)
+      expect((card.get('.track-map select').element as HTMLSelectElement).value).toBe('alpha')
+
+      // Deliberately narrower than the gate's list: `available` is offered,
+      // a `closing` agent never would be (a map drafted by one is a
+      // document no run ever writes).
+      const mapOptions = card.get('.track-map select').findAll('option').map((option) => option.attributes('value'))
+      expect(mapOptions.sort()).toEqual(['alpha', 'beta'])
+
+      await card.get('.track-map select').setValue('beta')
+      expect((card.get('.track-map select').element as HTMLSelectElement).value).toBe('beta')
+
+      await mapCheckbox.setValue(false)
+      expect(card.find('.track-map').exists()).toBe(false)
+    })
+
+    it('updates max_cycles, the problem list and the change preview on every keystroke, not only on blur', async () => {
+      // `config.js`'s own `onField` is registered on both `input` and
+      // `change`; a box bound only to `change` would leave the preview
+      // stale until the field lost focus.
+      serve({ '/api/config': configView({ tracks: { build: { required: ['alpha'], max_cycles: 5 } } }) })
+      const { Config } = await boot()
+      const wrapper = mount(Config)
+      await vi.waitFor(() => expect(wrapper.find('.track-editor').exists()).toBe(true))
+
+      const cycles = wrapper.get('.track-cycles input')
+      ;(cycles.element as HTMLInputElement).value = '7'
+      await cycles.trigger('input')
+
+      const items = wrapper.findAll('.track-preview-item').map((node) => node.text())
+      expect(items.some((text) => text.includes('max_cycles'))).toBe(true)
+    })
+
+    it("shows the count of comment lines a pending save would drop from a track's own block", async () => {
+      const raw = [
+        'version: 1',
+        'tracks:',
+        '  build:',
+        '    # one comment',
+        '    # two comment',
+        '    required:',
+        '      - alpha',
+        '    max_cycles: 5',
+        '',
+      ].join('\n')
+      serve({
+        '/api/config': {
+          raw,
+          revision: 'a'.repeat(64),
+          parsed: ConfigSchema.parse({ version: 1, tracks: { build: { required: ['alpha'], max_cycles: 5 } } }),
+          invalid: false,
+        },
+      })
+      const { Config } = await boot()
+      const wrapper = mount(Config)
+      await vi.waitFor(() => expect(wrapper.find('.track-editor').exists()).toBe(true))
+
+      expect(wrapper.find('.track-preview-comments').exists()).toBe(false)
+
+      const gateCheckbox = wrapper.get('[data-field="gate-enabled"]')
+      await gateCheckbox.setValue(true)
+
+      const comments = wrapper.get('.track-preview-comments')
+      expect(comments.text()).toBe(english['config.preview.commentsLost.other'].replace('{count}', '2'))
+    })
+
+    it('keeps an order edge reachable, and its problem visible, after its own agent leaves required — the orphan row', async () => {
+      serve({
+        '/api/config': configView({
+          tracks: {
+            mine: { required: ['alpha', 'beta'], max_cycles: 3, order: [{ agent: 'alpha', after: ['beta'] }] },
+          },
+        }),
+      })
+      const { Config } = await boot()
+      const wrapper = mount(Config)
+      await vi.waitFor(() => expect(wrapper.find('.track-editor').exists()).toBe(true))
+
+      const requiredList = wrapper.findAll('.track-list')[0]
+      const removeAlpha = requiredList?.findAll('.chips li').find((chip) => chip.text().includes('alpha'))
+      await removeAlpha?.get('button').trigger('click')
+
+      // The row survives — `draftable` no longer names `alpha`, but its
+      // edge is still in the draft, and the row is the union of `draftable`
+      // and every `edge.agent` already in `track.order`.
+      const orphanRow = wrapper.findAll('.track-order-agent').find((node) => node.attributes('data-agent') === 'alpha')
+      expect(orphanRow, 'the orphaned edge lost its row').toBeDefined()
+      expect(orphanRow?.find('.chips').text()).toContain('beta')
+      expect(wrapper.text()).toContain((english['config.problem.orderAgentUnknown'] ?? '').replace('{agent}', 'alpha'))
+    })
+  })
+
+  describe('#config-agent-names', () => {
+    it('offers every agent already named in specialists: and tracks:, as suggestions rather than a closed list', async () => {
+      serve({
+        '/api/config': configView({
+          specialists: { zeta: 'auto' },
+          tracks: { build: { required: ['alpha'], available: ['beta'], max_cycles: 5 } },
+        }),
+      })
+      const { Config } = await boot()
+      const wrapper = mount(Config)
+      await vi.waitFor(() => expect(wrapper.find('.track-editor').exists()).toBe(true))
+
+      const options = wrapper.get('#config-agent-names').findAll('option').map((option) => option.attributes('value'))
+      expect(options).toEqual(['alpha', 'beta', 'zeta'])
+
+      // The agent-name inputs point at it, and never at a closed <select>.
+      expect(wrapper.get('#config-specialist-new').attributes('list')).toBe('config-agent-names')
     })
   })
 

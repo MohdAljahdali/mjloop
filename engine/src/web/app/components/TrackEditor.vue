@@ -166,10 +166,29 @@ const orderRows = computed(() => {
   return [...draftable.value, ...orphans].map((agent) => ({ agent, after: edgeAfter(order, agent) }))
 })
 
+/**
+ * A predecessor, onto one agent's order edge.
+ *
+ * Naming itself is a 1-node cycle `findOrderCycle` would refuse anyway
+ * (schemas/config.ts:266-311) — `TrackOrderRow.vue` already rejects that
+ * before emitting `add`, and the `pred === agent` guard here is the second
+ * line of the same defence.
+ *
+ * @param agent The row's own agent — the edge's `agent` side.
+ * @param pred The predecessor being added — the edge's `after` side.
+ */
 function edgeAdd(agent: string, pred: string): void {
   if (pred === agent) return
   mutateTrack((entry) => {
     const order = Array.isArray(entry.order) ? entry.order : (entry.order = [])
+    // The engine supports more than one edge naming the same agent —
+    // `findOrderViolation` (ops/log.ts:598-611) filters `track.order` for
+    // every edge naming `agent` and loops all of them, and `dispatchWaves`
+    // (schemas/config.ts:767-773) does the same — so membership has to be
+    // checked across every edge already naming `agent`, not just the first
+    // one `.find` would return, or a second edge's predecessor could be
+    // re-added here even though the row (whose chips are that same union,
+    // see `edgeAfter` in `lib/config.ts`) already shows it as present.
     const edges = order.filter((candidate) => candidate.agent === agent)
     if (edges.some((edge) => edge.after.includes(pred))) return false
     let edge = edges[0]
@@ -180,10 +199,19 @@ function edgeAdd(agent: string, pred: string): void {
     edge.after.push(pred)
   })
 }
+
+/**
+ * @param agent The row's own agent.
+ * @param pred The predecessor leaving — the chip's own `×`.
+ */
 function edgeRemove(agent: string, pred: string): void {
   mutateTrack((entry) => {
     if (!Array.isArray(entry.order)) return false
     const order = entry.order
+    // The chip this row shows is the union across every edge naming `agent`
+    // (`edgeAfter`, `lib/config.ts`), so removing one has to clear `pred`
+    // from every one of those edges too — walked back-to-front so the splice
+    // below cannot skip the edge after the one just removed.
     let removed = false
     for (let i = order.length - 1; i >= 0; i--) {
       const edge = order[i]
@@ -192,6 +220,12 @@ function edgeRemove(agent: string, pred: string): void {
       if (at < 0) continue
       edge.after.splice(at, 1)
       removed = true
+      // `OrderEdgeSchema.after` is `.min(1)` (schemas/config.ts:62) — an edge
+      // with zero predecessors is not "no constraint", it is a shape the
+      // server refuses outright. Dropping the whole edge here is what lets
+      // removing its last predecessor read as clearing the constraint, the
+      // way every other chip removal on this card does, rather than leaving
+      // a draft that Save can never reach.
       if (edge.after.length === 0) order.splice(i, 1)
     }
     if (!removed) return false
@@ -234,6 +268,7 @@ const commentsLost = computed(() => {
           :value="track.max_cycles"
           :disabled="!props.enabled"
           :aria-label="t('config.maxCycles')"
+          @input="onCyclesChange"
           @change="onCyclesChange"
         />
       </label>
