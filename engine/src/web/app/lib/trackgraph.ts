@@ -144,7 +144,21 @@ export function layout(track: Track): { nodes: GraphNode[]; edges: GraphEdge[] }
 
   const nodes: GraphNode[] = []
   const nextIndex = new Map<number, number>()
+  // `TrackSchema.superRefine` (schemas/config.ts:117-255) never refuses an
+  // agent named in more than one of `required`/`available`/`closing`, or the
+  // same array naming it twice — every check there tests set membership
+  // (`known.has(...)`), which is silent about multiplicity. `layersOf` above
+  // inherits that: its `layer` map is keyed by agent name, so a repeated
+  // agent gets exactly one layer regardless of how many times it is listed.
+  // A node id has to follow the same rule — one node per agent, not one per
+  // listing — or two `place()` calls for the same agent would push two
+  // `GraphNode`s sharing `id: agent`, which Vue Flow (Task 12) cannot
+  // render: a duplicate key, silently resolved to whichever node's DOM
+  // happened to render last.
+  const placed = new Set<string>()
   const place = (agent: string, list: GraphNode['list'], atLayer: number, cyclic: boolean): void => {
+    if (placed.has(agent)) return
+    placed.add(agent)
     const index = nextIndex.get(atLayer) ?? 0
     nextIndex.set(atLayer, index + 1)
     nodes.push({ id: agent, agent, list, layer: atLayer, index, cyclic })

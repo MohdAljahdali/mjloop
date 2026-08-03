@@ -11,6 +11,19 @@
 @import '@vue-flow/core/dist/style.css';
 @import '@vue-flow/core/dist/theme-default.css';
 
+/* No `.terminal`-style `direction: ltr`/`overflow: hidden` escape hatch is
+ * added here for `.track-graph`, its own wrapper — `@vue-flow/core`'s own
+ * `style.css` already pins both on `.vue-flow`, the root class Vue Flow
+ * renders inside this wrapper: `.vue-flow { overflow: hidden; direction:
+ * ltr; }` (`node_modules/@vue-flow/core/dist/style.css:1-8`, imported two
+ * lines up). That is the same fix `.terminal` (`app.css`) carries by hand
+ * for xterm, applied at the source for the same reason: Vue Flow's own pane,
+ * zoom controls and edge paths are positioned in absolute pixel/transform
+ * math that assumes left-to-right, physical-left coordinates, unrelated to
+ * this project's own `dir="rtl"`. Confirmed by reading the vendor
+ * stylesheet directly rather than assuming parity with `.terminal` — a
+ * second escape hatch here would be redundant, not merely unnecessary. */
+
 .track-graph {
   position: relative;
   block-size: 360px;

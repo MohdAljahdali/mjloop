@@ -93,7 +93,16 @@ function onNodesChange(changes: NodeChange[]): void {
 
 <template>
   <div class="track-graph" :data-track-graph="props.name">
-    <VueFlow :nodes="nodes" :edges="edges" fit-view-on-init @connect="onConnect" @edges-change="onEdgesChange" @nodes-change="onNodesChange">
+    <!-- `:nodes-draggable="false"`: `lib/trackgraph.ts` derives `{ x, y }`
+         from `layer`/`index` on every render and nothing here ever writes a
+         moved position back — the same "positions are derived, never
+         stored" rule that file's own header states. Vue Flow drags nodes by
+         default; left on, a reader could drag a node, watch it hold, and
+         then have it silently snap back the next time `draft` changes
+         (any other edit re-renders this component with the same layout
+         coordinates). Turning dragging off makes that contract visible
+         instead of surprising. -->
+    <VueFlow :nodes="nodes" :edges="edges" :nodes-draggable="false" fit-view-on-init @connect="onConnect" @edges-change="onEdgesChange" @nodes-change="onNodesChange">
       <template #node-agent="nodeProps">
         <div class="graph-node" :class="[`node-${nodeProps.data.list}`, { 'node-cyclic': nodeProps.data.cyclic }]" :data-graph-node="nodeProps.id">
           <Handle type="target" :position="Position.Left" />

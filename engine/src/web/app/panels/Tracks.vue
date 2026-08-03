@@ -38,6 +38,7 @@ import { addOrderEdge, broken, collectTrackChanges, knownAgents, removeOrderEdge
 import { wouldCycle } from '../lib/trackgraph.js'
 import type { Config, ConfigView } from '../types/protocol.js'
 import SpecialistEditor from '../components/SpecialistEditor.vue'
+import Tx from '../components/Tx.vue'
 import TrackEditors from '../components/TrackEditors.vue'
 import TrackGraph from '../components/TrackGraph.vue'
 
@@ -89,6 +90,10 @@ watch(
     conflict.value = false
     dirty.value = false
     draft.value = seedDraft(config)
+    // A refusal describes an edge that was never drawn against a track this
+    // fresh `draft` may no longer even carry the same way — a reseed (a
+    // clean revision landing, not a conflict) starts the graph clean too.
+    graphRefusal.value = null
   },
   { immediate: true },
 )
@@ -143,8 +148,19 @@ const graphEntries = computed(() => {
     .filter((entry): entry is { name: string; track: NonNullable<(typeof entry)['track']> } => entry.track !== undefined)
 })
 
-/** Why the last drag on the graph was refused, or `null` once the graph is clean again. */
-const graphRefusal = ref<string | null>(null)
+/**
+ * Why the last drag on the graph was refused, or `null` once the graph is
+ * clean again — a key and its params, not a rendered string:
+ * `lib/i18n.ts`'s own `t()` docstring is explicit that `t()` is for
+ * attributes only, because it does not wrap a hole in `<bdi>` the way
+ * `tx()`/`Tx.vue` does, and this refusal's holes (`from`/`to`) are Latin
+ * agent names sitting inside what is otherwise Arabic content — exactly the
+ * case that isolation exists for. Holding the key also means a locale
+ * switch repaints this the same way every other translated string on the
+ * page does, instead of leaving whatever language it was in when the drag
+ * happened.
+ */
+const graphRefusal = ref<{ key: string; params: Record<string, string> } | null>(null)
 
 /**
  * A drag's own end, from whichever `TrackGraph` card emitted it. `wouldCycle`
@@ -159,7 +175,7 @@ function onGraphConnect(name: string, params: { source: string; target: string }
   const entry = draft.value?.tracks[name]
   if (entry === undefined) return
   if (wouldCycle(entry, params.source, params.target)) {
-    graphRefusal.value = t('config.graph.refusalCycle', { from: params.source, to: params.target })
+    graphRefusal.value = { key: 'config.graph.refusalCycle', params: { from: params.source, to: params.target } }
     return
   }
   graphRefusal.value = null
@@ -255,6 +271,7 @@ function reset(): void {
   draft.value = seedDraft(baseline.value)
   dirty.value = false
   conflict.value = false
+  graphRefusal.value = null
 }
 </script>
 
@@ -300,7 +317,18 @@ function reset(): void {
       <TrackEditors v-if="trackView === 'list'" :draft="draft" :baseline="baseline" :raw-text="rawText" :enabled="enabled" :mutate="mutate" />
 
       <section v-else id="tracks-graph-view" class="track-graphs" :aria-label="t('config.viewGraph')">
-        <p v-if="graphRefusal !== null" id="tracks-graph-refusal" class="banner warn" role="status">{{ graphRefusal }}</p>
+        <!-- Deliberately no live-region role or aria-live attribute here —
+             #tracks-editor-state above (this same panel) is a banner
+             without one too, and the page already keeps exactly two live
+             regions on purpose (Toasts.vue, Banners.vue;
+             discipline.test.ts's own "keeps one live region for notices and
+             one for banners"). A third would double-announce, and a region
+             that appears at the same moment its own text does is frequently
+             missed by a screen reader anyway — the visible banner is what
+             actually carries this. -->
+        <p v-if="graphRefusal !== null" id="tracks-graph-refusal" class="banner warn">
+          <Tx :key-name="graphRefusal.key" :params="graphRefusal.params" />
+        </p>
         <TrackGraph
           v-for="entry in graphEntries"
           :key="entry.name"

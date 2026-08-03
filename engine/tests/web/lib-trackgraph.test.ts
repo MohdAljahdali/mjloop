@@ -13,6 +13,19 @@ describe('laying a track out', () => {
     expect(byAgent['c']).toBe(2)
   })
 
+  it('places an agent named in two lists once, never twice — TrackSchema permits the overlap, but a node id must still be unique', () => {
+    // `required`/`available` naming the same agent is not a shape
+    // `TrackSchema.superRefine` refuses (schemas/config.ts:117-255 checks
+    // set membership only), so a hand-edited or mid-draft `config.yaml` can
+    // reach here with `builder` in both. A second node sharing `id: 'builder'`
+    // would be a Vue Flow key collision, not merely a cosmetic duplicate.
+    const overlapping = { required: ['a', 'b'], available: ['a'], closing: [], order: [], max_cycles: 5 }
+    const nodes = layout(overlapping).nodes
+    expect(nodes.map((node) => node.id)).toEqual(['a', 'b'])
+    // The earlier listing wins — `required` is walked before `available`.
+    expect(nodes.find((node) => node.id === 'a')?.list).toBe('required')
+  })
+
   it('puts closing agents on a layer of their own, past everything else', () => {
     const nodes = layout(ORDERED).nodes
     const closing = nodes.find((node) => node.agent === 'd')
