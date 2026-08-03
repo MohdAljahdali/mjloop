@@ -18,6 +18,7 @@ import Rail from './components/Rail.vue'
 import Toasts from './components/Toasts.vue'
 import Evidence from './panels/Evidence.vue'
 import Features from './panels/Features.vue'
+import Memory from './panels/Memory.vue'
 import Plans from './panels/Plans.vue'
 import Run from './panels/Run.vue'
 import Skills from './panels/Skills.vue'
@@ -162,6 +163,7 @@ const highCount = computed(() => snapshot.value?.state.findings.high ?? 0)
       <Features v-else-if="active === 'features'" />
       <Skills v-else-if="active === 'skills'" />
       <Evidence v-else-if="active === 'evidence'" />
+      <Memory v-else-if="active === 'memory'" />
     </KeepAlive>
   </main>
 

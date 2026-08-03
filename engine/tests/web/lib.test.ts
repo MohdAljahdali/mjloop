@@ -20,6 +20,7 @@ import {
 } from '../../src/web/app/lib/stories.ts'
 import { deriveEvents } from '../../src/web/app/lib/notifications.ts'
 import { planMemories, planRuns } from '../../src/web/app/lib/plans.ts'
+import { facet } from '../../src/web/app/lib/memory.ts'
 import { emptySnapshot } from './helpers/page.js'
 import type { Job, PlanView, StoryView } from '../../src/web/protocol.js'
 import type { Track } from '../../src/schemas/config.js'
@@ -589,6 +590,49 @@ describe('lib/plans', () => {
 
     it('excludes a memory scoped to a different plan entirely', () => {
       expect(planMemories([memory({ id: 'M005', plan: 'P002' })], plainPlan)).toEqual([])
+    })
+  })
+})
+
+describe('lib/memory', () => {
+  // `describe('memory faceting')`, `panels.test.ts:1811`, ported verbatim.
+  const entry = (patch: { id: string; kind?: string; title?: string; tags?: string[]; body?: string }): MemoryView => ({
+    id: patch.id,
+    kind: patch.kind ?? 'decision',
+    title: patch.title ?? 'A decision',
+    tags: patch.tags ?? [],
+    at: '2026-07-28T09:00:00.000Z',
+    run: null,
+    plan: null,
+    story: null,
+    body: patch.body ?? '',
+  })
+
+  describe('facet', () => {
+    it('matches every term across id, title, tags and body', () => {
+      const all = [
+        entry({ id: 'M001', title: 'Cookies over tokens', body: 'Because of SSR.' }),
+        entry({ id: 'M002', kind: 'lesson', title: 'Retry the flake', tags: ['ci'] }),
+      ]
+      expect(facet(all, 'cookies ssr', '').map((memory) => memory.id)).toEqual(['M001'])
+      expect(facet(all, 'ci', '').map((memory) => memory.id)).toEqual(['M002'])
+      expect(facet(all, '', 'lesson').map((memory) => memory.id)).toEqual(['M002'])
+      expect(facet(all, 'cookies', 'lesson')).toEqual([])
+      expect(facet(all, '', '')).toHaveLength(2)
+    })
+
+    it('is case-insensitive and ignores extra whitespace between terms', () => {
+      const all = [entry({ id: 'M001', title: 'Cookies Over Tokens' })]
+      expect(facet(all, '  COOKIES   tokens  ', '').map((memory) => memory.id)).toEqual(['M001'])
+    })
+
+    it('matches nothing when a term is absent, even if every other term matches', () => {
+      const all = [entry({ id: 'M001', title: 'Cookies over tokens' })]
+      expect(facet(all, 'cookies nonexistent', '')).toEqual([])
+    })
+
+    it('an empty memory list stays empty regardless of the filters', () => {
+      expect(facet([], 'anything', 'decision')).toEqual([])
     })
   })
 })
