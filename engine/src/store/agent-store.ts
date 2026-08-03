@@ -1,7 +1,11 @@
 import crypto from 'node:crypto'
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { parseFrontmatter } from './frontmatter.js'
+import { AgentNameSchema } from '../schemas/contract.js'
+import { writeTextAtomic } from './atomic.js'
+import { parseFrontmatter, serialiseFrontmatter } from './frontmatter.js'
+import { withLock } from './lock.js'
+import { resolveLoopPaths } from './paths.js'
 
 /**
  * One agent file, as a document this layer does not interpret.
@@ -107,4 +111,113 @@ export async function readAgent(projectDir: string, name: string): Promise<Agent
     return null
   }
   return toDoc(name, raw, file, 'project')
+}
+
+export type AgentWriteFailure = 'stale' | 'exists' | 'missing' | 'invalid' | 'reserved'
+
+export class AgentWriteError extends Error {
+  constructor(readonly kind: AgentWriteFailure, message: string) {
+    super(message)
+    this.name = 'AgentWriteError'
+  }
+}
+
+export interface AgentInput {
+  name: string
+  description: string
+  tools: string | null
+  model: string | null
+  extra: Record<string, unknown>
+  body: string
+}
+
+/**
+ * The whole path defence, in one place.
+ *
+ * The name is a token to be matched, never a path to be opened: it goes
+ * through `AgentNameSchema` — the engine's own — and only then is it joined
+ * onto the agents directory. `.` and `/` are outside that schema's character
+ * class, so `..` and `a/b` cannot match, and this is the first write in the
+ * server that lands outside `.mjloop/`.
+ */
+function agentFile(projectDir: string, name: string): string {
+  if (!AgentNameSchema.safeParse(name).success) {
+    throw new AgentWriteError('invalid', 'not an agent name')
+  }
+  return path.join(projectAgentsDir(projectDir), `${name}.md`)
+}
+
+function document(input: AgentInput): string {
+  // Insertion order is the serialised order, and it matches what every agent
+  // file in this plugin already opens with — a diff against a hand-written
+  // file should be about what changed, not about four fields moving.
+  const data: Record<string, unknown> = { name: input.name, description: input.description }
+  if (input.tools !== null) data['tools'] = input.tools
+  if (input.model !== null) data['model'] = input.model
+  Object.assign(data, input.extra)
+  return serialiseFrontmatter(data, input.body)
+}
+
+/**
+ * @param options.expectDigest `null` creates; a digest replaces exactly that
+ *   revision of the file and refuses anything else. A stale click is refused
+ *   rather than obeyed — the same contract `mutateConfig` holds.
+ * @param options.reserved The plugin's own agent names. A project agent
+ *   shadows a plugin one of the same name, so this refuses to replace an agent
+ *   carrying a system invariant with whatever somebody typed.
+ */
+export async function writeAgent(
+  projectDir: string,
+  input: AgentInput,
+  options: { expectDigest: string | null; reserved: readonly string[] },
+): Promise<{ digest: string }> {
+  const file = agentFile(projectDir, input.name)
+  if (options.reserved.includes(input.name)) {
+    throw new AgentWriteError('reserved', 'that name shadows a plugin agent')
+  }
+  if (input.description.trim().length === 0) {
+    throw new AgentWriteError('invalid', 'an agent needs a description')
+  }
+
+  // The project lock, not a lock of this file's own: an agent write and a
+  // config write are two halves of one decision often enough — deleting an
+  // agent a track names is refused by reading that config — that serialising
+  // them against each other is worth more than the concurrency it costs.
+  return withLock(resolveLoopPaths(projectDir).lock, async () => {
+    let current: string | null = null
+    try {
+      current = await fs.readFile(file, 'utf8')
+    } catch {
+      current = null
+    }
+    if (options.expectDigest === null && current !== null) {
+      throw new AgentWriteError('exists', 'that agent already exists')
+    }
+    if (options.expectDigest !== null) {
+      if (current === null) throw new AgentWriteError('missing', 'that agent is gone')
+      if (agentDigest(current) !== options.expectDigest) {
+        throw new AgentWriteError('stale', 'the file moved underneath the editor')
+      }
+    }
+    const next = document(input)
+    await fs.mkdir(projectAgentsDir(projectDir), { recursive: true })
+    await writeTextAtomic(file, next)
+    return { digest: agentDigest(next) }
+  })
+}
+
+export async function deleteAgent(projectDir: string, name: string, expectDigest: string): Promise<void> {
+  const file = agentFile(projectDir, name)
+  await withLock(resolveLoopPaths(projectDir).lock, async () => {
+    let current: string
+    try {
+      current = await fs.readFile(file, 'utf8')
+    } catch {
+      throw new AgentWriteError('missing', 'that agent is gone')
+    }
+    if (agentDigest(current) !== expectDigest) {
+      throw new AgentWriteError('stale', 'the file moved underneath the editor')
+    }
+    await fs.rm(file)
+  })
 }
