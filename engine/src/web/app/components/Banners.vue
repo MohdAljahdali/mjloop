@@ -9,6 +9,8 @@
 import { computed } from 'vue'
 import type { Snapshot } from '../types/protocol.js'
 import { useI18n } from '../composables/useI18n.js'
+import { send } from '../stores/session.js'
+import { time } from '../lib/fmt.js'
 
 // `snapshot` is nullable: the server may be down, the token may be bad, or
 // an upgrade may have been refused before a first snapshot ever arrives —
@@ -22,6 +24,16 @@ const stale = computed(() => props.snapshot?.state.recovered ?? false)
 // design system", it is missing everything; showing this banner then would be
 // telling the reader to run a command against a project that is not there yet.
 const noDesignSystem = computed(() => (props.snapshot?.state.initialised ?? false) && !props.snapshot?.state.design_system)
+
+/**
+ * `autonomous: false` lets a session end its turn mid-run and wait for a
+ * human. A queue that cannot see that hangs forever on job one, so this is a
+ * notice and a button — never automatic input. `nudge` names no run, unlike
+ * halt: it feeds the pty that is already attached rather than writing
+ * anything to disk, so it needs no run id — see `Run.vue`'s halt dialog for
+ * the write that does.
+ */
+const stalledSince = computed(() => props.snapshot?.session.stalledSince ?? null)
 </script>
 
 <template>
@@ -29,5 +41,10 @@ const noDesignSystem = computed(() => (props.snapshot?.state.initialised ?? fals
     <p v-if="!online" class="banner offline">{{ t('app.disconnected') }}</p>
     <p v-if="stale" class="banner warn">{{ t('banner.stale') }}</p>
     <p v-if="noDesignSystem" class="banner note">{{ t('banner.designSystem') }}</p>
+    <p v-if="stalledSince !== null" class="banner warn">
+      <span>{{ t('session.stalled', { time: time(stalledSince) }) }}</span>
+      <button type="button" @click="send({ type: 'nudge' })">{{ t('session.nudge') }}</button>
+      <small>{{ t('session.stalledHint') }}</small>
+    </p>
   </div>
 </template>

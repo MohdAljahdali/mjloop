@@ -11,6 +11,7 @@ import LanguagePicker from './components/LanguagePicker.vue'
 import Pane from './components/Pane.vue'
 import Rail from './components/Rail.vue'
 import Toasts from './components/Toasts.vue'
+import Run from './panels/Run.vue'
 import { bootPane } from './composables/usePane.js'
 
 const { t, tn } = useI18n()
@@ -80,8 +81,16 @@ const highCount = computed(() => snapshot.value?.state.findings.high ?? 0)
     </a>
   </nav>
 
-  <!-- Panels arrive in the second plan; the shell must build and ship first. -->
-  <main class="panel"></main>
+  <!-- One panel mounted at a time, and kept alive rather than torn down when
+       another tab opens — the same reason `Pane`'s own terminal is never
+       remounted: a feed re-fetching from scratch on every tab switch is not
+       what "the open tab is the subscription" (`lib/api.ts`) means. Panels
+       arrive one task at a time; only Run exists so far. -->
+  <main class="panel">
+    <KeepAlive>
+      <Run v-if="active === 'run'" />
+    </KeepAlive>
+  </main>
 
   <Pane />
 
