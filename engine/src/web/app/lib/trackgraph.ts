@@ -28,10 +28,14 @@
  *
  * `wouldCycle` is a separate, narrower question from `findOrderCycle`: not
  * "does this track already cycle" but "would drawing one more edge make it
- * cycle" — a depth-first search from the proposed edge's target, over
- * `order` edges alone (not the gate), looking for the proposed edge's
- * source. A gate is not drawn by dragging in the graph view, so it plays no
- * part in this refusal.
+ * cycle" — a depth-first search from the proposed edge's target, over `order`
+ * edges *and* the gate folded in the same way `layersOf` folds it, looking
+ * for the proposed edge's source. A gate is exactly a hidden order edge
+ * (`blocks after proven_by`) — `TrackSchema.superRefine`'s own cycle check
+ * and `dispatchWaves` both fold it in for precisely this reason
+ * (`schemas/config.ts:215-255`, `:764-773`) — so leaving it out of this
+ * search would let a user drag an edge that, combined with the gate, closes
+ * a cycle `wouldCycle` was supposed to refuse.
  */
 import type { Track } from '../types/protocol.js'
 
@@ -41,6 +45,18 @@ export interface GraphNode {
   list: 'required' | 'available' | 'closing'
   layer: number
   index: number
+  /**
+   * True for an agent `layersOf` could not place — starved because it sits in
+   * an order cycle the schema should have refused at parse, but which a
+   * hand-built fixture or a mid-edit draft (Save has not yet re-validated it)
+   * can still produce. Such a node still gets a `layer` number, one past
+   * every real layer including `closing`'s, so the value is never mistaken
+   * for a real position — but the flag is the actual contract: a caller that
+   * reads only `layer` and ignores `cyclic` would otherwise draw a starved
+   * agent as though it were merely "last", not broken. See `layersOf`'s own
+   * comment for why this can happen at all.
+   */
+  cyclic: boolean
 }
 
 export interface GraphEdge {
@@ -52,9 +68,8 @@ export interface GraphEdge {
 
 /** A gate folded into an edge, `blocks after proven_by` — the same fold `dispatchWaves` applies beside `track.order`. */
 function gateEdges(track: Track): { agent: string; after: string[] }[] {
-  return track.gate === undefined
-    ? []
-    : track.gate.blocks.map((agent) => ({ agent, after: [(track.gate as { proven_by: string }).proven_by] }))
+  const gate = track.gate
+  return gate === undefined ? [] : gate.blocks.map((agent) => ({ agent, after: [gate.proven_by] }))
 }
 
 /**
@@ -102,7 +117,15 @@ function layersOf(track: Track, agents: readonly string[]): Map<string, number> 
  * The graph a track implies: every agent as a node on the layer
  * `layersOf` assigns it, `closing` agents pushed one layer past everything
  * else because a closing agent closes the run rather than the cycle, and one
- * edge per predecessor an agent's `order` entry or the track's `gate` names.
+ * edge per predecessor an agent's `order` entry or the track's `gate` names —
+ * restricted to edges between two known agents, the same restriction
+ * `layersOf` already applies to layering. An `order` entry naming an agent in
+ * none of the three lists is exactly the transient state
+ * `trackProblems`'s `orderAgentUnknown`/`orderPredUnknown` (`lib/config.ts`)
+ * exist to catch — reachable mid-edit, before Save re-validates — and an
+ * edge left in for it would reference a node id `nodes` has no entry for, a
+ * dangling reference the caller would have to defend against instead of this
+ * module refusing to emit it.
  *
  * Node and edge order is fixed by traversal order alone — `required`, then
  * `available`, then `closing`, each in the track's own array order, and
@@ -110,30 +133,43 @@ function layersOf(track: Track, agents: readonly string[]): Map<string, number> 
  * the same track produce the same array, never a reshuffled one.
  */
 export function layout(track: Track): { nodes: GraphNode[]; edges: GraphEdge[] } {
+  const known = new Set([...track.required, ...track.available, ...track.closing])
   const nonClosing = [...track.required, ...track.available]
   const layer = layersOf(track, nonClosing)
   const maxLayer = Math.max(-1, ...layer.values())
   const closingLayer = maxLayer + 1
+  // One past even `closing` — see `GraphNode.cyclic`'s own comment: a starved
+  // agent must never land on a layer a real agent could also occupy.
+  const cyclicLayer = maxLayer + 2
 
   const nodes: GraphNode[] = []
   const nextIndex = new Map<number, number>()
-  const place = (agent: string, list: GraphNode['list'], atLayer: number): void => {
+  const place = (agent: string, list: GraphNode['list'], atLayer: number, cyclic: boolean): void => {
     const index = nextIndex.get(atLayer) ?? 0
     nextIndex.set(atLayer, index + 1)
-    nodes.push({ id: agent, agent, list, layer: atLayer, index })
+    nodes.push({ id: agent, agent, list, layer: atLayer, index, cyclic })
   }
-  for (const agent of track.required) place(agent, 'required', layer.get(agent) ?? 0)
-  for (const agent of track.available) place(agent, 'available', layer.get(agent) ?? 0)
-  for (const agent of track.closing) place(agent, 'closing', closingLayer)
+  for (const agent of track.required) {
+    const at = layer.get(agent)
+    place(agent, 'required', at ?? cyclicLayer, at === undefined)
+  }
+  for (const agent of track.available) {
+    const at = layer.get(agent)
+    place(agent, 'available', at ?? cyclicLayer, at === undefined)
+  }
+  for (const agent of track.closing) place(agent, 'closing', closingLayer, false)
 
   const edges: GraphEdge[] = []
   for (const edge of track.order) {
+    if (!known.has(edge.agent)) continue
     for (const pred of edge.after) {
+      if (!known.has(pred)) continue
       edges.push({ id: `order:${pred}->${edge.agent}`, source: pred, target: edge.agent, kind: 'order' })
     }
   }
-  if (track.gate !== undefined) {
+  if (track.gate !== undefined && known.has(track.gate.proven_by)) {
     for (const agent of track.gate.blocks) {
+      if (!known.has(agent)) continue
       edges.push({ id: `gate:${track.gate.proven_by}->${agent}`, source: track.gate.proven_by, target: agent, kind: 'gate' })
     }
   }
@@ -153,7 +189,7 @@ export function wouldCycle(track: Track, from: string, to: string): boolean {
   if (from === to) return true // an agent cannot be its own predecessor
 
   const successors = new Map<string, string[]>()
-  for (const edge of track.order) {
+  for (const edge of [...track.order, ...gateEdges(track)]) {
     for (const pred of edge.after) {
       const list = successors.get(pred) ?? []
       list.push(edge.agent)
