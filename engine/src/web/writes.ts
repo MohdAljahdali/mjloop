@@ -37,8 +37,8 @@ import type { WebCode } from './codes.js'
  *
  * Everything else on the page either reads, or composes a loop command and
  * enqueues it — there is one execution model and not a second, weaker one
- * beside it. These four cannot be expressed as a command, and each is
- * something a person is stuck on today:
+ * beside it. Eight doors reach past that model. The original four cannot be
+ * expressed as a command, and each is something a person is stuck on today:
  *
  *  - **Plan approval.** `gates.plan_approval` defaults to `human` and the build
  *    is refused until somebody decides. Spawning a whole `claude` session to
@@ -86,6 +86,42 @@ import type { WebCode } from './codes.js'
  * actually showing, and a draft's revision number does not move when those
  * words do.
  *
+ * **The three agent doors** — `agent.create`, `agent.update`, `agent.delete`
+ * — are the other four, and a different class from the original four above:
+ * not a repair for something the loop leaves broken, but `config.patch`'s
+ * class restated for a different file. `config.patch` is an operator's own
+ * decision about `config.yaml`, recorded compare-and-swap; these are the same
+ * decision about a file under `.claude/agents/`. Never `runStart`'s class —
+ * nothing here reports work the loop did, wipes history, or claims a cycle
+ * happened — which is exactly why they get two refusals of their own rather
+ * than none:
+ *
+ *  - **While a run is open.** Checked in `applyWrite`, before any handler
+ *    runs, via `stateSummary` (already read elsewhere under `src/web/`, so
+ *    importing it here does not open a new door of its own). The roster is
+ *    pinned and the briefs are already sent once a run starts, so an agent
+ *    edited mid-run would make what ran and what is recorded two different
+ *    things.
+ *  - **When a track still names the agent being deleted.** `agentUsedByTrack`
+ *    reads the same config `config.patch` already reads (`loadConfig`, same
+ *    story as `stateSummary` above on the import). It runs as `deleteAgent`'s
+ *    own `guard` — *inside* the project lock that write already takes, after
+ *    the digest check and before the file is removed — because the check and
+ *    the delete have to be atomic against a `config.patch` racing in between
+ *    them; a check made before calling `deleteAgent` would be reading the
+ *    config outside the very lock `agent-store.ts` takes to prevent that.
+ *
+ * These are also the first writes anywhere in this server to land outside
+ * `.mjloop/` at all — into `.claude/agents/`. That is confined at exactly one
+ * seam: the name arrives typed as `AgentNameSchema` (`schemas/contract.ts`),
+ * which admits only `[A-Za-z0-9_-]`, and `agent-store.ts`'s `agentFile`
+ * (`agent-store.ts:143-148`) is the only place that name is ever joined onto
+ * a path, and only onto the agents directory — `.` and `/` sit outside the
+ * schema's character class, so `..` and `a/b` can never reach it. A project
+ * agent may also shadow a plugin agent of the same name; `reservedAgentNames`
+ * below reads `PLUGIN_AGENTS_DIR` fresh rather than a hard-coded list, and
+ * `writeAgent`'s `reserved` option refuses the collision outright.
+ *
  * This path bypasses the `PreToolUse` state guard entirely — it is the server
  * process, not a `claude` tool call — so the boundary is structural rather than
  * a hook. Four layers hold it:
@@ -96,8 +132,11 @@ import type { WebCode } from './codes.js'
  *  2. **Schema.** `strictObject` throughout, so an undeclared wire field is
  *     rejected before `applyWrite` is reached.
  *  3. **An import allowlist**, asserted from source text: this file may import
- *     exactly the three ops and the guarded config mutator; `server.ts` may
- *     import none.
+ *     the three original ops, the guarded config mutator, the agent store's
+ *     two writers (`writeAgent`, `deleteAgent`), and the two reads the agent
+ *     doors need above (`stateSummary`, `loadConfig`) — the last two already
+ *     imported elsewhere under `src/web/` with no single-importer assertion to
+ *     widen; `server.ts` may import none.
  *  4. **A forbidden list**, asserted to appear nowhere under `src/web/`.
  */
 
@@ -340,11 +379,18 @@ const HANDLERS: Handlers = {
     )
   },
   'agent.delete': async (projectDir, write) => {
-    // Checked before the store is touched at all: a track that still names
-    // this agent is refused with nothing changed on disk, which is a fact
-    // about the config rather than about the agent file's own digest.
-    if (await agentUsedByTrack(projectDir, write.name)) throw new AgentInUseError()
-    await deleteAgent(projectDir, write.name, write.digest)
+    // The in-use check runs as `deleteAgent`'s `guard`, *inside* its lock and
+    // after the digest check, not before this handler calls it. Checking here
+    // first would read the config outside the very lock `agent-store.ts`
+    // takes to prevent this exact race: a `config.patch` naming this agent
+    // into a track between an outside check and the `fs.rm` would leave the
+    // config pointing at a file that no longer exists, and nothing — there is
+    // no digest over the config — would ever catch that.
+    await deleteAgent(projectDir, write.name, write.digest, {
+      guard: async () => {
+        if (await agentUsedByTrack(projectDir, write.name)) throw new AgentInUseError()
+      },
+    })
   },
 }
 

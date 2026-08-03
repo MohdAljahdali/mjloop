@@ -104,6 +104,17 @@ async function writeConfigWithTrack(dir: string, patch: { required: string[] }):
   })
 }
 
+/** The other direction — drops a name back out of `edit`'s required list. */
+async function dropFromTrack(dir: string, name: string): Promise<void> {
+  const config = await loadConfig(dir)
+  const edit = config.tracks.edit
+  if (edit === undefined) throw new Error('this project has no edit track to test against')
+  await writeConfig(dir, {
+    ...config,
+    tracks: { ...config.tracks, edit: { ...edit, required: edit.required.filter((agent) => agent !== name) } },
+  })
+}
+
 /** Sets `state.json` to `running` directly — no run need actually be dispatched to prove the guard. */
 async function setStatusRunning(dir: string): Promise<void> {
   await new StateStore(dir).update((draft) => {
@@ -570,6 +581,15 @@ describe('the agent write doors', () => {
     // Not `hashTree` — the agent file lives outside `.mjloop` entirely, so the
     // check that matters is the file itself, unmoved.
     expect(await readAgent(project.dir, 'scribe')).toEqual(doc)
+
+    // Proof that it is `deleteAgent`'s own `guard` doing the refusing, run
+    // live inside its lock, and not a cached answer from a check made before
+    // this handler was ever called: take the same agent back out of the
+    // track's `required` list and the very same digest now succeeds.
+    await dropFromTrack(project.dir, 'scribe')
+    const retried = await applyWrite(project.dir, { kind: 'agent.delete', name: 'scribe', digest: doc?.digest ?? '' })
+    expect(retried).toEqual({ ok: true })
+    expect(await readAgent(project.dir, 'scribe')).toBeNull()
   })
 
   it('refuses every agent write while a run is open', async () => {

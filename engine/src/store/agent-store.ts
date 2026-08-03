@@ -206,7 +206,25 @@ export async function writeAgent(
   })
 }
 
-export async function deleteAgent(projectDir: string, name: string, expectDigest: string): Promise<void> {
+/**
+ * @param options.guard Run inside the same lock, after the digest check and
+ *   immediately before the file is removed, and free to throw. This exists
+ *   because the digest this function already checks cannot see a track: a
+ *   caller that checked "does any track name this agent" *before* calling
+ *   `deleteAgent` would be reading the config outside the lock this function
+ *   takes — and that lock is the *project* lock precisely so a `config.patch`
+ *   racing in cannot add this agent to a track between that check and the
+ *   `fs.rm` below. Passed a callback rather than a config snapshot: the guard
+ *   itself decides what "in use" means and how to signal it — this store has
+ *   no opinion on tracks at all — so it re-reads whatever it needs from
+ *   inside the same lock, at the moment that actually matters.
+ */
+export async function deleteAgent(
+  projectDir: string,
+  name: string,
+  expectDigest: string,
+  options?: { guard?: () => Promise<void> },
+): Promise<void> {
   const file = agentFile(projectDir, name)
   await withLock(resolveLoopPaths(projectDir).lock, async () => {
     let current: string
@@ -218,6 +236,7 @@ export async function deleteAgent(projectDir: string, name: string, expectDigest
     if (agentDigest(current) !== expectDigest) {
       throw new AgentWriteError('stale', 'the file moved underneath the editor')
     }
+    if (options?.guard !== undefined) await options.guard()
     await fs.rm(file)
   })
 }
