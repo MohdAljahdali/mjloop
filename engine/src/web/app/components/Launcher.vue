@@ -23,6 +23,9 @@ const pane = usePane()
 
 const inputEl = ref<HTMLInputElement | null>(null)
 
+/** A long list caps rather than virtualises — `ui/list.js`'s own rule. `launcher.js:64` capped this datalist at 50. */
+const SUGGESTIONS_CAP = 50
+
 /**
  * The build commands worth suggesting: the stories that are actually ready.
  *
@@ -30,7 +33,11 @@ const inputEl = ref<HTMLInputElement | null>(null)
  * datalist offering a build the Plans panel refuses is the bug this shares
  * the rule to avoid.
  */
-const suggestions = computed(() => ready(snapshot.value?.plans ?? []).map((story) => `/mjloop:build ${story.id}`))
+const suggestions = computed(() =>
+  ready(snapshot.value?.plans ?? [])
+    .map((story) => `/mjloop:build ${story.id}`)
+    .slice(0, SUGGESTIONS_CAP),
+)
 
 function onSubmit(): void {
   const command = inputEl.value?.value.trim() ?? ''

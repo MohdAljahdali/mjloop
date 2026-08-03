@@ -143,12 +143,12 @@ describe('Pane', () => {
     expect(wrapper.find('#panel-queue').attributes('hidden')).toBeUndefined()
   })
 
-  it('shows #terminal-empty and hides the terminal wrapper while nothing is shown, and the reverse once a job starts', async () => {
+  it('shows #terminal-empty and hides .terminal while nothing is shown, and the reverse once a job starts', async () => {
     const { Pane, socket } = await boot()
     const wrapper = mount(Pane)
 
     expect(wrapper.find('#terminal-empty').attributes('hidden')).toBeUndefined()
-    expect(wrapper.find('.terminal-wrap').attributes('hidden')).toBeDefined()
+    expect(wrapper.find('.terminal').attributes('hidden')).toBeDefined()
 
     // `followQueue`: the transition from no job to this one is what puts a
     // transcript on screen — `session.jobId` alone does not.
@@ -158,7 +158,35 @@ describe('Pane', () => {
     await nextTick()
 
     expect(wrapper.find('#terminal-empty').attributes('hidden')).toBeDefined()
-    expect(wrapper.find('.terminal-wrap').attributes('hidden')).toBeUndefined()
+    expect(wrapper.find('.terminal').attributes('hidden')).toBeUndefined()
+  })
+
+  it('keeps the same Terminal instance — same xterm, same scrollback — across a view switch', async () => {
+    // `Terminal.vue` must not be remounted by a view switch: its scrollback,
+    // selection and pty geometry are the one thing the server cannot replay.
+    // `open()` is called once, in `onMounted`; if `Pane.vue` ever put a
+    // `v-if` or a `:key` above `Terminal`, switching views would tear it down
+    // and rebuild it, and this count would go to 2.
+    let opens = 0
+    ;(globalThis as any).Terminal = class {
+      cols = 80
+      rows = 24
+      loadAddon() {}
+      open() {
+        opens += 1
+      }
+      onData() {}
+      write() {}
+      reset() {}
+    }
+    const { Pane } = await boot()
+    const wrapper = mount(Pane)
+    expect(opens).toBe(1)
+
+    await wrapper.find('#view-queue').trigger('click')
+    await wrapper.find('#view-session').trigger('click')
+
+    expect(opens).toBe(1)
   })
 
   it('composes and enqueues a command from the command form, then clears it, and switches to the queue view', async () => {
@@ -203,6 +231,79 @@ describe('Pane', () => {
     expect(options).toEqual(['/mjloop:build P001-S01'])
   })
 
+  it('draws a job duration and its reason', async () => {
+    const snap = emptySnapshot({
+      queue: [
+        job({
+          id: 'j1',
+          status: 'failed',
+          reason: { code: 'job.failed.exit', params: { code: 1 } },
+          startedAt: '2026-07-28T12:00:00.000Z',
+          endedAt: '2026-07-28T12:03:12.000Z',
+        }),
+      ],
+    })
+    const { Pane } = await boot(snap)
+    const wrapper = mount(Pane)
+    await wrapper.find('#view-queue').trigger('click')
+
+    const row = wrapper.find('#queue-history .job')
+    expect(row.find('.dur').text()).toBe('3m 12s')
+    expect(row.find('.reason').text()).toContain('code 1')
+    expect(row.find('.st').classes()).toContain('job-failed')
+  })
+
+  it('says a job is closing rather than leaving it as running under a dead button', async () => {
+    const snap = emptySnapshot({
+      queue: [job({ id: 'j1', status: 'running', startedAt: '2026-07-28T12:00:00.000Z' })],
+      session: { jobId: 'j1', blocked: true, pausedBy: 'stopped', closing: true, stalledSince: null },
+    })
+    const { Pane } = await boot(snap)
+    const wrapper = mount(Pane)
+    await wrapper.find('#view-queue').trigger('click')
+
+    const row = wrapper.find('#queue-now .job')
+    expect(row.find('.st').text()).toBe(english['queue.closing'])
+    expect(row.find('.st').classes()).toContain('job-closing')
+    expect((row.find('.row-actions button').element as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('renders per-group controls that never overlap, and positions the waiting rows in run order', async () => {
+    // `panels.test.ts:3142-3172`, carried across. The running row stops a
+    // session (and can still open its own live transcript); a waiting row
+    // only drops a command; a history row only opens a transcript. Stop and
+    // Cancel used to share one `×` — the bug this exclusivity check exists
+    // to keep fixed.
+    const snap = emptySnapshot({
+      queue: [
+        job({ id: 'j1', status: 'done', startedAt: '2026-07-28T12:00:00.000Z', endedAt: '2026-07-28T12:01:00.000Z' }),
+        job({ id: 'j2', status: 'running', startedAt: '2026-07-28T12:01:00.000Z' }),
+        job({ id: 'j3', command: '/mjloop:fix a' }),
+        job({ id: 'j4', command: '/mjloop:fix b' }),
+      ],
+      session: { jobId: 'j2', blocked: false, pausedBy: null, closing: false, stalledSince: null },
+    })
+    const { Pane } = await boot(snap)
+    const wrapper = mount(Pane)
+    await wrapper.find('#view-queue').trigger('click')
+
+    expect(wrapper.findAll('#queue-now .job')).toHaveLength(1)
+    expect(wrapper.findAll('#queue-waiting .job')).toHaveLength(2)
+    expect(wrapper.findAll('#queue-history .job')).toHaveLength(1)
+
+    // Its place in the run order, so "mine is second" needs no counting.
+    expect(wrapper.findAll('#queue-waiting .job .pos').map((node) => node.text())).toEqual(['1', '2'])
+
+    const running = wrapper.find('#queue-now .job')
+    expect(running.findAll('.row-actions button').map((b) => b.text())).toEqual([english['job.stop'], english['job.view']])
+
+    const waiting = wrapper.find('#queue-waiting .job')
+    expect(waiting.findAll('.row-actions button').map((b) => b.text())).toEqual([english['job.remove']])
+
+    const history = wrapper.find('#queue-history .job')
+    expect(history.findAll('.row-actions button').map((b) => b.text())).toEqual([english['job.view']])
+  })
+
   it('cancels a queued job by sending its id', async () => {
     const snap = emptySnapshot({ queue: [job({ id: 'j1' })] })
     const { Pane, socket } = await boot(snap)
@@ -215,7 +316,7 @@ describe('Pane', () => {
     expect(socket.sent).toEqual([{ type: 'cancel', jobId: 'j1' }])
   })
 
-  it('stops a running job from its own row, disabled while the session is closing', async () => {
+  it('stops a running job from its own row, enabled while the session is not closing', async () => {
     const snap = emptySnapshot({
       queue: [job({ id: 'j1', status: 'running', startedAt: '2026-07-28T12:00:00.000Z' })],
       session: { jobId: 'j1', blocked: false, pausedBy: null, closing: false, stalledSince: null },
@@ -230,19 +331,23 @@ describe('Pane', () => {
     expect(socket.sent).toEqual([{ type: 'cancel', jobId: 'j1' }])
   })
 
-  it('attaching to a job sends attach, reveals the pane, and switches to the session view', async () => {
+  it('attaching to a job sends attach, reveals a collapsed pane, and switches to the session view', async () => {
     const snap = emptySnapshot({
       queue: [job({ id: 'j1', status: 'done', startedAt: '2026-07-28T12:00:00.000Z', endedAt: '2026-07-28T12:01:00.000Z' })],
     })
     const { Pane, socket } = await boot(snap)
     const wrapper = mount(Pane)
     await wrapper.find('#view-queue').trigger('click')
+    // `bootPane()` in `boot()` starts the pane collapsed, same as production.
+    expect(document.body.dataset['pane']).toBe('collapsed')
 
     const attach = wrapper.find('#queue-history .job .row-actions button')
     await attach.trigger('click')
 
     expect(socket.sent).toEqual([{ type: 'attach', jobId: 'j1' }])
     expect(wrapper.find('#view-session').attributes('aria-current')).toBe('true')
+    // `reveal()`'s own effect — the only part of this behaviour that can break.
+    expect(document.body.dataset['pane']).toBe('docked')
   })
 
   it('cycles collapsed -> docked -> full -> collapsed from the pane head', async () => {
@@ -273,7 +378,7 @@ describe('Pane', () => {
     expect(document.body.dataset['pane']).toBe('full')
   })
 
-  it('shows the pause banner and Resume, hides Stop until a job is running, and sends resume/clear', async () => {
+  it('shows the pause banner and Resume, with the cause-specific sentence for a stop and for a failure, and sends resume/clear', async () => {
     const snap = emptySnapshot({
       queue: [job({ id: 'j1' })],
       session: { jobId: null, blocked: true, pausedBy: 'stopped', closing: false, stalledSince: null },
@@ -285,9 +390,71 @@ describe('Pane', () => {
     expect(wrapper.find('#queue-blocked').attributes('hidden')).toBeUndefined()
     expect(wrapper.find('#queue-pause-text').text()).toBe(english['queue.pausedStopped'])
 
+    // A failure asks the reader to read a transcript; a stop asks nothing —
+    // different causes, different sentences (`panels.test.ts:3190-3193`).
+    const failed = { ...snap, session: { ...snap.session, pausedBy: 'failure' as const } }
+    FakeSocket.last?.deliver({ type: 'snapshot', snapshot: failed })
+    await nextTick()
+    expect(wrapper.find('#queue-pause-text').text()).toBe(english['queue.blockedBanner'])
+
     await wrapper.find('#queue-resume').trigger('click')
     await wrapper.find('#queue-clear').trigger('click')
     expect(socket.sent).toEqual([{ type: 'resume' }, { type: 'clear' }])
+  })
+
+  it('reads "Queue (n)" on the queue tab, on the pane head, while the session view is up', async () => {
+    // `pane.js:107-112`: the count lives on the head rather than inside the
+    // queue panel, because `render` skips a hidden panel and the panel is
+    // hidden whenever the session view (the default) is up.
+    const snap = emptySnapshot({
+      queue: [job({ id: 'j1' }), job({ id: 'j2' }), job({ id: 'j3' })],
+    })
+    const { Pane } = await boot(snap)
+    const wrapper = mount(Pane)
+    expect(wrapper.find('#view-session').attributes('aria-current')).toBe('true')
+    expect(wrapper.find('#view-queue').text()).toBe(english['queue.tabCount.other'].replace('{count}', '3'))
+  })
+
+  it('names the job on screen in the head, and warns only when it is not the live job', async () => {
+    const { Pane, socket } = await boot()
+    const wrapper = mount(Pane)
+
+    const running = emptySnapshot({
+      queue: [job({ id: 'j1', command: '/mjloop:build P001-S01', status: 'running', startedAt: '2026-07-28T12:00:00.000Z' })],
+      session: { jobId: 'j1', blocked: false, pausedBy: null, closing: false, stalledSince: null },
+    })
+    socket.deliver({ type: 'snapshot', snapshot: running })
+    await nextTick()
+
+    // `followQueue` puts the newly-started job on screen, and it is the live
+    // one, so `#job-viewing`'s warning does not apply.
+    expect(wrapper.find('#job-label bdi').text()).toBe('/mjloop:build P001-S01')
+    expect(wrapper.find('#job-viewing').attributes('hidden')).toBeDefined()
+
+    // The reader opens a different, finished job's transcript instead.
+    const withHistory = {
+      ...running,
+      queue: [
+        ...running.queue,
+        job({ id: 'j2', command: '/mjloop:fix a bug', status: 'done', startedAt: '2026-07-28T12:00:00.000Z', endedAt: '2026-07-28T12:01:00.000Z' }),
+      ],
+    }
+    socket.deliver({ type: 'snapshot', snapshot: withHistory })
+    await nextTick()
+    await wrapper.find('#view-queue').trigger('click')
+    await wrapper.find('#queue-history .job .row-actions button').trigger('click')
+    // The server answers `attach` with the transcript — the same `'transcript'`
+    // message `store.ts`'s `receive()` turns into a `'replace'` output frame,
+    // which is what actually puts j2 on screen (`shown`, not the attach click
+    // itself).
+    socket.deliver({ type: 'transcript', jobId: 'j2', data: 'j2 transcript' })
+    await nextTick()
+
+    // Typing into it would reach the still-live job j1, not j2 — the head
+    // says so.
+    expect(wrapper.find('#job-label bdi').text()).toBe('/mjloop:fix a bug')
+    expect(wrapper.find('#job-viewing').attributes('hidden')).toBeUndefined()
+    expect(wrapper.find('#job-viewing').text()).toBe(english['terminal.viewing'])
   })
 
   it('shows the paused and closing pills on the pane head, not only inside the queue view', async () => {

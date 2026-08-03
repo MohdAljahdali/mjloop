@@ -8,29 +8,26 @@
  * geometry, and it is the one part of this page whose contents the server
  * cannot replay in full.
  */
-import { onBeforeUnmount, onMounted, shallowRef, watch } from 'vue'
+import { onBeforeUnmount, onMounted, shallowRef } from 'vue'
+import { usePane } from '../composables/usePane.js'
 import { activeJob, onOutput, send } from '../stores/session.js'
 
 const host = shallowRef<HTMLElement | null>(null)
 const term = shallowRef<any>(null)
 const fit = shallowRef<any>(null)
-/** The job whose output is on screen, which is not always the running one. */
-const shown = shallowRef<string | null>(null)
+/**
+ * The job whose output is on screen, which is not always the running one.
+ *
+ * Owned by `usePane.ts`, not a private copy: this component must be free to
+ * sit under a `v-if` or `KeepAlive` in a later panel without a remount
+ * silently resetting what the pane head still names as on screen. `shown`'s
+ * own doc comment there carries `followQueue`'s reasoning — `ui/pane.js`'s
+ * rule, which used to live here as well as in `ui/pane.js` itself.
+ */
+const { shown } = usePane()
 
 let unsubscribe = () => {}
 let observer: ResizeObserver | null = null
-
-/**
- * Follow the queue onto the job that just started, unless the reader has
- * deliberately opened a finished transcript — in which case leave them where
- * they are. Mirrors `ui/pane.js`'s `followQueue`, which `app.js:279` calls on
- * every snapshot with the job id from before and after that snapshot.
- */
-watch(activeJob, (next, previous) => {
-  if (next !== null && next !== previous && (shown.value === previous || shown.value === null)) {
-    shown.value = next
-  }
-})
 
 function refit(): void {
   try {
@@ -71,7 +68,11 @@ onMounted(() => {
 
   unsubscribe = onOutput((frame) => {
     if (frame.kind === 'replace') {
-      shown.value = frame.jobId
+      // `usePane.ts`'s own `onOutput` subscriber sets `shown` on a `'replace'`
+      // frame too, and is registered earlier — every composable that calls
+      // `usePane()` does so from a `<script setup>` body, which runs before
+      // any `onMounted` hook, including this one. `shown.value` here is
+      // already `frame.jobId` by the time this handler runs.
       instance.reset()
       instance.write(frame.data)
       return

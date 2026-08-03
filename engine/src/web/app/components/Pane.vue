@@ -16,7 +16,7 @@
  * — the terminal opening into an already laid-out box — is unchanged by this
  * component sitting between them.
  */
-import { computed, watch } from 'vue'
+import { watch } from 'vue'
 import { useI18n } from '../composables/useI18n.js'
 import { usePane } from '../composables/usePane.js'
 import { activeJob, send } from '../stores/session.js'
@@ -35,18 +35,6 @@ watch(activeJob, (next, previous) => {
   if (previous === null && next !== null) pane.follow()
 })
 
-/**
- * `Terminal`'s own box must stay the exact flex child `.view` expects
- * (`app.css`'s `.terminal { flex: 1; min-height: 0 }`) — `40-terminal.css`
- * has no rule for a wrapper, so one that generated a box would collapse to
- * zero and take the terminal's box down with it. `display: contents` makes
- * this wrapper transparent to that layout — `.terminal` becomes `.view`'s
- * flex item exactly as it did as a direct child in `index.html`. `hidden`
- * (native, no inline style) is what removes it instead, the same as
- * `flag(terminal, 'hidden', shown === null)` used to.
- */
-const wrapStyle = computed(() => (pane.shown.value === null ? undefined : { display: 'contents' }))
-
 function onAttach(jobId: string): void {
   // `app.js`'s `job-attach` handler, in the same order: the write first, then
   // the two hiding places `reveal()`'s own comment names — `setView` for the
@@ -64,13 +52,15 @@ function onAttach(jobId: string): void {
     <div class="pane-body">
       <div class="view" id="view-session-body" :hidden="pane.view.value !== 'session'">
         <p class="empty" id="terminal-empty" :hidden="pane.shown.value !== null">{{ t('terminal.idle') }}</p>
-        <!-- Pinned ltr whatever the ui language is: claude's output is box
-             drawing and aligned columns, and mirroring it destroys both. The
-             pin itself lives on `.terminal` in `Terminal.vue` and in
-             `app.css`; nothing here repeats it. -->
-        <div class="terminal-wrap" :hidden="pane.shown.value === null" :style="wrapStyle">
-          <Terminal />
-        </div>
+        <!-- `hidden` falls through: `Terminal` declares no `hidden` prop of
+             its own, so Vue applies it to the component's single root
+             element — `.terminal` — exactly as `flag(terminal, 'hidden',
+             shown === null)` (`ui/pane.js:100`) did. No wrapper: `.terminal`
+             must stay `.view`'s direct flex child for `app.css`'s
+             `.terminal { flex: 1; min-height: 0 }` to apply to it, and a
+             wrapper with no rule of its own would collapse to zero and take
+             the terminal's box down with it. -->
+        <Terminal :hidden="pane.shown.value === null" />
       </div>
 
       <QueueView :hidden="pane.view.value !== 'queue'" @attach="onAttach" />

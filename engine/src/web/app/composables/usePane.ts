@@ -23,13 +23,14 @@ let chosen = false
  * finished transcript is worth reading, and the queue must not yank the
  * reader out of it the moment the next job starts.
  *
- * Mirrors `ui/pane.js`'s own module-level `shown`, and — separately —
- * `Terminal.vue`'s private copy of the same rule: that component owns what
- * xterm is actually shown and must not be touched (its scrollback, selection
- * and pty geometry are the one thing the server cannot replay), so this is a
- * second tracker rather than a shared one. Both watch the identical inputs
- * (`activeJob`, and a `'replace'` output frame) with the identical rule, in
- * the same reactive flush, so the two never disagree.
+ * Mirrors `ui/pane.js`'s own module-level `shown` — and is the **one** owner
+ * of it. `Terminal.vue` reads and writes this same ref rather than keeping a
+ * private copy: two independent trackers happened to agree as long as
+ * `Terminal` never unmounted, but that invariant was written nowhere and
+ * `Terminal` is exactly the kind of leaf a later panel puts under a `v-if` or
+ * `KeepAlive` — at which point a private copy resets to `null` on remount
+ * while this one does not, and the terminal goes on dropping every chunk for
+ * a job the head still names. One ref removes the question.
  */
 const shown = ref<string | null>(null)
 
@@ -87,7 +88,7 @@ export function usePane() {
       chosen = true
       apply(ORDER[(ORDER.indexOf(mode.value) + 1) % ORDER.length] ?? 'docked')
     },
-    /** Collapsed <-> docked. `pane.fullscreen`'s button; distinct from `cycle()`'s three-way rotation. */
+    /** Docked <-> full. `pane.fullscreen`'s button; distinct from `cycle()`'s three-way rotation. */
     toggleFull() {
       chosen = true
       apply(mode.value === 'full' ? 'docked' : 'full')
@@ -106,6 +107,13 @@ export function usePane() {
       chosen = true
       if (mode.value === 'collapsed') apply('docked')
     },
+    /**
+     * `ui/pane.js:70-77`'s `setView` called `refit()` explicitly here, because
+     * the terminal's box changes without a window resize when the queue view
+     * covers it. `Terminal.vue`'s own `ResizeObserver` (watching `.terminal`
+     * itself) picks up that same box change on its own, so there is nothing
+     * to call through to from here — a substitution, not an omission.
+     */
     setView(next: 'session' | 'queue') {
       view.value = next
     },
