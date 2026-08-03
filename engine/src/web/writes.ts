@@ -1,21 +1,33 @@
 import os from 'node:os'
 import * as z from 'zod'
+import { AgentNameSchema } from '../schemas/contract.js'
 import { FeatureIdSchema } from '../schemas/feature.js'
 import { ApprovalDecisionSchema, PlanIdSchema, StoryIdSchema, StoryStatusSchema } from '../schemas/plan.js'
 import { gateSet } from '../ops/plan.js'
 import { storyUpdate } from '../ops/plan.js'
 import { halt } from '../ops/run.js'
+import { stateSummary } from '../ops/summary.js'
 import {
   ConfigChangeSchema,
   ConfigMutationError,
   mutateConfig,
 } from '../store/config-mutation.js'
+import { loadConfig } from '../store/config-store.js'
 import {
   ApprovedRevisionImmutableError,
   StaleFeatureContentError,
   StaleFeatureRevisionError,
   approveFeatureBrief,
 } from '../store/feature-store.js'
+import {
+  AgentWriteError,
+  deleteAgent,
+  listAgents,
+  readAgent,
+  writeAgent,
+  type AgentWriteFailure,
+} from '../store/agent-store.js'
+import { PLUGIN_AGENTS_DIR } from './read.js'
 import { StalePreconditionError } from '../store/precondition.js'
 import type { WebCode } from './codes.js'
 
@@ -156,6 +168,34 @@ export const WriteSchema = z.discriminatedUnion('kind', [
     digest: z.string().regex(/^[a-f0-9]{64}$/),
     note: z.string().max(2000).nullable().default(null),
   }),
+  z.strictObject({
+    kind: z.literal('agent.create'),
+    name: AgentNameSchema,
+    description: z.string().min(1).max(500),
+    tools: z.string().max(500).nullable(),
+    model: z.string().max(100).nullable(),
+    /**
+     * The agent's own prompt. Free text, and that is not a violation of the
+     * no-prose rule: that rule constrains *server-authored* prose. This is the
+     * user's own words travelling into a project file, the same category as
+     * `note` and `reason` above.
+     */
+    body: z.string().max(100000),
+  }),
+  z.strictObject({
+    kind: z.literal('agent.update'),
+    name: AgentNameSchema,
+    digest: z.string().regex(/^[a-f0-9]{64}$/),
+    description: z.string().min(1).max(500),
+    tools: z.string().max(500).nullable(),
+    model: z.string().max(100).nullable(),
+    body: z.string().max(100000),
+  }),
+  z.strictObject({
+    kind: z.literal('agent.delete'),
+    name: AgentNameSchema,
+    digest: z.string().regex(/^[a-f0-9]{64}$/),
+  }),
 ])
 
 export type Write = z.infer<typeof WriteSchema>
@@ -178,6 +218,52 @@ function decidedBy(): string {
   }
   return `dashboard:${who}`
 }
+
+/** Every agent door, and only those. */
+const AGENT_KINDS: readonly Write['kind'][] = ['agent.create', 'agent.update', 'agent.delete']
+
+/**
+ * The plugin's own agent names — a project agent may not shadow one of these.
+ *
+ * Read fresh from `PLUGIN_AGENTS_DIR` rather than hard-coded: the reserved set
+ * is exactly what `readAgentsView` already lists as `plugin`, and duplicating
+ * it here as a literal array would be a second place for a new plugin agent
+ * to go unreserved.
+ */
+async function reservedAgentNames(): Promise<string[]> {
+  const { agents } = await listAgents(PLUGIN_AGENTS_DIR, 'plugin')
+  return agents.map((agent) => agent.name)
+}
+
+/**
+ * Which tracks name an agent, and in which list.
+ *
+ * Read from the config rather than remembered: an agent's membership is the
+ * track's business, and a cached answer here is one that can be wrong at
+ * exactly the moment it matters — when somebody is deleting the agent.
+ */
+async function agentUsedByTrack(projectDir: string, name: string): Promise<boolean> {
+  const config = await loadConfig(projectDir)
+  return Object.values(config.tracks).some((track) =>
+    [
+      ...track.required,
+      ...(track.available ?? []),
+      ...(track.closing ?? []),
+      ...(track.gate?.blocks ?? []),
+      track.gate?.proven_by ?? '',
+      track.map?.drafted_by ?? '',
+    ].includes(name),
+  )
+}
+
+/**
+ * Raised inside a handler and translated to `write.refused.agent.inUse` in the
+ * `catch` below — not an `AgentWriteError` kind, because the store has no
+ * opinion on tracks at all; that reasoning belongs to this layer, the same way
+ * `agentUsedByTrack` above reads the config this layer already reads for
+ * `config.patch`.
+ */
+class AgentInUseError extends Error {}
 
 type Handlers = {
   [K in Write['kind']]: (projectDir: string, write: Extract<Write, { kind: K }>) => Promise<void>
@@ -222,13 +308,75 @@ const HANDLERS: Handlers = {
       note: write.note,
     })
   },
+  'agent.create': async (projectDir, write) => {
+    // `extra` is always empty on a create: there is no existing file for an
+    // unknown field to have come from.
+    await writeAgent(
+      projectDir,
+      { name: write.name, description: write.description, tools: write.tools, model: write.model, extra: {}, body: write.body },
+      { expectDigest: null, reserved: await reservedAgentNames() },
+    )
+  },
+  'agent.update': async (projectDir, write) => {
+    // The browser never sends `extra`: a field it has never heard of is read
+    // from the file here and carried forward unchanged. This read is not
+    // inside `writeAgent`'s own lock, but that is not a race — `expectDigest`
+    // below is a hash of the *whole* file, `extra` included, so if the file
+    // moved between this read and the write landing, the digest check inside
+    // `writeAgent` refuses the write outright rather than letting a stale
+    // `extra` land.
+    const existing = await readAgent(projectDir, write.name)
+    await writeAgent(
+      projectDir,
+      {
+        name: write.name,
+        description: write.description,
+        tools: write.tools,
+        model: write.model,
+        extra: existing?.extra ?? {},
+        body: write.body,
+      },
+      { expectDigest: write.digest, reserved: await reservedAgentNames() },
+    )
+  },
+  'agent.delete': async (projectDir, write) => {
+    // Checked before the store is touched at all: a track that still names
+    // this agent is refused with nothing changed on disk, which is a fact
+    // about the config rather than about the agent file's own digest.
+    if (await agentUsedByTrack(projectDir, write.name)) throw new AgentInUseError()
+    await deleteAgent(projectDir, write.name, write.digest)
+  },
 }
 
 export async function applyWrite(projectDir: string, write: Write): Promise<WriteResult> {
+  if (AGENT_KINDS.includes(write.kind)) {
+    // Refused while a run is open, for a reason the config editor does not
+    // have: the roster is pinned and the briefs are already sent, so an agent
+    // edited mid-run makes what ran and what is recorded two different things.
+    const state = await stateSummary(projectDir)
+    if (state.status === 'running') return { ok: false, code: 'write.refused.running' }
+  }
   try {
     await HANDLERS[write.kind](projectDir, write as never)
     return { ok: true }
   } catch (error) {
+    if (error instanceof AgentInUseError) {
+      return { ok: false, code: 'write.refused.agent.inUse' }
+    }
+    if (error instanceof AgentWriteError) {
+      const code = {
+        stale: 'write.stale.agent',
+        exists: 'write.invalid.agent',
+        // For the browser this is one fact, not three: the screen the click
+        // was made from is out of date and nothing was changed. `stale` and
+        // `missing` share a code for the same reason `write.stale.feature`
+        // folds three store distinctions into one above.
+        missing: 'write.stale.agent',
+        invalid: 'write.invalid.agent',
+        reserved: 'write.refused.agent.shadow',
+      } as const satisfies Record<AgentWriteFailure, WebCode>
+      return { ok: false, code: code[error.kind] }
+    }
     if (error instanceof ConfigMutationError) {
       return {
         ok: false,

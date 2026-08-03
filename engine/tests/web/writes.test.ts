@@ -5,7 +5,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { initLoop } from '../../src/ops/init.js'
 import { gateSet, planCreate, storyAdd, storyUpdate } from '../../src/ops/plan.js'
 import { runStart } from '../../src/ops/run.js'
+import { agentDigest, readAgent } from '../../src/store/agent-store.js'
 import { configRevision } from '../../src/store/config-mutation.js'
+import { loadConfig, writeConfig } from '../../src/store/config-store.js'
 import {
   createFeatureBrief,
   readFeatureBrief,
@@ -14,6 +16,7 @@ import {
 } from '../../src/store/feature-store.js'
 import { resolveLoopPaths } from '../../src/store/paths.js'
 import { acceptProfile } from '../../src/store/project-profile-store.js'
+import { StateStore } from '../../src/store/state-store.js'
 import type { ProjectComponent } from '../../src/schemas/project-profile.js'
 import { WEB_CODES } from '../../src/web/codes.js'
 import { buildSnapshot } from '../../src/web/snapshot.js'
@@ -83,6 +86,38 @@ const NO_SUCH_DIGEST = '0'.repeat(64)
 
 function component(id: string): ProjectComponent {
   return { id, root: id, technology: 'unknown', verification: { test: null, lint: null, build: null }, skillTags: [] }
+}
+
+/**
+ * Adds to `edit`'s required list, for the delete-in-use case — appended
+ * rather than replacing it outright, since `edit`'s default `order` names
+ * agents this track already runs, and replacing `required` wholesale would
+ * make those edges name an agent the track no longer has.
+ */
+async function writeConfigWithTrack(dir: string, patch: { required: string[] }): Promise<void> {
+  const config = await loadConfig(dir)
+  const edit = config.tracks.edit
+  if (edit === undefined) throw new Error('this project has no edit track to test against')
+  await writeConfig(dir, {
+    ...config,
+    tracks: { ...config.tracks, edit: { ...edit, required: [...edit.required, ...patch.required] } },
+  })
+}
+
+/** Sets `state.json` to `running` directly — no run need actually be dispatched to prove the guard. */
+async function setStatusRunning(dir: string): Promise<void> {
+  await new StateStore(dir).update((draft) => {
+    draft.status = 'running'
+  })
+}
+
+const CREATE = {
+  kind: 'agent.create' as const,
+  name: 'scribe',
+  description: 'Writes notes.',
+  tools: 'Read, Write',
+  model: 'sonnet',
+  body: 'You write notes.\n\n```json\n{"status":"pass"}\n```',
 }
 
 describe('applyWrite', () => {
@@ -464,6 +499,88 @@ describe('WriteSchema', () => {
         changes: [{ kind: 'raw', path: '../state.json', value: 'x' }],
       }).success,
     ).toBe(false)
+  })
+})
+
+describe('the agent write doors', () => {
+  it('creates an agent, then refuses a name that shadows a plugin agent', async () => {
+    // The plain create case, folded in here rather than given its own test:
+    // it is the setup every other assertion in this suite needs anyway.
+    expect(await applyWrite(project.dir, CREATE)).toEqual({ ok: true })
+    const created = await readAgent(project.dir, 'scribe')
+    expect(created?.description).toBe('Writes notes.')
+
+    // `verifier` is a real agent shipped by this plugin — the shadow case has
+    // to be a name that actually collides, not an arbitrary reserved word.
+    // `hashTree` only covers `.mjloop`, so the property that actually matters
+    // — the agent file itself did not move and no `verifier.md` appeared next
+    // to it — is checked directly.
+    const result = await applyWrite(project.dir, { ...CREATE, name: 'verifier' })
+    expect(result).toEqual({ ok: false, code: 'write.refused.agent.shadow' })
+    expect(await readAgent(project.dir, 'scribe')).toEqual(created)
+    expect(await readAgent(project.dir, 'verifier')).toBeNull()
+  })
+
+  it('refuses an update whose digest has moved, then carries an unrecognised field forward on a real one', async () => {
+    // A hand-edited file this layer has never heard of `color:` on. Written
+    // directly rather than through `applyWrite`, since the browser never
+    // sends `extra` and could not have produced this file itself.
+    await fs.mkdir(path.join(project.dir, '.claude', 'agents'), { recursive: true })
+    const file = path.join(project.dir, '.claude', 'agents', 'scribe.md')
+    const raw = '---\nname: scribe\ndescription: a\ncolor: blue\n---\n\nbody\n'
+    await fs.writeFile(file, raw, 'utf8')
+
+    const stale = await applyWrite(project.dir, {
+      kind: 'agent.update',
+      name: 'scribe',
+      digest: agentDigest('stale'),
+      description: 'b',
+      tools: null,
+      model: null,
+      body: 'edited',
+    })
+    expect(stale).toEqual({ ok: false, code: 'write.stale.agent' })
+    expect(await fs.readFile(file, 'utf8')).toBe(raw)
+
+    // The correct digest this time — the browser did not author `color`, and
+    // it survives the round trip anyway because the store reads it from the
+    // file itself, inside the same lock the digest check runs under.
+    const ok = await applyWrite(project.dir, {
+      kind: 'agent.update',
+      name: 'scribe',
+      digest: agentDigest(raw),
+      description: 'b',
+      tools: null,
+      model: null,
+      body: 'body',
+    })
+    expect(ok).toEqual({ ok: true })
+    const after = await readAgent(project.dir, 'scribe')
+    expect(after?.description).toBe('b')
+    expect(after?.extra).toEqual({ color: 'blue' })
+  })
+
+  it('refuses to delete an agent a track still names', async () => {
+    await applyWrite(project.dir, CREATE)
+    const doc = await readAgent(project.dir, 'scribe')
+    await writeConfigWithTrack(project.dir, { required: ['scribe'] })
+
+    const result = await applyWrite(project.dir, { kind: 'agent.delete', name: 'scribe', digest: doc?.digest ?? '' })
+    expect(result).toEqual({ ok: false, code: 'write.refused.agent.inUse' })
+    // Not `hashTree` — the agent file lives outside `.mjloop` entirely, so the
+    // check that matters is the file itself, unmoved.
+    expect(await readAgent(project.dir, 'scribe')).toEqual(doc)
+  })
+
+  it('refuses every agent write while a run is open', async () => {
+    await applyWrite(project.dir, CREATE)
+    await setStatusRunning(project.dir)
+
+    const before = await hashTree()
+    const result = await applyWrite(project.dir, { ...CREATE, name: 'second-scribe' })
+    expect(result).toEqual({ ok: false, code: 'write.refused.running' })
+    expect(await readAgent(project.dir, 'second-scribe')).toBeNull()
+    expect(await hashTree()).toEqual(before)
   })
 })
 

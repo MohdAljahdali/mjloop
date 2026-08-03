@@ -75,6 +75,17 @@ export const WEB_CODES = [
   'error.skillSourceDisabled',
   'error.skillsShTokenMissing',
   'error.webSearchUnavailable',
+
+  /* the agent doors. A refusal names which door closed and nothing else: the
+     five below are five different next steps for the person reading the
+     screen — reopen the editor, pick another name, edit the track first, wait
+     for the run, or fix the field. */
+  'write.stale.agent',
+  'write.invalid.agent',
+  'write.refused.agent.shadow',
+  'write.refused.agent.inUse',
+  'write.refused.running',
+  'write.ok.agent',
 ] as const
 
 export type WebCode = (typeof WEB_CODES)[number]

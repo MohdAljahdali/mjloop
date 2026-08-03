@@ -622,6 +622,12 @@
   "write.ok.halt": "Run halted. HALT.md is in the run directory.",
   "write.ok.config": "Project settings saved.",
   "write.ok.feature": "Feature brief approved.",
+  "write.stale.agent": "That agent moved in the meantime — nothing was changed.",
+  "write.invalid.agent": "Those agent details would make an invalid agent — nothing was changed.",
+  "write.refused.agent.shadow": "That name shadows a plugin agent — pick another.",
+  "write.refused.agent.inUse": "A track still names this agent. Edit the track first.",
+  "write.refused.running": "A run is active right now — agents cannot be edited until it ends.",
+  "write.ok.agent": "Agent saved.",
   "write.undo": "Undo",
 
   "toast.dismiss": "Dismiss",
