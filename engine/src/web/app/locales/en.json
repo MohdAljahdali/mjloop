@@ -440,6 +440,8 @@
 
   "config.editorTitle": "Edit project settings",
   "config.editorHelp": "Changes are validated as one configuration and apply to the next run. Existing runs keep the policy they started with.",
+  "config.tracksEditorTitle": "Edit tracks and specialists",
+  "config.tracksEditorHelp": "Changes are validated as one configuration and apply to the next run. Existing runs keep the policy they started with.",
   "config.behavior": "Loop behavior and gates",
   "config.save": "Save settings",
   "config.reset": "Reset",

@@ -159,6 +159,18 @@ describe('Config.vue', () => {
     expect(control(wrapper, 'config-max-parallel-input').disabled).toBe(true)
   })
 
+  it('shows the invalid-document banner for a config.yaml that failed to parse', async () => {
+    // `Config.vue`'s `stateKey` still carries this branch verbatim
+    // (`view.value?.invalid === true ? 'config.editorInvalid' : …`) even
+    // though the fieldset-survival test that used to exercise it moved to
+    // `panel-tracks.test.ts` along with the track editors — the branch
+    // itself did not move, and needs its own assertion here.
+    serve({ '/api/config': { raw: 'tracks: [this is not valid', revision: null, parsed: null, invalid: true } })
+    const { Config } = await boot()
+    const wrapper = mount(Config)
+    await vi.waitFor(() => expect(wrapper.get('#config-editor-state').text()).toBe(english['config.editorInvalid']))
+  })
+
   it('no longer carries the track editors', async () => {
     serve({ '/api/config': configView() })
     const { Config } = await boot()
@@ -253,12 +265,21 @@ describe('Config.vue', () => {
       expect(write.kind).toBe('config.patch')
       expect(write.changes.length).toBeGreaterThan(0)
 
-      // Settling the write is what clears `dirty` — Save stays disabled and
-      // nothing sends again on its own.
-      socket.deliver({ type: 'receipt', id: (socket.sent[0] as { id: string }).id, ok: true, code: 'write.ok' })
+      // A refusal is not silently treated as success — the identical bug
+      // `panel-tracks.test.ts`'s own two-tab test catches in `Tracks.vue`
+      // is checked here too: `dirty` stays true and Save stays enabled.
+      socket.deliver({ type: 'receipt', id: (socket.sent[0] as { id: string }).id, ok: false, code: 'write.stale.config' })
+      await nextTick()
+      expect(control(wrapper, 'config-save').disabled).toBe(false)
+
+      // Only settling the write with `ok: true` clears `dirty` — Save stays
+      // disabled after that, and nothing sends again on its own.
+      await wrapper.get('#config-editor').trigger('submit')
+      expect(socket.sent).toHaveLength(2)
+      socket.deliver({ type: 'receipt', id: (socket.sent[1] as { id: string }).id, ok: true, code: 'write.ok' })
       await nextTick()
       expect(control(wrapper, 'config-save').disabled).toBe(true)
-      expect(socket.sent).toHaveLength(1)
+      expect(socket.sent).toHaveLength(2)
     })
   })
 

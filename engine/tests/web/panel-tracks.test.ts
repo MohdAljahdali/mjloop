@@ -425,6 +425,34 @@ describe('Tracks.vue', () => {
       expect(items.some((text) => text.includes('max_cycles'))).toBe(true)
     })
 
+    it('blocks Save while the required max_cycles box is left empty, rather than silently sending the last value it accepted', async () => {
+      // `onCyclesChange` (`TrackEditor.vue`) refuses a non-integer or `< 1`
+      // and keeps the draft at its last good value — so clearing the box
+      // alone never reaches the wire with a bad number. What it does not do
+      // is put the box back to that value, so the reader is left staring at
+      // an empty required field with Save still enabled unless something
+      // gates on the form's own HTML validity, the same way `Config.vue`
+      // does for its plain fields.
+      serve({ '/api/config': configView({ tracks: { build: { required: ['alpha'], max_cycles: 5 } } }) })
+      const { Tracks, socket } = await boot()
+      const wrapper = mount(Tracks)
+      await vi.waitFor(() => expect(wrapper.find('.track-editor').exists()).toBe(true))
+
+      const cycles = wrapper.get('.track-cycles input').element as HTMLInputElement
+      // A valid edit first, so the draft actually differs from the
+      // baseline — otherwise `collectTrackChanges` sends nothing regardless
+      // of the box's own validity, and the gate below is never reached.
+      cycles.value = '7'
+      await wrapper.get('.track-cycles input').trigger('input')
+      // Then clear it — the draft stays at 7, but the box itself now shows
+      // nothing.
+      cycles.value = ''
+      await wrapper.get('.track-cycles input').trigger('input')
+
+      await wrapper.get('#tracks-editor').trigger('submit')
+      expect(socket.sent, 'an invalid required field must block the write').toEqual([])
+    })
+
     it("shows the count of comment lines a pending save would drop from a track's own block", async () => {
       const raw = [
         'version: 1',
@@ -515,6 +543,8 @@ describe('Tracks.vue', () => {
       expect(root.classes()).toContain('panel')
       expect(root.attributes('aria-labelledby')).toBe('panel-tracks-title')
       expect(wrapper.get('#tracks-editor').classes()).toContain('config-editor')
+      expect(wrapper.find('.config-editor-head').exists()).toBe(true)
+      expect(wrapper.find('.config-editor-actions').exists()).toBe(true)
       expect(wrapper.find('.track-lists').exists()).toBe(true)
       expect(wrapper.find('.track-editor-head').exists()).toBe(true)
     })

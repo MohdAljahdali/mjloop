@@ -5,10 +5,10 @@
  * and a gate's `blocks` are all `TrackAgentList.vue` rather than four
  * templates.
  *
- * Every control here writes through `mutate` — the one function `Config.vue`
+ * Every control here writes through `mutate` — the one function `Tracks.vue`
  * hands down that is allowed to touch the draft — and nothing here ever
  * calls `submit()`. That is the invariant this whole panel exists to
- * protect; see `Config.vue`'s own comment on `save()`.
+ * protect; see `Tracks.vue`'s own comment on `save()`.
  */
 import { computed } from 'vue'
 import { useI18n } from '../composables/useI18n.js'

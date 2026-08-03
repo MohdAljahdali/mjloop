@@ -119,8 +119,23 @@ const stateKey = computed<string | null>(() => {
 const saveDisabled = computed(() => !enabled.value || !dirty.value || saving.value || conflict.value || broken(draft.value))
 const resetDisabled = computed(() => !enabled.value || (!dirty.value && !conflict.value) || saving.value)
 
+const formEl = ref<HTMLFormElement | null>(null)
+
 function save(): void {
   if (!enabled.value || baseline.value === null || editorRevision.value === null || saving.value || conflict.value) return
+  // `TrackEditor.vue`'s `max_cycles` box is `required min="1"` — the one
+  // native-validated control this half of the document carries. `Config.vue`
+  // gates on this same check; a form with no such gate lets an empty or
+  // out-of-range required box sit on screen with Save enabled, silently
+  // sending whatever `onCyclesChange` last accepted rather than the value
+  // the box currently (and visibly) shows.
+  // `TrackEditor.vue`'s `max_cycles` box is `required min="1"` — the one
+  // native-validated control this half of the document carries. `Config.vue`
+  // gates on this same check; a form with no such gate lets an empty or
+  // out-of-range required box sit on screen with Save enabled, silently
+  // sending whatever `onCyclesChange` last accepted rather than the value
+  // the box currently (and visibly) shows.
+  if (formEl.value !== null && !formEl.value.reportValidity()) return
   if (draft.value === null) return
   const changes = collectTrackChanges(draft.value, baseline.value)
   if (changes.length === 0) {
@@ -156,11 +171,11 @@ function reset(): void {
       </div>
     </header>
 
-    <form id="tracks-editor" class="config-editor" @submit.prevent="save" @input="markDirty" @change="markDirty">
+    <form id="tracks-editor" ref="formEl" class="config-editor" @submit.prevent="save" @input="markDirty" @change="markDirty">
       <div class="config-editor-head">
         <div>
-          <h2>{{ t('config.editorTitle') }}</h2>
-          <p class="hint">{{ t('config.editorHelp') }}</p>
+          <h2>{{ t('config.tracksEditorTitle') }}</h2>
+          <p class="hint">{{ t('config.tracksEditorHelp') }}</p>
         </div>
         <div class="config-editor-actions">
           <button type="button" id="tracks-reset" :disabled="resetDisabled" @click="reset">{{ t('config.reset') }}</button>
