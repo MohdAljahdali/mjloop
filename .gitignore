@@ -8,6 +8,12 @@ node_modules/
 *.tsbuildinfo
 .worktrees/
 
+# Declaration output of `engine/tsconfig.protocol.json`, the composite build
+# that lets `tsconfig.web.json` resolve `Snapshot`/`ClientMessage`/`Write`
+# through project references instead of Node-touching source. Rebuilt by
+# `npm run typecheck`; never shipped.
+engine/.ts-out/
+
 # Test output
 coverage/
 

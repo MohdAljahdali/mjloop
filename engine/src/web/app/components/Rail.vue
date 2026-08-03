@@ -14,7 +14,7 @@
  * `.rail-detail`, `.bit`, `.warnish`) keeps applying unchanged.
  */
 import { computed } from 'vue'
-import type { Snapshot } from '../../protocol.js'
+import type { Snapshot } from '../types/protocol.js'
 import { useI18n } from '../composables/useI18n.js'
 import Bdi from './Bdi.vue'
 import NoticeFeed from './NoticeFeed.vue'

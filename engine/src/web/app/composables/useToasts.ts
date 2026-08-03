@@ -6,7 +6,7 @@
  * screen re-renders it in the new language.
  */
 import { readonly, ref } from 'vue'
-import type { Message } from '../../protocol.js'
+import type { Message } from '../types/protocol.js'
 
 export type ToastAction = { code: string; run: () => void }
 export type Toast = { id: number; message: Message; action: ToastAction | null }

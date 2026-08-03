@@ -9,7 +9,7 @@
  * on, and the open tab *is* the subscription. Nothing to leak when a socket
  * dies, no resubscribe on reconnect, no per-view tick budget to tune.
  */
-import type { Snapshot } from '../../protocol.js'
+import type { Snapshot } from '../types/protocol.js'
 
 let token = ''
 

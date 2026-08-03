@@ -17,7 +17,7 @@
     "dev": "vite",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc -p tsconfig.json --noEmit && vue-tsc -p tsconfig.web.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -b tsconfig.protocol.json && vue-tsc -p tsconfig.web.json",
     "e2e": "bash ../tests/e2e/run-edit.sh",
     "e2e:build": "bash ../tests/e2e/run-build.sh",
     "e2e:fix": "bash ../tests/e2e/run-fix.sh",

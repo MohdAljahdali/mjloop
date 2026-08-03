@@ -21,7 +21,7 @@
  * on the panel that used to own it: two panels and the navigation badge now
  * read these numbers, and three copies of a readiness rule is three answers.
  */
-import type { PlanView, StoryView } from '../../protocol.js'
+import type { PlanView, StoryView } from '../types/protocol.js'
 import type { StoryDetail } from '../../read.js'
 import type { Track } from '../../../schemas/config.js'
 import type { ProjectSkillAcceptance } from '../../../schemas/skill-acceptance.js'

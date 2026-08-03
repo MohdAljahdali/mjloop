@@ -14,7 +14,7 @@
  * pure diff over two plain objects, and the panel that renders its output
  * (`ui/notifications.js`) is a thin, imperative wrapper around it.
  */
-import type { Snapshot, PlanView } from '../../protocol.js'
+import type { Snapshot, PlanView } from '../types/protocol.js'
 
 export interface Event {
   code: string

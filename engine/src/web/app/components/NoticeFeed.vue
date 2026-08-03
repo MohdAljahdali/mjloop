@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onBeforeUnmount, ref } from 'vue'
-import type { Message } from '../../protocol.js'
+import type { Message } from '../types/protocol.js'
 import { onNotice } from '../stores/session.js'
 import { useI18n } from '../composables/useI18n.js'
 

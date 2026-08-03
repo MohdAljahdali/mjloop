@@ -22,7 +22,7 @@
 import { feed } from './api.js'
 import { activePlan } from './selection.js'
 import type { Feed } from './api.js'
-import type { Snapshot } from '../../protocol.js'
+import type { Snapshot } from '../types/protocol.js'
 import type { PlanDetail } from '../../read.js'
 
 let held: Feed<PlanDetail> | null = null

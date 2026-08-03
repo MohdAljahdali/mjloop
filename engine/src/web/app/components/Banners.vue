@@ -7,7 +7,7 @@
  * data went missing.
  */
 import { computed } from 'vue'
-import type { Snapshot } from '../../protocol.js'
+import type { Snapshot } from '../types/protocol.js'
 import { useI18n } from '../composables/useI18n.js'
 
 // `snapshot` is nullable: the server may be down, the token may be bad, or

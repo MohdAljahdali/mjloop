@@ -5,8 +5,7 @@
  * holding refs is the smallest thing that models that honestly.
  */
 import { computed, ref, shallowReadonly, shallowRef } from 'vue'
-import type { ClientMessage, Message, ServerMessage, Snapshot } from '../../protocol.js'
-import type { Write } from '../../writes.js'
+import type { ClientMessage, Message, ServerMessage, Snapshot, Write } from '../types/protocol.js'
 
 export type Receipt = { id: string; ok: boolean; code: Message['code'] }
 export type OutputFrame = { kind: 'append' | 'replace'; jobId: string; data: string }

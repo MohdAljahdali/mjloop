@@ -13,7 +13,7 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
-    "types": ["vite/client", "node"],
+    "types": ["vite/client"],
     "noEmit": true,
     "strict": true,
     "jsx": "preserve",
@@ -23,5 +23,14 @@
     "skipLibCheck": true,
     "allowImportingTsExtensions": true
   },
-  "include": ["src/web/app/**/*.ts", "src/web/app/**/*.vue", "src/web/app/env.d.ts"]
+  "include": ["src/web/app/**/*.ts", "src/web/app/**/*.vue", "src/web/app/env.d.ts"],
+  /*
+   * `app/types/protocol.ts` re-exports types from `protocol.ts` and
+   * `writes.ts`. Some of those (`ClientMessage`, `Write`) are `z.infer` of a
+   * schema built from Node-touching server modules, so resolving them from
+   * source pulls that whole graph in. This reference makes TypeScript resolve
+   * them from `tsconfig.protocol.json`'s built `.d.ts` instead — see that
+   * file for why a type-only barrel alone could not do this.
+   */
+  "references": [{ "path": "./tsconfig.protocol.json" }]
 }

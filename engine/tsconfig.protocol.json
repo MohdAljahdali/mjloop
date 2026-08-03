@@ -1,0 +1,35 @@
+{
+  /*
+   * A composite build of the server program, for one reason only: letting
+   * `tsconfig.web.json` reference it as a project reference.
+   *
+   * `protocol.ts` re-exports `ClientMessage` and `writes.ts` exports `Write` as
+   * `z.infer<typeof …Schema>` — a *computed* type, not a re-exported name. A
+   * type-only barrel (`app/types/protocol.ts`) still has to resolve what that
+   * inferred type actually is, and doing that means TypeScript type-checks
+   * `protocol.ts`'s own module — including its runtime import of `writes.ts`,
+   * which runs on through `ops/plan.ts`, `ops/run.ts`, `ops/verify.ts` and
+   * `store/*` — every one of them reaching for `node:fs`, `process`, `Buffer`.
+   * A barrel cannot cut that graph; see `tsconfig.web.json` and
+   * `src/web/app/types/protocol.ts` for where it was tried and measured.
+   *
+   * A project reference can, because a *built* reference is consumed through
+   * its emitted `.d.ts`, not its source. `z.infer<typeof ClientMessageSchema>`
+   * gets baked into a concrete, spelled-out type at declaration-emit time —
+   * `writes.ts`'s own `.d.ts` carries no `node:os` import because that module
+   * is used internally, never in an exported type — so the browser program
+   * never has a reason to open the file that has it.
+   *
+   * Output goes to `.ts-out/`, not `dist/`: `dist/` is what `npm run build`
+   * bundles with esbuild and Vite, and is committed and byte-compared by
+   * `verify-ship`. This declaration build has nothing to do with that pipeline
+   * and must never be able to change what ships.
+   */
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "composite": true,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "outDir": ".ts-out/protocol"
+  }
+}
