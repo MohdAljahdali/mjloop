@@ -11,6 +11,7 @@ import type { Snapshot } from '../types/protocol.js'
 import { useI18n } from '../composables/useI18n.js'
 import { send } from '../stores/session.js'
 import { time } from '../lib/fmt.js'
+import Bdi from './Bdi.vue'
 
 // `snapshot` is nullable: the server may be down, the token may be bad, or
 // an upgrade may have been refused before a first snapshot ever arrives —
@@ -19,6 +20,13 @@ import { time } from '../lib/fmt.js'
 const props = defineProps<{ snapshot: Snapshot | null; online: boolean }>()
 const { t } = useI18n()
 
+// A total outage — the file cannot be parsed, or the write door cannot be
+// reached — and must not read at the weight of a normal row. Moved here from
+// `ui/rail.js`'s own `configBanner` slot; `Config.vue` is the panel this
+// error is *about*, but the banner is page-level like every other one on
+// this component, so it stays with them rather than living inside a tab that
+// might not be the one open.
+const configError = computed(() => props.snapshot?.state.config_error ?? null)
 const stale = computed(() => props.snapshot?.state.recovered ?? false)
 // `rail.js:118` — a project that has not initialised at all is not "missing a
 // design system", it is missing everything; showing this banner then would be
@@ -39,6 +47,10 @@ const stalledSince = computed(() => props.snapshot?.session.stalledSince ?? null
 <template>
   <div class="banners" role="status" aria-live="polite">
     <p v-if="!online" class="banner offline">{{ t('app.disconnected') }}</p>
+    <p v-if="configError !== null" class="banner error">
+      <strong>{{ t('banner.configError') }}</strong>
+      <code><Bdi :value="configError" /></code>
+    </p>
     <p v-if="stale" class="banner warn">{{ t('banner.stale') }}</p>
     <p v-if="noDesignSystem" class="banner note">{{ t('banner.designSystem') }}</p>
     <p v-if="stalledSince !== null" class="banner warn">

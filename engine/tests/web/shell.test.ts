@@ -102,6 +102,28 @@ describe('Banners', () => {
     expect(wrapper.findAll('.banner')).toHaveLength(0)
   })
 
+  it('shows the config error as a total outage, above the other banners, and names the file\'s own problem', () => {
+    // Moved here from `ui/rail.js`'s `configBanner` slot, deferred by the
+    // foundation plan and picked up by the Config panel task — see
+    // `Banners.vue`'s own comment. `state.config_error` is a parse failure or
+    // a write door the engine cannot reach; the string itself is an
+    // identifier (a path or an error message) and must not be mirrored.
+    const snap = emptySnapshot()
+    snap.state = { ...snap.state, config_error: 'config.yaml:12: unknown key "trak"' }
+    const wrapper = mount(Banners, { props: { snapshot: snap, online: true } })
+    const banner = wrapper.find('.banner.error')
+    expect(banner.exists()).toBe(true)
+    expect(banner.find('code bdi').text()).toBe('config.yaml:12: unknown key "trak"')
+    expect(banner.find('code bdi').attributes('dir')).toBe('ltr')
+  })
+
+  it('says nothing about config once the error clears', () => {
+    const snap = emptySnapshot()
+    snap.state = { ...snap.state, config_error: null }
+    const wrapper = mount(Banners, { props: { snapshot: snap, online: true } })
+    expect(wrapper.find('.banner.error').exists()).toBe(false)
+  })
+
   it('warns when the project has no design system', () => {
     const snap = emptySnapshot()
     snap.state = { ...snap.state, design_system: false }

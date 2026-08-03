@@ -16,6 +16,7 @@ import LanguagePicker from './components/LanguagePicker.vue'
 import Pane from './components/Pane.vue'
 import Rail from './components/Rail.vue'
 import Toasts from './components/Toasts.vue'
+import Config from './panels/Config.vue'
 import Evidence from './panels/Evidence.vue'
 import Features from './panels/Features.vue'
 import Memory from './panels/Memory.vue'
@@ -164,6 +165,7 @@ const highCount = computed(() => snapshot.value?.state.findings.high ?? 0)
       <Skills v-else-if="active === 'skills'" />
       <Evidence v-else-if="active === 'evidence'" />
       <Memory v-else-if="active === 'memory'" />
+      <Config v-else-if="active === 'config'" />
     </KeepAlive>
   </main>
 

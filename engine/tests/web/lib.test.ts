@@ -21,9 +21,29 @@ import {
 import { deriveEvents } from '../../src/web/app/lib/notifications.ts'
 import { planMemories, planRuns } from '../../src/web/app/lib/plans.ts'
 import { facet } from '../../src/web/app/lib/memory.ts'
+import {
+  broken,
+  collectConfigChanges,
+  commandRows,
+  edgeAfter,
+  findOrderCycle,
+  knownAgents,
+  orchestrationProblem,
+  orderEdgeChanges,
+  policyRows,
+  seedDraft,
+  seedFormValues,
+  trackCommentLoss,
+  trackFieldChanges,
+  trackPending,
+  trackProblems,
+  validAgent,
+} from '../../src/web/app/lib/config.ts'
 import { emptySnapshot } from './helpers/page.js'
 import type { Job, PlanView, StoryView } from '../../src/web/protocol.js'
-import type { Track } from '../../src/schemas/config.js'
+import { ConfigSchema } from '../../src/schemas/config.js'
+import type { Config, Track } from '../../src/schemas/config.js'
+import { ConfigChangeSchema } from '../../src/store/config-mutation.js'
 import type { ProjectSkillAcceptance } from '../../src/schemas/skill-acceptance.js'
 import type { MemoryView, RunSummary } from '../../src/web/read.js'
 
@@ -638,6 +658,472 @@ describe('lib/memory', () => {
 
     it('an empty memory list stays empty regardless of the filters', () => {
       expect(facet([], 'anything', 'decision')).toEqual([])
+    })
+  })
+})
+
+/**
+ * `Config.vue`'s pure half — ported from `panels/config.js`'s own
+ * `collectConfigChanges`, `trackProblems`, `findOrderCycle` and the C6
+ * change-impact preview, with `panels.test.ts:2023`'s `describe('config')`
+ * as the requirements list. What is under test here is the diff and the
+ * refusal logic; the DOM this drives (the editor banner, disabled buttons,
+ * the draft-only-until-Save invariant) is `panel-config.test.ts`'s own.
+ */
+describe('lib/config', () => {
+  const baseline = (patch: Record<string, unknown> = {}): Config =>
+    ConfigSchema.parse({
+      version: 1,
+      tracks: { build: { required: ['builder'], max_cycles: 5 }, edit: { required: ['builder'], max_cycles: 2 } },
+      ...patch,
+    })
+
+  describe('seedFormValues / collectConfigChanges', () => {
+    it('emits nothing for a form and draft seeded straight from the baseline', () => {
+      const config = baseline()
+      const form = seedFormValues(config)
+      const draft = seedDraft(config)
+      expect(collectConfigChanges(form, draft, config)).toEqual([])
+    })
+
+    it('emits only the plain fields and the structured maps that actually moved', () => {
+      const config = baseline({
+        autonomous: false,
+        limits: { max_parallel_agents: 4, no_progress_strikes: 2 },
+        verify: { test: 'npm test', lint: null, build: 'npm run build' },
+      })
+      const form = seedFormValues(config)
+      const draft = seedDraft(config)
+
+      form.autonomous = true
+      form.verifyTest = 'npm run test:ci'
+      draft.specialists['security'] = 'always'
+      const build = draft.tracks['build']
+      if (build !== undefined) build.max_cycles = 7
+
+      expect(collectConfigChanges(form, draft, config)).toEqual([
+        { kind: 'root', key: 'autonomous', value: true },
+        { kind: 'verify.command', key: 'test', value: 'npm run test:ci' },
+        { kind: 'specialist', agent: 'security', value: 'always' },
+        {
+          kind: 'track',
+          track: 'build',
+          // `Track` is the output type of `TrackSchema`, so `order` defaults
+          // to `[]` on every parsed track — including this diff's own
+          // baseline — even though nothing in the draft touched it.
+          value: { required: ['builder'], available: [], closing: [], order: [], max_cycles: 7 },
+        },
+      ])
+    })
+
+    it('turns every orchestration control into the change vocabulary the server accepts, and every change is wire-legal', () => {
+      const config = baseline()
+      const form = seedFormValues(config)
+      expect(form.orchDiscoveryQuestionBudget).toBe(8)
+      expect(collectConfigChanges(form, seedDraft(config), config)).toEqual([])
+
+      form.orchProfileAutoAccept = true
+      // `always` before `auto-plan`: the pair is one document-level rule, and
+      // `orchestrationProblem` below is what catches the half that would be
+      // refused alone.
+      form.orchDiscoveryMode = 'always'
+      form.orchDiscoveryQuestionBudget = 12
+      form.orchDiscoveryCompletion = 'auto-plan'
+      form.orchExecutionAfterPlanApproval = 'auto'
+      form.orchExecutionUncertainConcurrency = 'parallel'
+      form.orchExecutionRepairAttempts = 3
+      form.orchQualityIndependentPlanReview = true
+      form.orchQualityIndependentVerification = true
+      form.orchSkillsSourceRegistry = true
+      form.orchSkillsTrustedRegistries = 'https://skills.example.com\n\n'
+      form.orchSkillsUpdateMode = 'pinned'
+
+      const changes = collectConfigChanges(form, seedDraft(config), config)
+      expect(changes).toEqual([
+        { kind: 'orchestration.profile.auto_accept', value: true },
+        { kind: 'orchestration.discovery.mode', value: 'always' },
+        { kind: 'orchestration.discovery.question_budget', value: 12 },
+        { kind: 'orchestration.discovery.completion', value: 'auto-plan' },
+        { kind: 'orchestration.execution.after_plan_approval', value: 'auto' },
+        { kind: 'orchestration.execution.uncertain_concurrency', value: 'parallel' },
+        { kind: 'orchestration.execution.repair_attempts', value: 3 },
+        { kind: 'orchestration.quality', key: 'independent_plan_review', value: true },
+        { kind: 'orchestration.quality', key: 'independent_verification', value: true },
+        { kind: 'orchestration.skills.sources', value: ['github', 'registry'] },
+        { kind: 'orchestration.skills.trusted_registries', value: ['https://skills.example.com'] },
+        { kind: 'orchestration.skills.update_mode', value: 'pinned' },
+      ])
+      // The panel shares no code with the server's schema; this is the only
+      // place the two vocabularies are checked against each other.
+      for (const change of changes) {
+        expect(ConfigChangeSchema.safeParse(change).success, JSON.stringify(change)).toBe(true)
+      }
+    })
+
+    it('compares skill sources as a set, never rewriting the order a document already holds', () => {
+      const config = baseline({ orchestration: { skills: { sources: ['web', 'github'] } } })
+      const form = seedFormValues(config)
+      expect(collectConfigChanges(form, seedDraft(config), config)).toEqual([])
+    })
+
+    it("carries an order edge added through an agent's own row into the change set, and drops it once its last predecessor is removed", () => {
+      const config = baseline({
+        tracks: { build: { required: ['builder', 'verifier'], available: ['ui-designer'], max_cycles: 5 } },
+      })
+      const draft = seedDraft(config)
+      const form = seedFormValues(config)
+      const track = draft.tracks['build']
+      if (track === undefined) throw new Error('fixture')
+      track.order = [{ agent: 'verifier', after: ['builder'] }]
+
+      expect(collectConfigChanges(form, draft, config)).toEqual([
+        {
+          kind: 'track',
+          track: 'build',
+          value: {
+            required: ['builder', 'verifier'],
+            available: ['ui-designer'],
+            closing: [],
+            order: [{ agent: 'verifier', after: ['builder'] }],
+            max_cycles: 5,
+          },
+        },
+      ])
+
+      track.order = []
+      expect(collectConfigChanges(form, draft, config)).toEqual([])
+    })
+  })
+
+  describe('orchestrationProblem', () => {
+    it('refuses auto-plan completion under a discovery mode of off, and lifts once discovery is on', () => {
+      const config = baseline()
+      const form = seedFormValues(config)
+      form.orchDiscoveryCompletion = 'auto-plan'
+      expect(orchestrationProblem(form)).toBe('config.problem.autoPlanOff')
+      form.orchDiscoveryMode = 'always'
+      expect(orchestrationProblem(form)).toBeNull()
+    })
+
+    it('refuses a registry source with nothing trusted, and a trusted registry that is not https', () => {
+      const config = baseline()
+      const form = seedFormValues(config)
+      form.orchSkillsSourceRegistry = true
+      expect(orchestrationProblem(form)).toBe('config.problem.registryUntrusted')
+
+      form.orchSkillsTrustedRegistries = 'http://registry.internal'
+      expect(orchestrationProblem(form)).toBe('config.problem.registryNotHttps')
+
+      // One bad line among good ones is still the whole frame.
+      form.orchSkillsTrustedRegistries = 'https://skills.example.com\nftp://mirror.internal\n'
+      expect(orchestrationProblem(form)).toBe('config.problem.registryNotHttps')
+
+      form.orchSkillsTrustedRegistries = 'https://skills.example.com\n\nhttps://mirror.internal\n'
+      expect(orchestrationProblem(form)).toBeNull()
+    })
+  })
+
+  // `trackProblems` reads a plain `Draft` — never `ConfigSchema.parse`d —
+  // because it exists to describe exactly the shapes the schema would
+  // refuse. `mkDraft` builds that shape directly rather than routing an
+  // invalid document through `baseline()`, which would throw first.
+  const mkDraft = (tracks: Record<string, Track>, specialists: Record<string, string> = {}) => ({ specialists, tracks })
+
+  describe('trackProblems / broken', () => {
+    it('flags a track with no required agent', () => {
+      const draft = mkDraft({ mine: { required: [], available: [], closing: [], order: [], max_cycles: 3 } })
+      expect(trackProblems(draft, 'mine').map((problem) => problem.key)).toContain('config.problem.noRequired')
+      expect(broken(draft)).toBe(true)
+    })
+
+    it('flags a gate whose prover or blocks name an agent the track never runs, blocks itself, or is empty', () => {
+      const track: Track = {
+        required: ['alpha', 'beta'],
+        available: [],
+        closing: [],
+        order: [],
+        max_cycles: 3,
+        gate: { proven_by: 'ghost', blocks: ['alpha'] },
+      }
+      expect(trackProblems(mkDraft({ mine: track }), 'mine').map((p) => p.key)).toContain('config.problem.gateUnknown')
+
+      track.gate = { proven_by: 'alpha', blocks: ['ghost'] }
+      expect(trackProblems(mkDraft({ mine: track }), 'mine').map((p) => p.key)).toContain('config.problem.blockUnknown')
+
+      track.gate = { proven_by: 'alpha', blocks: ['alpha'] }
+      expect(trackProblems(mkDraft({ mine: track }), 'mine').map((p) => p.key)).toContain('config.problem.gateSelfBlock')
+
+      track.gate = { proven_by: 'alpha', blocks: [] }
+      expect(trackProblems(mkDraft({ mine: track }), 'mine').map((p) => p.key)).toContain('config.problem.noBlocks')
+    })
+
+    it('flags an agent specialists: marks never, wherever the track would run it', () => {
+      const track: Track = {
+        required: ['alpha', 'beta'],
+        available: [],
+        closing: [],
+        order: [],
+        max_cycles: 3,
+        gate: { proven_by: 'alpha', blocks: ['beta'] },
+      }
+      const draft = mkDraft({ mine: track }, { alpha: 'never' })
+      expect(trackProblems(draft, 'mine').map((p) => p.key)).toContain('config.problem.forbidden')
+    })
+
+    it('flags a map drafted by an agent the track cannot draft, and lifts once it names one that can', () => {
+      const track: Track = {
+        required: ['alpha'],
+        available: [],
+        closing: ['docs'],
+        order: [],
+        max_cycles: 3,
+        map: { drafted_by: 'docs' },
+      }
+      const draft = mkDraft({ mine: track })
+      expect(trackProblems(draft, 'mine').map((p) => p.key)).toContain('config.problem.mapUnknown')
+      track.map = { drafted_by: 'alpha' }
+      expect(trackProblems(draft, 'mine')).toEqual([])
+    })
+
+    it('flags every one of the four order-edge refusals TrackSchema.superRefine applies', () => {
+      // Unknown predecessor.
+      expect(
+        trackProblems(
+          mkDraft({ mine: { required: ['alpha'], available: [], closing: [], max_cycles: 3, order: [{ agent: 'alpha', after: ['ghost'] }] } }),
+          'mine',
+        ).map((p) => p.key),
+      ).toContain('config.problem.orderPredUnknown')
+
+      // Predecessor is a closing agent, which never logs a result inside a cycle.
+      expect(
+        trackProblems(
+          mkDraft({
+            mine: { required: ['alpha'], available: [], closing: ['docs'], max_cycles: 3, order: [{ agent: 'alpha', after: ['docs'] }] },
+          }),
+          'mine',
+        ).map((p) => p.key),
+      ).toContain('config.problem.orderPredClosing')
+
+      // The edge's own agent moved out of required/available (orphaned, but
+      // still known) and then into closing.
+      const orphaned: Track = {
+        required: ['beta'],
+        available: [],
+        closing: [],
+        max_cycles: 3,
+        order: [{ agent: 'alpha', after: ['beta'] }],
+      }
+      const draft = mkDraft({ mine: orphaned })
+      expect(trackProblems(draft, 'mine').map((p) => p.key)).toContain('config.problem.orderAgentUnknown')
+      orphaned.closing = ['alpha']
+      expect(trackProblems(draft, 'mine').map((p) => p.key)).toContain('config.problem.orderAgentClosing')
+
+      // An edge inverting the track's own gate.
+      expect(
+        trackProblems(
+          mkDraft({
+            mine: {
+              required: ['prover', 'blocked'],
+              available: [],
+              closing: [],
+              max_cycles: 3,
+              gate: { proven_by: 'prover', blocks: ['blocked'] },
+              order: [{ agent: 'prover', after: ['blocked'] }],
+            },
+          }),
+          'mine',
+        ).map((p) => p.key),
+      ).toContain('config.problem.orderInvertsGate')
+    })
+
+    it('flags a cycle two edges close between them', () => {
+      const draft = mkDraft({
+        mine: {
+          required: ['alpha', 'beta'],
+          available: [],
+          closing: [],
+          max_cycles: 3,
+          order: [
+            { agent: 'alpha', after: ['beta'] },
+            { agent: 'beta', after: ['alpha'] },
+          ],
+        },
+      })
+      const problem = trackProblems(draft, 'mine').find((p) => p.key === 'config.problem.orderCycle')
+      expect(problem?.params['path']).toBe('alpha → beta → alpha')
+    })
+
+    it("folds the gate's own precondition into the cycle check, catching a deadlock one hop past the direct edge", () => {
+      // `verifier after planner`, `planner after builder`, plus the gate's own
+      // fold (`builder after verifier`, since `blocks: ['builder']` waits on
+      // `proven_by: 'verifier'`) — no edge here names `builder` waiting on
+      // `verifier` directly; only the fold closes the loop.
+      const draft = mkDraft({
+        mine: {
+          required: ['verifier', 'builder', 'planner'],
+          available: [],
+          closing: [],
+          max_cycles: 3,
+          gate: { proven_by: 'verifier', blocks: ['builder'] },
+          order: [
+            { agent: 'verifier', after: ['planner'] },
+            { agent: 'planner', after: ['builder'] },
+          ],
+        },
+      })
+      const problem = trackProblems(draft, 'mine').find((p) => p.key === 'config.problem.orderCycle')
+      expect(problem?.params['path']).toBe('verifier → builder → planner → verifier')
+    })
+
+    it('returns nothing for a track this model does not have, and nothing for a null model', () => {
+      const draft = seedDraft(baseline())
+      expect(trackProblems(draft, 'ghost')).toEqual([])
+      expect(trackProblems(null, 'build')).toEqual([])
+      expect(broken(null)).toBe(false)
+    })
+  })
+
+  describe('edgeAfter', () => {
+    it('unions every edge naming the same agent, not just the first', () => {
+      const order = [
+        { agent: 'alpha', after: ['beta'] },
+        { agent: 'alpha', after: ['gamma'] },
+      ]
+      expect(edgeAfter(order, 'alpha')).toEqual(['beta', 'gamma'])
+      expect(edgeAfter(order, 'ghost')).toEqual([])
+    })
+  })
+
+  describe('findOrderCycle', () => {
+    it('finds no cycle in an acyclic graph', () => {
+      expect(findOrderCycle([{ agent: 'b', after: ['a'] }])).toBeNull()
+    })
+
+    it('names the closing path of a direct two-node cycle', () => {
+      expect(
+        findOrderCycle([
+          { agent: 'a', after: ['b'] },
+          { agent: 'b', after: ['a'] },
+        ]),
+      ).toEqual(['a', 'b', 'a'])
+    })
+  })
+
+  describe('knownAgents', () => {
+    it('collects every agent named anywhere in the draft, deduplicated and sorted, dropping an empty name', () => {
+      const draft = seedDraft(
+        baseline({
+          specialists: { zeta: 'auto' },
+          tracks: {
+            mine: {
+              required: ['alpha'],
+              available: ['beta'],
+              closing: ['gamma'],
+              max_cycles: 3,
+              gate: { proven_by: 'alpha', blocks: ['beta'] },
+              map: { drafted_by: 'alpha' },
+            },
+          },
+        }),
+      )
+      expect(knownAgents(draft)).toEqual(['alpha', 'beta', 'gamma', 'zeta'])
+    })
+  })
+
+  describe('validAgent', () => {
+    it('accepts the id pattern and rejects a double hyphen or a reserved name', () => {
+      expect(validAgent('builder')).toBe(true)
+      expect(validAgent('ui-designer')).toBe(true)
+      expect(validAgent('a--b')).toBe(false)
+      expect(validAgent('findings')).toBe(false)
+      expect(validAgent('has space')).toBe(false)
+      expect(validAgent('')).toBe(false)
+    })
+  })
+
+  describe('C6: trackFieldChanges / orderEdgeChanges / trackPending', () => {
+    it('names a brand-new track rather than diffing it against nothing', () => {
+      const draftTrack: Track = { required: ['alpha'], available: [], closing: [], order: [], max_cycles: 3 }
+      expect(trackFieldChanges(undefined, draftTrack)).toEqual([{ id: 'new', key: 'config.preview.newTrack', params: {} }])
+    })
+
+    it('names each field that differs from the baseline, and nothing that did not move', () => {
+      const before: Track = { required: ['alpha'], available: [], closing: [], order: [], max_cycles: 5 }
+      const after: Track = { ...before, max_cycles: 7, gate: { proven_by: 'alpha', blocks: ['beta'] } }
+      expect(trackFieldChanges(before, after).map((item) => item.params['field'])).toEqual(['max_cycles', 'gate'])
+    })
+
+    it('names each order edge added and removed, as {agent, pred} pairs', () => {
+      const before = { order: [{ agent: 'alpha', after: ['beta'] }] }
+      const after = { order: [{ agent: 'alpha', after: ['gamma'] }] }
+      const items = orderEdgeChanges(before, after)
+      expect(items).toContainEqual({ id: 'add:alpha:gamma', key: 'config.preview.orderAdded', params: { agent: 'alpha', pred: 'gamma' } })
+      expect(items).toContainEqual({ id: 'remove:alpha:beta', key: 'config.preview.orderRemoved', params: { agent: 'alpha', pred: 'beta' } })
+      expect(items).toHaveLength(2)
+    })
+
+    it('is false only when the whole-object compare agrees, and false against itself', () => {
+      const before: Track = { required: ['alpha'], available: [], closing: [], order: [], max_cycles: 5, map: { drafted_by: 'alpha' } }
+      expect(trackPending(before, before)).toBe(false)
+      expect(trackPending(before, { ...before, max_cycles: 6 })).toBe(true)
+    })
+
+    it("stays true across a toggle that round-trips a field's own value — `onField`'s map-enabled case deletes and reassigns `entry.map`, which moves it to the end of the track object even though every named field reads equal", () => {
+      const before: Track = { required: ['alpha'], available: [], closing: [], order: [], max_cycles: 5, map: { drafted_by: 'alpha' } }
+      // Same fields, same values, `map` inserted before `order`/`max_cycles`
+      // instead of after — exactly what `delete entry.map; entry.map = …`
+      // produces the *first* time (moved to the end), and what a second
+      // round trip reaching a different position would produce here: either
+      // way, insertion order — not field values — is what this test moves.
+      const after: Track = { required: ['alpha'], available: [], map: { drafted_by: 'alpha' }, closing: [], order: [], max_cycles: 5 }
+
+      expect(trackFieldChanges(before, after)).toEqual([])
+      expect(trackPending(before, after)).toBe(true)
+    })
+  })
+
+  describe('trackCommentLoss', () => {
+    const raw = [
+      'version: 1',
+      'tracks:',
+      '  build:',
+      "    # Three agents, so one busy day doesn't stall this track.",
+      '    required:',
+      '      - alpha',
+      '      - beta',
+      '      - gamma',
+      "    # Lower until the verifier's own suite gets faster.",
+      '    max_cycles: 5',
+      '  edit:',
+      '    required:',
+      '      - builder',
+      '    max_cycles: 2',
+      '',
+    ].join('\n')
+
+    it("counts only the whole-line comments inside one track's own block", () => {
+      expect(trackCommentLoss(raw, 'build')).toBe(2)
+      expect(trackCommentLoss(raw, 'edit')).toBe(0)
+    })
+
+    it('returns null when the raw text is null, has no tracks: block, or names no such track', () => {
+      expect(trackCommentLoss(null, 'build')).toBeNull()
+      expect(trackCommentLoss('version: 1\n', 'build')).toBeNull()
+      expect(trackCommentLoss(raw, 'ghost')).toBeNull()
+    })
+  })
+
+  describe('commandRows / policyRows', () => {
+    it('splits verify: into the commands it runs and everything else', () => {
+      const config = baseline({ verify: { test: 'npm test', build: 'npm run build', failure_patterns: { test: ['^FAIL'] } } })
+      expect(commandRows(config.verify)).toEqual([
+        { key: 'verify.test', value: 'npm test' },
+        { key: 'verify.lint', value: null },
+        { key: 'verify.build', value: 'npm run build' },
+      ])
+      const policy = policyRows(config.verify)
+      expect(policy.map((row) => row.key)).toEqual(['verify.timeout_ms', 'verify.lock_timeout_ms', 'verify.failure_patterns.test'])
+      expect(policy.find((row) => row.key === 'verify.failure_patterns.test')?.value).toBe('^FAIL')
     })
   })
 })
