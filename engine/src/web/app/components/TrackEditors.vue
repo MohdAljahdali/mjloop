@@ -43,7 +43,7 @@ function add(): void {
   <fieldset>
     <legend>{{ t('config.tracks') }}</legend>
     <p class="hint">{{ t('config.tracksHelp') }}</p>
-    <div id="config-track-editors" class="track-editors">
+    <div id="config-track-editors" class="track-editors" role="tabpanel" tabindex="0" aria-labelledby="tracks-view-list">
       <template v-if="props.draft !== null">
         <TrackEditor
           v-for="name in names"

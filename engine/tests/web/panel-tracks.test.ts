@@ -671,6 +671,56 @@ describe('Tracks.vue', () => {
       expect(wrapper.find('#config-track-editors').exists()).toBe(false)
     })
 
+    it('names the two views as tabs, with the graph selected first', async () => {
+      serve({ '/api/config': configView({ tracks: { build: { required: ['builder'], max_cycles: 5 } } }) })
+      const { Tracks } = await boot()
+      const wrapper = mount(Tracks)
+      await ready(wrapper)
+
+      const strip = wrapper.get('.track-view-toggle')
+      expect(strip.attributes('role')).toBe('tablist')
+      // Source order is the reading order a screen reader and a Tab press
+      // both follow, so "graph first" is an assertion about the markup, not
+      // only about which one is selected.
+      expect(strip.findAll('[role="tab"]').map((tab) => tab.attributes('id'))).toEqual([
+        'tracks-view-graph',
+        'tracks-view-list',
+      ])
+      expect(wrapper.get('#tracks-view-graph').attributes('aria-selected')).toBe('true')
+      expect(wrapper.get('#tracks-view-list').attributes('aria-selected')).toBe('false')
+      // Roving tabindex: one stop in the tab order, not two.
+      expect(wrapper.get('#tracks-view-graph').attributes('tabindex')).toBe('0')
+      expect(wrapper.get('#tracks-view-list').attributes('tabindex')).toBe('-1')
+      expect(wrapper.get('#tracks-graph-view').attributes('role')).toBe('tabpanel')
+      expect(wrapper.get('#tracks-graph-view').attributes('aria-labelledby')).toBe('tracks-view-graph')
+    })
+
+    it('moves between the two tabs on an arrow key, in whichever direction the page runs', async () => {
+      serve({ '/api/config': configView({ tracks: { build: { required: ['builder'], max_cycles: 5 } } }) })
+      const { Tracks } = await boot()
+      const wrapper = mount(Tracks, { attachTo: document.body })
+      await ready(wrapper)
+
+      // ltr: the list sits after the graph, so ArrowRight reaches it.
+      document.documentElement.dir = 'ltr'
+      await wrapper.get('.track-view-toggle').trigger('keydown', { key: 'ArrowRight' })
+      await nextTick()
+      expect(wrapper.get('#tracks-view-list').attributes('aria-selected')).toBe('true')
+      expect(wrapper.find('#config-track-editors').exists()).toBe(true)
+      expect(document.activeElement?.id).toBe('tracks-view-list')
+
+      // rtl: the same physical key now walks the other way, because the strip
+      // is laid out the other way. This is the whole reason the handler reads
+      // `dir` instead of hard-coding a direction — the page ships in Arabic.
+      document.documentElement.dir = 'rtl'
+      await wrapper.get('.track-view-toggle').trigger('keydown', { key: 'ArrowRight' })
+      await nextTick()
+      expect(wrapper.get('#tracks-view-graph').attributes('aria-selected')).toBe('true')
+
+      document.documentElement.dir = 'ltr'
+      wrapper.unmount()
+    })
+
     it('draws one node per agent in the track, in required, available, closing order', async () => {
       serve({
         '/api/config': configView({
