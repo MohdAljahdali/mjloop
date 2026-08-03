@@ -7,6 +7,14 @@
    * JSDoc pass over hand-written DOM could only see the JavaScript.
    *
    * It emits nothing. Vite does the emitting.
+   *
+   * `tsc -b tsconfig.protocol.json` must run before `vue-tsc -p tsconfig.web.json`
+   * — see the `references` entry below. A bare `vue-tsc -p tsconfig.web.json` on
+   * a tree with no `.ts-out/` fails with `TS6305` on every type this program
+   * gets through that reference, plus a cascade of unrelated-looking `TS7006`s
+   * from the app files that import them. `npm run typecheck` and
+   * `tests/web/typeguard.test.ts` already build it first; do the same for any
+   * other direct invocation of this config.
    */
   "compilerOptions": {
     "target": "ES2023",
