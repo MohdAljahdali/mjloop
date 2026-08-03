@@ -94,19 +94,30 @@ lost its compiler check. Closes when `public/` goes.
   would pass against a stale `dist`. Only `verify-ship`'s fresh-build comparison
   closes that pair.
 
-## The one thing no test can reach
+## Verified in a browser
 
-**Nobody has opened the page in a browser.** Every gate on this branch was unit
-tests, `vue-tsc`, and `verify-ship`.
+The branch's one untestable risk is closed. The page was served from the
+committed `dist/` by `node dist/web/cli.js --port 4199` and driven in Chrome.
 
-The specific risk, narrowed but not closed: xterm measures its cell geometry in
-`open()`. The page boots `<body data-pane="docked">` and moves `bootPane()` into
-`App.vue`'s `onMounted` so the terminal mounts into a laid-out box before any
-collapse — reproducing `app.js`'s `mountTerminal()`-then-`mountPane()` order. The
-ordering is verified; the measurement is not, because every terminal test mounts
-a double whose `open()` does nothing.
+- **It loads with zero console errors**: header, project path, language picker,
+  status pill, notice toggle, eight tabs, an empty `<main>`, and a collapsed
+  pane. No black terminal box on arrival.
+- **xterm measures correctly** — the risk that mattered. With the pane docked:
+  terminal box 1476×272, `.xterm-screen` 1440×240, 16 rows rendered. So booting
+  `<body data-pane="docked">` and collapsing in `App.vue`'s `onMounted` does
+  reproduce `app.js`'s `mountTerminal()`-then-`mountPane()` order, and xterm gets
+  a laid-out box at `open()`.
+- **RTL holds**: `?lang=ar` gives `dir="rtl"`, the whole shell in Arabic, and
+  `scrollWidth === clientWidth` — no horizontal scrollbar from xterm's measuring
+  span, which is the invariant `usePane.ts`'s header warns about.
+- **The contracts hold at runtime**, not just in tests: `.rail #notice-toggle`
+  present and `.brand #notice-toggle` absent, all eight `tab-<id>` ids, and
+  `data-status` on the pill.
 
-Before starting the second plan: run `node dist/web/cli.js`, open the URL, dock
-the pane, and confirm the terminal has a cursor and sensible columns. Then switch
-to العربية and confirm the page flips to RTL with no horizontal scrollbar —
-`usePane.ts`'s header explains why that one matters.
+Still unverified, and cheap to check once the pane controls exist: that
+collapsing and re-docking at runtime re-fits the terminal. The boot path is what
+was dangerous, and it is now proven.
+
+One cosmetic consequence of deferred scope, seen on screen: a docked pane with
+nothing running is a bare black rectangle, where the old page shows the
+`#terminal-empty` hint. That lands with the pane surface listed above.
