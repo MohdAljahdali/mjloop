@@ -39,38 +39,6 @@ function refit(): void {
   }
 }
 
-/**
- * `Pane.vue` binds `:hidden="pane.shown.value === null"` on this component's
- * root, which is `true` at boot — nothing is shown yet, so `onMounted` below
- * calls `instance.open(host)` against a `display: none` box, and xterm caches
- * its character metrics from nothing (measured: `.xterm-screen` 0x0). The
- * foundation's own browser check measured 1440x240 over 16 rows at boot,
- * because the old page opens `#terminal` un-hidden and only applies `hidden`
- * in a pass that runs after `mountPane()` — ordering, not markup, is what
- * kept it laid out. This restores `ui/pane.js:76`'s explicit `refit()` (also
- * `follow()`'s and `reveal()`'s own calls) the deterministic way: `shown`
- * transitioning away from `null` is what `followQueue` and a `'replace'`
- * frame both funnel every one of those call sites through, so watching it
- * here covers `setView`, `follow` and `reveal` at once, without this
- * component reaching back into any of them.
- *
- * `flush: 'post'` so this runs after Vue has already patched `.terminal`'s
- * `hidden` attribute off — `fit()` measuring a still-`display: none` box
- * would be the exact bug this exists to fix, just moved one line down.
- *
- * The `ResizeObserver` above stays as the backstop it already was for the
- * cases this does not name explicitly (a view switch that does not change
- * `shown`, a pane mode change) — confirmed in a browser to repair the box
- * on its own, just not deterministically enough to assert in a test.
- */
-watch(
-  shown,
-  (next) => {
-    if (next !== null) refit()
-  },
-  { flush: 'post' },
-)
-
 onMounted(() => {
   const instance = new Terminal({
     fontFamily: 'ui-monospace, "SF Mono", Menlo, monospace',
@@ -89,6 +57,51 @@ onMounted(() => {
   term.value = instance
   fit.value = addon
 
+  /**
+   * `Pane.vue` binds `:hidden="pane.shown.value === null"` on this
+   * component's root, which is `true` at boot — nothing is shown yet, so
+   * `instance.open(host)` above just ran against a `display: none` box, and
+   * xterm caches its character metrics from nothing (measured:
+   * `.xterm-screen` 0x0). The foundation's own browser check measured
+   * 1440x240 over 16 rows at boot, because the old page opens `#terminal`
+   * un-hidden and only applies `hidden` in a pass that runs after
+   * `mountPane()` — ordering, not markup, is what kept it laid out. This
+   * restores `ui/pane.js:76`'s explicit `refit()` (also `follow()`'s and
+   * `reveal()`'s own calls) the deterministic way: `shown` transitioning
+   * away from `null` is what `followQueue` and a `'replace'` frame both
+   * funnel every one of those call sites through, so watching it here
+   * covers `setView`, `follow` and `reveal` at once, without this component
+   * reaching back into any of them.
+   *
+   * `flush: 'post'` so this runs after Vue has already patched `.terminal`'s
+   * `hidden` attribute off — `fit()` measuring a still-`display: none` box
+   * would be the exact bug this exists to fix, just moved one line down.
+   *
+   * `immediate: true`, and declared here rather than at the top of `<script
+   * setup>`: unreachable today, since `Terminal` only ever mounts once with
+   * `shown` still `null` — but the moment this component sits under a
+   * `v-if`, a remount with a job already on screen must refit too, or the
+   * newly-opened xterm instance repeats the exact boot-time bug this
+   * watcher exists to fix. Declaring the watch before `term`/`fit` are
+   * assigned would fire that immediate call against nothing to fit; here it
+   * runs after `open()` and after `term.value`/`fit.value` are set, so a
+   * remount with `shown` already non-null refits the newly-opened instance
+   * correctly. With `shown === null` the callback is a no-op, so this costs
+   * nothing in the common (first-mount) case.
+   *
+   * The `ResizeObserver` below stays as the backstop it already was for the
+   * cases this does not name explicitly (a view switch that does not change
+   * `shown`, a pane mode change) — confirmed in a browser to repair the box
+   * on its own, just not deterministically enough to assert in a test.
+   */
+  watch(
+    shown,
+    (next) => {
+      if (next !== null) refit()
+    },
+    { flush: 'post', immediate: true },
+  )
+
   // A ResizeObserver rather than a window resize listener: collapsing the pane,
   // switching tabs or opening the queue view changes the terminal's box without
   // firing a window resize, and xterm then reports stale columns to the pty —
@@ -100,11 +113,13 @@ onMounted(() => {
 
   unsubscribe = onOutput((frame) => {
     if (frame.kind === 'replace') {
-      // `usePane.ts`'s own `onOutput` subscriber sets `shown` on a `'replace'`
-      // frame too, and is registered earlier — every composable that calls
-      // `usePane()` does so from a `<script setup>` body, which runs before
-      // any `onMounted` hook, including this one. `shown.value` here is
-      // already `frame.jobId` by the time this handler runs.
+      // `usePane.ts` has its own `onOutput` subscriber that also sets `shown`
+      // on a `'replace'` frame, registered earlier (its module body runs at
+      // import time, before this `onMounted`), so this write is redundant in
+      // practice today. It is repeated here anyway rather than left implicit:
+      // idempotent, writes the same value, and leaves nothing here depending
+      // on subscriber registration order to stay correct.
+      shown.value = frame.jobId
       instance.reset()
       instance.write(frame.data)
       return

@@ -169,19 +169,25 @@ describe('Pane', () => {
     // `shown` (`flush: 'post'`) and calls `fit()` explicitly once it is no
     // longer `null` — assert `fit()` actually runs, and that `.terminal` has
     // already lost its `hidden` attribute by the time it does.
+    // Scoped to this test's own wrapper, never to `document`: reaching for
+    // `document.querySelector` (and `attachTo: document.body` to make that
+    // reach anything, since `mount()` otherwise renders detached) leaves
+    // real DOM nodes sitting in shared global state — the kind of leak that
+    // produces a test failing once in twenty runs rather than reliably.
+    // `terminalEl` is assigned right after `mount()`, before the fake `fit()`
+    // below is ever called.
+    let terminalEl: Element | null = null
     const hiddenAtFit: boolean[] = []
     ;(globalThis as any).FitAddon = {
       FitAddon: class {
         fit() {
-          hiddenAtFit.push(document.querySelector('.terminal')?.hasAttribute('hidden') ?? true)
+          hiddenAtFit.push(terminalEl?.hasAttribute('hidden') ?? true)
         }
       },
     }
     const { Pane, socket } = await boot()
-    // `attachTo`: `document.querySelector` inside the fake `fit()` above only
-    // sees `.terminal` if the wrapper is actually in `document` — `mount()`
-    // otherwise renders into a detached node.
-    const wrapper = mount(Pane, { attachTo: document.body })
+    const wrapper = mount(Pane)
+    terminalEl = wrapper.find('.terminal').element
     const callsAtMount = hiddenAtFit.length
 
     const started = emptySnapshot()
@@ -191,7 +197,6 @@ describe('Pane', () => {
 
     expect(hiddenAtFit.length).toBeGreaterThan(callsAtMount)
     expect(hiddenAtFit.at(-1)).toBe(false)
-    wrapper.unmount()
   })
 
   it('keeps the same Terminal instance — same xterm, same scrollback — across a view switch', async () => {
@@ -361,7 +366,11 @@ describe('Pane', () => {
     const stop = wrapper.find('#queue-now .job .row-actions button')
     expect((stop.element as HTMLButtonElement).disabled).toBe(false)
     await stop.trigger('click')
-    expect(socket.sent).toEqual([{ type: 'cancel', jobId: 'j1' }])
+    // A job is already on screen at boot here, so mounting `Terminal` also
+    // fires its own `refit()` (the immediate `shown`-watch this same fix
+    // round added) and sends an unrelated `resize` — filtered out, since
+    // this test is about the cancel write, not the terminal's geometry.
+    expect(socket.sent.filter((m: any) => m.type !== 'resize')).toEqual([{ type: 'cancel', jobId: 'j1' }])
   })
 
   it('attaching to a job sends attach, reveals a collapsed pane, and switches to the session view', async () => {
@@ -510,7 +519,9 @@ describe('Pane', () => {
     const { Pane, socket } = await boot(snap)
     const wrapper = mount(Pane)
     await wrapper.find('#pane-stop').trigger('click')
-    expect(socket.sent).toEqual([{ type: 'stop' }])
+    // Same `resize` noise as the row-level Stop test above — a job is
+    // already on screen at boot, so mounting fires the immediate refit.
+    expect(socket.sent.filter((m: any) => m.type !== 'resize')).toEqual([{ type: 'stop' }])
   })
 })
 
