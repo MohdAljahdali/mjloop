@@ -8,7 +8,7 @@
  * geometry, and it is the one part of this page whose contents the server
  * cannot replay in full.
  */
-import { onBeforeUnmount, onMounted, shallowRef } from 'vue'
+import { onBeforeUnmount, onMounted, shallowRef, watch } from 'vue'
 import { activeJob, onOutput, send } from '../stores/session.js'
 
 const host = shallowRef<HTMLElement | null>(null)
@@ -19,6 +19,18 @@ const shown = shallowRef<string | null>(null)
 
 let unsubscribe = () => {}
 let observer: ResizeObserver | null = null
+
+/**
+ * Follow the queue onto the job that just started, unless the reader has
+ * deliberately opened a finished transcript — in which case leave them where
+ * they are. Mirrors `ui/pane.js`'s `followQueue`, which `app.js:279` calls on
+ * every snapshot with the job id from before and after that snapshot.
+ */
+watch(activeJob, (next, previous) => {
+  if (next !== null && next !== previous && (shown.value === previous || shown.value === null)) {
+    shown.value = next
+  }
+})
 
 function refit(): void {
   try {
@@ -64,10 +76,10 @@ onMounted(() => {
       instance.write(frame.data)
       return
     }
-    // A late chunk from a job the reader has navigated away from is dropped
-    // rather than drawn into somebody else's transcript.
-    if (shown.value !== null && frame.jobId !== shown.value) return
-    shown.value = frame.jobId
+    // A chunk from any job but the one on screen is dropped, not adopted —
+    // `app.js:285`'s `if (message.jobId === shownJob()) write(...)` applies
+    // even while nothing is shown yet (`shown === null` matches no jobId).
+    if (frame.jobId !== shown.value) return
     instance.write(frame.data)
   })
 })

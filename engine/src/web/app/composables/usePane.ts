@@ -23,6 +23,21 @@ function apply(next: PaneMode): void {
   remember({ pane: next })
 }
 
+/**
+ * Stamps `body.dataset.pane` with the mode already read from storage.
+ *
+ * `index.html`'s static markup opens on `data-pane="collapsed"`, and nothing
+ * else writes the attribute until a reader acts — so a reader who left the
+ * pane docked reloads to a page that looks collapsed until they touch it.
+ * `ui/pane.js`'s `mountPane()` closes the same gap by opening with
+ * `setPane(prefs().pane)`. Distinct from `set()`: applying a remembered
+ * height at boot is not the reader choosing one just now, so `chosen` stays
+ * false and `follow()` can still open a collapsed pane once work starts.
+ */
+export function bootPane(): void {
+  document.body.dataset['pane'] = mode.value
+}
+
 export function usePane() {
   return {
     mode,
@@ -39,8 +54,14 @@ export function usePane() {
     follow() {
       if (!chosen && mode.value === 'collapsed') apply('docked')
     },
-    /** The reader asked for this one explicitly, so it wins even over their height. */
+    /**
+     * The reader asked for this one explicitly, so it wins even over their
+     * height. `chosen` is set here too, on the same logic `cycle()` already
+     * follows: an explicit action, not a side effect for a later automatic
+     * one (`follow()`) to override. `ui/pane.js`'s `reveal()` argues the case.
+     */
     reveal() {
+      chosen = true
       if (mode.value === 'collapsed') apply('docked')
     },
     setView(next: 'session' | 'queue') {

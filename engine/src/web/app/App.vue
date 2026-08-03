@@ -9,10 +9,14 @@ import Bdi from './components/Bdi.vue'
 import LanguagePicker from './components/LanguagePicker.vue'
 import Rail from './components/Rail.vue'
 import Terminal from './components/Terminal.vue'
+import { bootPane } from './composables/usePane.js'
 
 const { t, tn } = useI18n()
 const { tabs, active, show } = useTabs()
 startTabs()
+// Applies the pane mode already read from storage — the static markup opens
+// collapsed, and nothing else stamps `body.dataset.pane` before this runs.
+bootPane()
 
 /**
  * The two navigation counts.
@@ -59,8 +63,14 @@ const highCount = computed(() => snapshot.value?.state.findings.high ?? 0)
 
   <!-- The rest of the pane — view tabs, the queue, the command form — arrives
        with the components that drive them; the terminal is the one piece that
-       must never be inside a re-rendered container, so it mounts here alone. -->
+       must never be inside a re-rendered container, so it mounts here alone.
+       `.pane-body` still has to wrap it: `body[data-pane="collapsed"]
+       .pane-body { display: none }` is what hides the terminal on the boot
+       state, and without this wrapper an empty terminal box is on screen from
+       the first paint. -->
   <section class="pane">
-    <Terminal />
+    <div class="pane-body">
+      <Terminal />
+    </div>
   </section>
 </template>

@@ -108,6 +108,17 @@ body {
   overflow: hidden;
 }
 
+/* Vue mounts onto `#app`, but the grid above is on `body` and every
+   `grid-area` rule below keys off `body`'s direct children — `.top`, `.tabs`,
+   `main`, `.pane`. `display: contents` takes `#app` out of the box model
+   entirely so its children become `body`'s grid items, exactly as the old
+   page's flat `<body>` children did. Without this, `body[data-pane="full"]`
+   (`40-terminal.css:175,193`) has no effect at all: the row it collapses is
+   `#app`'s single row, not the four rows the mode is meant to reshuffle. */
+#app {
+  display: contents;
+}
+
 /**
  * Wide enough for a sidebar: the five views move out of the content column and
  * become a column of their own, so the panel below the header starts at the top
