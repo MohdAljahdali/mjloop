@@ -95,9 +95,12 @@ function confirm(): void {
       <h2>{{ t('features.confirmTitle') }}</h2>
       <p class="hint">{{ t('features.confirmExplain') }}</p>
       <p class="record" id="feature-dialog-subject">
-        <!-- `revision` stays a number — see `Features.vue`'s own comment on
-             `features.record.*` for why `String(...)` here would be a
-             visible change in Arabic. `id` is the Latin brief id. -->
+        <!-- `revision` stays a number: it travels the old page's
+             `renderParam` path, exactly as `Features.vue`'s own comment on
+             `features.record.*` explains — see the AN rule in
+             `lib/i18n.ts`'s `renderParam()` docstring for why that path,
+             not any particular digit shape, is what a number is kept for.
+             `id` is the Latin brief id, which does need `Tx`'s isolation. -->
         <Tx v-if="subject !== null" key-name="features.confirmSubject" :params="{ id: subject.id, revision: subject.revision, n: subject.n }" />
       </p>
       <label>
