@@ -68,3 +68,16 @@ export function duration(from: string | null | undefined, to: string | null | un
   if (minutes > 0) return `${minutes}m ${String(seconds % 60).padStart(2, '0')}s`
   return `${seconds}s`
 }
+
+/**
+ * Milliseconds as `1.8s`, and an em dash while there is nothing to measure.
+ *
+ * Deliberately not `duration()` above, and for the same reason that one gives
+ * for itself: this sits in a dense row beside a command and an exit code,
+ * and the unit letter reads the same at a glance in both directions. One
+ * decimal, because the number the cache argument turns on is under two
+ * seconds — `panels/evidence.js`'s own `seconds()`, ported.
+ */
+export function verifyDuration(ms: number | null): string {
+  return ms === null ? '—' : `${(ms / 1000).toFixed(1)}s`
+}
