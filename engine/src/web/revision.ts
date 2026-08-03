@@ -82,6 +82,15 @@ export interface Revisions {
    * accepted months ago on another machine.
    */
   skills: string
+  /**
+   * `.claude/agents/` — Claude Code's own directory, outside `.mjloop/` and
+   * outside `paths` for the same reason `.claude/skills/` is: it is not this
+   * engine's tree. Stamped anyway because the Agents tab draws it and writes
+   * into it, and a tab that does not refresh when its own write lands is a tab
+   * showing yesterday. `stampTree` is enough here — an agent is one file
+   * directly inside the directory, not a level deeper the way a `SKILL.md` is.
+   */
+  agents: string
 }
 
 /**
@@ -232,7 +241,7 @@ export async function readRevisions(projectDir: string, tick: number, running: b
     plans[key] = plans[key] === undefined ? stamped : `${plans[key]}|${stamped}`
   }
 
-  const [state, config, memory, runs, profile, features, acceptances, library, projectSkills] = await Promise.all([
+  const [state, config, memory, runs, profile, features, acceptances, library, projectSkills, agents] = await Promise.all([
     stamp(paths.state),
     stamp(paths.config),
     stampListing(paths.memory),
@@ -253,6 +262,10 @@ export async function readRevisions(projectDir: string, tick: number, running: b
     // `stampProjectSkills`, not `stampTree`: a `SKILL.md` is a level deeper
     // than `stampTree` reaches, so an in-place edit needs its own stamp.
     stampProjectSkills(path.join(projectDir, '.claude', 'skills')),
+    // `.claude/agents/` — same rationale as `.claude/skills/` above. `stampTree`
+    // is enough: an agent is one file directly inside the directory, not a
+    // level deeper the way a `SKILL.md` is.
+    stampTree(path.join(projectDir, '.claude', 'agents')),
   ])
 
   return {
@@ -265,5 +278,6 @@ export async function readRevisions(projectDir: string, tick: number, running: b
     profile,
     features,
     skills: `${acceptances}|${library}|${projectSkills}`,
+    agents,
   }
 }

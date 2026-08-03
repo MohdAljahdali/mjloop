@@ -7,6 +7,7 @@ import { PlanIdSchema, StoryIdSchema } from '../schemas/plan.js'
 import { IdSchema } from '../schemas/state.js'
 import {
   NotFoundError,
+  readAgentsView,
   readConfigView,
   readCycleDetail,
   readFeatureDetail,
@@ -179,6 +180,14 @@ async function route(projectDir: string, segments: readonly string[], query: URL
         return ok(await readCycleDetail(projectDir, first, cycle))
       }
       break
+
+    case 'agents':
+      // No parameter, and none a later story should add: the tab draws every
+      // agent at once, and a route that took a name would be the read half of
+      // one that opened a file by a string from the wire. Writes go through
+      // `web/writes.ts`, where the name is confined by `AgentNameSchema`.
+      if (segments.length !== 1) break
+      return ok(await readAgentsView(projectDir))
 
     case 'telemetry':
       // No parameter, and deliberately none: the row cap and the walk's bound

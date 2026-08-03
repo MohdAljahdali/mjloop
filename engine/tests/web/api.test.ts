@@ -631,3 +631,35 @@ describe('handleApi', () => {
     expect(etag(first)).toBe(etag(second))
   })
 })
+
+describe('/api/agents', () => {
+  // Folded together rather than three separate tests (a user ruling on top of
+  // the plan's own test count): project and plugin apart, and a sub-path 404,
+  // both checked in the one place that already sets up a project agent.
+  it('serves the project agents and the plugin agents apart, and is a 404 for a sub-path', async () => {
+    await fs.mkdir(path.join(project.dir, '.claude', 'agents'), { recursive: true })
+    await fs.writeFile(
+      path.join(project.dir, '.claude', 'agents', 'scribe.md'),
+      '---\nname: scribe\ndescription: Writes notes.\n---\n\nYou write notes.\n',
+      'utf8',
+    )
+    const result = await call('/api/agents')
+    const body = result?.body as { project: { name: string }[]; plugin: { name: string }[] }
+    expect(body.project.map((agent) => agent.name)).toEqual(['scribe'])
+    // The plugin ships its own, read from the repository this test runs in.
+    expect(body.plugin.map((agent) => agent.name)).toContain('verifier')
+
+    expect(await call('/api/agents/scribe')).toEqual({ status: 404, body: { error: { code: 'error.notFound' } } })
+  })
+
+  it('never puts an absolute path on the wire', async () => {
+    await fs.mkdir(path.join(project.dir, '.claude', 'agents'), { recursive: true })
+    await fs.writeFile(
+      path.join(project.dir, '.claude', 'agents', 'scribe.md'),
+      '---\nname: scribe\ndescription: Writes notes.\n---\n\nYou write notes.\n',
+      'utf8',
+    )
+    const result = await call('/api/agents')
+    expect(JSON.stringify(result?.body)).not.toContain(project.dir)
+  })
+})

@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { HISTORY_DEFAULT_LIMIT } from '../ops/history.js'
 import { preflightEstimate, type Preflight } from '../ops/preflight.js'
 import { readProjectSkills } from '../ops/project-skills.js'
@@ -26,6 +27,7 @@ import { listMemories, readMemory } from '../store/memory-store.js'
 import { resolveLoopPaths } from '../store/paths.js'
 import { findPlanDir, listStories, type Story } from '../store/plan-store.js'
 import { readAcceptedProfile, readProposedProfile } from '../store/project-profile-store.js'
+import { listAgents, projectAgentsDir, type AgentDoc } from '../store/agent-store.js'
 import { listAcceptances } from '../store/skill-acceptance-store.js'
 import { listPackages, type UnreadablePackage } from '../store/skill-library-store.js'
 import type { ProjectSkillAcceptance } from '../schemas/skill-acceptance.js'
@@ -34,6 +36,7 @@ import type { ProjectSkillOnDisk, UnreadableProjectSkill } from '../schemas/proj
 import { StateStore } from '../store/state-store.js'
 import type { Config } from '../schemas/config.js'
 import type { ProjectComponent } from '../schemas/project-profile.js'
+import type { AgentView, AgentsView } from './protocol.js'
 
 /**
  * Everything the read API serves.
@@ -271,6 +274,42 @@ export async function readSkillsView(projectDir: string): Promise<SkillsView> {
     acceptances,
     onDisk: onDisk.skills,
     onDiskUnreadable: onDisk.unreadable,
+  }
+}
+
+/* ── agents ───────────────────────────────────────────────────────────────── */
+
+/**
+ * The plugin's own `agents/`, resolved the way `web/cli.ts:84` resolves
+ * `ENGINE_DIR` — except this module sits one directory deeper than `cli.ts`
+ * relative to the plugin root: `cli.ts`'s `'../../'` lands on the engine root
+ * (`engine/`), and the plugin's `agents/` sits one level above *that*, so this
+ * needs a third `..`. Verified directly: from both `engine/src/web/` under
+ * vitest and `engine/dist/web/` in a build, three levels up lands on
+ * `<repo-root>/agents/`, not `engine/agents/` (which does not exist).
+ */
+export const PLUGIN_AGENTS_DIR = fileURLToPath(new URL('../../../agents/', import.meta.url))
+
+/**
+ * The two agent directories, side by side and never merged.
+ *
+ * A project agent shadows a plugin one of the same name, and folding them into
+ * one list would hide exactly that. `path` is dropped on the way out: it is an
+ * absolute path, which the page has no use for and must not display.
+ */
+export async function readAgentsView(projectDir: string): Promise<AgentsView> {
+  const [project, plugin] = await Promise.all([
+    listAgents(projectAgentsDir(projectDir), 'project'),
+    listAgents(PLUGIN_AGENTS_DIR, 'plugin'),
+  ])
+  const view = ({ path: _path, ...rest }: AgentDoc): AgentView => rest
+  return {
+    project: project.agents.map(view),
+    plugin: plugin.agents.map(view),
+    // The plugin's own unreadable files are not this project's problem to
+    // report — a broken plugin file is a bug in the plugin, and a project
+    // cannot act on it.
+    unreadable: project.unreadable.map((entry) => ({ path: path.basename(entry.path) })),
   }
 }
 
