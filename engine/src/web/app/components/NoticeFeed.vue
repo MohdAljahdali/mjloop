@@ -15,16 +15,35 @@ const feed = ref<{ id: number; message: Message }[]>([])
 const unread = ref(0)
 let counter = 0
 
-const off = onNotice((message) => {
+/**
+ * The one place an entry is recorded, whatever door it came through:
+ * `onNotice` below for a server-pushed `{type:'notice'}` frame, and `push` —
+ * exposed to `App.vue` — for a write receipt. `notifications.js:15`'s "the
+ * ephemeral toast and the durable log can never disagree" is why a receipt
+ * must land here through the same recording logic a queue notice already
+ * uses, not a second one that could drift from it.
+ */
+function record(message: Message): void {
   feed.value = [{ id: ++counter, message }, ...feed.value].slice(0, LIMIT)
   if (!open.value) unread.value += 1
-})
+}
+
+const off = onNotice(record)
 onBeforeUnmount(off)
 
 function toggle(): void {
   open.value = !open.value
   if (open.value) unread.value = 0
 }
+
+/**
+ * `App.vue` calls this from the same installed announcer that toasts a write
+ * receipt — the single door restored, one call site, two surfaces. The store
+ * itself never sees this component; it only ever calls the announcer
+ * function `App.vue` installs, which is what keeps `session.ts` free of any
+ * component import.
+ */
+defineExpose({ push: record })
 </script>
 
 <template>

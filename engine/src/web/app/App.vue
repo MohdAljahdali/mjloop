@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import type { Message } from './types/protocol.js'
 import { installAnnouncer, online, onNotice, snapshot } from './stores/session.js'
 import { useI18n } from './composables/useI18n.js'
 import { useSelection } from './composables/useSelection.js'
@@ -48,8 +49,19 @@ onMounted(() => {
 })
 
 const { notify } = useToasts()
-installAnnouncer(notify)
-// Server-pushed notices become toasts too; NoticeFeed keeps its own copy.
+// `railRef` reaches `NoticeFeed` through `Rail`, which is the component that
+// actually renders it (`.rail #notice-toggle` — see `Rail.vue`). This is the
+// one door restored: every write receipt now reaches both the toast and the
+// notice log from this single call, the same guarantee `ui/notifications.js:15`
+// names — "the ephemeral toast and the durable log can never disagree".
+const railRef = ref<InstanceType<typeof Rail> | null>(null)
+function announceAndLog(message: Message, action?: { code: string; run: () => void }): void {
+  notify(message, action)
+  railRef.value?.pushNotice(message)
+}
+installAnnouncer(announceAndLog)
+// Server-pushed notices become toasts too; NoticeFeed keeps its own copy
+// through its own `onNotice` subscription, so this stays toast-only.
 onBeforeUnmount(onNotice((message) => notify(message)))
 
 /**
@@ -119,7 +131,7 @@ const highCount = computed(() => snapshot.value?.state.findings.high ?? 0)
          there, the same as `index.html:47-96`'s static markup. Gating this on
          `snapshot !== null` was the regression finding 5's fix introduced:
          the same defect as the banner above, one component over. -->
-    <Rail :snapshot="snapshot" />
+    <Rail ref="railRef" :snapshot="snapshot" />
   </header>
 
   <nav class="tabs" :aria-label="t('tabs.label')">
@@ -129,6 +141,7 @@ const highCount = computed(() => snapshot.value?.state.findings.high ?? 0)
       :key="id"
       :href="`#${id}`"
       :aria-current="active === id ? 'page' : undefined"
+      :aria-controls="`panel-${id}`"
       :title="id === 'stories' && readyCount > 0 ? tn('tabs.readyCount', readyCount) : id === 'run' && highCount > 0 ? tn('tabs.highCount', highCount) : undefined"
       @click.prevent="show(id)"
     >

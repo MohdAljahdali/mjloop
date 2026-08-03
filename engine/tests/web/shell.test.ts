@@ -337,6 +337,100 @@ describe('App', () => {
     wrapper.unmount()
   })
 
+  it('carries a write receipt through the one door — the toast and the notice log both show it, and the badge counts it while the panel is closed', async () => {
+    // The foundation split what `ui/notifications.js:15` deliberately kept
+    // together: a write receipt used to become a toast only. This is task
+    // 11's restoration — `store.submit`'s receipt must reach `NoticeFeed`
+    // too, through the same call that toasts it.
+    vi.resetModules()
+    const freshI18n = await import('../../src/web/app/lib/i18n.ts')
+    freshI18n.installForTest({ code: 'en', strings: english })
+    const store = await import('../../src/web/app/stores/session.ts')
+    const { default: App } = await import('../../src/web/app/App.vue')
+
+    class FakeSocket {
+      static last: FakeSocket | null = null
+      readyState = 1
+      listeners = new Map<string, (event: unknown) => void>()
+      sent: string[] = []
+      constructor(public url: string) {
+        FakeSocket.last = this
+      }
+      addEventListener(type: string, fn: (event: unknown) => void) {
+        this.listeners.set(type, fn)
+      }
+      send(data: string): void {
+        this.sent.push(data)
+      }
+      deliver(message: unknown): void {
+        this.listeners.get('message')?.({ data: JSON.stringify(message) })
+      }
+    }
+    store.connect({ token: 'tok', socketFactory: (url) => new FakeSocket(url) as unknown as WebSocket })
+    FakeSocket.last?.deliver({ type: 'snapshot', snapshot: emptySnapshot() })
+
+    const wrapper = mount(App, { attachTo: document.body })
+
+    store.submit({ kind: 'halt', run: 'run-1', reason: 'because' })
+    const id = JSON.parse((FakeSocket.last as FakeSocket).sent[0] as string).id
+    FakeSocket.last?.deliver({ type: 'receipt', id, ok: true, code: 'write.ok.halt' })
+    await nextTick()
+
+    // The toast.
+    expect(wrapper.get('.toast > span').text()).toBe(english['write.ok.halt'])
+
+    // The badge, closed.
+    expect(wrapper.get('#notice-toggle .nav-count').text()).toBe('1')
+
+    // The log, opened — the same receipt, not a second one.
+    await wrapper.get('#notice-toggle').trigger('click')
+    const rows = wrapper.findAll('.notice-row')
+    expect(rows).toHaveLength(1)
+    expect(rows[0]?.text()).toBe(english['write.ok.halt'])
+    expect(wrapper.find('#notice-toggle .nav-count').exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  it('points every tab anchor\'s aria-controls at the panel that is actually in the document once that tab is active', async () => {
+    vi.resetModules()
+    const freshI18n = await import('../../src/web/app/lib/i18n.ts')
+    freshI18n.installForTest({ code: 'en', strings: english })
+    const store = await import('../../src/web/app/stores/session.ts')
+    const { default: App } = await import('../../src/web/app/App.vue')
+
+    class FakeSocket {
+      static last: FakeSocket | null = null
+      readyState = 1
+      listeners = new Map<string, (event: unknown) => void>()
+      constructor(public url: string) {
+        FakeSocket.last = this
+      }
+      addEventListener(type: string, fn: (event: unknown) => void) {
+        this.listeners.set(type, fn)
+      }
+      send(): void {}
+      deliver(message: unknown): void {
+        this.listeners.get('message')?.({ data: JSON.stringify(message) })
+      }
+    }
+    store.connect({ token: 'tok', socketFactory: (url) => new FakeSocket(url) as unknown as WebSocket })
+    FakeSocket.last?.deliver({ type: 'snapshot', snapshot: emptySnapshot() })
+
+    const wrapper = mount(App, { attachTo: document.body })
+
+    for (const id of ['run', 'plans', 'stories', 'features', 'skills', 'evidence', 'memory', 'config']) {
+      location.hash = `#${id}`
+      window.dispatchEvent(new Event('hashchange'))
+      await nextTick()
+      const controls = wrapper.get(`#tab-${id}`).attributes('aria-controls')
+      expect(controls).toBe(`panel-${id}`)
+      expect(document.getElementById(controls as string)).not.toBeNull()
+    }
+
+    wrapper.unmount()
+  })
+
   it('reopens the plan the reader left open, on a mount that reproduces production import order — the module graph loaded, then storage installed', async () => {
     // Fix round 2 of the Plans panel: `main.ts`'s very first statement,
     // `import App from './App.vue'`, pulls `useSelection.ts` in through
