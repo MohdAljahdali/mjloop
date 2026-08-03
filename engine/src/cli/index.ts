@@ -462,7 +462,7 @@ const FLAG_VALUES: Record<string, string> = {
   '--expect': 'a revision number or the word none',
   '--from': 'the number of the accepted revision whose component map to reselect',
   '--components': 'a comma-separated list of component ids from the accepted map',
-  '--agents': 'a comma-separated list of agent roles (planner, builder, critic, verifier)',
+  '--agents': "a comma-separated list of agent names this project's own tracks name in config.yaml (the fixed planner, builder, critic, verifier when it declares no tracks)",
   '--policy': 'auto, review or pinned',
   '--source': 'github, registry, web or skills-sh',
   '--ref': 'a branch, tag, or commit sha to pin',

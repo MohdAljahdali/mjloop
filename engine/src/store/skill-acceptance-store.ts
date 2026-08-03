@@ -161,6 +161,16 @@ export class SkillAlreadyAcceptedError extends Error {
  * rather than throwing `ConfigMissingError`: accepting a skill is not a loop
  * command, and it must not start demanding a file the acceptance store never
  * needed before this rule existed.
+ *
+ * Both callers read this *before* taking the project lock (`acceptSkill` and
+ * `setAcceptanceAgents` below), not inside it — `config.yaml` is a different
+ * file under a different lock than the acceptance record either of them then
+ * writes, so joining this read to that lock would buy no atomicity. The gap
+ * this leaves is benign: a `config.patch` landing in between can only make the
+ * check stale by one edit either way — an agent a track *just* gained is
+ * rejected until the caller retries, or one a track *just* lost is written and
+ * self-corrects the next time anything reads it — never a write that outruns
+ * a check meant to stop it.
  */
 export async function routableAgents(projectDir: string): Promise<Set<string>> {
   const config = await loadConfig(projectDir).catch((error) => {

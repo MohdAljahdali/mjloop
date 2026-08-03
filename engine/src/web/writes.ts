@@ -256,7 +256,7 @@ export const WriteSchema = z.discriminatedUnion('kind', [
   z.strictObject({
     kind: z.literal('skill.agents'),
     skill: IdSchema,
-    /** `AcceptanceView.digest` (`web/read.ts`) — the compare-and-swap token this write checks inside the store's lock. */
+    /** `AcceptanceView.recordDigest` (`web/read.ts`) — the compare-and-swap token this write checks inside the store's lock. */
     digest: z.string().regex(/^[a-f0-9]{64}$/),
     agents: z.array(AgentNameSchema).max(50),
   }),

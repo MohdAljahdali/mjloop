@@ -206,6 +206,13 @@ function componentFingerprint(components: readonly ProjectComponent[]): string {
  * One acceptance, plus the compare-and-swap token the `skill.agents` write
  * door checks it against.
  *
+ * Named `recordDigest`, never `digest`: `ProjectSkillAcceptanceSchema` already
+ * has a `digest` field — the *package* content digest `acceptSkill` pins
+ * (`schemas/skill-acceptance.ts:42`) — and `{ ...record, digest: ... }` would
+ * silently overwrite it rather than error, since both are `string`. That
+ * collision is exactly what broke the Skills panel's package join before this
+ * field had its own name.
+ *
  * Not a field on `ProjectSkillAcceptanceSchema` itself: the schema is what
  * `acceptSkill` validates and persists, and `acceptanceDigest` is a hash *over*
  * that record, computed the same way `configRevision` is computed over
@@ -214,7 +221,7 @@ function componentFingerprint(components: readonly ProjectComponent[]): string {
  * `acceptanceDigest`'s own doc comment already rejected a counter revision to
  * avoid.
  */
-export type AcceptanceView = ProjectSkillAcceptance & { digest: string }
+export type AcceptanceView = ProjectSkillAcceptance & { recordDigest: string }
 
 export interface SkillsView {
   /**
@@ -239,9 +246,9 @@ export interface SkillsView {
   unreadable: UnreadablePackage[]
   /**
    * This project's own acceptances — digest, components, agents, policy,
-   * status — each carrying its own `digest` (`AcceptanceView`, above), which
-   * `skill.agents` hands back unmodified as the token proving which acceptance
-   * the click was made against.
+   * status — each carrying its own `recordDigest` (`AcceptanceView`, above),
+   * which `skill.agents` hands back unmodified as the token proving which
+   * acceptance the click was made against.
    */
   acceptances: AcceptanceView[]
   /**
@@ -290,7 +297,7 @@ export async function readSkillsView(projectDir: string): Promise<SkillsView> {
   return {
     packages: library.packages,
     unreadable: library.unreadable,
-    acceptances: acceptances.map((record) => ({ ...record, digest: acceptanceDigest(record) })),
+    acceptances: acceptances.map((record) => ({ ...record, recordDigest: acceptanceDigest(record) })),
     onDisk: onDisk.skills,
     onDiskUnreadable: onDisk.unreadable,
   }

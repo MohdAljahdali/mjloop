@@ -23,6 +23,20 @@ import { makeTmpProject, type TmpProject } from '../helpers/tmp-project.js'
 const NOW = new Date('2026-07-26T10:36:00.000Z')
 const clock = () => NOW
 
+/**
+ * Every agent this project's own tracks name, sorted — the identical formula
+ * `skillSelectionAgents` (`ops/run.ts`) applies, restated here because a test
+ * that only ever recomputed the production formula would pass whenever the
+ * *rule itself* drifted (dropping `closing`, say) and prove nothing. Used only
+ * for the `.toHaveLength` sanity check; the tests below also pin concrete
+ * landmarks — the count, specific names known present and known absent — that
+ * would catch a drift in the rule this restatement cannot.
+ */
+async function routedAgentsOf(dir: string): Promise<string[]> {
+  const config = await loadConfig(dir)
+  return [...new Set(Object.values(config.tracks).flatMap((t) => [...t.required, ...t.available, ...t.closing]))].sort()
+}
+
 let project: TmpProject
 
 beforeEach(async () => {
@@ -996,9 +1010,17 @@ describe('the run skill manifest', () => {
     // project's own tracks name still gets a selection recorded, each naming
     // no skill at all — the additive guarantee: a project that accepts
     // nothing pins exactly what it would have, whatever its tracks name.
-    const routedAgents = [...new Set(Object.values((await loadConfig(project.dir)).tracks).flatMap((t) => [...t.required, ...t.available, ...t.closing]))].sort()
-    expect(manifest.selections).toHaveLength(routedAgents.length)
+    const routedAgents = await routedAgentsOf(project.dir)
     expect(manifest.selections.map((s: any) => s.agent)).toEqual(routedAgents)
+    // Concrete landmarks, not just agreement with the paraphrased formula
+    // above: 19 unique agents across `initLoop`'s default `edit`/`build`/
+    // `fix`/`plan` tracks; `scout` (drafted by `build`) and `docs` (`build`'s
+    // *closing*-only agent — proof `closing` is not dropped from the set) are
+    // both present; a name no default track names anywhere is absent.
+    expect(manifest.selections).toHaveLength(19)
+    expect(routedAgents).toContain('scout')
+    expect(routedAgents).toContain('docs')
+    expect(routedAgents).not.toContain('ghost')
     for (const selection of manifest.selections) {
       expect(selection.component).toBe('mobile')
       expect(selection.skillIds).toEqual([])
@@ -1068,8 +1090,13 @@ describe('the run skill manifest', () => {
     const manifest = await readManifest(state)
 
     // Component id, then agent — every agent this project's own tracks name,
-    // not the old fixed four.
-    const routedAgents = [...new Set(Object.values((await loadConfig(project.dir)).tracks).flatMap((t) => [...t.required, ...t.available, ...t.closing]))].sort()
+    // not the old fixed four. Landmarks, not just the paraphrase: 19 agents
+    // per component, `scout`/`docs` present, `ghost` absent.
+    const routedAgents = await routedAgentsOf(project.dir)
+    expect(routedAgents).toHaveLength(19)
+    expect(routedAgents).toContain('scout')
+    expect(routedAgents).toContain('docs')
+    expect(routedAgents).not.toContain('ghost')
     expect(manifest.selections.map((s: any) => `${s.component}:${s.agent}`)).toEqual([
       ...routedAgents.map((agent) => `admin:${agent}`),
       ...routedAgents.map((agent) => `mobile:${agent}`),

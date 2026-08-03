@@ -282,6 +282,9 @@ describe('setAcceptanceAgents', () => {
     await acceptSkill(project.dir, { packageDigest: DIGEST_A, agents: ['scribe'], updatePolicy: 'review', acceptedBy: 'tester' }, clock)
 
     const before = await readAcceptance(project.dir, 'flutter-widgets')
+    // What `acceptSkill` actually produced, before `setAcceptanceAgents` ever
+    // touches it — the fixture this test's own title is about.
+    expect(before?.agents).toEqual(['scribe'])
     await setAcceptanceAgents(project.dir, 'flutter-widgets', ['verifier'], acceptanceDigest(before!))
     const after = await readAcceptance(project.dir, 'flutter-widgets')
 
