@@ -1000,7 +1000,7 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
   // web/writes.ts
   { kind: 'skill.agents', skill: string, digest: string, agents: string[] }
   ```
-- `/api/skills` يكتسب `digest` على كل قبول.
+- `/api/skills` يكتسب `recordDigest` على كل قبول. **ليس `digest`**: `ProjectSkillAcceptanceSchema` يحمل حقلاً بهذا الاسم أصلاً (`schemas/skill-acceptance.ts:39`) وهو بصمة *محتوى الحزمة* التي يتمّ عليها الوصل في `lib/skills.ts`. اسمٌ ثانٍ بنفس الكلمة يدهسه في `{ ...record, digest }` دون خطأ ترجمة، لأن كليهما `string`.
 
 **القاعدة الجديدة:** الأدوار المقبولة = أسماء الوكلاء التي يذكرها أي مسار في `config.yaml`، بدل القائمة الرباعية الثابتة. اتّجاه الطبقات يمنع `schemas/` من الاستيراد من `ops/`، فالمجموعة تُمرَّر **إلى** موضع التحقّق.
 
