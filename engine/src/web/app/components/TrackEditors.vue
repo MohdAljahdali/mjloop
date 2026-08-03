@@ -12,7 +12,7 @@
  */
 import { computed, ref } from 'vue'
 import { useI18n } from '../composables/useI18n.js'
-import { NAME, type Draft } from '../lib/config.js'
+import { NAME, trackNames, type Draft } from '../lib/config.js'
 import type { Config } from '../types/protocol.js'
 import TrackEditor from './TrackEditor.vue'
 
@@ -25,7 +25,7 @@ const props = defineProps<{
 }>()
 const { t } = useI18n()
 
-const names = computed(() => (props.draft === null ? [] : Object.keys(props.draft.tracks).sort()))
+const names = computed(() => trackNames(props.draft))
 
 const newTrack = ref('')
 function add(): void {

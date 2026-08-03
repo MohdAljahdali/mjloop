@@ -478,6 +478,55 @@ export function edgeAfter(order: { agent: string; after: string[] }[], agent: st
   return [...new Set(order.filter((edge) => edge.agent === agent).flatMap((edge) => edge.after))]
 }
 
+/** Every track name in the draft, sorted — `TrackEditors.vue`'s own card order, and Task 12's graph view order beside it. Pulled out here so the two never drift into two different sort rules. */
+export function trackNames(draft: Draft | null): string[] {
+  return draft === null ? [] : Object.keys(draft.tracks).sort()
+}
+
+/**
+ * Add a predecessor to one agent's order edge, in place. Pulled out of
+ * `TrackEditor.vue` (where it was `edgeAdd`, closed over `mutateTrack`) so
+ * Task 12's `TrackGraph.vue` — reached through `Tracks.vue`'s own `mutate`,
+ * never a second implementation of this rule — can add the same edge a drag
+ * on the canvas implies. See the caller's own comment for why membership has
+ * to be checked across every edge already naming `agent`, not just the first.
+ */
+export function addOrderEdge(entry: Track, agent: string, pred: string): boolean | void {
+  if (pred === agent) return false
+  const order = Array.isArray(entry.order) ? entry.order : (entry.order = [])
+  const edges = order.filter((candidate) => candidate.agent === agent)
+  if (edges.some((edge) => edge.after.includes(pred))) return false
+  let edge = edges[0]
+  if (edge === undefined) {
+    edge = { agent, after: [] }
+    order.push(edge)
+  }
+  edge.after.push(pred)
+}
+
+/**
+ * Remove a predecessor from every order edge naming `agent`, in place —
+ * `TrackEditor.vue`'s own `edgeRemove`, pulled out for the same reason
+ * `addOrderEdge` beside it was. `OrderEdgeSchema.after` is `.min(1)`, so an
+ * edge left with zero predecessors is dropped entirely rather than kept as an
+ * empty constraint the server would refuse.
+ */
+export function removeOrderEdge(entry: Track, agent: string, pred: string): boolean | void {
+  if (!Array.isArray(entry.order)) return false
+  const order = entry.order
+  let removed = false
+  for (let i = order.length - 1; i >= 0; i--) {
+    const edge = order[i]
+    if (edge === undefined || edge.agent !== agent) continue
+    const at = edge.after.indexOf(pred)
+    if (at < 0) continue
+    edge.after.splice(at, 1)
+    removed = true
+    if (edge.after.length === 0) order.splice(i, 1)
+  }
+  if (!removed) return false
+}
+
 /** The first cycle a track's order graph contains, as the path that closes it, or `null`. A client-side mirror of `findOrderCycle` (`schemas/config.ts`). */
 export function findOrderCycle(order: { agent: string; after: string[] }[]): string[] | null {
   const successors = new Map<string, string[]>()

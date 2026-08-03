@@ -87,9 +87,10 @@ async function boot(snapshot: Snapshot = emptySnapshot()) {
   store.connect({ token: 'tok', socketFactory: (url) => new FakeSocket(url) as unknown as WebSocket })
   const { default: Tracks } = await import('../../src/web/app/panels/Tracks.vue')
   const { default: Config } = await import('../../src/web/app/panels/Config.vue')
+  const { default: TrackGraph } = await import('../../src/web/app/components/TrackGraph.vue')
   FakeSocket.last?.deliver({ type: 'snapshot', snapshot })
   await nextTick()
-  return { store, Tracks, Config, socket: FakeSocket.last as FakeSocket }
+  return { store, Tracks, Config, TrackGraph, socket: FakeSocket.last as FakeSocket }
 }
 
 const control = (wrapper: ReturnType<typeof mount>, id: string) => wrapper.get(`#${id}`).element as HTMLInputElement & HTMLSelectElement
@@ -615,6 +616,93 @@ describe('Tracks.vue', () => {
       expect(control(tracksWrapper, 'tracks-save').disabled).toBe(false)
       expect(tracksWrapper.find('.rule').exists()).toBe(true)
       expect(tracksWrapper.get('.rule-name').text()).toBe('security')
+    })
+  })
+
+  /**
+   * Task 12: the graph is a second lens on the same draft `TrackEditors.vue`
+   * already owns, drawn with `@vue-flow/core` — never a second editor. Four
+   * `it`s, the test-economy ceiling this task's brief sets: one node per
+   * agent, a connect that moves the draft, a connect `wouldCycle` refuses,
+   * and the list surviving the round trip. `TrackGraph.vue` never imports
+   * `mutate` or `submit` itself — it only emits `connect`/`disconnect`/
+   * `remove`, so every assertion below drives it exactly the way a real drag
+   * would reach `Tracks.vue`: through the emitted event, not by reaching
+   * into the child's own internals.
+   */
+  describe('the graph view (TrackGraph.vue)', () => {
+    it('draws one node per agent in the track, in required, available, closing order', async () => {
+      serve({
+        '/api/config': configView({
+          tracks: { build: { required: ['builder', 'critic'], available: ['docs'], closing: ['verifier'], max_cycles: 5 } },
+        }),
+      })
+      const { Tracks } = await boot()
+      const wrapper = mount(Tracks)
+      await vi.waitFor(() => expect(wrapper.find('.track-editor').exists()).toBe(true))
+
+      await wrapper.get('#tracks-view-graph').trigger('click')
+      await nextTick()
+      expect(wrapper.findAll('[data-graph-node]').map((node) => node.attributes('data-graph-node'))).toEqual([
+        'builder',
+        'critic',
+        'docs',
+        'verifier',
+      ])
+    })
+
+    it('adds an order edge when two nodes are connected, and makes Save live', async () => {
+      serve({
+        '/api/config': configView({ tracks: { build: { required: ['builder', 'critic'], max_cycles: 5 } } }),
+      })
+      const { Tracks, TrackGraph } = await boot()
+      const wrapper = mount(Tracks)
+      await vi.waitFor(() => expect(wrapper.find('.track-editor').exists()).toBe(true))
+      await wrapper.get('#tracks-view-graph').trigger('click')
+      await nextTick()
+
+      expect(control(wrapper, 'tracks-save').disabled).toBe(true)
+      await wrapper.findComponent(TrackGraph).vm.$emit('connect', { source: 'builder', target: 'critic' })
+      await nextTick()
+
+      expect(control(wrapper, 'tracks-save').disabled).toBe(false)
+      expect(wrapper.find('#tracks-graph-refusal').exists()).toBe(false)
+    })
+
+    it('refuses a connection that would close a cycle, says so, and never touches the draft', async () => {
+      serve({
+        '/api/config': configView({
+          tracks: { build: { required: ['builder', 'critic'], max_cycles: 5, order: [{ agent: 'critic', after: ['builder'] }] } },
+        }),
+      })
+      const { Tracks, TrackGraph } = await boot()
+      const wrapper = mount(Tracks)
+      await vi.waitFor(() => expect(wrapper.find('.track-editor').exists()).toBe(true))
+      await wrapper.get('#tracks-view-graph').trigger('click')
+      await nextTick()
+
+      // `critic` already runs after `builder` — closing the loop the other way.
+      await wrapper.findComponent(TrackGraph).vm.$emit('connect', { source: 'critic', target: 'builder' })
+      await nextTick()
+
+      expect(wrapper.find('#tracks-graph-refusal').exists()).toBe(true)
+      // Refused, not merely undone: the draft never moved, so Save is still off.
+      expect(control(wrapper, 'tracks-save').disabled).toBe(true)
+    })
+
+    it('keeps the list view reachable, because the graph is not keyboard-drivable', async () => {
+      serve({ '/api/config': configView({ tracks: { build: { required: ['builder'], max_cycles: 5 } } }) })
+      const { Tracks } = await boot()
+      const wrapper = mount(Tracks)
+      await vi.waitFor(() => expect(wrapper.find('.track-editor').exists()).toBe(true))
+
+      await wrapper.get('#tracks-view-graph').trigger('click')
+      await nextTick()
+      expect(wrapper.find('#config-track-editors').exists()).toBe(false)
+
+      await wrapper.get('#tracks-view-list').trigger('click')
+      await nextTick()
+      expect(wrapper.find('#config-track-editors').exists()).toBe(true)
     })
   })
 })

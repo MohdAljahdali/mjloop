@@ -48,5 +48,8 @@
   },
   "optionalDependencies": {
     "node-pty": "1.0.0"
+  },
+  "dependencies": {
+    "@vue-flow/core": "^1.48.2"
   }
 }

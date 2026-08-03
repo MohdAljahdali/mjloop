@@ -598,6 +598,11 @@
   "config.preview.commentsLost.few": "سيُسقط الحفظ {count} أسطر تعليق من هذا المسار.",
   "config.preview.commentsLost.many": "سيُسقط الحفظ {count} سطرًا من التعليقات من هذا المسار.",
   "config.preview.commentsLost.other": "سيُسقط الحفظ {count} سطر تعليق من هذا المسار.",
+  "config.viewList": "قائمة",
+  "config.viewGraph": "مخطّط",
+  "config.trackView": "عرض المسار",
+  "config.graph.refusalCycle": "وصل {from} بـ{to} سيُغلق حلقةً، لذا رُفض.",
+  "config.graph.cyclic": "عالق في حلقة — لن يتحقّق ترتيبه أبداً",
 
   "telemetry.title": "المتخصّصون، كما استُدعوا",
   "telemetry.why": "ما أعاده فعلًا كلّ متخصّص استدعاه هذا المشروع. تقرير لا قاعدة — لا شيء في المحرّك يستدعي وكيلًا أو يتخطّاه بسبب رقم هنا. ويتجدّد الجدول عند بدء التشغيل التالي.",

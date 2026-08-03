@@ -574,6 +574,11 @@
   "config.preview.orderRemoved": "{agent} will no longer wait on {pred}.",
   "config.preview.commentsLost.one": "Saving will drop the {count} comment line written inside this track.",
   "config.preview.commentsLost.other": "Saving will drop the {count} comment lines written inside this track.",
+  "config.viewList": "List",
+  "config.viewGraph": "Graph",
+  "config.trackView": "Track view",
+  "config.graph.refusalCycle": "Connecting {from} to {to} would close a cycle, so it was refused.",
+  "config.graph.cyclic": "stuck in a cycle — its order can never be satisfied",
 
   "telemetry.title": "Specialists, as drafted",
   "telemetry.why": "What every specialist this project drafted actually returned. A report and never a rule — nothing in the engine drafts or skips an agent because of a number here. It refreshes when the next run opens.",

@@ -34,10 +34,12 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from '../composables/useI18n.js'
 import { useFeed } from '../composables/useFeed.js'
 import { submit } from '../stores/session.js'
-import { broken, collectTrackChanges, knownAgents, seedDraft, type Draft } from '../lib/config.js'
+import { addOrderEdge, broken, collectTrackChanges, knownAgents, removeOrderEdge, seedDraft, trackNames, type Draft } from '../lib/config.js'
+import { wouldCycle } from '../lib/trackgraph.js'
 import type { Config, ConfigView } from '../types/protocol.js'
 import SpecialistEditor from '../components/SpecialistEditor.vue'
 import TrackEditors from '../components/TrackEditors.vue'
+import TrackGraph from '../components/TrackGraph.vue'
 
 const { t } = useI18n()
 
@@ -108,6 +110,100 @@ function mutate(change: (model: Draft) => boolean | void): void {
 }
 
 const agentNames = computed(() => (draft.value === null ? [] : knownAgents(draft.value)))
+
+/**
+ * List or graph — a second lens on the same `tracks:` half of the draft, not
+ * a second editor. Switching does not touch `draft` itself, only which
+ * component reads it, which is why `#config-track-editors` reappears intact
+ * the moment this flips back to `'list'`: nothing here ever unmounts the
+ * list's own state, `Tracks.vue`'s draft it reads.
+ *
+ * The graph has no keyboard path — a drag canvas cannot get one the way a
+ * button or a combobox can — so the list stays the complete editor and the
+ * graph stays a second, drag-driven way to write the same edges, never a
+ * replacement for it. See `discipline.test.ts`'s own "keyboard before
+ * pointer" describe block.
+ */
+const trackView = ref<'list' | 'graph'>('list')
+function setView(next: typeof trackView.value): void {
+  trackView.value = next
+  graphRefusal.value = null
+}
+
+// `Draft['tracks']` indexes as `Track | undefined` under
+// `noUncheckedIndexedAccess` even though every name here came from
+// `Object.keys(draft.tracks)` a moment ago — pairing name and track once,
+// here, is what lets the template below hand `TrackGraph` a real `Track`
+// rather than repeating an `undefined` check inside a `v-for`.
+const graphEntries = computed(() => {
+  const model = draft.value
+  if (model === null) return []
+  return trackNames(model)
+    .map((name) => ({ name, track: model.tracks[name] }))
+    .filter((entry): entry is { name: string; track: NonNullable<(typeof entry)['track']> } => entry.track !== undefined)
+})
+
+/** Why the last drag on the graph was refused, or `null` once the graph is clean again. */
+const graphRefusal = ref<string | null>(null)
+
+/**
+ * A drag's own end, from whichever `TrackGraph` card emitted it. `wouldCycle`
+ * (`lib/trackgraph.ts`) folds the track's own gate in beside its `order`
+ * edges, so a connection that closes a cycle through the gate is refused
+ * here exactly as one that closes it through `order` alone is — the same
+ * fold `layersOf` and `dispatchWaves` both apply, for the reason `wouldCycle`'s
+ * own comment gives. A refusal never reaches `mutate`: the draft only moves
+ * on the branch below that calls it.
+ */
+function onGraphConnect(name: string, params: { source: string; target: string }): void {
+  const entry = draft.value?.tracks[name]
+  if (entry === undefined) return
+  if (wouldCycle(entry, params.source, params.target)) {
+    graphRefusal.value = t('config.graph.refusalCycle', { from: params.source, to: params.target })
+    return
+  }
+  graphRefusal.value = null
+  mutate((model) => {
+    const target = model.tracks[name]
+    if (target === undefined) return false
+    return addOrderEdge(target, params.target, params.source)
+  })
+}
+
+/** An order edge coming off on the canvas — never reachable for a gate edge, whose own `selectable: false` keeps it out of `TrackGraph.vue`'s removal path in the first place. */
+function onGraphDisconnect(name: string, params: { source: string; target: string }): void {
+  mutate((model) => {
+    const target = model.tracks[name]
+    if (target === undefined) return false
+    return removeOrderEdge(target, params.target, params.source)
+  })
+}
+
+/**
+ * A node coming off the canvas — dropping that agent out of whichever of
+ * `required`/`available`/`closing` it is currently drawn from, the same
+ * three lists `TrackAgentList.vue`'s own remove chip writes to. Only those
+ * three: a graph node is never drawn for a gate's `blocks` entry on its own
+ * (a gate is an edge over an existing node, not a second node), so there is
+ * no fourth bucket to check here the way `TrackEditor.vue`'s `bucketOf` has
+ * to.
+ */
+function onGraphRemove(name: string, params: { agent: string }): void {
+  mutate((model) => {
+    const entry = model.tracks[name]
+    if (entry === undefined) return false
+    for (const list of ['required', 'available', 'closing'] as const) {
+      const bucket = entry[list]
+      if (!Array.isArray(bucket)) continue
+      const at = bucket.indexOf(params.agent)
+      if (at >= 0) {
+        bucket.splice(at, 1)
+        return
+      }
+    }
+    return false
+  })
+}
 
 /** Why the editor banner is showing — unavailable/invalid first, then a conflicting revision, mirroring `Config.vue`'s own `stateKey` priority minus the orchestration refusals, which are that panel's own half. */
 const stateKey = computed<string | null>(() => {
@@ -192,7 +288,29 @@ function reset(): void {
            and `TrackEditors.vue`'s own comments. -->
       <SpecialistEditor :draft="draft" :agent-names="agentNames" :enabled="enabled" :mutate="mutate" />
 
-      <TrackEditors :draft="draft" :baseline="baseline" :raw-text="rawText" :enabled="enabled" :mutate="mutate" />
+      <!-- List and graph both read the same draft; switching never unmounts
+           it, so `#config-track-editors` is exactly as complete after a
+           round trip through the graph as it was before — see `view`'s own
+           comment. -->
+      <div class="track-view-toggle" role="group" :aria-label="t('config.trackView')">
+        <button type="button" id="tracks-view-list" :aria-pressed="trackView === 'list'" @click="setView('list')">{{ t('config.viewList') }}</button>
+        <button type="button" id="tracks-view-graph" :aria-pressed="trackView === 'graph'" @click="setView('graph')">{{ t('config.viewGraph') }}</button>
+      </div>
+
+      <TrackEditors v-if="trackView === 'list'" :draft="draft" :baseline="baseline" :raw-text="rawText" :enabled="enabled" :mutate="mutate" />
+
+      <section v-else id="tracks-graph-view" class="track-graphs" :aria-label="t('config.viewGraph')">
+        <p v-if="graphRefusal !== null" id="tracks-graph-refusal" class="banner warn" role="status">{{ graphRefusal }}</p>
+        <TrackGraph
+          v-for="entry in graphEntries"
+          :key="entry.name"
+          :track="entry.track"
+          :name="entry.name"
+          @connect="(params) => onGraphConnect(entry.name, params)"
+          @disconnect="(params) => onGraphDisconnect(entry.name, params)"
+          @remove="(params) => onGraphRemove(entry.name, params)"
+        />
+      </section>
 
       <datalist id="config-agent-names">
         <option v-for="name in agentNames" :key="name" :value="name"></option>

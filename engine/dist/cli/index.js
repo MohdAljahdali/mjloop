@@ -13415,6 +13415,105 @@ var StateStore = class {
 // src/ops/run.ts
 import path7 from "node:path";
 
+// src/schemas/skill-library.ts
+var DigestSchema = string2().regex(/^[a-f0-9]{64}$/, "a digest is 64 lower-case hex characters");
+var SkillPackageSchema = strictObject({
+  schema: literal(1),
+  /**
+   * Stable across revisions of one source. Two imports of the same GitHub
+   * repository at two different pinned revisions share a `packageId` and
+   * differ in `digest` — `packageId` is "which skill", `digest` is "which
+   * bytes of it".
+   */
+  packageId: IdSchema,
+  /** Of the content; also the directory name under the library root. */
+  digest: DigestSchema,
+  source: strictObject({
+    kind: SkillSourceSchema,
+    url: string2().url().startsWith("https://"),
+    /**
+     * A pinned commit or tag, never a moving ref such as a branch name. A
+     * branch would let the *same recorded revision* resolve to different
+     * bytes over time, which is precisely what content-addressing by digest
+     * is here to make impossible — the revision has to hold that promise on
+     * its own terms, not merely happen to agree with the digest today.
+     */
+    revision: string2().min(1)
+  }),
+  license: strictObject({
+    spdx: string2().min(1).nullable(),
+    file: string2().min(1).nullable()
+  }),
+  skillName: string2().min(1).max(200),
+  description: string2().min(1).max(1e3),
+  tags: array(string2().min(1)),
+  dependencies: strictObject({
+    /** An inventory of what the package declares — never a resolution. */
+    executables: array(string2().min(1)),
+    /** Likewise: named, not installed. */
+    packages: array(string2().min(1))
+  }),
+  audit: strictObject({
+    state: _enum(["pending", "passed", "failed"]),
+    findings: array(string2().min(1)),
+    at: iso_exports.datetime().nullable()
+  }),
+  /**
+   * The bounded text S05 hands an agent. Capped at the same 4000 characters
+   * `AcceptedProjectSkill.guidance` is, for the same reason stated there: it
+   * is copied into a brief on every dispatch, so an unbounded string here
+   * would make every dispatch as large as the largest guidance any package
+   * in the library has ever carried.
+   */
+  guidance: string2().min(1).max(4e3),
+  importedAt: iso_exports.datetime()
+});
+
+// src/schemas/skill-acceptance.ts
+var SKILL_ACCEPTANCE_AGENTS = ["planner", "builder", "critic", "verifier"];
+var ProjectSkillAcceptanceSchema = strictObject({
+  schema: literal(1),
+  skillId: IdSchema,
+  /** Stable across revisions of one source — see `SkillPackageSchema.packageId`. */
+  packageId: IdSchema,
+  /**
+   * A digest, never a path. The stop condition is explicit: no global-library
+   * path may be stored in a project record, because the library moves per
+   * machine and this record is committed.
+   */
+  digest: DigestSchema,
+  components: array(IdSchema),
+  agents: array(AgentNameSchema),
+  tags: array(string2().min(1)),
+  /**
+   * No global fallback of any kind. `orchestration.skills.update_mode` is
+   * only ever a *default offered* at acceptance time by whichever caller
+   * assembles this input — never consulted afterwards — because a global
+   * policy could otherwise silently change what a project's already-accepted
+   * skill does on its next run without that project ever having decided so.
+   */
+  updatePolicy: SkillUpdateModeSchema,
+  status: _enum(["active", "disabled"]),
+  /**
+   * The per-project host compatibility result.
+   *
+   * Nothing in this story determines host compatibility — no field on
+   * `SkillPackage` records what a host needs, and checking `dependencies.
+   * executables` against the machine that will run an agent is squarely the
+   * sandboxed problem S07 owns. `acceptSkill` accepts this as an explicit
+   * input rather than computing it, and defaults it to `true` when the
+   * caller does not know better yet: today nothing here can prove a package
+   * is *incompatible*, so recording an unearned `false` would be a claim as
+   * ungrounded as an unearned `true` — the honest default is the one that
+   * matches what this story can actually establish. A later story that can
+   * compute this for real overwrites it rather than reads a fabricated one.
+   */
+  compatible: boolean2(),
+  /** Who accepted it. Free text; the engine cannot verify it. */
+  acceptedBy: string2().min(1),
+  acceptedAt: iso_exports.datetime()
+});
+
 // src/schemas/feature.ts
 var FeatureIdSchema = string2().regex(/^F\d{3}$/, "a feature id looks like F001");
 var FeatureBriefStatusSchema = _enum(["draft", "approved", "superseded"]);
@@ -14020,105 +14119,6 @@ function parseFrontmatter(raw) {
 import fs7 from "node:fs/promises";
 import path6 from "node:path";
 
-// src/schemas/skill-library.ts
-var DigestSchema = string2().regex(/^[a-f0-9]{64}$/, "a digest is 64 lower-case hex characters");
-var SkillPackageSchema = strictObject({
-  schema: literal(1),
-  /**
-   * Stable across revisions of one source. Two imports of the same GitHub
-   * repository at two different pinned revisions share a `packageId` and
-   * differ in `digest` — `packageId` is "which skill", `digest` is "which
-   * bytes of it".
-   */
-  packageId: IdSchema,
-  /** Of the content; also the directory name under the library root. */
-  digest: DigestSchema,
-  source: strictObject({
-    kind: SkillSourceSchema,
-    url: string2().url().startsWith("https://"),
-    /**
-     * A pinned commit or tag, never a moving ref such as a branch name. A
-     * branch would let the *same recorded revision* resolve to different
-     * bytes over time, which is precisely what content-addressing by digest
-     * is here to make impossible — the revision has to hold that promise on
-     * its own terms, not merely happen to agree with the digest today.
-     */
-    revision: string2().min(1)
-  }),
-  license: strictObject({
-    spdx: string2().min(1).nullable(),
-    file: string2().min(1).nullable()
-  }),
-  skillName: string2().min(1).max(200),
-  description: string2().min(1).max(1e3),
-  tags: array(string2().min(1)),
-  dependencies: strictObject({
-    /** An inventory of what the package declares — never a resolution. */
-    executables: array(string2().min(1)),
-    /** Likewise: named, not installed. */
-    packages: array(string2().min(1))
-  }),
-  audit: strictObject({
-    state: _enum(["pending", "passed", "failed"]),
-    findings: array(string2().min(1)),
-    at: iso_exports.datetime().nullable()
-  }),
-  /**
-   * The bounded text S05 hands an agent. Capped at the same 4000 characters
-   * `AcceptedProjectSkill.guidance` is, for the same reason stated there: it
-   * is copied into a brief on every dispatch, so an unbounded string here
-   * would make every dispatch as large as the largest guidance any package
-   * in the library has ever carried.
-   */
-  guidance: string2().min(1).max(4e3),
-  importedAt: iso_exports.datetime()
-});
-
-// src/schemas/skill-acceptance.ts
-var SKILL_ACCEPTANCE_AGENTS = ["planner", "builder", "critic", "verifier"];
-var ProjectSkillAcceptanceSchema = strictObject({
-  schema: literal(1),
-  skillId: IdSchema,
-  /** Stable across revisions of one source — see `SkillPackageSchema.packageId`. */
-  packageId: IdSchema,
-  /**
-   * A digest, never a path. The stop condition is explicit: no global-library
-   * path may be stored in a project record, because the library moves per
-   * machine and this record is committed.
-   */
-  digest: DigestSchema,
-  components: array(IdSchema),
-  agents: array(AgentNameSchema),
-  tags: array(string2().min(1)),
-  /**
-   * No global fallback of any kind. `orchestration.skills.update_mode` is
-   * only ever a *default offered* at acceptance time by whichever caller
-   * assembles this input — never consulted afterwards — because a global
-   * policy could otherwise silently change what a project's already-accepted
-   * skill does on its next run without that project ever having decided so.
-   */
-  updatePolicy: SkillUpdateModeSchema,
-  status: _enum(["active", "disabled"]),
-  /**
-   * The per-project host compatibility result.
-   *
-   * Nothing in this story determines host compatibility — no field on
-   * `SkillPackage` records what a host needs, and checking `dependencies.
-   * executables` against the machine that will run an agent is squarely the
-   * sandboxed problem S07 owns. `acceptSkill` accepts this as an explicit
-   * input rather than computing it, and defaults it to `true` when the
-   * caller does not know better yet: today nothing here can prove a package
-   * is *incompatible*, so recording an unearned `false` would be a claim as
-   * ungrounded as an unearned `true` — the honest default is the one that
-   * matches what this story can actually establish. A later story that can
-   * compute this for real overwrites it rather than reads a fabricated one.
-   */
-  compatible: boolean2(),
-  /** Who accepted it. Free text; the engine cannot verify it. */
-  acceptedBy: string2().min(1),
-  acceptedAt: iso_exports.datetime()
-});
-
 // src/store/skill-library-store.ts
 import fs6 from "node:fs/promises";
 import path5 from "node:path";
@@ -14332,11 +14332,12 @@ var UnknownAcceptanceComponentError = class extends Error {
   }
 };
 var UnknownAcceptanceAgentError = class extends Error {
-  constructor(unknown2) {
+  constructor(unknown2, known) {
     super(
-      `${quoted(unknown2)} is not one of the fixed agent roles dynamic skill selection routes to (${SKILL_ACCEPTANCE_AGENTS.join(", ")}) \u2014 an unknown role here would select a skill for a dispatch that never happens.`
+      `${quoted(unknown2)} is not an agent any track in this project's config.yaml names (${known.join(", ")}) \u2014 an unknown role here would select a skill for a dispatch that never happens.`
     );
     this.unknown = unknown2;
+    this.known = known;
     this.name = "UnknownAcceptanceAgentError";
   }
 };
@@ -14348,6 +14349,14 @@ var SkillAlreadyAcceptedError = class extends Error {
     this.name = "SkillAlreadyAcceptedError";
   }
 };
+async function routableAgents(projectDir) {
+  const config2 = await loadConfig(projectDir).catch((error2) => {
+    if (error2 instanceof ConfigMissingError) return null;
+    throw error2;
+  });
+  const names = config2 === null ? [] : Object.values(config2.tracks).flatMap((track) => [...track.required, ...track.available ?? [], ...track.closing ?? []]);
+  return names.length === 0 ? new Set(SKILL_ACCEPTANCE_AGENTS) : new Set(names);
+}
 function validateSkillId(skillId) {
   const parsed = IdSchema.safeParse(skillId);
   if (!parsed.success) throw new InvalidSkillIdError(skillId);
@@ -14397,11 +14406,10 @@ async function acceptSkill(projectDir, input, now = () => /* @__PURE__ */ new Da
     const accepted = await readAcceptedProfile(projectDir);
     const components = input.components ?? (accepted?.components ?? []).map((component) => component.id);
     await assertKnownComponents(projectDir, components);
-    const agents = input.agents ?? [...SKILL_ACCEPTANCE_AGENTS];
-    const unknownAgents = agents.filter(
-      (agent) => !SKILL_ACCEPTANCE_AGENTS.includes(agent)
-    );
-    if (unknownAgents.length > 0) throw new UnknownAcceptanceAgentError(unknownAgents);
+    const routable = await routableAgents(projectDir);
+    const agents = input.agents ?? [...routable];
+    const unknownAgents = agents.filter((agent) => !routable.has(agent));
+    if (unknownAgents.length > 0) throw new UnknownAcceptanceAgentError(unknownAgents, [...routable]);
     const parsed = ProjectSkillAcceptanceSchema.parse({
       schema: 1,
       skillId,
@@ -15941,7 +15949,7 @@ var FLAG_VALUES = {
   "--expect": "a revision number or the word none",
   "--from": "the number of the accepted revision whose component map to reselect",
   "--components": "a comma-separated list of component ids from the accepted map",
-  "--agents": "a comma-separated list of agent roles (planner, builder, critic, verifier)",
+  "--agents": "a comma-separated list of agent names this project's own tracks name in config.yaml (the fixed planner, builder, critic, verifier when it declares no tracks)",
   "--policy": "auto, review or pinned",
   "--source": "github, registry, web or skills-sh",
   "--ref": "a branch, tag, or commit sha to pin"
