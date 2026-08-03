@@ -135,15 +135,18 @@ export function submit(write: Write, options: { undo?: Write; settled?: (receipt
     // same contract as a stale refusal from the server: nothing happened, and
     // the page says so. The offline banner is already on screen with the why.
     options.settled?.({ id, ok: false, code: 'write.failed' })
-    announceRefusal({ code: 'write.failed' })
+    announce({ code: 'write.failed' })
     return
   }
   pending.set(id, options)
 }
 
-/** Routed through `noticeSubscribers`, the same door `settle` uses — one place for Task 7's toast layer to change. */
-function announceRefusal(message: Message): void {
-  for (const fn of noticeSubscribers) fn(message)
+type Announcer = (message: Message, action?: { code: string; run: () => void }) => void
+let announce: Announcer = () => {}
+
+/** Installed once from `App.vue`, so the store never imports a component. */
+export function installAnnouncer(fn: Announcer): void {
+  announce = fn
 }
 
 function settle(receipt: Receipt): void {
@@ -151,7 +154,20 @@ function settle(receipt: Receipt): void {
   if (heldWrite === undefined) return
   pending.delete(receipt.id)
   heldWrite.settled?.(receipt)
-  announceRefusal({ code: receipt.code })
+
+  // A refusal is worth saying out loud: the user pressed something, it did not
+  // happen, and the reason is that the world moved underneath them. There is
+  // nothing to undo, because nothing was done.
+  if (!receipt.ok) {
+    announce({ code: receipt.code })
+    return
+  }
+  const undo = heldWrite.undo
+  if (undo === undefined) {
+    announce({ code: receipt.code })
+    return
+  }
+  announce({ code: receipt.code }, { code: 'write.undo', run: () => submit(undo) })
 }
 
 /** Test seam: production drives `emit` from a socket frame. */

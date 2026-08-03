@@ -118,21 +118,27 @@ describe('writes', () => {
   })
 
   it('offers the inverse write only when one was given and the write landed', () => {
-    const notices: unknown[] = []
-    store.onNotice((message) => notices.push(message))
+    const announced: unknown[] = []
+    store.installAnnouncer((message, action) => announced.push({ message, undo: action !== undefined }))
+
     store.submit({ kind: 'gate', run: 'r', open: true }, { undo: { kind: 'gate', run: 'r', open: false } })
-    const id = JSON.parse(FakeSocket.last?.sent[0] ?? '{}').id
-    FakeSocket.last?.deliver({ type: 'receipt', id, ok: false, code: 'write.stale' })
-    // A refusal is announced, but there is nothing to undo: it did not happen.
-    expect(notices).toEqual([{ code: 'write.stale' }])
+    const first = JSON.parse(FakeSocket.last?.sent[0] ?? '{}').id
+    FakeSocket.last?.deliver({ type: 'receipt', id: first, ok: false, code: 'write.stale' })
+    // Refused: announced, but there is nothing to undo — it did not happen.
+    expect(announced).toEqual([{ message: { code: 'write.stale' }, undo: false }])
+
+    store.submit({ kind: 'gate', run: 'r', open: true }, { undo: { kind: 'gate', run: 'r', open: false } })
+    const second = JSON.parse(FakeSocket.last?.sent[1] ?? '{}').id
+    FakeSocket.last?.deliver({ type: 'receipt', id: second, ok: true, code: 'write.ok.gate' })
+    expect(announced[1]).toEqual({ message: { code: 'write.ok.gate' }, undo: true })
   })
 
   it('settles as a refusal, and does not leave a pending entry, when the socket is down', () => {
     const socket = FakeSocket.last
     if (socket !== null) socket.readyState = 0
     const settled = vi.fn()
-    const notices: unknown[] = []
-    store.onNotice((message) => notices.push(message))
+    const announced: unknown[] = []
+    store.installAnnouncer((message) => announced.push(message))
 
     store.submit({ kind: 'halt', run: 'run-1', reason: 'r' }, { settled })
 
@@ -141,7 +147,7 @@ describe('writes', () => {
     // The caller is told immediately: a refusal, not silence.
     expect(settled).toHaveBeenCalledTimes(1)
     expect(settled).toHaveBeenCalledWith(expect.objectContaining({ ok: false, code: 'write.failed' }))
-    expect(notices).toEqual([{ code: 'write.failed' }])
+    expect(announced).toEqual([{ code: 'write.failed' }])
 
     // A receipt that later arrives under the same id (e.g. the socket came
     // back and the server, coincidentally, reused a correlation id) does not

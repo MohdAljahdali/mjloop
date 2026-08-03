@@ -1,14 +1,17 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { online, snapshot } from './stores/session.js'
+import { installAnnouncer, online, onNotice, snapshot } from './stores/session.js'
 import { useI18n } from './composables/useI18n.js'
 import { startTabs, useTabs } from './composables/useTabs.js'
+import { useToasts } from './composables/useToasts.js'
 import { ready } from './lib/stories.js'
 import Banners from './components/Banners.vue'
 import Bdi from './components/Bdi.vue'
 import LanguagePicker from './components/LanguagePicker.vue'
+import NoticeFeed from './components/NoticeFeed.vue'
 import Rail from './components/Rail.vue'
 import Terminal from './components/Terminal.vue'
+import Toasts from './components/Toasts.vue'
 import { bootPane } from './composables/usePane.js'
 
 const { t, tn } = useI18n()
@@ -17,6 +20,11 @@ startTabs()
 // Applies the pane mode already read from storage — the static markup opens
 // collapsed, and nothing else stamps `body.dataset.pane` before this runs.
 bootPane()
+
+const { notify } = useToasts()
+installAnnouncer(notify)
+// Server-pushed notices become toasts too; NoticeFeed keeps its own copy.
+onNotice((message) => notify(message))
 
 /**
  * The two navigation counts.
@@ -34,6 +42,7 @@ const highCount = computed(() => snapshot.value?.state.findings.high ?? 0)
       <h1>{{ t('app.title') }}</h1>
       <span class="project"><Bdi :value="snapshot?.project ?? ''" /></span>
       <LanguagePicker />
+      <NoticeFeed />
     </div>
     <Banners v-if="snapshot !== null" :snapshot="snapshot" :online="online" />
     <Rail v-if="snapshot !== null" :snapshot="snapshot" />
@@ -73,4 +82,6 @@ const highCount = computed(() => snapshot.value?.state.findings.high ?? 0)
       <Terminal />
     </div>
   </section>
+
+  <Toasts />
 </template>
