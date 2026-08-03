@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
+import { nextTick } from 'vue'
 import { installForTest } from '../../src/web/app/lib/i18n.ts'
 import Rail from '../../src/web/app/components/Rail.vue'
 import Banners from '../../src/web/app/components/Banners.vue'
@@ -150,6 +151,11 @@ describe('App', () => {
       observe() {}
       disconnect() {}
     }
+    // App.vue now mounts `Run.vue` too, whose feeds issue real conditional
+    // GETs (`panel-run.test.ts`'s own `beforeEach` stubs this the same way).
+    // There is no server here; a real request would only leave every test in
+    // this block hitting `localhost:3000` for nothing.
+    vi.stubGlobal('fetch', () => Promise.resolve(new Response('null', { status: 200 })))
   })
 
   it('marks the pill, every tab anchor, and the nav counts with the hooks the shipped CSS keys off', async () => {
@@ -232,6 +238,72 @@ describe('App', () => {
     const wrapper = mount(App)
     expect(wrapper.find('.rail #notice-toggle').exists()).toBe(true)
     expect(wrapper.find('.brand #notice-toggle').exists()).toBe(false)
+  })
+
+  it('keeps the halt dialog usable across a tab switch — it is a sibling of <main>, never inside the panels\' <KeepAlive>', async () => {
+    // The regression this guards: `HaltDialog` used to live inside `Run.vue`,
+    // itself inside `<KeepAlive>`. Opening it, switching tabs and coming back
+    // detached the native `<dialog>` from the document mid-modal — it lost its
+    // top-layer state, `haltOpen` stayed `true`, and nothing re-fired the
+    // watcher that calls `showModal()` again. Halt was dead until reload.
+    vi.resetModules()
+    const freshI18n = await import('../../src/web/app/lib/i18n.ts')
+    freshI18n.installForTest({ code: 'en', strings: english })
+    const store = await import('../../src/web/app/stores/session.ts')
+    const { default: App } = await import('../../src/web/app/App.vue')
+
+    class FakeSocket {
+      static last: FakeSocket | null = null
+      readyState = 1
+      listeners = new Map<string, (event: unknown) => void>()
+      sent: unknown[] = []
+      constructor(public url: string) {
+        FakeSocket.last = this
+      }
+      addEventListener(type: string, fn: (event: unknown) => void) {
+        this.listeners.set(type, fn)
+      }
+      send(data: string): void {
+        this.sent.push(JSON.parse(data))
+      }
+      deliver(message: unknown): void {
+        this.listeners.get('message')?.({ data: JSON.stringify(message) })
+      }
+    }
+    store.connect({ token: 'tok', socketFactory: (url) => new FakeSocket(url) as unknown as WebSocket })
+    const running = emptySnapshot()
+    running.state = { ...running.state, status: 'running', run_id: '20260803-1' }
+    FakeSocket.last?.deliver({ type: 'snapshot', snapshot: running })
+
+    const wrapper = mount(App, { attachTo: document.body })
+
+    await wrapper.get('.rail button.danger').trigger('click')
+    const dialog = document.getElementById('halt-dialog') as HTMLDialogElement
+    expect(dialog.open).toBe(true)
+    expect(wrapper.find('#panel-run').exists()).toBe(true)
+
+    // Away and back — the panel deactivates (KeepAlive, not destroyed) while
+    // the dialog, outside it, is never touched.
+    location.hash = '#plans'
+    window.dispatchEvent(new Event('hashchange'))
+    await nextTick()
+    expect(wrapper.find('#panel-run').exists()).toBe(false)
+    expect(dialog.open).toBe(true)
+
+    location.hash = '#run'
+    window.dispatchEvent(new Event('hashchange'))
+    await nextTick()
+    expect(wrapper.find('#panel-run').exists()).toBe(true)
+    expect(dialog.open).toBe(true)
+
+    // Still live: a reason submitted now still reaches the write door.
+    await wrapper.get('#halt-reason').setValue('checking it survives a tab switch')
+    await wrapper.get('#halt-form').trigger('submit')
+    await nextTick()
+    expect((FakeSocket.last as FakeSocket).sent).toEqual([
+      { type: 'write', id: expect.any(String), write: { kind: 'halt', run: '20260803-1', reason: 'checking it survives a tab switch' } },
+    ])
+    wrapper.unmount()
   })
 })
 

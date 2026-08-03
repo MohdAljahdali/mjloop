@@ -12,10 +12,13 @@
  * rosters are keys and ride the snapshot; findings, history, gate excerpts
  * and the halt report are bodies and are fetched — `panels/run.js`, ported.
  *
- * It also carries the one write and the one session control whose home
- * could not be decided until the run id they act on had somewhere to live:
- * the halt dialog (`HaltDialog.vue`) and, in `Banners.vue`, the stalled
- * banner and its nudge button.
+ * The halt control and its dialog live in `Rail.vue`/`App.vue` instead of
+ * here, even though the run id they name comes off this same snapshot:
+ * `ui/rail.js:106` shows Halt on every tab a run is `running` on, not only
+ * this one, and `HaltDialog` has to sit outside the panels' `<KeepAlive>`
+ * to survive a tab switch — see `useHalt.ts`. The stalled banner and its
+ * nudge button are in `Banners.vue` for the same reason: page-level, not
+ * panel-scoped.
  */
 import { computed, ref, watch } from 'vue'
 import { snapshot } from '../stores/session.js'
@@ -23,7 +26,7 @@ import { useI18n } from '../composables/useI18n.js'
 import { useFeed } from '../composables/useFeed.js'
 import { preflightFacts, preflightPast, runDirName } from '../composables/useRun.js'
 import { stamp } from '../lib/fmt.js'
-import type { ConfigView, Preflight, RunDetail, SkillManifest, Snapshot, State } from '../types/protocol.js'
+import type { ConfigView, Preflight, RunDetail, SkillManifest, Snapshot, StateView } from '../types/protocol.js'
 import Bdi from '../components/Bdi.vue'
 import FactRow from '../components/FactRow.vue'
 import Chip from '../components/Chip.vue'
@@ -32,7 +35,6 @@ import CycleErrorChip from '../components/CycleErrorChip.vue'
 import FindingRow from '../components/FindingRow.vue'
 import CycleRow from '../components/CycleRow.vue'
 import ManifestSelection from '../components/ManifestSelection.vue'
-import HaltDialog from '../components/HaltDialog.vue'
 
 const { t, tn } = useI18n()
 
@@ -105,7 +107,7 @@ const preflightPastRows = computed(() => (comparable.value === null ? [] : prefl
  * an agent result carries findings, a gate proof or error signatures: a
  * clean pass writes `cycle-NN/<agent>.json` and moves nothing else.
  */
-const stateFeed = useFeed<{ state: State }>({
+const stateFeed = useFeed<StateView>({
   dep: (snap) => (snap.state.initialised ? `${snap.revisions.state}:${snap.revisions.cycle}` : null),
   path: () => '/api/state',
 })
@@ -159,21 +161,15 @@ const guards = computed(() => snapshot.value?.guards ?? null)
 const strikesText = computed(() => `${guards.value?.strikes ?? 0}/${guards.value?.strikesAllowed ?? '?'}`)
 
 const lastCycle = computed(() => summary.value?.last_cycle ?? null)
-
-// ── the halt dialog ─────────────────────────────────────────────────────────
-const haltOpen = ref(false)
 </script>
 
 <template>
-  <section id="panel-run">
+  <section id="panel-run" class="panel" aria-labelledby="panel-run-title">
     <header class="panel-head">
       <div>
-        <h1>{{ t('panel.run.title') }}</h1>
+        <h1 id="panel-run-title">{{ t('panel.run.title') }}</h1>
         <p class="hint">{{ t('panel.run.help') }}</p>
       </div>
-      <button v-if="summary?.status === 'running'" type="button" class="danger" @click="haltOpen = true">
-        {{ t('controls.halt') }}
-      </button>
     </header>
 
     <p v-if="idle" class="empty">{{ t(summary?.initialised ? 'run.idle' : 'run.uninitialised') }}</p>
@@ -186,7 +182,7 @@ const haltOpen = ref(false)
       <p class="hint">{{ t('preflight.why') }}</p>
       <label class="picker">
         <span>{{ t('preflight.track') }}</span>
-        <select id="preflight-track" v-model="chosen">
+        <select id="preflight-track" v-model="chosen" name="track" :aria-label="t('preflight.track')">
           <option v-for="trackName in tracks" :key="trackName" :value="trackName">{{ trackName }}</option>
         </select>
       </label>
@@ -243,7 +239,12 @@ const haltOpen = ref(false)
           <p id="run-gate-state">
             {{ gateProof === null ? t('run.gateState.shut') : t('run.gateState.provenBy', { agent: gateProof.agent, cycle: gateProof.cycle }) }}
           </p>
-          <p v-if="gateProof !== null"><code id="run-gate-ref"><Bdi :value="gateProof.ref" /></code></p>
+          <!-- The `<p>` always renders; only the `<code>` inside it hides —
+               `run.js:469` hides `run-gate-ref` itself, not its wrapper, and
+               an always-present `<p>` here is what keeps the two states
+               (shut, proven with no excerpt) from collapsing their margins
+               into each other differently than the old page did. -->
+          <p><code v-if="gateProof !== null" id="run-gate-ref"><Bdi :value="gateProof.ref" /></code></p>
           <pre v-if="gateProof !== null && gateProof.excerpt.length > 0" id="run-gate-excerpt" class="excerpt"><Bdi :value="gateProof.excerpt" /></pre>
         </section>
 
@@ -331,7 +332,5 @@ const haltOpen = ref(false)
         </section>
       </aside>
     </div>
-
-    <HaltDialog :open="haltOpen" :run-id="summary?.run_id ?? null" @close="haltOpen = false" />
   </section>
 </template>

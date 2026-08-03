@@ -16,6 +16,8 @@
 import { computed } from 'vue'
 import type { Snapshot } from '../types/protocol.js'
 import { useI18n } from '../composables/useI18n.js'
+import { useHalt } from '../composables/useHalt.js'
+import { send } from '../stores/session.js'
 import Bdi from './Bdi.vue'
 import NoticeFeed from './NoticeFeed.vue'
 
@@ -44,6 +46,9 @@ const strikes = computed(() => guards.value?.strikes ?? 0)
 const strikesText = computed(() => `${strikes.value}/${guards.value?.strikesAllowed ?? '?'}`)
 
 const reproduction = computed(() => state.value?.reproduction ?? null)
+
+const session = computed(() => props.snapshot?.session ?? null)
+const { openHalt } = useHalt()
 </script>
 
 <template>
@@ -82,5 +87,16 @@ const reproduction = computed(() => state.value?.reproduction ?? null)
          old page's static toggle: a dead server or a bad token at load must
          not also take away the reader's way to open their notice history. -->
     <NoticeFeed />
+    <!-- Halt and Stop, side by side and labelled distinctly — `rail.js:99,103`.
+         Conflating them is the obvious mistake: Stop kills the pty and leaves
+         `state.json` saying `running` with no `HALT.md`, which is not a halt.
+         Halt opens `HaltDialog`, hosted in `App.vue` outside the panels'
+         `<KeepAlive>` — see `useHalt.ts` for why it cannot live here or on
+         the Run panel. Stop reaches the pty directly through `send()`, the
+         same door `PaneHead.vue`'s own Stop button (`#pane-stop`) uses. -->
+    <button v-if="state?.status === 'running'" type="button" class="danger" @click="openHalt()">{{ t('controls.halt') }}</button>
+    <button v-if="session?.jobId !== null && session !== null" type="button" :disabled="session.closing" @click="send({ type: 'stop' })">
+      {{ t('controls.stop') }}
+    </button>
   </div>
 </template>

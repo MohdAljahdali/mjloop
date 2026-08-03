@@ -7,16 +7,21 @@ import { useToasts } from './composables/useToasts.js'
 import { ready } from './lib/stories.js'
 import Banners from './components/Banners.vue'
 import Bdi from './components/Bdi.vue'
+import HaltDialog from './components/HaltDialog.vue'
 import LanguagePicker from './components/LanguagePicker.vue'
 import Pane from './components/Pane.vue'
 import Rail from './components/Rail.vue'
 import Toasts from './components/Toasts.vue'
 import Run from './panels/Run.vue'
 import { bootPane } from './composables/usePane.js'
+import { useHalt } from './composables/useHalt.js'
 
 const { t, tn } = useI18n()
 const { tabs, active, show } = useTabs()
 startTabs()
+// The dialog itself is a sibling of `<main>`, not inside it — see
+// `useHalt.ts` for why it cannot live inside a kept-alive panel.
+const { open: haltOpen, closeHalt } = useHalt()
 // Applies the pane mode already read from storage, but only once the
 // terminal underneath it has mounted into a laid-out box — a child's
 // `onMounted` fires before its parent's, so calling this from here rather
@@ -85,8 +90,18 @@ const highCount = computed(() => snapshot.value?.state.findings.high ?? 0)
        another tab opens — the same reason `Pane`'s own terminal is never
        remounted: a feed re-fetching from scratch on every tab switch is not
        what "the open tab is the subscription" (`lib/api.ts`) means. Panels
-       arrive one task at a time; only Run exists so far. -->
-  <main class="panel">
+       arrive one task at a time; only Run exists so far.
+
+       `class="panel"` (`10-layout.css:100-108`: the capped, centred column
+       and the `panel-in` fade) belongs on the panel *section* itself, the
+       same as `index.html:136`'s `<section class="panel" id="panel-run">` —
+       never on `<main>`, which is only the `overflow-y: auto` scroller
+       (`10-layout.css:83-88`). `<main>` is mounted once, at boot; a class
+       on it animates once, ever, and its own layout properties (padding,
+       overflow) would otherwise double up with `.panel`'s margin/max-width
+       in a way the old page never had to reconcile. Each panel component
+       carries the class on its own root instead — see `Run.vue`. -->
+  <main>
     <KeepAlive>
       <Run v-if="active === 'run'" />
     </KeepAlive>
@@ -95,4 +110,7 @@ const highCount = computed(() => snapshot.value?.state.findings.high ?? 0)
   <Pane />
 
   <Toasts />
+
+  <!-- Outside the `<KeepAlive>` on purpose — see `useHalt.ts`. -->
+  <HaltDialog :open="haltOpen" :run-id="snapshot?.state.run_id ?? null" @close="closeHalt()" />
 </template>

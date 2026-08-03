@@ -57,3 +57,27 @@ Every key used already exists in `src/web/app/locales/en.json` — none invented
 - `npm run build` — exit 0.
 - `node scripts/verify-ship.mjs` — all checks `ok`, "The shipped tree runs with nothing installed."
 - `git status` — clean after the commit below.
+
+## Fix round 1
+
+**Ruling 1 (halt placement) accepted — moved.** `Rail.vue` now carries both the halt button (`v-if="state.status === 'running'"`) and Stop (`v-if="session.jobId !== null"`, `:disabled="session.closing"`), after `<NoticeFeed />`, matching `index.html:83-84`'s order. `#pane-stop` in `PaneHead.vue` is untouched — it is a second, separate control, same as the old page. `HaltDialog` moved to `App.vue`, a sibling of `<main>` and outside its `<KeepAlive>`; a new module-singleton composable, `useHalt.ts` (same shape as `useTabs.ts`'s `active` ref), is the door between the button and the dialog since they are no longer in the same component subtree. `Run.vue`'s panel head lost the button and its own `haltOpen` ref entirely.
+
+**Ruling 2 (`draftedAgents`) — no change, confirmed correct.**
+
+**Regression test added for the KeepAlive defect** (Important 2): `tests/web/shell.test.ts`, `describe('App')`, *"keeps the halt dialog usable across a tab switch…"* — mounts the whole `App`, opens the dialog, switches to `#plans` (confirms `#panel-run` actually leaves the DOM — real deactivation, not a no-op), switches back, and confirms the dialog is still `.open` and a submitted reason still reaches `send()`. Placed in `shell.test.ts` rather than `panel-run.test.ts` because it exercises `App.vue`, not `Run.vue`. That describe block's `beforeEach` now also stubs `fetch`, since mounting `App` pulls in `Run.vue`'s feeds and two pre-existing `App` tests were until now issuing real network calls to a server that isn't running (harmless, but they were leaving an `ECONNREFUSED` `AggregateError` in every run's output — silenced as a side effect of this fix, not something I introduced).
+
+**Important 3 (focus) — done.** `HaltDialog.vue` calls `reasonInput.value?.focus()` right after `showModal()`. Test: `panel-run.test.ts`, *"focuses the reason field on open, for a keyboard user"*.
+
+**Important 4 (`.panel` on `<main>`) — done, and it is Task 2's regression, confirmed.** `class="panel"` moved off `<main>` in `App.vue` (which is now unclassed — only the `overflow-y:auto` scroller) and onto `Run.vue`'s own `#panel-run` section, matching `index.html:136`. Each future panel component will need to carry the class on its own root the same way; left a comment on `<main>` saying so.
+
+**Minors — all done.**
+- `#panel-run` restored `class="panel"`, `aria-labelledby="panel-run-title"`; its `<h1>` restored `id="panel-run-title"`.
+- `#preflight-track` restored `name="track"` and an `aria-label` (bound via `:aria-label="t('preflight.track')"` — the Vue-native equivalent of the old page's `data-i18n-label`, since nothing here reads `data-i18n-*` attributes).
+- The other dropped `#run-*` ids (on facts and blocks not named above) are left out: nothing in `60-panels.css` or `discipline.test.ts` selects them, confirmed by grep before this round and again now.
+- `run-gate-ref`: the `<p>` now always renders; only the `<code id="run-gate-ref">` inside it is conditional, matching `run.js:469` (`flag(gateRef, …)` hides the code element itself, not its wrapper).
+- `types/protocol.ts`: dropped the unused `State`, `Reproduction`, `Track` re-exports (confirmed by grep — nothing under `src/web/app` imported any of the three). `Run.vue`'s `stateFeed` now types itself `useFeed<StateView>` instead of restating `{ state: State }`.
+- Added the preflight-track-change → refetch test: `panel-run.test.ts`, *"refetches the estimate when a person picks a different track (run.js:119-122)"* — changes `#preflight-track`'s value from `build` to `edit` and asserts `#preflight-facts` redraws against the second track's own preflight response.
+
+**Worth knowing, not a defect (as flagged):** under `<KeepAlive>` a deactivated `Run` panel's feeds keep updating on every broadcast — `useFeed`'s `watchEffect` watches the store's `snapshot` ref directly, which has no notion of "this component is currently hidden." The old page's `register()`/`draw()` skipped a hidden panel's `update()` entirely. Traded deliberately for now (a feed watcher gated on visibility would also need to catch back up the moment the tab reopens, which is a second thing to get right), but it means a cached, invisible Run panel is still issuing conditional GETs and holding reactive state in memory for as long as the app is open. Left for whoever revisits panel memory/network cost across all eight panels, since it is a `<KeepAlive>`-wide question and not particular to Run.
+
+Commands re-run after the fix: `npx vitest run tests/web/panel-run.test.ts` — 25 passed. `npx vitest run tests/web/shell.test.ts` — 17 passed. `npx vitest run` — 89 files / 2127 tests passed, one run, no retry needed, no unhandled-rejection noise. `npm run typecheck` — exit 0. `npm run build` — exit 0. `node scripts/verify-ship.mjs` — all `ok`. `git status` — clean after the commit.

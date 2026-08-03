@@ -29,6 +29,7 @@ const emit = defineEmits<{ close: [] }>()
 const { t } = useI18n()
 
 const dialog = ref<HTMLDialogElement | null>(null)
+const reasonInput = ref<HTMLInputElement | null>(null)
 // Written once, on open, by a user action — never by a renderer. Uncontrolled
 // for the rest of its life, the same as the old page's `reason.value = ''`.
 const reason = ref('')
@@ -39,6 +40,9 @@ watch(
     if (isOpen) {
       reason.value = ''
       dialog.value?.showModal()
+      // `dialog.js:33` — a keyboard user's focus must land on the field a
+      // halt actually requires, not merely somewhere inside the dialog.
+      reasonInput.value?.focus()
     } else {
       dialog.value?.close()
     }
@@ -64,7 +68,7 @@ function confirm(): void {
       <p class="hint">{{ t('halt.explain') }}</p>
       <label>
         <span>{{ t('halt.reason') }}</span>
-        <input id="halt-reason" v-model="reason" name="reason" required maxlength="2000" dir="auto" autocomplete="off" />
+        <input id="halt-reason" ref="reasonInput" v-model="reason" name="reason" required maxlength="2000" dir="auto" autocomplete="off" />
       </label>
       <div class="dialog-actions">
         <button type="button" @click="cancel">{{ t('halt.cancel') }}</button>

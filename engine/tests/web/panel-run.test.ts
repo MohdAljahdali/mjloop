@@ -1,17 +1,22 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
-import { nextTick } from 'vue'
+import { defineComponent, h, nextTick } from 'vue'
 import { ConfigSchema } from '../../src/schemas/config.js'
 import type { Snapshot } from '../../src/web/protocol.js'
 import { emptySnapshot, readLocale } from './helpers/page.js'
 
 /**
  * The Run panel — `panels/run.js`, `describe('run')` at `panels.test.ts:1835`,
- * and the run section of `index.html` — ported to `Run.vue`, plus the two
- * controls the foundation deferred here because the run id they act on lives
- * on this panel: the halt dialog and (in `Banners.vue`) the stalled banner
- * and its nudge button.
+ * and the run section of `index.html` — ported to `Run.vue`.
+ *
+ * The halt dialog and the stalled banner/nudge (in `Banners.vue`) were first
+ * built here, then relocated after fix round 1: halt is `Rail.vue` +
+ * `HaltDialog.vue` (hosted in `App.vue`, outside the panels' `<KeepAlive>` —
+ * see `useHalt.ts`) because `ui/rail.js:106` shows it on every tab a run is
+ * running on, not only this one. Their tests below now mount `Rail` and
+ * `HaltDialog` together rather than `Run`; `shell.test.ts` additionally
+ * covers the dialog surviving a tab switch, the defect that placement fixes.
  */
 
 const english = await readLocale('en')
@@ -84,9 +89,28 @@ async function boot(snapshot: Snapshot = emptySnapshot()) {
   store.connect({ token: 'tok', socketFactory: (url) => new FakeSocket(url) as unknown as WebSocket })
   const { default: Run } = await import('../../src/web/app/panels/Run.vue')
   const { default: Banners } = await import('../../src/web/app/components/Banners.vue')
+  const { default: Rail } = await import('../../src/web/app/components/Rail.vue')
+  const { default: HaltDialog } = await import('../../src/web/app/components/HaltDialog.vue')
+  const { useHalt } = await import('../../src/web/app/composables/useHalt.ts')
   FakeSocket.last?.deliver({ type: 'snapshot', snapshot })
   await nextTick()
-  return { store, Run, Banners, socket: FakeSocket.last as FakeSocket }
+
+  /**
+   * `Rail`'s halt button and `HaltDialog` are siblings under `App.vue`, wired
+   * through `useHalt.ts`'s shared ref rather than through each other — the
+   * same shape `App.vue` itself uses. This host reproduces exactly that
+   * wiring, from the same fresh module graph `Rail`/`HaltDialog` were loaded
+   * from, so `openHalt()` called inside `Rail`'s click handler is the same
+   * ref `HaltDialog`'s `open` prop reads here.
+   */
+  const halt = useHalt()
+  const HaltHost = defineComponent({
+    props: { snapshot: { type: Object, required: true }, runId: { type: String, default: null } },
+    setup: (props) => () =>
+      h('div', [h(Rail, { snapshot: props.snapshot }), h(HaltDialog, { open: halt.open.value, runId: props.runId, onClose: halt.closeHalt })]),
+  })
+
+  return { store, Run, Banners, Rail, HaltDialog, HaltHost, halt, socket: FakeSocket.last as FakeSocket }
 }
 
 const runningState = (patch: Record<string, unknown> = {}) => ({
@@ -206,6 +230,35 @@ describe('Run.vue', () => {
     const wrapper = mount(Run)
     await vi.waitFor(() => expect((wrapper.get('#preflight-track').element as HTMLSelectElement).options.length).toBeGreaterThan(0))
     expect((wrapper.get('#preflight-track').element as HTMLSelectElement).value).toBe('edit')
+  })
+
+  it('refetches the estimate when a person picks a different track (run.js:119-122)', async () => {
+    serve({
+      '/api/config': configView({ tracks: { build: { required: ['builder'], max_cycles: 5 }, edit: { required: ['builder'], max_cycles: 2 } } }),
+      '/api/preflight/build': {
+        track: 'build',
+        max_cycles: 5,
+        roster: { required: ['builder'], available: [], forced: [], forbidden: [], closing: [] },
+        dispatches_per_cycle: 1,
+        ceiling: { cycles: 5, dispatches: 5 },
+        comparable: null,
+      },
+      '/api/preflight/edit': {
+        track: 'edit',
+        max_cycles: 2,
+        roster: { required: ['builder', 'verifier'], available: [], forced: [], forbidden: [], closing: [] },
+        dispatches_per_cycle: 2,
+        ceiling: { cycles: 2, dispatches: 4 },
+        comparable: null,
+      },
+    })
+    const { Run } = await boot(emptySnapshot())
+    const wrapper = mount(Run)
+    await vi.waitFor(() => expect(wrapper.findAll('#preflight-facts dd').map((n) => n.text())).toEqual(['5', '1', '5', 'builder']))
+
+    const select = wrapper.get('#preflight-track')
+    await select.setValue('edit')
+    await vi.waitFor(() => expect(wrapper.findAll('#preflight-facts dd').map((n) => n.text())).toEqual(['2', '2', '4', 'builder, verifier']))
   })
 
   it('draws the findings table, with the severity a screen reader hears and the CSS keys on', async () => {
@@ -367,20 +420,21 @@ describe('Run.vue', () => {
     expect(chips[1]?.classes()).toContain('armed-no')
   })
 
-  describe('the halt dialog', () => {
-    it('opens on the halt button, and is not offered when nothing is running', async () => {
-      const { Run } = await boot(emptySnapshot({ state: { ...emptySnapshot().state, status: 'idle' } }))
-      const wrapper = mount(Run)
+  describe('the halt dialog (Rail.vue + HaltDialog.vue, wired through useHalt.ts)', () => {
+    it('opens on the rail\'s halt button, and is not offered when nothing is running', async () => {
+      const { HaltHost } = await boot(emptySnapshot({ state: { ...emptySnapshot().state, status: 'idle' } }))
+      const wrapper = mount(HaltHost, { props: { snapshot: emptySnapshot({ state: { ...emptySnapshot().state, status: 'idle' } }), runId: null } })
       await nextTick()
-      expect(wrapper.find('header.panel-head button.danger').exists()).toBe(false)
+      expect(wrapper.find('.rail button.danger').exists()).toBe(false)
     })
 
     it('writes a halt for the run on screen, and never as an optimistic render', async () => {
-      const { Run, socket } = await boot(emptySnapshot({ state: runningState() }))
-      const wrapper = mount(Run, { attachTo: document.body })
+      const running = runningState()
+      const { HaltHost, socket } = await boot(emptySnapshot({ state: running }))
+      const wrapper = mount(HaltHost, { props: { snapshot: emptySnapshot({ state: running }), runId: running.run_id }, attachTo: document.body })
       await nextTick()
 
-      await wrapper.get('header.panel-head button.danger').trigger('click')
+      await wrapper.get('.rail button.danger').trigger('click')
       const dialog = document.getElementById('halt-dialog') as HTMLDialogElement
       expect(dialog.open).toBe(true)
       expect(socket.sent).toEqual([])
@@ -403,18 +457,30 @@ describe('Run.vue', () => {
     })
 
     it('sends nothing for an empty reason, and nothing on cancel', async () => {
-      const { Run, socket } = await boot(emptySnapshot({ state: runningState() }))
-      const wrapper = mount(Run, { attachTo: document.body })
+      const running = runningState()
+      const { HaltHost, socket } = await boot(emptySnapshot({ state: running }))
+      const wrapper = mount(HaltHost, { props: { snapshot: emptySnapshot({ state: running }), runId: running.run_id }, attachTo: document.body })
       await nextTick()
 
-      await wrapper.get('header.panel-head button.danger').trigger('click')
+      await wrapper.get('.rail button.danger').trigger('click')
       await wrapper.get('#halt-form').trigger('submit')
       expect(socket.sent).toEqual([])
 
-      await wrapper.get('header.panel-head button.danger').trigger('click')
+      await wrapper.get('.rail button.danger').trigger('click')
       await wrapper.get('#halt-reason').setValue('a reason')
       await wrapper.find('.dialog-actions button[type="button"]').trigger('click')
       expect(socket.sent).toEqual([])
+      wrapper.unmount()
+    })
+
+    it('focuses the reason field on open, for a keyboard user', async () => {
+      const running = runningState()
+      const { HaltHost } = await boot(emptySnapshot({ state: running }))
+      const wrapper = mount(HaltHost, { props: { snapshot: emptySnapshot({ state: running }), runId: running.run_id }, attachTo: document.body })
+      await nextTick()
+
+      await wrapper.get('.rail button.danger').trigger('click')
+      expect(document.activeElement).toBe(document.getElementById('halt-reason'))
       wrapper.unmount()
     })
   })
