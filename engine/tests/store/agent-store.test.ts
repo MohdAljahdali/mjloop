@@ -105,6 +105,15 @@ describe('writing agent files', () => {
     expect(doc?.digest).toBe(digest)
     expect(doc?.body).toBe('You write notes.')
     expect(doc?.extra).toEqual({ color: 'blue' })
+
+    // Folded in rather than a separate `it`: a second `expectDigest: null`
+    // create hits a distinct guard (`current !== null`) no other test
+    // exercises, and the refusal must leave the first file exactly as it was.
+    await expect(
+      writeAgent(dir, { ...INPUT, body: 'a different scribe' }, { expectDigest: null, reserved: [] }),
+    ).rejects.toMatchObject({ kind: 'exists' } satisfies Partial<AgentWriteError>)
+    expect((await readAgent(dir, 'scribe'))?.digest).toBe(digest)
+    expect((await readAgent(dir, 'scribe'))?.body).toBe('You write notes.')
   })
 
   it('refuses an update whose digest has moved underneath it, changing nothing on disk', async () => {
@@ -137,6 +146,16 @@ describe('writing agent files', () => {
       kind: 'stale',
     } satisfies Partial<AgentWriteError>)
     expect(await readAgent(dir, 'scribe')).not.toBeNull()
+
+    // Folded in rather than a separate `it`: `deleteAgent`'s `missing` branch
+    // (the read failing outright, before any digest is compared) is never
+    // reached by the stale-digest case above, and refusing it must leave the
+    // real agent file untouched.
+    await expect(deleteAgent(dir, 'ghost', agentDigest('x'))).rejects.toMatchObject({
+      kind: 'missing',
+    } satisfies Partial<AgentWriteError>)
+    expect((await readAgent(dir, 'scribe'))?.digest).toBe(digest)
+
     await deleteAgent(dir, 'scribe', digest)
     expect(await readAgent(dir, 'scribe')).toBeNull()
   })
