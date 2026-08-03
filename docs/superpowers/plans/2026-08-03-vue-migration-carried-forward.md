@@ -121,3 +121,81 @@ was dangerous, and it is now proven.
 One cosmetic consequence of deferred scope, seen on screen: a docked pane with
 nothing running is a bare black rectangle, where the old page shows the
 `#terminal-empty` hint. That lands with the pane surface listed above.
+
+---
+
+# Carried forward from the panels plan and the switch
+
+The second plan ported the eight panels, restored bidi isolation, unified the
+notice door, deleted `src/web/public/`, and spent what that unlocked. Branch
+`611119c..1c42724`, 61 commits, 92 test files / 2084 tests.
+
+## Open, and nobody has closed it
+
+**A ~1-in-40 whole-suite flake, never attributed.** One run in forty fails and
+nobody has caught which test. Two hunts were run; the first was contaminated by
+an implementer working in the same tree, the second could not reproduce it in
+33 consecutive clean runs. Every reviewer's run since has been green. It is not
+a merge blocker, but do not let it fall off: an intermittent failure teaches
+every future maintainer to re-run instead of read, which is the habit that lets
+the next real defect through.
+
+**Terminal geometry on the real path.** A job actually starting, `shown` going
+non-null, and the `flush: 'post'` refit running against a freshly-unhidden box.
+The `ResizeObserver` backstop was verified in a browser and the deterministic
+watcher is unit-tested against a fake xterm, but the two have never been
+observed together with a live pty — running one writes to the project, so no
+agent did it. Five minutes of human hands.
+
+**The client's write path has no schema check of its own.** `WriteSchema` lives
+on the server, `submit()` trusts its caller, and nothing re-validates an
+outbound `Write`. This is why two test fixtures carrying a `Write` shape the
+server would reject at the schema boundary — `{kind:'gate', run, open}` — passed
+for the whole migration. A guard running each `submit()` payload the app can
+produce through `WriteSchema.parse` would close it.
+
+**Deactivated panels still render.** `<KeepAlive>` does not pause a deactivated
+component's effects. `useFeed`'s I/O is now gated through
+`onActivated`/`onDeactivated`, so no background panel fetches — but every
+visited-then-closed panel still re-derives and patches its vnode tree into the
+detached container on each broadcast, up to 1.25 times a second. The deleted
+`ui/render.js` skipped hidden panels entirely. CPU only, no correctness or
+network cost; closing it needs a different mechanism (`v-if` over `KeepAlive`,
+or a render gate), which is a design change rather than a fix.
+
+**The two-epoch i18n problem, still parked.** `useI18n`'s epoch ref mirrors
+`lib/i18n.ts`'s own counter rather than being the same fact. A component calling
+`setLocale` directly would change the language and repaint nothing. The barrier
+comment at `useI18n.ts` is the entire mitigation, and it holds only because
+`setLocale` has exactly one importer.
+
+## Small and specific
+
+- `useSelection`'s mutators now re-read their getter to match the module header,
+  but nothing pins them there: reverting to the assignment leaves all 59 plans
+  and stories tests green.
+- `scripts/assets.d.mts` is a hand-written declaration for an untyped `.mjs`
+  with nothing binding the two; a second export would be silently omitted. A
+  `@ts-check`ed `.mjs` would make the pair self-enforcing.
+- `tsconfig.tests.json` covers `tests/**/*.ts`; a future `.mts` under `tests/`
+  falls outside it.
+- `typeguard.test.ts` applies its `<script setup>` exemption file-wide, so a
+  `.vue` carrying both a setup and a plain `<script>` would exempt the plain
+  block too. No such file exists yet.
+- A red first `typecheck` run was seen once and blamed on stale `.ts-out/`
+  incremental state. **That explanation is unverified** — a reviewer could not
+  reproduce it warm or cold. The cause is unexplained, not diagnosed.
+
+## What this migration taught, worth keeping
+
+Three tests on this branch were found to guard nothing, two of them after being
+reported as verified. One whole class — fixtures asserting shapes the server can
+never send — was invisible to 2,083 green tests and was found in one pass by
+pointing a compiler at the test files for the first time.
+
+And every defect of the worst class traced to a comment in the old page that
+recorded a **decision** rather than a mechanism: "exported so it is not copied",
+"these two buttons are adjacent deliberately", "an allowlist rather than an
+exclusion", "hidden panels are skipped entirely". Porting the behaviour
+succeeded each time while the decision behind it was lost. The old page is at
+`git show 611119c:engine/src/web/public/<path>`; `App.vue`'s header says so.
