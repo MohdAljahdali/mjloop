@@ -40,6 +40,16 @@ import { emptySnapshot, readLocale } from './helpers/page.js'
  *      actually halted.
  *  12. The run list's own "more" line appears only past the 200-row cap
  *      `ui/list.js`'s `reconcile()` used, and is otherwise absent.
+ *  13. The revision-driven refetch — the stated point of this task. The
+ *      *live* cycle (the open run's last cycle, while that run is the
+ *      project's current one) refetches when `revisions.cycle` moves; an
+ *      earlier, inert cycle does not — it follows `revisions.runs` instead,
+ *      so it is fetched once and left alone for as long as only the cycle
+ *      revision advances.
+ *  14. Switching the open run tears down the previous run's `CycleFeed`
+ *      instances rather than leaving them fetching in the background —
+ *      `CycleFeed.vue`'s whole reason for being one component per cycle
+ *      instead of a hand-rolled `Map`.
  *
  * Deferred, with reason: the 200-row cap on the run list itself (behaviour
  * 12's boundary) is not separately exercised — it is a `slice()` of the same
@@ -98,20 +108,35 @@ async function boot(snapshot: Snapshot = emptySnapshot()) {
 describe('Evidence.vue', () => {
   it('draws the run list with its outcomes, and the empty state when there is none', async () => {
     // Cycles verbatim, not `tn()`'s prose: `panels/evidence.js`'s own row
-    // wrote `verbatim(count, entry.cycles)`, unlike `StoryRunRow`.
-    serve({ '/api/runs': [{ id: '2026-07-28-001--P001-S01--build', story: 'P001-S01', track: 'build', cycles: 2, halted: true }] })
+    // wrote `verbatim(count, entry.cycles)`, unlike `StoryRunRow`. A second,
+    // adhoc run with no story or track — the "—" fallback, and both
+    // outcomes' own colour.
+    serve({
+      '/api/runs': [
+        { id: '2026-07-28-001--P001-S01--build', story: 'P001-S01', track: 'build', cycles: 2, halted: true },
+        { id: '2026-07-28-000--adhoc--edit', story: null, track: null, cycles: 1, halted: false },
+      ],
+    })
     const { Evidence } = await boot()
     const wrapper = mount(Evidence)
-    await vi.waitFor(() => expect(wrapper.findAll('#evidence-list .run')).toHaveLength(1))
+    await vi.waitFor(() => expect(wrapper.findAll('#evidence-list .run')).toHaveLength(2))
 
-    const row = wrapper.get('#evidence-list .run')
-    expect(row.get('[data-slot="id"]').text()).toBe('2026-07-28-001--P001-S01--build')
-    expect(row.get('[data-slot="story"]').text()).toBe('P001-S01')
-    expect(row.get('[data-slot="track"]').text()).toBe('build')
-    expect(row.get('[data-slot="cycles"]').text()).toBe('2')
-    expect(row.get('[data-slot="outcome"]').text()).toBe(english['evidence.halted'])
-    expect(row.get('[data-slot="outcome"]').classes()).toContain('res-fail')
+    const rows = wrapper.findAll('#evidence-list .run')
+    expect(rows[0]?.get('[data-slot="id"]').text()).toBe('2026-07-28-001--P001-S01--build')
+    expect(rows[0]?.get('[data-slot="story"]').text()).toBe('P001-S01')
+    expect(rows[0]?.get('[data-slot="track"]').text()).toBe('build')
+    expect(rows[0]?.get('[data-slot="cycles"]').text()).toBe('2')
+    expect(rows[0]?.get('[data-slot="outcome"]').text()).toBe(english['evidence.halted'])
+    expect(rows[0]?.get('[data-slot="outcome"]').classes()).toContain('res-fail')
+
+    expect(rows[1]?.get('[data-slot="story"]').text()).toBe('—')
+    expect(rows[1]?.get('[data-slot="track"]').text()).toBe('—')
+    expect(rows[1]?.get('[data-slot="outcome"]').text()).toBe(english['evidence.ended'])
+    expect(rows[1]?.get('[data-slot="outcome"]').classes()).toContain('res-pass')
+
     expect(wrapper.find('#evidence-empty').exists()).toBe(false)
+    // Two runs, nowhere near the 200-row cap.
+    expect(wrapper.find('#evidence-more').exists()).toBe(false)
   })
 
   it('shows the empty state with no runs, and the run list none of it', async () => {
@@ -163,6 +188,22 @@ describe('Evidence.vue', () => {
             duration_ms: null,
             at: '2026-07-28T12:00:01.000Z',
           },
+          {
+            slot: 'build',
+            command: 'npm run build',
+            // A run that started under one `config.yaml` and finished under
+            // another — nothing pinned it, so it ran the file as it stood.
+            source: 'live',
+            live_command: null,
+            log: 'build-01.log',
+            phase: 'complete',
+            exit_code: 0,
+            timed_out: false,
+            fingerprint: null,
+            cached_from_cycle: null,
+            duration_ms: 400,
+            at: '2026-07-28T12:00:02.000Z',
+          },
         ],
         verify_total: 9,
         handoff: '# Cycle 1\n\nbuilder: pass — the parser now reads the header.',
@@ -178,7 +219,7 @@ describe('Evidence.vue', () => {
     expect(openButton.text()).toBe(english['evidence.open'])
     expect(openButton.attributes('data-run')).toBe(id)
     await openButton.trigger('click')
-    await vi.waitFor(() => expect(wrapper.findAll('.grid-verify .grid-row')).toHaveLength(2))
+    await vi.waitFor(() => expect(wrapper.findAll('.grid-verify .grid-row')).toHaveLength(3))
 
     // The row's own control flips once the run is open.
     expect(wrapper.get('[data-act="open-run"]').text()).toBe(english['evidence.close'])
@@ -190,11 +231,15 @@ describe('Evidence.vue', () => {
     expect(rows[0]?.get('[data-slot="exit"]').text()).toBe('1')
     expect(rows[0]?.get('[data-slot="exit"]').classes()).toContain('exit-nonzero')
     expect(rows[0]?.get('[data-slot="duration"]').text()).toBe('1.8s')
+    expect(rows[0]?.get('[data-slot="source"]').text()).toBe(english['evidence.verify.pinned'])
     // The command that is in `config.yaml` now, beside the one that ran.
     expect(rows[0]?.get('[data-slot="drift"]').text()).toBe('npm test -- --coverage')
     expect(rows[1]?.get('[data-slot="phase"]').text()).toBe(english['evidence.verify.queued'])
     expect(rows[1]?.get('[data-slot="exit"]').text()).toBe('—')
     expect(rows[1]?.get('[data-slot="exit"]').classes()).toContain('exit-none')
+    expect(rows[2]?.get('[data-slot="exit"]').text()).toBe('0')
+    expect(rows[2]?.get('[data-slot="exit"]').classes()).toContain('exit-zero')
+    expect(rows[2]?.get('[data-slot="source"]').text()).toBe(english['evidence.verify.live'])
 
     // Headers inside the cycle block are translated, not dead text.
     expect(wrapper.get('.grid-verify [data-slot="vh-slot"]').text()).toBe(english['evidence.verify.slot'])
@@ -204,7 +249,7 @@ describe('Evidence.vue', () => {
     // complete record with invocations missing from it.
     const more = wrapper.get('[data-slot="verifyMore"]')
     expect(more.text()).toContain('9')
-    expect(more.text()).toContain('2')
+    expect(more.text()).toContain('3')
 
     const handoff = wrapper.get('[data-slot="handoffDetails"]')
     expect(handoff.find('[data-slot="handoff"]').text()).toContain('the parser now reads the header')
@@ -366,5 +411,90 @@ describe('Evidence.vue', () => {
 
     expect(fetched).toContain(`/api/runs/${id}/1`)
     expect(fetched).toContain(`/api/runs/${id}/2`)
+  })
+
+  it('refetches the live cycle when revisions.cycle moves, and leaves an inert cycle alone — the point of this task', async () => {
+    const runId = '20260729T100000Z'
+    const id = `${runId}--adhoc--build`
+    const fetched: string[] = []
+    vi.stubGlobal('fetch', (url: string) => {
+      const path = url.split('?')[0] ?? ''
+      fetched.push(path)
+      const routes: Record<string, unknown> = {
+        '/api/runs': [{ id, story: null, track: 'build', cycles: 2, halted: false }],
+        [`/api/runs/${id}`]: { id, halt: null, cycles: [1, 2] },
+        [`/api/runs/${id}/1`]: { cycle: 1, roster: null, findings: [], agents: [], verify: [], verify_total: 0, handoff: null, handoff_truncated: false },
+        [`/api/runs/${id}/2`]: { cycle: 2, roster: null, findings: [], agents: [], verify: [], verify_total: 0, handoff: null, handoff_truncated: false },
+      }
+      const body = routes[path]
+      return Promise.resolve(new Response(JSON.stringify(body ?? { error: { code: 'error.notFound' } }), { status: body === undefined ? 404 : 200 }))
+    })
+
+    // `run_id` names this run as the live one, so its own last cycle (2) is
+    // the live cycle — cycle 1 is inert.
+    const first = emptySnapshot({
+      state: { ...emptySnapshot().state, status: 'running', run_id: runId, cycle: 2 },
+      revisions: { ...emptySnapshot().revisions, runs: 'r1', cycle: 'c1' },
+    })
+    const { Evidence, socket } = await boot(first)
+    const wrapper = mount(Evidence)
+    await vi.waitFor(() => expect(wrapper.findAll('#evidence-list .run')).toHaveLength(1))
+
+    await wrapper.get('[data-act="open-run"]').trigger('click')
+    await vi.waitFor(() => expect(wrapper.findAll('#run-open-cycles .cycle-block')).toHaveLength(2))
+
+    const count = (path: string): number => fetched.filter((entry) => entry === path).length
+    expect(count(`/api/runs/${id}/1`)).toBe(1)
+    expect(count(`/api/runs/${id}/2`)).toBe(1)
+
+    // Only `revisions.cycle` moves; `revisions.runs` does not.
+    socket.deliver({ type: 'snapshot', snapshot: { ...first, revisions: { ...first.revisions, cycle: 'c2' } } })
+    await vi.waitFor(() => expect(count(`/api/runs/${id}/2`)).toBe(2))
+    // The inert cycle follows `revisions.runs` and stayed put.
+    expect(count(`/api/runs/${id}/1`)).toBe(1)
+  })
+
+  it('tears down a closed run\'s cycle feeds on switching runs, rather than leaving them fetching', async () => {
+    const idA = '20260729T110000Z--adhoc--build'
+    const idB = '20260729T120000Z--adhoc--edit'
+    const fetched: string[] = []
+    vi.stubGlobal('fetch', (url: string) => {
+      const path = url.split('?')[0] ?? ''
+      fetched.push(path)
+      const routes: Record<string, unknown> = {
+        '/api/runs': [
+          { id: idA, story: null, track: 'build', cycles: 1, halted: false },
+          { id: idB, story: null, track: 'edit', cycles: 1, halted: false },
+        ],
+        [`/api/runs/${idA}`]: { id: idA, halt: null, cycles: [1] },
+        [`/api/runs/${idA}/1`]: { cycle: 1, roster: null, findings: [], agents: [], verify: [], verify_total: 0, handoff: null, handoff_truncated: false },
+        [`/api/runs/${idB}`]: { id: idB, halt: null, cycles: [1] },
+        [`/api/runs/${idB}/1`]: { cycle: 1, roster: null, findings: [], agents: [], verify: [], verify_total: 0, handoff: null, handoff_truncated: false },
+      }
+      const body = routes[path]
+      return Promise.resolve(new Response(JSON.stringify(body ?? { error: { code: 'error.notFound' } }), { status: body === undefined ? 404 : 200 }))
+    })
+
+    const { Evidence, socket } = await boot()
+    const wrapper = mount(Evidence)
+    await vi.waitFor(() => expect(wrapper.findAll('#evidence-list .run')).toHaveLength(2))
+
+    const count = (path: string): number => fetched.filter((entry) => entry === path).length
+    const buttons = (): ReturnType<typeof wrapper.findAll> => wrapper.findAll('[data-act="open-run"]')
+    await buttons()[0]?.trigger('click')
+    await vi.waitFor(() => expect(count(`/api/runs/${idA}/1`)).toBe(1))
+
+    // A single toggle: opening run B's own control moves `opened` straight
+    // from A to B, unmounting run A's `CycleFeed` in the same tick `openRun`
+    // itself moves.
+    await buttons()[1]?.trigger('click')
+    await vi.waitFor(() => expect(count(`/api/runs/${idB}/1`)).toBe(1))
+
+    // A broadcast after the switch must not resurrect run A's own feed — it
+    // was unmounted, not merely hidden, which is the whole point of one
+    // `CycleFeed` component per cycle over a hand-rolled `Map`.
+    socket.deliver({ type: 'snapshot', snapshot: emptySnapshot({ revisions: { ...emptySnapshot().revisions, cycle: 'moved' } }) })
+    await nextTick()
+    expect(count(`/api/runs/${idA}/1`)).toBe(1)
   })
 })
