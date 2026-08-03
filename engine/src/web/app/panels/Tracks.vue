@@ -117,19 +117,28 @@ function mutate(change: (model: Draft) => boolean | void): void {
 const agentNames = computed(() => (draft.value === null ? [] : knownAgents(draft.value)))
 
 /**
- * List or graph — a second lens on the same `tracks:` half of the draft, not
+ * Graph or list — a second lens on the same `tracks:` half of the draft, not
  * a second editor. Switching does not touch `draft` itself, only which
  * component reads it, which is why `#config-track-editors` reappears intact
- * the moment this flips back to `'list'`: nothing here ever unmounts the
- * list's own state, `Tracks.vue`'s draft it reads.
+ * the moment this flips to `'list'`: nothing here ever unmounts the list's
+ * own state, `Tracks.vue`'s draft it reads.
  *
- * The graph has no keyboard path — a drag canvas cannot get one the way a
- * button or a combobox can — so the list stays the complete editor and the
- * graph stays a second, drag-driven way to write the same edges, never a
- * replacement for it. See `discipline.test.ts`'s own "keyboard before
- * pointer" describe block.
+ * The panel opens on the graph because a track *is* a graph — layers, order
+ * edges and a gate — and a reader answering "what shape is this track" gets
+ * it in one look rather than from three chip rows. The graph itself still
+ * has no keyboard path; a drag canvas cannot get one the way a button or a
+ * combobox can. What makes that acceptable as a default is the tablist
+ * below: it is the first focusable control in this region, it carries
+ * `role="tab"` so a screen reader announces both views, and one arrow key
+ * from it reaches the list, which remains the complete editor. See
+ * `discipline.test.ts`'s own "keyboard before pointer" describe block.
+ *
+ * Held in the component, not the hash: `App.vue` keeps every panel under
+ * `<KeepAlive>`, so the reader's choice survives a trip through another tab
+ * without a router entry that would make "which lens" as linkable as "which
+ * tab", which it is not.
  */
-const trackView = ref<'list' | 'graph'>('list')
+const trackView = ref<'graph' | 'list'>('graph')
 function setView(next: typeof trackView.value): void {
   trackView.value = next
   graphRefusal.value = null
