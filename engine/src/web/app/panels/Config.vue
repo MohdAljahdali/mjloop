@@ -1,28 +1,27 @@
 <script setup lang="ts">
 /**
- * Config — a typed editor in front of the guarded config mutator.
- * `panels/config.js`, ported; the pure half — the change vocabulary, the
- * order-graph refusals, the change-impact preview — lives in `lib/config.ts`
- * so it is testable without a DOM.
+ * Config — a typed editor in front of the guarded config mutator, now the
+ * *plain-field* half only. `panels/config.js`, ported; the pure half — the
+ * change vocabulary, the order-graph refusals, the change-impact preview —
+ * lives in `lib/config.ts` so it is testable without a DOM.
+ *
+ * `specialists:` and `tracks:` — the structured half of the same document —
+ * moved to `Tracks.vue` in the task that split `collectConfigChanges` into
+ * `collectSettingsChanges`/`collectTrackChanges`. This panel keeps its own
+ * `baseline`/`editorRevision`/`conflict` because the two panels read the
+ * same `/api/config` feed and the same revision independently — see
+ * `Tracks.vue`'s own header for why a save from either one must be checked
+ * against the revision the *other* panel might have moved, not merely its own.
  *
  * The browser never sends a YAML path or a replacement document. It compares
- * `form` and `draft` — the state every control on this page writes to —
- * against `baseline`, the parsed document this editor was last seeded from,
- * and sends a closed list of typed changes plus that document's revision.
+ * `form` — the state every control on this page writes to — against
+ * `baseline`, the parsed document this editor was last seeded from, and
+ * sends a closed list of typed changes plus that document's revision.
  *
  * **The invariant this panel exists to protect**: every control on this page
- * writes to `form` or `draft` and nothing else. `mutate()` below is the one
- * function allowed to touch `draft`; `save()` is the one function that ever
- * calls `submit()`, and it is the only place `collectConfigChanges` is
- * called outside a test. No child component imports `submit` or `feed` —
- * `SpecialistEditor.vue` and every track-card component only ever receive
- * `mutate` as a prop and call it.
- *
- * `specialists:` and `tracks:` were two JSON textareas before this rewrite.
- * The DOM seam `config.js` needed to keep that surface change off the
- * wire — hidden `*_json` fields feeding `collectConfigChanges` — does not
- * exist here: `draft` below is already the object `collectConfigChanges`
- * reads, because Vue's own reactivity is the seam.
+ * writes to `form` and nothing else. `save()` is the one function that ever
+ * calls `submit()`, and it is the only place `collectSettingsChanges` is
+ * called outside a test.
  */
 import { computed, ref, watch } from 'vue'
 import { useI18n } from '../composables/useI18n.js'
@@ -30,24 +29,18 @@ import { useFeed } from '../composables/useFeed.js'
 import { snapshot, submit } from '../stores/session.js'
 import { pluralKey } from '../lib/i18n.js'
 import {
-  broken,
-  collectConfigChanges,
+  collectSettingsChanges,
   commandRows,
-  knownAgents,
   orchestrationProblem,
   policyRows,
-  seedDraft,
   seedFormValues,
   type ConfigFormValues,
-  type Draft,
 } from '../lib/config.js'
 import type { Config, ConfigView, Telemetry } from '../types/protocol.js'
 import Bdi from '../components/Bdi.vue'
 import Tx from '../components/Tx.vue'
 import ConfigFactRow from '../components/ConfigFactRow.vue'
 import ConfigTelemetryRow from '../components/ConfigTelemetryRow.vue'
-import SpecialistEditor from '../components/SpecialistEditor.vue'
-import TrackEditors from '../components/TrackEditors.vue'
 
 const { t, tn, locale } = useI18n()
 
@@ -100,15 +93,12 @@ const telemetry = computed(() => telemetryFeed.value.value)
 /** The document this editor was last seeded from, and its own revision hash. */
 const baseline = ref<Config | null>(null)
 const editorRevision = ref<string | null>(null)
-/** `config.yaml`'s own text for that same revision — see `trackCommentLoss`'s only caller, `TrackEditor.vue`. */
-const rawText = ref<string | null>(null)
 
 const dirty = ref(false)
 const saving = ref(false)
 const conflict = ref(false)
 
 const form = ref<ConfigFormValues>({ ...BLANK_FORM })
-const draft = ref<Draft | null>(null)
 
 // No `seedEpoch` here, unlike `config.js`'s own `max_cycles` box: that
 // counter existed purely to stop its imperative renderer from clobbering a
@@ -116,7 +106,7 @@ const draft = ref<Draft | null>(null)
 // on every redraw, poll included. Vue's own patcher already only writes a
 // bound `.value` when it actually differs from the DOM's current one, and
 // the reseed guard just below (`revision !== editorRevision`, skipped while
-// dirty and not conflicting) is what stops the poll from reaching a draft a
+// dirty and not conflicting) is what stops the poll from reaching a form a
 // reader is mid-edit on — the two together make the epoch redundant rather
 // than merely hidden.
 watch(
@@ -134,7 +124,6 @@ watch(
 
     baseline.value = config
     editorRevision.value = revision
-    rawText.value = current?.raw ?? null
 
     if (conflicting) {
       conflict.value = true
@@ -142,7 +131,6 @@ watch(
     }
     conflict.value = false
     dirty.value = false
-    draft.value = seedDraft(config)
     form.value = seedFormValues(config)
   },
   { immediate: true },
@@ -152,19 +140,6 @@ function markDirty(): void {
   if (!enabled.value) return
   dirty.value = true
 }
-
-/**
- * A draft mutation: apply it and mark the form dirty. Every structured
- * editor action goes through here — the one place "the draft moved" and
- * "the form is dirty" cannot disagree. See this file's own header.
- */
-function mutate(change: (model: Draft) => boolean | void): void {
-  if (!enabled.value || draft.value === null) return
-  if (change(draft.value) === false) return
-  markDirty()
-}
-
-const agentNames = computed(() => (draft.value === null ? [] : knownAgents(draft.value)))
 
 const problem = computed(() => (enabled.value ? orchestrationProblem(form.value) : null))
 
@@ -177,7 +152,7 @@ const stateKey = computed<string | null>(() => {
 })
 
 const saveDisabled = computed(
-  () => !enabled.value || !dirty.value || saving.value || conflict.value || broken(draft.value) || problem.value !== null,
+  () => !enabled.value || !dirty.value || saving.value || conflict.value || problem.value !== null,
 )
 const resetDisabled = computed(() => !enabled.value || (!dirty.value && !conflict.value) || saving.value)
 
@@ -186,8 +161,7 @@ const formEl = ref<HTMLFormElement | null>(null)
 function save(): void {
   if (!enabled.value || baseline.value === null || editorRevision.value === null || saving.value || conflict.value) return
   if (formEl.value !== null && !formEl.value.reportValidity()) return
-  if (draft.value === null) return
-  const changes = collectConfigChanges(form.value, draft.value, baseline.value)
+  const changes = collectSettingsChanges(form.value, baseline.value)
   if (changes.length === 0) {
     dirty.value = false
     return
@@ -206,7 +180,6 @@ function save(): void {
 
 function reset(): void {
   if (!enabled.value || baseline.value === null) return
-  draft.value = seedDraft(baseline.value)
   form.value = seedFormValues(baseline.value)
   dirty.value = false
   conflict.value = false
@@ -441,19 +414,6 @@ const flaggedKey = computed(() => (locale.value, pluralKey('telemetry.flagged', 
         </div>
       </fieldset>
 
-      <!-- `draft` is passed through as-is, not defaulted to an empty
-           document: `null` and "the document has zero specialists/tracks"
-           are two different states `config.js` distinguishes on purpose, and
-           collapsing them here would make an unparseable `config.yaml` read
-           as a project with no rules at all. See `SpecialistEditor.vue`'s
-           and `TrackEditors.vue`'s own comments. -->
-      <SpecialistEditor :draft="draft" :agent-names="agentNames" :enabled="enabled" :mutate="mutate" />
-
-      <TrackEditors :draft="draft" :baseline="baseline" :raw-text="rawText" :enabled="enabled" :mutate="mutate" />
-
-      <datalist id="config-agent-names">
-        <option v-for="name in agentNames" :key="name" :value="name"></option>
-      </datalist>
     </form>
 
     <section class="block">

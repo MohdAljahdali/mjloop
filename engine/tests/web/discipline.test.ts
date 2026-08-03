@@ -71,8 +71,9 @@ describe('accessibility', () => {
       evidence: 'panels/Evidence.vue',
       memory: 'panels/Memory.vue',
       config: 'panels/Config.vue',
+      tracks: 'panels/Tracks.vue',
     }
-    for (const route of ['run', 'plans', 'stories', 'features', 'skills', 'agents', 'evidence', 'memory', 'config']) {
+    for (const route of ['run', 'plans', 'stories', 'features', 'skills', 'agents', 'evidence', 'memory', 'config', 'tracks']) {
       const panel = read(panelFile[route] ?? '')
       expect(panel, `${panelFile[route]} has no content`).not.toBe('')
       expect(panel).toMatch(new RegExp(`id="panel-${route}"[^>]+aria-labelledby="panel-${route}-title"`))

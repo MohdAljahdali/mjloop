@@ -46,6 +46,7 @@ import Plans from './panels/Plans.vue'
 import Run from './panels/Run.vue'
 import Skills from './panels/Skills.vue'
 import Stories from './panels/Stories.vue'
+import Tracks from './panels/Tracks.vue'
 import { bootPane } from './composables/usePane.js'
 import { useHalt } from './composables/useHalt.js'
 import { useFeatureApprove } from './composables/useFeatureApprove.js'
@@ -210,6 +211,7 @@ const highCount = computed(() => snapshot.value?.state.findings.high ?? 0)
       <Evidence v-else-if="active === 'evidence'" />
       <Memory v-else-if="active === 'memory'" />
       <Config v-else-if="active === 'config'" />
+      <Tracks v-else-if="active === 'tracks'" />
     </KeepAlive>
   </main>
 

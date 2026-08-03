@@ -1,22 +1,30 @@
 /**
- * Config — the pure half of the panel: the plain-field diff, the structured
- * `specialists:`/`tracks:` draft rules, and the client-side mirrors of
- * `TrackSchema.superRefine`'s own checks.
+ * Config — the pure half of two panels now: the plain-field diff
+ * (`Config.vue`'s own half), the structured `specialists:`/`tracks:` draft
+ * rules (`Tracks.vue`'s own half), and the client-side mirrors of
+ * `TrackSchema.superRefine`'s own checks that the second half leans on.
  *
  * Ported from `public/panels/config.js`. The DOM seam that file needed —
- * hidden `specialists_json`/`tracks_json` fields feeding `collectConfigChanges`
- * — does not exist here: `Config.vue`'s draft is already the object this
- * module reads, so `collectConfigChanges` below takes it directly rather than
- * parsing it back out of a form. Everything else — the change vocabulary, the
- * four order-graph refusals, the change-impact preview (C6), the YAML comment
+ * hidden `specialists_json`/`tracks_json` fields feeding its one collector —
+ * does not exist here: each panel's draft is already the object this module
+ * reads, so `collectTrackChanges` below takes it directly rather than parsing
+ * it back out of a form. Everything else — the change vocabulary, the four
+ * order-graph refusals, the change-impact preview (C6), the YAML comment
  * count — is the same walk over the same shapes, DOM-free so it is testable
  * under this suite's `environment: 'node'`.
+ *
+ * `collectConfigChanges` used to be one function walking `form` and `draft`
+ * together; it split into `collectSettingsChanges(form, baseline)` and
+ * `collectTrackChanges(draft, baseline)` at exactly the line the two inputs
+ * stopped being read together, so that two panels writing to the same
+ * document each have their own half of the vocabulary and neither reaches
+ * into the other's keys.
  *
  * The invariant this file exists to protect: nothing here ever calls
  * `submit()`. It only ever turns state into the closed change vocabulary the
  * server accepts, or into a reason a control should be disabled. `Config.vue`
- * is the one and only caller of `submit()`, and it calls
- * `collectConfigChanges` immediately before doing so — see its own comment.
+ * and `Tracks.vue` are the only callers of `submit()`, and each calls its own
+ * half of the split immediately before doing so — see their own comments.
  */
 import type { Config, ConfigChange, Track } from '../types/protocol.js'
 
@@ -149,11 +157,18 @@ function push(changes: ConfigChange[], changed: boolean, change: ConfigChange): 
 }
 
 /**
- * Turn the form and the draft into the same closed change vocabulary the
- * server accepts. Pure: reads `form`, `draft` and `baseline` and nothing
- * else, and never calls `submit()` — see this module's own header.
+ * Turn the plain form fields into the same closed change vocabulary the
+ * server accepts — everything Config.vue's own controls write to, which is
+ * `form` alone. Pure: reads `form` and `baseline` and nothing else, and
+ * never calls `submit()` — see this module's own header.
+ *
+ * Split off `collectConfigChanges`'s single walk at the point its own
+ * comment already marked: the two structured maps below (`specialists:` and
+ * `tracks:`) live in `draft`, not `form`, and moved into `collectTrackChanges`
+ * unchanged rather than being re-derived — see that function's own comment.
+ * This half keeps every `form`-only rule in its original order.
  */
-export function collectConfigChanges(form: ConfigFormValues, draft: Draft, baseline: Config): ConfigChange[] {
+export function collectSettingsChanges(form: ConfigFormValues, baseline: Config): ConfigChange[] {
   const changes: ConfigChange[] = []
 
   push(changes, baseline.autonomous !== form.autonomous, { kind: 'root', key: 'autonomous', value: form.autonomous })
@@ -226,31 +241,6 @@ export function collectConfigChanges(form: ConfigFormValues, draft: Draft, basel
     { kind: 'verify.patterns', key: 'build', value: patterns(form.patternsBuild) },
   )
 
-  const specialists = draft.specialists
-  for (const agent of [...new Set([...Object.keys(baseline.specialists), ...Object.keys(specialists)])].sort()) {
-    const next = agent in specialists ? specialists[agent] : null
-    push(changes, baseline.specialists[agent] !== next, {
-      kind: 'specialist',
-      agent,
-      value: next as 'auto' | 'always' | 'never' | null,
-    })
-  }
-
-  // `order` rides through here with the rest of the track — see
-  // `config.js`'s own comment on why a draft that moved only its order graph
-  // is, from this loop's point of view, a track whose serialised JSON changed
-  // like any other edit to the same object, and on the YAML-comment cost of
-  // reusing this door (`trackCommentLoss` below is where that cost is shown).
-  const tracks = draft.tracks
-  for (const track of [...new Set([...Object.keys(baseline.tracks), ...Object.keys(tracks)])].sort()) {
-    const next = track in tracks ? tracks[track] : null
-    push(changes, JSON.stringify(baseline.tracks[track] ?? null) !== JSON.stringify(next ?? null), {
-      kind: 'track',
-      track,
-      value: (next ?? null) as Config['tracks'][string] | null,
-    })
-  }
-
   const orchestration = baseline.orchestration
   push(changes, orchestration.profile.auto_accept !== form.orchProfileAutoAccept, {
     kind: 'orchestration.profile.auto_accept',
@@ -314,6 +304,47 @@ export function collectConfigChanges(form: ConfigFormValues, draft: Draft, basel
     kind: 'orchestration.skills.update_mode',
     value: form.orchSkillsUpdateMode,
   })
+
+  return changes
+}
+
+/**
+ * Turn the structured draft into the same closed change vocabulary the
+ * server accepts — the `specialists:`/`tracks:` half `collectSettingsChanges`
+ * split off above. Pure: reads `draft` and `baseline` and nothing else, and
+ * never calls `submit()`.
+ *
+ * Both loops below are moved verbatim from the pre-split `collectConfigChanges`
+ * — the `order` comment on the tracks loop is the original reasoning, not a
+ * rewrite, and still applies unchanged.
+ */
+export function collectTrackChanges(draft: Draft, baseline: Config): ConfigChange[] {
+  const changes: ConfigChange[] = []
+
+  const specialists = draft.specialists
+  for (const agent of [...new Set([...Object.keys(baseline.specialists), ...Object.keys(specialists)])].sort()) {
+    const next = agent in specialists ? specialists[agent] : null
+    push(changes, baseline.specialists[agent] !== next, {
+      kind: 'specialist',
+      agent,
+      value: next as 'auto' | 'always' | 'never' | null,
+    })
+  }
+
+  // `order` rides through here with the rest of the track — see
+  // `config.js`'s own comment on why a draft that moved only its order graph
+  // is, from this loop's point of view, a track whose serialised JSON changed
+  // like any other edit to the same object, and on the YAML-comment cost of
+  // reusing this door (`trackCommentLoss` below is where that cost is shown).
+  const tracks = draft.tracks
+  for (const track of [...new Set([...Object.keys(baseline.tracks), ...Object.keys(tracks)])].sort()) {
+    const next = track in tracks ? tracks[track] : null
+    push(changes, JSON.stringify(baseline.tracks[track] ?? null) !== JSON.stringify(next ?? null), {
+      kind: 'track',
+      track,
+      value: (next ?? null) as Config['tracks'][string] | null,
+    })
+  }
 
   return changes
 }

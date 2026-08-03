@@ -40,7 +40,7 @@
   "panel.memory.title": "Project memory",
   "panel.memory.help": "Search the decisions and lessons MjLoop retained for later runs.",
   "panel.config.title": "Project configuration",
-  "panel.config.help": "Inspect the policy, verification commands, tracks, and specialist behavior MjLoop uses.",
+  "panel.config.help": "Inspect the policy and verification commands MjLoop uses.",
 
   "tabs.features": "Features",
   "tabs.skills": "Skills",
@@ -52,6 +52,10 @@
   "panel.skills.help": "The component map runs are routed by, this machine's skill library, and what this project has accepted of it.",
   "panel.agents.title": "Agents",
   "panel.agents.help": "Every agent a run can draft, project-defined and plugin-supplied apart, and which tracks name each one.",
+
+  "tabs.tracks": "Tracks",
+  "panel.tracks.title": "Tracks",
+  "panel.tracks.help": "Edit which tracks this project runs, what each one requires, and which specialists it may draft.",
 
   "features.empty": "No feature has been raised yet. /mjloop:plan can interview one into a brief.",
   "features.more": "Showing {shown} of {total}.",

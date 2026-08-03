@@ -6,12 +6,30 @@
 import { ref, type Ref } from 'vue'
 import { startRouter } from '../lib/router.js'
 
-// 'tracks' is not added here yet — Tracks.vue does not exist until its own
-// task, and a tab link that opens an empty <main> is a broken page shipped
-// for however long it would sit unfinished. It lands beside its own panel.
-export type TabId = 'run' | 'plans' | 'stories' | 'features' | 'skills' | 'agents' | 'evidence' | 'memory' | 'config'
+export type TabId =
+  | 'run'
+  | 'plans'
+  | 'stories'
+  | 'features'
+  | 'skills'
+  | 'agents'
+  | 'evidence'
+  | 'memory'
+  | 'config'
+  | 'tracks'
 
-export const TABS: readonly TabId[] = ['run', 'plans', 'stories', 'features', 'skills', 'agents', 'evidence', 'memory', 'config']
+export const TABS: readonly TabId[] = [
+  'run',
+  'plans',
+  'stories',
+  'features',
+  'skills',
+  'agents',
+  'evidence',
+  'memory',
+  'config',
+  'tracks',
+]
 
 const active = ref<TabId>('run') as Ref<TabId>
 
