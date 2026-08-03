@@ -486,6 +486,16 @@ describe('Features.vue', () => {
       await nextTick()
       expect(wrapper.find('#panel-features').exists()).toBe(false)
       expect(dialog.open).toBe(true)
+      // The load-bearing assertion: happy-dom does not model the `<dialog>`
+      // top layer, so `dialog.open` alone stays `true` even if the element
+      // itself is detached — `.exists()` above only proves `Features.vue`
+      // left the DOM, not that the dialog was never inside it. `isConnected`
+      // catches what those two together do not: it is `false` the instant
+      // `FeatureApproveDialog` moves back under a `v-if`'d panel, because
+      // `<KeepAlive>` detaches that panel's whole subtree, dialog included,
+      // on the very switch this test makes.
+      expect(dialog.isConnected).toBe(true)
+      expect(document.querySelector('#panel-features #feature-dialog')).toBeNull()
 
       location.hash = '#features'
       window.dispatchEvent(new Event('hashchange'))
