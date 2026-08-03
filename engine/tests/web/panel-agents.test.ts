@@ -263,4 +263,64 @@ describe('Agents.vue', () => {
     expect(document.getElementById('agent-editor')?.hasAttribute('open')).toBe(true)
     page.unmount()
   })
+
+  /**
+   * `AgentSkillRow.vue`'s fixture on purpose carries two distinct 64-hex
+   * values: `digest` (the package content hash the Skills panel joins on)
+   * and `recordDigest` (the compare-and-swap token `skill.agents` actually
+   * checks). A fixture that reused one value for both could pass every
+   * assertion below even if the component sent the wrong one — the exact
+   * Critical defect an earlier task in this plan already made once.
+   */
+  const acceptance = (patch: Partial<Record<string, unknown>> = {}): Record<string, unknown> => ({
+    schema: 1,
+    skillId: 'create-readme',
+    packageId: 'create-readme',
+    digest: 'b'.repeat(64),
+    recordDigest: 'c'.repeat(64),
+    components: [],
+    agents: [],
+    tags: [],
+    updatePolicy: 'pinned',
+    status: 'active',
+    compatible: true,
+    acceptedBy: 'mohd',
+    acceptedAt: '2026-07-28T09:00:00.000Z',
+    ...patch,
+  })
+
+  const skillsView = (accepted: Record<string, unknown>[]): Record<string, unknown> => ({
+    packages: [],
+    unreadable: [],
+    acceptances: accepted,
+    onDisk: [],
+    onDiskUnreadable: [],
+  })
+
+  it('lists the accepted skills routed to this agent', async () => {
+    serve({ '/api/agents': AGENTS, '/api/skills': skillsView([acceptance({ agents: ['scribe'] })]) })
+    const page = await boot(snapshotWith())
+    await flushPromises()
+    expect(page.get('[data-agent="scribe"] .agent-skills').text()).toContain('create-readme')
+  })
+
+  it('sends skill.agents with the record digest, never the package digest, and the whole new agents array', async () => {
+    serve({ '/api/agents': AGENTS, '/api/skills': skillsView([acceptance({ agents: [] })]) })
+    const { page, sent } = await bootWithHost(snapshotWith())
+    await flushPromises()
+    await page.get('[data-agent="scribe"] [data-skill="create-readme"] input').setValue(true)
+    expect(sent).toContainEqual(
+      expect.objectContaining({
+        write: expect.objectContaining({ kind: 'skill.agents', skill: 'create-readme', digest: 'c'.repeat(64), agents: ['scribe'] }),
+      }),
+    )
+    page.unmount()
+  })
+
+  it('offers no skill checkbox for a plugin agent', async () => {
+    serve({ '/api/agents': AGENTS, '/api/skills': skillsView([acceptance({ agents: ['scribe', 'verifier'] })]) })
+    const page = await boot(snapshotWith())
+    await flushPromises()
+    expect(page.find('[data-agent="verifier"] .agent-skills input').exists()).toBe(false)
+  })
 })

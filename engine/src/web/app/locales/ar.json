@@ -170,6 +170,8 @@
   "agents.usage.blocks": "محجوب خلف وكيل آخر",
   "agents.usage.gate": "يفتح البوّابة",
   "agents.usage.map": "يرسم الخريطة",
+  "agents.skills": "المهارات الموجَّهة",
+  "agents.skillsNone": "لم يقبل هذا المشروع أي مهارة نشطة توجَّه إلى هنا.",
   "agents.edit": "تحرير",
   "agents.delete": "حذف",
   "agents.copy": "اشتقّ نسخة",

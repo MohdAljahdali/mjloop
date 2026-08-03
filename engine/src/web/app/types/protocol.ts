@@ -35,6 +35,7 @@ export type {
   CycleDetail,
   MemoryView,
   SkillsView,
+  AcceptanceView,
   ProfileView,
   FeatureDetail,
   FeatureRevisionView,

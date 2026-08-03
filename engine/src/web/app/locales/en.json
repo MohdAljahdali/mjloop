@@ -162,6 +162,8 @@
   "agents.usage.blocks": "gated behind another agent",
   "agents.usage.gate": "opens the gate",
   "agents.usage.map": "drafts the map",
+  "agents.skills": "Routed skills",
+  "agents.skillsNone": "This project has accepted no active skill to route here.",
   "agents.edit": "Edit",
   "agents.delete": "Delete",
   "agents.copy": "Derive a copy",

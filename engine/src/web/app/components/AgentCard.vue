@@ -25,13 +25,28 @@
  * button is pressed — see `useAgentDelete.ts`'s own header for why that alone
  * already fixes the first defect, and why hosting the dialog outside
  * `<KeepAlive>` fixes the second.
+ *
+ * The skills block below rides `/api/skills` (`revisions.skills`) — the same
+ * feed `Skills.vue` reads, fetched again here rather than lifted to
+ * `Agents.vue` and passed down as a prop: `lib/api.ts`'s `feed()` already
+ * dedups a repeated subscription to one path, so a second `useFeed` costs
+ * nothing a shared one would not, and it keeps this card self-contained the
+ * same way `usage(config, ...)` already reads `config` straight off its own
+ * prop rather than a value `Agents.vue` would otherwise have to derive twice.
+ * Only *active* acceptances get a row: a disabled one already routes to
+ * nobody, and offering a checkbox for it would let this card change `agents`
+ * on a record `mjloop-cli skills disable` has deliberately taken out of
+ * rotation. A plugin agent gets no row at all — see the `v-if` on the block
+ * below, which is the one place that decision is made.
  */
 import { computed } from 'vue'
 import { useI18n } from '../composables/useI18n.js'
 import { usage } from '../lib/agents.js'
 import { useAgentDelete } from '../composables/useAgentDelete.js'
-import type { AgentView, Config } from '../types/protocol.js'
+import { useFeed } from '../composables/useFeed.js'
+import type { AgentView, Config, SkillsView } from '../types/protocol.js'
 import Bdi from './Bdi.vue'
+import AgentSkillRow from './AgentSkillRow.vue'
 
 const props = defineProps<{ agent: AgentView; config: Config | null }>()
 const emit = defineEmits<{ edit: [agent: AgentView]; derive: [agent: AgentView] }>()
@@ -40,6 +55,14 @@ const { t } = useI18n()
 const usedBy = computed(() => usage(props.config, props.agent.name))
 
 const { askDelete } = useAgentDelete()
+
+const skillsFeed = useFeed<SkillsView>({
+  dep: (state) => state.revisions.skills,
+  path: () => '/api/skills',
+})
+// Active only — see the header above for why a disabled acceptance offers
+// no row here.
+const routableSkills = computed(() => (skillsFeed.value.value?.acceptances ?? []).filter((entry) => entry.status === 'active'))
 </script>
 
 <template>
@@ -66,6 +89,14 @@ const { askDelete } = useAgentDelete()
           <Bdi :value="entry.track" /> — {{ t(`agents.usage.${entry.list}`) }}
         </li>
       </ul>
+    </div>
+    <!-- A project agent may be routed a skill from here; a plugin agent may
+         not — this project cannot edit the file that skill would run
+         against, so no checkbox is offered for one at all. -->
+    <div class="agent-skills" v-if="props.agent.source === 'project'">
+      <h4>{{ t('agents.skills') }}</h4>
+      <p class="empty" v-if="routableSkills.length === 0">{{ t('agents.skillsNone') }}</p>
+      <AgentSkillRow v-for="entry in routableSkills" :key="entry.skillId" :entry="entry" :agent-name="props.agent.name" />
     </div>
     <div class="agent-actions" v-if="props.agent.source === 'project'">
       <button type="button" class="agent-edit" @click="emit('edit', props.agent)">{{ t('agents.edit') }}</button>
