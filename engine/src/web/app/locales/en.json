@@ -170,6 +170,7 @@
   "agents.name": "Name",
   "agents.nameInvalid": "Only letters, digits, \"-\" and \"_\" are allowed, \"--\" is reserved, and this name cannot be one the cycle directory already reserves for itself.",
   "agents.description": "Description",
+  "agents.descriptionRequired": "A description is required.",
   "agents.body": "Prompt body",
   "agents.contractWarning": "This body carries no output contract — a fenced ```json block with a status field. An agent that only points at the contract tends to violate it on its first attempt.",
   "agents.cancel": "Cancel",

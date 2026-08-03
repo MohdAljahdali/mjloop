@@ -65,33 +65,49 @@ const digest = ref('')
 
 /** `AgentNameSchema`, mirrored client-side — `lib/config.ts:90`'s own comment: never authoritative. */
 const nameProblem = ref(false)
+/** The same treatment as `nameProblem` above — a round-2 review found the invalid-name guard left a visible reason, and this one, silently, did not. */
+const descriptionProblem = ref(false)
 
 watch(
   () => props.open,
   (isOpen) => {
-    if (isOpen) {
-      const subject = props.subject
-      if (subject === null) return
-      mode.value = subject.mode
-      originalName.value = subject.agent.name
-      name.value = subject.mode === 'create' ? copyName(subject.takenNames, subject.agent.name) : subject.agent.name
-      description.value = subject.agent.description
-      tools.value = subject.agent.tools ?? ''
-      model.value = subject.agent.model ?? ''
-      body.value = subject.agent.body
-      digest.value = subject.agent.digest
-      nameProblem.value = false
-      dialog.value?.showModal()
-      // The field the action actually requires focus on: in `update` mode
-      // `name` is read-only, so landing a keyboard user there first would
-      // make them tab past a field they cannot act on before reaching one
-      // they can — `HaltDialog.vue:59-61`'s own rule, ported. `create` mode
-      // keeps `name` as the first stop: it is the one field seeded from a
-      // guess (`copyName`) the operator is most likely to want to check first.
-      ;(mode.value === 'update' ? descriptionInput : nameInput).value?.focus()
-    } else {
+    if (!isOpen) {
       dialog.value?.close()
+      return
     }
+    const subject = props.subject
+    // `open` and `subject` are only ever set together, by `openEdit`/
+    // `openDerive` (`useAgentEditor.ts`) — but a round-2 review found this
+    // branch trusted that pairing rather than enforcing it: the old code
+    // `return`ed here *before* `showModal()`, which — had `open` ever gone
+    // `true` with a `null` subject — would have left `open === true` with no
+    // visible dialog and no way back, since a later `open = true` is a no-op
+    // to a `watch` that never sees it change. Emitting `close` instead makes
+    // that state self-correct in the one frame it could ever occur, rather
+    // than relying on `useAgentEditor.ts`'s two setters never being called
+    // out of step.
+    if (subject === null) {
+      emit('close')
+      return
+    }
+    mode.value = subject.mode
+    originalName.value = subject.agent.name
+    name.value = subject.mode === 'create' ? copyName(subject.takenNames, subject.agent.name) : subject.agent.name
+    description.value = subject.agent.description
+    tools.value = subject.agent.tools ?? ''
+    model.value = subject.agent.model ?? ''
+    body.value = subject.agent.body
+    digest.value = subject.agent.digest
+    nameProblem.value = false
+    descriptionProblem.value = false
+    dialog.value?.showModal()
+    // The field the action actually requires focus on: in `update` mode
+    // `name` is read-only, so landing a keyboard user there first would
+    // make them tab past a field they cannot act on before reaching one
+    // they can — `HaltDialog.vue:59-61`'s own rule, ported. `create` mode
+    // keeps `name` as the first stop: it is the one field seeded from a
+    // guess (`copyName`) the operator is most likely to want to check first.
+    ;(mode.value === 'update' ? descriptionInput : nameInput).value?.focus()
   },
 )
 
@@ -109,13 +125,19 @@ function cancel(): void {
  * caught the previous ordering emitting `close` *first*, which silently threw
  * away a freshly rewritten body behind a whitespace-only description: the
  * form was already destroyed by the time the guard ran. Both guards below run
- * ahead of `emit('close')` now, and the invalid-name guard leaves a visible
- * reason on screen rather than a write that `server.ts` would have dropped
- * in silence.
+ * ahead of `emit('close')` now. A round-2 review caught the remaining half of
+ * that same defect: moving the guard ahead of the close preserved the form,
+ * but the empty-description case still failed with no visible reason at
+ * all — `descriptionProblem` gives it the identical treatment
+ * `nameProblem` already had, a banner naming what is wrong rather than a
+ * button that does nothing.
  */
 function onSubmit(): void {
   const trimmedDescription = description.value.trim()
-  if (trimmedDescription.length === 0) return
+  if (trimmedDescription.length === 0) {
+    descriptionProblem.value = true
+    return
+  }
   if (mode.value === 'create' && !validAgent(name.value)) {
     nameProblem.value = true
     return
@@ -168,8 +190,19 @@ function onSubmit(): void {
       <p v-if="mode === 'create' && nameProblem" id="agent-name-problem" class="banner warn">{{ t('agents.nameInvalid') }}</p>
       <label>
         <span>{{ t('agents.description') }}</span>
-        <textarea id="agent-description" ref="descriptionInput" v-model="description" name="description" rows="2" required maxlength="500" dir="auto"></textarea>
+        <textarea
+          id="agent-description"
+          ref="descriptionInput"
+          v-model="description"
+          name="description"
+          rows="2"
+          required
+          maxlength="500"
+          dir="auto"
+          @input="descriptionProblem = false"
+        ></textarea>
       </label>
+      <p v-if="descriptionProblem" id="agent-description-problem" class="banner warn">{{ t('agents.descriptionRequired') }}</p>
       <label>
         <span>{{ t('agents.tools') }}</span>
         <input id="agent-tools" v-model="tools" name="tools" maxlength="500" dir="ltr" autocomplete="off" />

@@ -334,6 +334,43 @@ describe('App', () => {
     expect((FakeSocket.last as FakeSocket).sent).toEqual([
       { type: 'write', id: expect.any(String), write: { kind: 'halt', run: '20260803-1', reason: 'checking it survives a tab switch' } },
     ])
+
+    // The identical regression, same fix, for the two dialogs a round-2
+    // review found this exact test class had never been applied to:
+    // `AgentEditor.vue` and `AgentDeleteDialog.vue` used to live inside
+    // `Agents.vue`, itself inside `<KeepAlive>` — see `useAgentEditor.ts`'s
+    // own header. Opened straight through the composables rather than a
+    // click: `AgentCard.vue` needs a fetched `/api/agents` feed to render a
+    // button at all, and this test is only about the dialogs' own survival.
+    vi.stubGlobal('fetch', () => Promise.resolve(new Response('null', { status: 200 })))
+    const { useAgentEditor } = await import('../../src/web/app/composables/useAgentEditor.ts')
+    const { useAgentDelete } = await import('../../src/web/app/composables/useAgentDelete.ts')
+    const fixtureAgent = { name: 'scribe', source: 'project' as const, description: 'Writes notes.', tools: null, model: null, extra: {}, body: 'x', digest: 'a'.repeat(64) }
+    useAgentEditor().openEdit(fixtureAgent, [])
+    useAgentDelete().askDelete(fixtureAgent)
+    await nextTick()
+    const editorDialog = document.getElementById('agent-editor') as HTMLDialogElement
+    const deleteDialog = document.querySelector('.agent-delete-dialog') as HTMLDialogElement
+    expect(editorDialog.open).toBe(true)
+    expect(deleteDialog.open).toBe(true)
+
+    location.hash = '#agents'
+    window.dispatchEvent(new Event('hashchange'))
+    await nextTick()
+    expect(wrapper.find('#panel-agents').exists()).toBe(true)
+    expect(editorDialog.isConnected).toBe(true)
+    expect(deleteDialog.isConnected).toBe(true)
+    expect(document.querySelector('#panel-agents #agent-editor')).toBeNull()
+    expect(document.querySelector('#panel-agents .agent-delete-dialog')).toBeNull()
+
+    location.hash = '#plans'
+    window.dispatchEvent(new Event('hashchange'))
+    await nextTick()
+    expect(editorDialog.isConnected).toBe(true)
+    expect(deleteDialog.isConnected).toBe(true)
+    expect(editorDialog.open).toBe(true)
+    expect(deleteDialog.open).toBe(true)
+
     wrapper.unmount()
   })
 

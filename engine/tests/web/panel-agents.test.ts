@@ -246,7 +246,7 @@ describe('Agents.vue', () => {
     page.unmount()
   })
 
-  it('refuses to submit an empty description', async () => {
+  it('refuses to submit an empty description, and says so rather than discarding the form in silence', async () => {
     serve({ '/api/agents': AGENTS })
     const { page, sent } = await bootWithHost(snapshotWith())
     await flushPromises()
@@ -254,7 +254,13 @@ describe('Agents.vue', () => {
     await nextTick()
     await page.get('#agent-description').setValue('   ')
     await page.get('#agent-form').trigger('submit')
+    await nextTick()
     expect(sent).toEqual([])
+    // Round-2 minor: the invalid-name case got a visible banner, this one
+    // used to fail as a silent no-op — same treatment now.
+    expect(page.get('#agent-description-problem').text().length).toBeGreaterThan(0)
+    // And the dialog is still open with the form intact, not discarded.
+    expect(document.getElementById('agent-editor')?.hasAttribute('open')).toBe(true)
     page.unmount()
   })
 })
