@@ -23,6 +23,10 @@ describe('where an agent is used', () => {
       { track: 'fix', list: 'blocks' },
       { track: 'fix', list: 'map' },
     ])
+    expect(usage(CONFIG, 'reproducer')).toEqual([
+      { track: 'fix', list: 'required' },
+      { track: 'fix', list: 'gate' },
+    ])
   })
 
   it('is empty for an agent no track names, and for a null config', () => {
