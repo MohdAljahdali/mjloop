@@ -161,6 +161,39 @@ describe('Pane', () => {
     expect(wrapper.find('.terminal').attributes('hidden')).toBeUndefined()
   })
 
+  it('re-fits the terminal once it stops being hidden, rather than trusting a browser to notice on its own', async () => {
+    // The terminal boots hidden (`shown === null`), so `onMounted` opens
+    // xterm against a `display: none` box and it caches zero-size metrics.
+    // A `ResizeObserver` repairs this eventually in a real browser, but that
+    // is a browser behaviour no test can see; `Terminal.vue` instead watches
+    // `shown` (`flush: 'post'`) and calls `fit()` explicitly once it is no
+    // longer `null` — assert `fit()` actually runs, and that `.terminal` has
+    // already lost its `hidden` attribute by the time it does.
+    const hiddenAtFit: boolean[] = []
+    ;(globalThis as any).FitAddon = {
+      FitAddon: class {
+        fit() {
+          hiddenAtFit.push(document.querySelector('.terminal')?.hasAttribute('hidden') ?? true)
+        }
+      },
+    }
+    const { Pane, socket } = await boot()
+    // `attachTo`: `document.querySelector` inside the fake `fit()` above only
+    // sees `.terminal` if the wrapper is actually in `document` — `mount()`
+    // otherwise renders into a detached node.
+    const wrapper = mount(Pane, { attachTo: document.body })
+    const callsAtMount = hiddenAtFit.length
+
+    const started = emptySnapshot()
+    started.session = { ...started.session, jobId: 'j2' }
+    socket.deliver({ type: 'snapshot', snapshot: started })
+    await nextTick()
+
+    expect(hiddenAtFit.length).toBeGreaterThan(callsAtMount)
+    expect(hiddenAtFit.at(-1)).toBe(false)
+    wrapper.unmount()
+  })
+
   it('keeps the same Terminal instance — same xterm, same scrollback — across a view switch', async () => {
     // `Terminal.vue` must not be remounted by a view switch: its scrollback,
     // selection and pty geometry are the one thing the server cannot replay.

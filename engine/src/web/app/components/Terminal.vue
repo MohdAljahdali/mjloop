@@ -8,7 +8,7 @@
  * geometry, and it is the one part of this page whose contents the server
  * cannot replay in full.
  */
-import { onBeforeUnmount, onMounted, shallowRef } from 'vue'
+import { onBeforeUnmount, onMounted, shallowRef, watch } from 'vue'
 import { usePane } from '../composables/usePane.js'
 import { activeJob, onOutput, send } from '../stores/session.js'
 
@@ -38,6 +38,38 @@ function refit(): void {
     // observer fires again the moment it has a box.
   }
 }
+
+/**
+ * `Pane.vue` binds `:hidden="pane.shown.value === null"` on this component's
+ * root, which is `true` at boot — nothing is shown yet, so `onMounted` below
+ * calls `instance.open(host)` against a `display: none` box, and xterm caches
+ * its character metrics from nothing (measured: `.xterm-screen` 0x0). The
+ * foundation's own browser check measured 1440x240 over 16 rows at boot,
+ * because the old page opens `#terminal` un-hidden and only applies `hidden`
+ * in a pass that runs after `mountPane()` — ordering, not markup, is what
+ * kept it laid out. This restores `ui/pane.js:76`'s explicit `refit()` (also
+ * `follow()`'s and `reveal()`'s own calls) the deterministic way: `shown`
+ * transitioning away from `null` is what `followQueue` and a `'replace'`
+ * frame both funnel every one of those call sites through, so watching it
+ * here covers `setView`, `follow` and `reveal` at once, without this
+ * component reaching back into any of them.
+ *
+ * `flush: 'post'` so this runs after Vue has already patched `.terminal`'s
+ * `hidden` attribute off — `fit()` measuring a still-`display: none` box
+ * would be the exact bug this exists to fix, just moved one line down.
+ *
+ * The `ResizeObserver` above stays as the backstop it already was for the
+ * cases this does not name explicitly (a view switch that does not change
+ * `shown`, a pane mode change) — confirmed in a browser to repair the box
+ * on its own, just not deterministically enough to assert in a test.
+ */
+watch(
+  shown,
+  (next) => {
+    if (next !== null) refit()
+  },
+  { flush: 'post' },
+)
 
 onMounted(() => {
   const instance = new Terminal({
