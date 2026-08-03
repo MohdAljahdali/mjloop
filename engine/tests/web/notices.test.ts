@@ -5,7 +5,26 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import type { ServerMessage } from '../../src/web/protocol.js'
 import { NOTICE_CODES } from '../../src/web/app/lib/notifications.ts'
-import { emptySnapshot, PUBLIC_DIR, readLocale } from './helpers/page.js'
+import { emptySnapshot } from './helpers/page.js'
+
+/**
+ * `src/web/app/locales`, not `helpers/page.ts`'s `PUBLIC_DIR` — that path
+ * reads the old page's `src/web/public`, which Task 12 deletes.
+ * `src/web/app/locales` is the tree the Vue app actually ships from, and
+ * `locales.test.ts`'s own "locale drift between the two shipped copies"
+ * describe block is what keeps the two byte-identical today, so reading from
+ * `app/` here is equivalent now and survives that deletion untouched.
+ *
+ * Resolved from `process.cwd()`, not `import.meta.url`, for the same reason
+ * `helpers/page.ts`'s own `PUBLIC_DIR` is: under `happy-dom` the global `URL`
+ * is the DOM one and resolves a module specifier against `http://localhost/`,
+ * so `fileURLToPath` throws. vitest runs from the engine root.
+ */
+const APP_LOCALES_DIR = path.resolve(process.cwd(), 'src', 'web', 'app', 'locales')
+
+async function readAppLocale(code: string): Promise<Record<string, string>> {
+  return JSON.parse(await fs.readFile(path.join(APP_LOCALES_DIR, `${code}.json`), 'utf8')) as Record<string, string>
+}
 
 /**
  * A socket the test drives by hand — the same double `store.test.ts` uses.
@@ -159,14 +178,12 @@ describe('useNotices', () => {
   })
 
   it('gives every NoticeCode a key in every shipped locale — the other half of the guard WEB_CODES gets from locales.test.ts', async () => {
-    const codes = (await fs.readdir(path.join(PUBLIC_DIR, 'locales')))
-      .filter((name) => name.endsWith('.json'))
-      .map((name) => name.replace(/\.json$/, ''))
+    const codes = (await fs.readdir(APP_LOCALES_DIR)).filter((name) => name.endsWith('.json')).map((name) => name.replace(/\.json$/, ''))
     expect(codes).toContain('en')
     expect(codes).toContain('ar')
 
     for (const code of codes) {
-      const dictionary = await readLocale(code)
+      const dictionary = await readAppLocale(code)
       const missing = NOTICE_CODES.filter((notice) => !(notice in dictionary))
       expect(missing, `${code} is missing`).toEqual([])
     }
