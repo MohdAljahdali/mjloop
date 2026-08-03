@@ -29,6 +29,8 @@ import { mountFeatureDoc, opened as openedFeature } from './lib/featuredoc.js'
 import { ready } from './lib/stories.js'
 import Banners from './components/Banners.vue'
 import Bdi from './components/Bdi.vue'
+import AgentDeleteDialog from './components/AgentDeleteDialog.vue'
+import AgentEditor from './components/AgentEditor.vue'
 import FeatureApproveDialog from './components/FeatureApproveDialog.vue'
 import HaltDialog from './components/HaltDialog.vue'
 import LanguagePicker from './components/LanguagePicker.vue'
@@ -47,6 +49,8 @@ import Stories from './panels/Stories.vue'
 import { bootPane } from './composables/usePane.js'
 import { useHalt } from './composables/useHalt.js'
 import { useFeatureApprove } from './composables/useFeatureApprove.js'
+import { useAgentEditor } from './composables/useAgentEditor.js'
+import { useAgentDelete } from './composables/useAgentDelete.js'
 
 const { t, tn } = useI18n()
 const { tabs, active, show } = useTabs()
@@ -57,6 +61,12 @@ const { open: haltOpen, closeHalt } = useHalt()
 // Same shape, for the one other write on this page a stale click must not
 // land on — see `useFeatureApprove.ts`.
 const { open: featureApproveOpen, closeApprove } = useFeatureApprove()
+// Same shape again, for the agent editor and its delete confirmation — both
+// opened from `AgentCard.vue`, inside the kept-alive `Agents` panel, and both
+// needing to survive a tab switch while open. See `useAgentEditor.ts`'s own
+// header for why a round-1 review moved these two out of that panel.
+const { open: agentEditorOpen, subject: agentEditorSubject, closeEditor } = useAgentEditor()
+const { open: agentDeleteOpen, subject: agentDeleteSubject, closeDelete } = useAgentDelete()
 // Applies the pane mode already read from storage, but only once the
 // terminal underneath it has mounted into a laid-out box — a child's
 // `onMounted` fires before its parent's, so calling this from here rather
@@ -209,4 +219,7 @@ const highCount = computed(() => snapshot.value?.state.findings.high ?? 0)
   <HaltDialog :open="haltOpen" :run-id="snapshot?.state.run_id ?? null" @close="closeHalt()" />
   <!-- Same reason — see `useFeatureApprove.ts`. -->
   <FeatureApproveDialog :open="featureApproveOpen" @close="closeApprove()" />
+  <!-- Same reason again — see `useAgentEditor.ts`/`useAgentDelete.ts`. -->
+  <AgentEditor :open="agentEditorOpen" :subject="agentEditorSubject" @close="closeEditor()" />
+  <AgentDeleteDialog :open="agentDeleteOpen" :subject="agentDeleteSubject" @close="closeDelete()" />
 </template>

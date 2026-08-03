@@ -53,10 +53,23 @@ export function hasContract(body: string): boolean {
   return false
 }
 
-/** `<source>-copy`, then `-2`, `-3` — the same shape `TrackEditor.vue`'s own duplicate uses. */
+/**
+ * `<source>-copy`, then `-2`, `-3` — the same shape `TrackEditor.vue`'s own
+ * duplicate uses.
+ *
+ * Trailing `-` is stripped from `source` first: a bare `${source}-copy` on a
+ * name already ending in `-` would embed `--`, which `AgentNameSchema`
+ * (`schemas/contract.ts`) rejects outright — `--` is reserved to separate an
+ * agent from its cycle instance. A round-1 review caught this as newly
+ * reachable once derive stopped being a disabled button: `foo-` would have
+ * produced `foo--copy`, a name `agent.create` would refuse in silence from
+ * this form's point of view (the server drops a malformed frame rather than
+ * answering it).
+ */
 export function copyName(taken: readonly string[], source: string): string {
-  let candidate = `${source}-copy`
+  const base = source.replace(/-+$/, '')
+  let candidate = `${base}-copy`
   let n = 2
-  while (taken.includes(candidate)) candidate = `${source}-copy-${n++}`
+  while (taken.includes(candidate)) candidate = `${base}-copy-${n++}`
   return candidate
 }

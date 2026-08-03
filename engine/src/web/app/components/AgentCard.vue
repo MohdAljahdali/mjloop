@@ -9,23 +9,29 @@
  * button is pressed, because the server (`writes.ts`'s `agentUsedByTrack`)
  * refuses the delete for exactly the same reason.
  *
- * Edit and derive open `AgentEditor.vue` (see `Agents.vue`, which owns the one
- * instance every card shares); delete asks its own confirmation right here,
- * because the confirmation names *this* card's agent and digest and nothing
- * upstream needs to coordinate that. Its shape follows `HaltDialog.vue` and
- * `FeatureApproveDialog.vue`: a native `<dialog>` opened with `showModal()`,
- * so focus trapping, the backdrop and `Escape` are the browser's job, and the
- * subject (name, digest) is frozen the moment it opens rather than re-read at
- * confirm time — this write has no live document behind it to re-check
- * against, unlike the feature brief's.
+ * Edit, derive and delete all live outside this component now — `edit` calls
+ * `useAgentEditor.ts`'s `openEdit`, `derive` calls its `openDerive`, and
+ * `delete` calls `useAgentDelete.ts`'s `askDelete`, each of which freezes a
+ * subject and flips a module-level `open` ref that `AgentEditor.vue`/
+ * `AgentDeleteDialog.vue` — hosted in `App.vue`, outside `<KeepAlive>` — read.
+ * A round-1 review found the previous shape wrong on two counts at once: an
+ * inline `<dialog>` right here read `props.agent` — a *live* prop — at
+ * confirm time, so a snapshot arriving while the confirmation sat open could
+ * swap in a new digest before the button was ever pressed; and the `<dialog>`
+ * itself lived inside the kept-alive `Agents` panel, so it lost its
+ * top-layer state (backdrop, focus trap, `Escape`) the moment a tab switch
+ * detached the panel's subtree. `askDelete(props.agent)` below copies
+ * `name`/`digest` out of this card's prop into a fresh object the instant the
+ * button is pressed — see `useAgentDelete.ts`'s own header for why that alone
+ * already fixes the first defect, and why hosting the dialog outside
+ * `<KeepAlive>` fixes the second.
  */
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import { useI18n } from '../composables/useI18n.js'
 import { usage } from '../lib/agents.js'
-import { submit } from '../stores/session.js'
+import { useAgentDelete } from '../composables/useAgentDelete.js'
 import type { AgentView, Config } from '../types/protocol.js'
 import Bdi from './Bdi.vue'
-import Tx from './Tx.vue'
 
 const props = defineProps<{ agent: AgentView; config: Config | null }>()
 const emit = defineEmits<{ edit: [agent: AgentView]; derive: [agent: AgentView] }>()
@@ -33,20 +39,7 @@ const { t } = useI18n()
 
 const usedBy = computed(() => usage(props.config, props.agent.name))
 
-const deleteDialog = ref<HTMLDialogElement | null>(null)
-
-function askDelete(): void {
-  deleteDialog.value?.showModal()
-}
-
-function cancelDelete(): void {
-  deleteDialog.value?.close()
-}
-
-function confirmDelete(): void {
-  deleteDialog.value?.close()
-  submit({ kind: 'agent.delete', name: props.agent.name, digest: props.agent.digest })
-}
+const { askDelete } = useAgentDelete()
 </script>
 
 <template>
@@ -76,22 +69,10 @@ function confirmDelete(): void {
     </div>
     <div class="agent-actions" v-if="props.agent.source === 'project'">
       <button type="button" class="agent-edit" @click="emit('edit', props.agent)">{{ t('agents.edit') }}</button>
-      <button type="button" class="danger agent-delete" @click="askDelete">{{ t('agents.delete') }}</button>
+      <button type="button" class="danger agent-delete" @click="askDelete(props.agent)">{{ t('agents.delete') }}</button>
     </div>
     <div class="agent-actions" v-else>
       <button type="button" class="agent-derive" @click="emit('derive', props.agent)">{{ t('agents.copy') }}</button>
     </div>
-
-    <dialog v-if="props.agent.source === 'project'" class="agent-delete-dialog" ref="deleteDialog" @cancel.prevent="cancelDelete">
-      <form method="dialog" @submit.prevent="confirmDelete">
-        <h2>{{ t('agents.deleteConfirmTitle') }}</h2>
-        <p class="hint">{{ t('agents.deleteConfirmExplain') }}</p>
-        <p class="record"><Tx key-name="agents.deleteConfirmSubject" :params="{ name: props.agent.name }" /></p>
-        <div class="dialog-actions">
-          <button type="button" @click="cancelDelete">{{ t('agents.deleteCancel') }}</button>
-          <button type="submit" class="danger">{{ t('agents.deleteConfirm') }}</button>
-        </div>
-      </form>
-    </dialog>
   </div>
 </template>

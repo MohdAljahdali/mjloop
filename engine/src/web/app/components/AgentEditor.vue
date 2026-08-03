@@ -5,59 +5,54 @@
  * an update and a fresh copy differ only in whether `name` is fixed and
  * whether a digest travels with the write, not in what the form asks for.
  *
- * `AgentCard.vue`'s header asks the question this file answers: inline on the
- * card, or a dialog outside the kept-alive panel like `HaltDialog.vue` and
- * `FeatureApproveDialog.vue`? Those two live outside `<KeepAlive>` because the
- * document behind them keeps moving while they sit open — `FeatureApproveDialog`
- * re-reads the live brief at confirm time for exactly that reason — and a
- * panel swap would otherwise cut a subscription a still-open dialog depends on.
- * Nothing here re-reads anything: `digest` is a value this component was
- * *handed*, not a feed it watches, and the global rule above is explicit that
- * it must go back exactly as shown, never refreshed "to be sure". So there is
- * no live document whose subscription would break if this dialog's parent
- * panel were swapped out from under it, and `Agents.vue` mounting one of these
- * itself — rather than `App.vue` reaching past the panel boundary the way it
- * does for the other two — is the simpler, equally correct choice. It is also
- * the only choice this task's own test harness (`panel-agents.test.ts`, which
- * boots `Agents.vue` alone, never `App.vue`) can reach at all.
+ * **Round-1 fix.** This used to live inside `Agents.vue`, remounted per open
+ * via `:key`. A review caught that its header argued from the wrong rule: it
+ * treated "no live document to re-check" as license to sit inside the
+ * kept-alive panel, when the actual rule (`useHalt.ts`'s own comment,
+ * repeated verbatim by `useFeatureApprove.ts`) is about the `<dialog>`
+ * element's *top-layer state*, not about whether anything underneath it is
+ * still moving. A native `<dialog>` opened with `showModal()` loses that
+ * state — backdrop, focus trap, `Escape` — the instant its subtree detaches
+ * on a tab switch, because nothing re-opens it on `onActivated`. So this
+ * component now follows `HaltDialog.vue`'s own shape exactly: a single
+ * always-mounted instance, hosted in `App.vue` outside `<KeepAlive>`, driven
+ * by `useAgentEditor.ts`'s module-level `open`/`subject` rather than by a
+ * `v-if`/`:key` pair inside the panel that opens it.
  *
- * One document, not a shared draft: every field here is a plain `ref` seeded
- * once from the `agent` prop at open time (`Agents.vue` gives this component a
- * fresh `:key` per open, so "seeded once" really does mean once). `Config.vue`
- * needs `mutate()`/`draft`/`dirty` because many controls accumulate changes
- * into one document before a single save; this form has exactly one control
+ * One document, not a shared draft: every field here is a plain `ref`, reset
+ * from `props.subject` exactly once per open, in the `watch(open)` handler
+ * below — the same moment `HaltDialog.vue` resets its own `reason` and
+ * `FeatureApproveDialog.vue` its own `note`. `Config.vue` needs
+ * `mutate()`/`draft`/`dirty` because many controls accumulate changes into
+ * one document before a single save; this form has exactly one control
  * surface and calls `submit()` exactly once, from exactly one place, the
  * moment it is pressed.
  */
-import { onMounted, ref } from 'vue'
+import { ref, watch } from 'vue'
 import { useI18n } from '../composables/useI18n.js'
+import { validAgent } from '../lib/config.js'
 import { copyName, hasContract } from '../lib/agents.js'
 import { submit } from '../stores/session.js'
-import type { AgentView } from '../types/protocol.js'
+import type { AgentEditSubject } from '../composables/useAgentEditor.js'
 
-const props = defineProps<{
-  mode: 'update' | 'create'
-  /** The card this editor was opened from. Read once, below, at setup — never watched. */
-  agent: AgentView
-  /** Every name already in use — `create` mode seeds a free one from this. */
-  takenNames: readonly string[]
-}>()
+const props = defineProps<{ open: boolean; subject: AgentEditSubject | null }>()
 const emit = defineEmits<{ close: [] }>()
 const { t } = useI18n()
 
 const dialog = ref<HTMLDialogElement | null>(null)
 const nameInput = ref<HTMLInputElement | null>(null)
+const descriptionInput = ref<HTMLTextAreaElement | null>(null)
 
-// Seeded once from the prop this component was mounted with. `Agents.vue`
-// remounts this component (via `:key`) on every open, so there is no second
-// agent this instance will ever need to reseed for. `create` mode starts from
-// `copyName`'s own free suggestion — `<source>-copy`, then `-2`, `-3` — rather
-// than the source's own name, which a bare create would collide on immediately.
-const name = ref(props.mode === 'create' ? copyName(props.takenNames, props.agent.name) : props.agent.name)
-const description = ref(props.agent.description)
-const tools = ref(props.agent.tools ?? '')
-const model = ref(props.agent.model ?? '')
-const body = ref(props.agent.body)
+// The subject this instance is currently showing, frozen at the moment the
+// dialog opened — see the `watch` below, the same freeze `HaltDialog.vue`
+// gives its own `subject` from `props.runId`.
+const mode = ref<'update' | 'create'>('update')
+const originalName = ref('')
+const name = ref('')
+const description = ref('')
+const tools = ref('')
+const model = ref('')
+const body = ref('')
 
 /**
  * The digest this editor was shown, held untouched from the moment it opened.
@@ -66,16 +61,39 @@ const body = ref(props.agent.body)
  * "to be sure" before sending would defeat the entire mechanism — it would
  * let a click land on words nobody actually read.
  */
-const digest = props.agent.digest
+const digest = ref('')
 
-// This instance is freshly mounted per open (`Agents.vue` keys it by the
-// agent it opened on), so `showModal()` belongs in `onMounted` rather than
-// behind a watched `open` prop the way `HaltDialog.vue`'s does — there is no
-// "closed but present" state for this component to sit in.
-onMounted(() => {
-  dialog.value?.showModal()
-  nameInput.value?.focus()
-})
+/** `AgentNameSchema`, mirrored client-side — `lib/config.ts:90`'s own comment: never authoritative. */
+const nameProblem = ref(false)
+
+watch(
+  () => props.open,
+  (isOpen) => {
+    if (isOpen) {
+      const subject = props.subject
+      if (subject === null) return
+      mode.value = subject.mode
+      originalName.value = subject.agent.name
+      name.value = subject.mode === 'create' ? copyName(subject.takenNames, subject.agent.name) : subject.agent.name
+      description.value = subject.agent.description
+      tools.value = subject.agent.tools ?? ''
+      model.value = subject.agent.model ?? ''
+      body.value = subject.agent.body
+      digest.value = subject.agent.digest
+      nameProblem.value = false
+      dialog.value?.showModal()
+      // The field the action actually requires focus on: in `update` mode
+      // `name` is read-only, so landing a keyboard user there first would
+      // make them tab past a field they cannot act on before reaching one
+      // they can — `HaltDialog.vue:59-61`'s own rule, ported. `create` mode
+      // keeps `name` as the first stop: it is the one field seeded from a
+      // guess (`copyName`) the operator is most likely to want to check first.
+      ;(mode.value === 'update' ? descriptionInput : nameInput).value?.focus()
+    } else {
+      dialog.value?.close()
+    }
+  },
+)
 
 function cancel(): void {
   emit('close')
@@ -86,22 +104,30 @@ function cancel(): void {
  * `submit()` docstring), so by the time a receipt arrives the page already
  * shows whatever the server decided — there is nothing left for this dialog
  * to hold open for, win or refuse. It closes the same way `HaltDialog.vue`
- * and `FeatureApproveDialog.vue` both close: unconditionally, the instant the
- * button is pressed, before the outcome is known. A refusal still reaches the
- * reader — `settle()` announces every receipt, `ok` or not — it just does not
- * do it through this dialog staying open.
+ * and `FeatureApproveDialog.vue` both close: unconditionally, once every
+ * client-side guard below has already passed — not before. A round-1 review
+ * caught the previous ordering emitting `close` *first*, which silently threw
+ * away a freshly rewritten body behind a whitespace-only description: the
+ * form was already destroyed by the time the guard ran. Both guards below run
+ * ahead of `emit('close')` now, and the invalid-name guard leaves a visible
+ * reason on screen rather than a write that `server.ts` would have dropped
+ * in silence.
  */
 function onSubmit(): void {
   const trimmedDescription = description.value.trim()
-  emit('close')
   if (trimmedDescription.length === 0) return
+  if (mode.value === 'create' && !validAgent(name.value)) {
+    nameProblem.value = true
+    return
+  }
+  emit('close')
   const trimmedTools = tools.value.trim()
   const trimmedModel = model.value.trim()
-  if (props.mode === 'update') {
+  if (mode.value === 'update') {
     submit({
       kind: 'agent.update',
-      name: props.agent.name,
-      digest,
+      name: originalName.value,
+      digest: digest.value,
       description: trimmedDescription,
       tools: trimmedTools.length === 0 ? null : trimmedTools,
       model: trimmedModel.length === 0 ? null : trimmedModel,
@@ -123,7 +149,7 @@ function onSubmit(): void {
 <template>
   <dialog id="agent-editor" ref="dialog" @cancel.prevent="cancel">
     <form id="agent-form" method="dialog" @submit.prevent="onSubmit">
-      <h2>{{ props.mode === 'update' ? t('agents.editTitle') : t('agents.deriveTitle') }}</h2>
+      <h2>{{ mode === 'update' ? t('agents.editTitle') : t('agents.deriveTitle') }}</h2>
       <label>
         <span>{{ t('agents.name') }}</span>
         <input
@@ -133,15 +159,16 @@ function onSubmit(): void {
           name="name"
           required
           maxlength="64"
-          pattern="[A-Za-z0-9_-]+"
           dir="ltr"
           autocomplete="off"
-          :readonly="props.mode === 'update'"
+          :readonly="mode === 'update'"
+          @input="nameProblem = false"
         />
       </label>
+      <p v-if="mode === 'create' && nameProblem" id="agent-name-problem" class="banner warn">{{ t('agents.nameInvalid') }}</p>
       <label>
         <span>{{ t('agents.description') }}</span>
-        <textarea id="agent-description" v-model="description" name="description" rows="2" required maxlength="500" dir="auto"></textarea>
+        <textarea id="agent-description" ref="descriptionInput" v-model="description" name="description" rows="2" required maxlength="500" dir="auto"></textarea>
       </label>
       <label>
         <span>{{ t('agents.tools') }}</span>
@@ -162,7 +189,7 @@ function onSubmit(): void {
       <p v-if="!hasContract(body)" id="agent-contract-warning" class="banner warn">{{ t('agents.contractWarning') }}</p>
       <div class="dialog-actions">
         <button type="button" id="agent-editor-cancel" @click="cancel">{{ t('agents.cancel') }}</button>
-        <button type="submit" class="primary" id="agent-editor-submit">{{ props.mode === 'update' ? t('agents.save') : t('agents.create') }}</button>
+        <button type="submit" class="primary" id="agent-editor-submit">{{ mode === 'update' ? t('agents.save') : t('agents.create') }}</button>
       </div>
     </form>
   </dialog>

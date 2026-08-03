@@ -14,22 +14,23 @@
  * can call `usage(config, name)` — the track membership that makes deleting
  * an agent a decision rather than a gamble.
  *
- * This panel owns the one `AgentEditor.vue` instance every card shares:
- * `edit` opens it in `update` mode on the card's own agent, `derive` opens it
- * in `create` mode seeded from that agent but under a free name. `:key` below
- * forces a fresh instance on every open — including opening a second agent
- * while one is already open — so the editor's own fields, seeded once at
- * setup from its `agent` prop, are never asked to reseed themselves against a
- * document that changed out from under them. See `AgentEditor.vue`'s own
- * header for why this editor lives inside the panel rather than beside
- * `HaltDialog`/`FeatureApproveDialog` outside `<KeepAlive>`.
+ * This panel is only the *trigger* for `edit`/`derive` now, not the host: it
+ * calls `useAgentEditor.ts`'s `openEdit`/`openDerive` with the agent and the
+ * current `takenNames`, which freezes a subject and flips a module-level
+ * `open` ref. The dialog that reads that ref (`AgentEditor.vue`) is mounted in
+ * `App.vue`, outside `<KeepAlive>` — a round-1 review found this panel used
+ * to host it directly (remounted per open via `:key`), which loses its
+ * `<dialog>`'s top-layer state the moment a tab switch detaches this panel's
+ * subtree. See `useAgentEditor.ts`'s own header for the full reasoning.
+ * `AgentCard.vue` calls `useAgentDelete.ts`'s `askDelete` on its own, since
+ * that write needs nothing this panel holds beyond the one card's agent.
  */
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import { useI18n } from '../composables/useI18n.js'
 import { useFeed } from '../composables/useFeed.js'
+import { useAgentEditor } from '../composables/useAgentEditor.js'
 import type { AgentsView, AgentView, ConfigView } from '../types/protocol.js'
 import AgentCard from '../components/AgentCard.vue'
-import AgentEditor from '../components/AgentEditor.vue'
 import Bdi from '../components/Bdi.vue'
 
 const { t } = useI18n()
@@ -62,18 +63,14 @@ const config = computed(() => configFeed.value.value?.parsed ?? null)
 // copy must avoid shadowing *and* colliding either way.
 const takenNames = computed(() => [...project.value, ...plugin.value].map((entry) => entry.name))
 
-const editing = ref<{ mode: 'update' | 'create'; agent: AgentView } | null>(null)
+const { openEdit: openEditSubject, openDerive: openDeriveSubject } = useAgentEditor()
 
 function openEdit(agent: AgentView): void {
-  editing.value = { mode: 'update', agent }
+  openEditSubject(agent, takenNames.value)
 }
 
 function openDerive(agent: AgentView): void {
-  editing.value = { mode: 'create', agent }
-}
-
-function closeEditor(): void {
-  editing.value = null
+  openDeriveSubject(agent, takenNames.value)
 }
 </script>
 
@@ -114,15 +111,5 @@ function closeEditor(): void {
         <p class="banner warn" v-for="entry in unreadable" :key="entry.path"><Bdi :value="entry.path" /></p>
       </div>
     </section>
-
-    <!-- `:key` forces a fresh instance per open — see this file's own header. -->
-    <AgentEditor
-      v-if="editing !== null"
-      :key="`${editing.mode}-${editing.agent.name}-${editing.agent.digest}`"
-      :mode="editing.mode"
-      :agent="editing.agent"
-      :taken-names="takenNames"
-      @close="closeEditor"
-    />
   </section>
 </template>

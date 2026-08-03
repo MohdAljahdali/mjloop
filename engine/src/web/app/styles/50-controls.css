@@ -113,7 +113,12 @@
   }
 }
 
-/* A native <dialog>: the browser owns focus trapping, Escape and the backdrop. */
+/* A native <dialog>: the browser owns focus trapping, Escape and the backdrop.
+   `max-height`/`overflow-y` are this rule's own, not left to the UA sheet's
+   default `max-height: calc(100% - 6px)` — that box has no `overflow` of its
+   own, so content taller than it (the agent editor: name, description,
+   tools, model, a 12-row body and a warning banner, all inside one dialog)
+   would render past the box edge rather than scroll, on a short viewport. */
 dialog {
   background: var(--panel-2);
   color: var(--text);
@@ -121,6 +126,8 @@ dialog {
   border-radius: var(--radius);
   padding: 22px 24px;
   max-width: min(520px, 92vw);
+  max-height: min(720px, 90vh);
+  overflow-y: auto;
   box-shadow: var(--shadow-3);
 }
 
