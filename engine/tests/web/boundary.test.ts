@@ -22,7 +22,14 @@ async function walk(dir: string, prefix = ''): Promise<string[]> {
   const out: string[] = []
   for (const entry of (await fs.readdir(dir, { withFileTypes: true })).sort((a, b) => a.name.localeCompare(b.name))) {
     const relative = prefix === '' ? entry.name : `${prefix}/${entry.name}`
-    // `public/` is the browser; it cannot import the engine at all.
+    // Task 12 deleted `src/web/public/` from source — it no longer exists to
+    // walk into on a clean checkout, and `vitest.config.ts`'s
+    // `serverPublicDirForTests` plugin means a test run never writes one back
+    // either. The skip stays anyway, defensively: nothing that could ever
+    // land at this path — a stray local build artifact, a leftover directory
+    // from before that plugin existed — is TypeScript the engine imports, so
+    // descending into it is never useful and would only be a way for
+    // something irrelevant to be walked by accident.
     if (entry.isDirectory()) {
       if (entry.name !== 'public') out.push(...(await walk(path.join(dir, entry.name), relative)))
       continue
