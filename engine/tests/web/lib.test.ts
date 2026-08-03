@@ -19,10 +19,12 @@ import {
   unmet,
 } from '../../src/web/app/lib/stories.ts'
 import { deriveEvents } from '../../src/web/app/lib/notifications.ts'
+import { planMemories, planRuns } from '../../src/web/app/lib/plans.ts'
 import { emptySnapshot } from './helpers/page.js'
 import type { Job, PlanView, StoryView } from '../../src/web/protocol.js'
 import type { Track } from '../../src/schemas/config.js'
 import type { ProjectSkillAcceptance } from '../../src/schemas/skill-acceptance.js'
+import type { MemoryView, RunSummary } from '../../src/web/read.js'
 
 /**
  * `lib/` is DOM-free so it is testable here, under the suite's existing
@@ -526,5 +528,67 @@ describe('notifications', () => {
     expect(deriveEvents(oneError, twoErrors)).toEqual([
       { code: 'notice.verify.failed', params: { signature: 'npm run build :: exit N' } },
     ])
+  })
+})
+
+describe('lib/plans', () => {
+  const run = (patch: Partial<RunSummary> & { id: string }): RunSummary => ({
+    story: null,
+    track: 'build',
+    cycles: 1,
+    halted: false,
+    ...patch,
+  })
+  const memory = (patch: Partial<MemoryView> & { id: string }): MemoryView => ({
+    kind: 'decision',
+    title: 'Something',
+    tags: [],
+    at: '2026-07-28T09:00:00.000Z',
+    run: null,
+    plan: null,
+    story: null,
+    body: '',
+    ...patch,
+  })
+
+  describe('planRuns', () => {
+    it('keeps only the runs whose directory names one of this plan\'s own stories', () => {
+      const runs = [run({ id: 'a', story: 'P001-S01' }), run({ id: 'b', story: 'P002-S01' }), run({ id: 'c', story: null })]
+      expect(planRuns(runs, { stories: [{ id: 'P001-S01' }] }).map((entry) => entry.id)).toEqual(['a'])
+    })
+
+    it('matches an ad-hoc run to no plan, ever', () => {
+      // `readRuns` maps a directory with no story segment to `story: null` —
+      // never attributable to any plan, which is a fact about the directory
+      // name and not a gap in this filter.
+      const runs = [run({ id: 'adhoc', story: null })]
+      expect(planRuns(runs, { stories: [{ id: 'P001-S01' }] })).toEqual([])
+    })
+  })
+
+  describe('planMemories', () => {
+    const plainPlan = { id: 'P001', stories: [{ id: 'P001-S01' }] }
+
+    it("joins on the memory's own `plan` field", () => {
+      expect(planMemories([memory({ id: 'M001', plan: 'P001' })], plainPlan)).toEqual([memory({ id: 'M001', plan: 'P001' })])
+    })
+
+    it("joins on the memory's own `story` field, scoped to this plan's stories", () => {
+      expect(planMemories([memory({ id: 'M002', story: 'P001-S01' })], plainPlan)).toEqual([
+        memory({ id: 'M002', story: 'P001-S01' }),
+      ])
+    })
+
+    it('never matches a prose mention in the title or body', () => {
+      expect(planMemories([memory({ id: 'M003', title: 'P001-S01, allegedly', body: 'About P001' })], plainPlan)).toEqual([])
+    })
+
+    it('never matches on the `run` field', () => {
+      expect(planMemories([memory({ id: 'M004', run: '2026-07-28-001--P001-S01--build' })], plainPlan)).toEqual([])
+    })
+
+    it('excludes a memory scoped to a different plan entirely', () => {
+      expect(planMemories([memory({ id: 'M005', plan: 'P002' })], plainPlan)).toEqual([])
+    })
   })
 })

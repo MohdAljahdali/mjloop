@@ -12,6 +12,7 @@ import LanguagePicker from './components/LanguagePicker.vue'
 import Pane from './components/Pane.vue'
 import Rail from './components/Rail.vue'
 import Toasts from './components/Toasts.vue'
+import Plans from './panels/Plans.vue'
 import Run from './panels/Run.vue'
 import { bootPane } from './composables/usePane.js'
 import { useHalt } from './composables/useHalt.js'
@@ -90,7 +91,7 @@ const highCount = computed(() => snapshot.value?.state.findings.high ?? 0)
        another tab opens — the same reason `Pane`'s own terminal is never
        remounted: a feed re-fetching from scratch on every tab switch is not
        what "the open tab is the subscription" (`lib/api.ts`) means. Panels
-       arrive one task at a time; only Run exists so far.
+       arrive one task at a time; Run and Plans exist so far.
 
        `class="panel"` (`10-layout.css:100-108`: the capped, centred column
        and the `panel-in` fade) belongs on the panel *section* itself, the
@@ -104,6 +105,7 @@ const highCount = computed(() => snapshot.value?.state.findings.high ?? 0)
   <main>
     <KeepAlive>
       <Run v-if="active === 'run'" />
+      <Plans v-else-if="active === 'plans'" />
     </KeepAlive>
   </main>
 
