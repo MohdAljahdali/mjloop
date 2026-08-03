@@ -130,11 +130,17 @@ function ask(): void {
           <p class="record" id="feature-record">
             <!-- `revision` stays a number, not `String(...)`: the old page
                  passed `brief.revision` straight through `phrase()` →
-                 `renderParam` → `Intl.NumberFormat('ar')`, rendering
-                 "المراجعة ١" in Arabic. A `String()` here would render "١"
-                 as the Latin "1" instead — a visible change the user must
-                 not see. `id` is the Latin brief id, which does need `Tx`'s
-                 isolation. -->
+                 `renderParam` → `Intl.NumberFormat`, and `String()` here
+                 would take a different path through `t()`. Under the
+                 registry's `ar` (not `ar-EG`/`ar-SA`), both paths happen to
+                 print the same Latin digits on this ICU — the point is not
+                 the digits, it is that a numeric hole resolves as bidi class
+                 AN regardless of script, so it never forms a strong-LTR run
+                 and never drags the sentence's punctuation around; a
+                 `String()` value is prose and only avoids that by accident.
+                 Keeping it a number matches the old page's exact call shape
+                 rather than one that is merely equivalent today. `id` is the
+                 Latin brief id, which does need `Tx`'s isolation. -->
             <Tx :key-name="`features.record.${brief.status}`" :params="{ id: brief.brief.id, revision: brief.brief.revision }" />
           </p>
           <p class="banner warn" id="feature-blocked" :hidden="gate.why === null">{{ gate.why === null ? '' : t(gate.why) }}</p>

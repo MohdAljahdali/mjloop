@@ -108,9 +108,17 @@ export async function setLocale(code: string): Promise<void> {
  * A parameter's rendered form.
  *
  * Numbers go through `Intl` because they are prose counts. Ids, paths, commands,
- * cycle numbers and run ids must never come through here — `Intl.NumberFormat('ar')`
- * renders Arabic-Indic digits and `P001-S02` would become `P٠٠١-S٠٢`. Those go
- * through `verbatim()`.
+ * cycle numbers and run ids must never come through here — whichever digits a
+ * locale's `Intl.NumberFormat` chooses (some, like `ar-EG`, print Arabic-Indic;
+ * `ar` itself prints Latin on this ICU), `P001-S02` is not a count and must not
+ * be reformatted digit by digit. Those go through `verbatim()`.
+ *
+ * The bidi reason a number is safe to pass through here at all, regardless of
+ * which digits come out, is that a formatted number resolves to bidi class AN
+ * (Arabic Number) rather than a strong-LTR run — it cannot drag a sentence's
+ * own punctuation to the wrong end the way an id, a name or free prose can.
+ * That is the line `tx()`/`Tx.vue` actually draws when deciding which holes
+ * need a `<bdi>`: not "is it a number", but "can it contain a strong-LTR run".
  */
 function renderParam(value: string | number): string {
   return typeof value === 'number' ? numbers.format(value) : String(value)

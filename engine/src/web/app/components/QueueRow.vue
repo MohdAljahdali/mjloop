@@ -11,6 +11,7 @@ import type { Job } from '../types/protocol.js'
 import { useI18n } from '../composables/useI18n.js'
 import { duration } from '../lib/fmt.js'
 import Bdi from './Bdi.vue'
+import Tx from './Tx.vue'
 
 const props = defineProps<{
   job: Job
@@ -54,6 +55,9 @@ const { t } = useI18n()
       </button>
       <button v-if="group !== 'waiting'" type="button" @click="$emit('attach', job.id)">{{ t('job.view') }}</button>
     </span>
-    <span v-if="job.reason !== null" class="reason">{{ t(job.reason.code, job.reason.params) }}</span>
+    <!-- Server-sent `{code, params}`, same open surface as `Toasts.vue` and
+         `NoticeFeed.vue` — `Tx`, unconditionally, for the same reason: a code
+         added later carries no guarantee its holes stay bidi-neutral. -->
+    <span v-if="job.reason !== null" class="reason"><Tx :key-name="job.reason.code" :params="job.reason.params" /></span>
   </li>
 </template>
