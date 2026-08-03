@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import type { Snapshot } from '../../src/web/protocol.js'
 import { ConfigSchema } from '../../src/schemas/config.js'
@@ -703,6 +703,45 @@ describe('Tracks.vue', () => {
       await wrapper.get('#tracks-view-list').trigger('click')
       await nextTick()
       expect(wrapper.find('#config-track-editors').exists()).toBe(true)
+    })
+  })
+
+  /**
+   * `TrackRunForm.vue` — the thing `/mjloop:run` exists for: a track built
+   * from this tab had nothing else that could open it. Same execution model
+   * as `Launcher.vue`'s own command bar — `send({ type: 'enqueue', ... })` —
+   * scoped to one card's own track name, so what these two `it`s prove is the
+   * command string that path composes and the one case it must refuse to
+   * enqueue at all.
+   */
+  describe('the run form (TrackRunForm.vue)', () => {
+    async function bootWithSocket(sent: unknown[]) {
+      serve({ '/api/config': configView({ tracks: { build: { required: ['builder'], max_cycles: 5 } } }) })
+      const { Tracks, socket } = await boot()
+      const originalSend = socket.send.bind(socket)
+      socket.send = (data: string) => {
+        originalSend(data)
+        sent.push(JSON.parse(data))
+      }
+      const wrapper = mount(Tracks)
+      await vi.waitFor(() => expect(wrapper.find('.track-editor').exists()).toBe(true))
+      return wrapper
+    }
+
+    it('enqueues /mjloop:run with the track and the goal', async () => {
+      const sent: unknown[] = []
+      const page = await bootWithSocket(sent)
+      await flushPromises()
+      await page.find('[data-track="build"] .track-run-goal').setValue('ship the thing')
+      await page.find('[data-track="build"] .track-run').trigger('submit')
+      expect(sent).toContainEqual({ type: 'enqueue', command: '/mjloop:run build ship the thing', story: null })
+    })
+
+    it('enqueues nothing for an empty goal', async () => {
+      const sent: unknown[] = []
+      const page = await bootWithSocket(sent)
+      await page.find('[data-track="build"] .track-run').trigger('submit')
+      expect(sent).toEqual([])
     })
   })
 })

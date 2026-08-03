@@ -28,6 +28,7 @@ import Bdi from './Bdi.vue'
 import Tx from './Tx.vue'
 import TrackAgentList from './TrackAgentList.vue'
 import TrackOrderRow from './TrackOrderRow.vue'
+import TrackRunForm from './TrackRunForm.vue'
 
 const props = defineProps<{
   name: string
@@ -248,6 +249,12 @@ const commentsLost = computed(() => {
       <button type="button" :disabled="!props.enabled" @click="duplicate">{{ t('config.duplicate') }}</button>
       <button type="button" class="danger" :disabled="!props.enabled" @click="remove">{{ t('config.delete') }}</button>
     </header>
+
+    <!-- A track built here has nothing else that can open it — the four
+         static commands each pin their own track name in their own text.
+         This is the same enqueue path as the command bar, scoped to this
+         card's own track; see `TrackRunForm.vue`'s own header. -->
+    <TrackRunForm :track="props.name" :enabled="props.enabled" />
 
     <div class="track-lists">
       <TrackAgentList

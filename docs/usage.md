@@ -20,6 +20,10 @@ Then pick the command that matches the work:
 | Something is broken and you do not know why | `/mjloop:fix <problem>` |
 | An idea that needs to become buildable work | `/mjloop:plan <idea>` |
 
+A track with none of the four commands above still runs: `/mjloop:run <track> <goal>` opens
+any track named in `config.yaml`, including one built from the cockpit's Tracks tab that no
+command was ever written for. See **`/mjloop:run <track> <goal>`** below.
+
 Choosing the smallest track that fits is not a formality. `/mjloop:edit` is capped at one
 cycle and skips critique entirely, which is why it is cheap; `/mjloop:plan` runs five
 agents through two gates, which is why it is not.
@@ -85,6 +89,20 @@ The track can be preceded by an interview. Under `orchestration.discovery.mode` 
 first asks whether the request is understood well enough to plan at all — see **Feature
 discovery** below. The setting defaults to `off`, so a project that has not changed it gets
 exactly the command described here.
+
+### `/mjloop:run <track> <goal>`
+
+The other four commands each name their own track in their own text, which is exactly why a
+track that exists only in `config.yaml` — one created from the cockpit's Tracks tab, say —
+had nothing that could open it. `/mjloop:run` fixes that by naming no track at all: it reads
+the first word of its argument, checks that word against `tracks:` in `config.yaml`, and
+runs whichever one matches.
+
+It adds no rules of its own. The roster still comes from the track's own `required`,
+`available`, and `closing` sets; its gate and its order graph still apply exactly as they do
+under any of the four named commands. If the first word names `edit`, `build`, `fix`, or
+`plan`, it still runs — but the leader also says that the matching named command carries
+guidance this one does not, so you know it exists next time.
 
 ## Feature discovery
 

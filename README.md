@@ -67,6 +67,10 @@ Then open Claude Code in a project and run:
 | `/mjloop:fix <problem>` | Defects and regressions | Reproduce the failure before accepting a fix |
 | `/mjloop:plan <idea>` | Turning an idea into buildable stories | Fit check and approval before story creation |
 
+A track that has none of these four commands still runs: `/mjloop:run <track> <goal>` opens
+any track named in `config.yaml`, so a track added from the dashboard's Tracks tab is not
+stuck without a way to start it.
+
 Use `/mjloop:status` to inspect the current run, `/mjloop:resume` to continue an
 interrupted run, `/mjloop:stop` to halt it, and `/mjloop:web` to open the browser cockpit.
 

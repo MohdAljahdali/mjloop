@@ -603,6 +603,9 @@
   "config.trackView": "عرض المسار",
   "config.graph.refusalCycle": "وصل {from} بـ{to} سيُغلق حلقةً، لذا رُفض.",
   "config.graph.cyclic": "عالق في حلقة — لن يتحقّق ترتيبه أبداً",
+  "config.run.goalLabel": "الهدف لمسار {track}",
+  "config.run.goalPlaceholder": "ما الذي ينبغي أن يفعله هذا التشغيل؟",
+  "config.run.button": "شغّل",
 
   "telemetry.title": "المتخصّصون، كما استُدعوا",
   "telemetry.why": "ما أعاده فعلًا كلّ متخصّص استدعاه هذا المشروع. تقرير لا قاعدة — لا شيء في المحرّك يستدعي وكيلًا أو يتخطّاه بسبب رقم هنا. ويتجدّد الجدول عند بدء التشغيل التالي.",

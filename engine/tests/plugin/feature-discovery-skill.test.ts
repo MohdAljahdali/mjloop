@@ -475,6 +475,19 @@ describe('the plan command', () => {
   })
 })
 
+describe('the run command', () => {
+  it('carries the frontmatter every command needs, the same way the plan command does', async () => {
+    // `/mjloop:run` is the command this task adds so a track built from the
+    // dashboard has something to open it. The plugin loader reads every
+    // command the same way, so the check is the same one `commands/plan.md`
+    // already gets above — this file just points it at the new file.
+    const runCommand = await fs.readFile(path.join(COMMANDS_DIR, 'run.md'), 'utf8')
+    const parsed = frontmatter(runCommand)
+    expect(parsed.description ?? '').not.toBe('')
+    expect(parsed['argument-hint'] ?? '').not.toBe('')
+  })
+})
+
 describe('the leader skill', () => {
   it('names no MCP tool the engine does not register', () => {
     expect(toolsNamedIn(leader).filter((tool) => !registered.has(tool))).toEqual([])
