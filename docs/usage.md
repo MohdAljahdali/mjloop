@@ -274,6 +274,25 @@ read, approved and tracked, and **Stories** is where its stories are filtered an
 Whichever plan you have open under Plans is the one Stories shows. Click a story's Run and
 it is queued; type any loop command into the box and it is queued too.
 
+### Agents and Tracks
+
+Two more tabs sit beside Plans and Stories. **Agents** lists every agent a run can draft —
+project and plugin, drawn in two separate sections rather than merged, because a project
+agent shadows a plugin agent of the same name and one list would hide exactly that — and
+shows which tracks use each one. It creates, edits, and deletes `.claude/agents/<name>.md`
+from there: each write compares and swaps on the file's own sha256, the name is confined by
+the same schema that keeps it from ever becoming a path outside `.claude/agents/`, deleting
+an agent a track still names is refused, and every agent write is refused outright while a
+run is open — an edit mid-run would make what ran and what is recorded two different
+things. A plugin agent stays read-only; deriving one copies it into a project agent you can
+then edit, the same way a hand-written one works.
+
+**Tracks** is where `tracks:` and `specialists:` moved to, out of Config and into their own
+tab: a Vue Flow graph of the track's order beside the full list view, not a summary of it —
+the list is what a keyboard reaches the same edits through. A track built here needs no
+command written for it before it runs: `/mjloop:run <track> <goal>` opens it by name, as
+described above.
+
 Opening a session in a project that has `.mjloop/` starts it for you and puts it on
 screen. Only on a genuine session start — not on `/clear` and not on a resume, which happen
 too often to be worth a browser tab each — and only once: a second session finds the
@@ -471,10 +490,10 @@ guarded write behind `config set` does three things an editor cannot:
 
 A hand edit gets none of the three, and its damage does not surface at the keystroke: the
 config is next loaded when somebody starts a run, so a broken document turns up as a
-failed `/mjloop:build`, in another session, with no obvious cause. The cockpit's Config
-tab writes through the same guarded route. `config set` reaches the `orchestration` block
-and nothing else — change `tracks`, `verify`, `gates`, `specialists` and `limits` in the
-cockpit.
+failed `/mjloop:build`, in another session, with no obvious cause. The cockpit's Config and
+Tracks tabs write through the same guarded route. `config set` reaches the `orchestration`
+block and nothing else — change `verify`, `gates` and `limits` in Config, and `tracks` and
+`specialists` in Tracks.
 
 ## The component map
 
@@ -572,13 +591,14 @@ resolves it.
 
 ## Skill selection
 
-A run built against an approved feature brief can hand each of four existing roles —
-`planner`, `builder`, `critic`, and `verifier` — skill guidance drawn from what the project
-has itself accepted. **The roles do not change, and there is no `flutter-builder`, no
-`nextjs-builder`, and there never will be.** A Flutter project and a Next.js project
-dispatch the same four roles; what differs between them is the guidance a role is handed
-for one task, never who holds the responsibility — inventing a role per technology is
-exactly what this design refuses to do.
+A run built against an approved feature brief can hand skill guidance to any agent this
+project's own tracks name — `planner`, `builder`, `critic`, and `verifier` are the floor a
+config that declares no tracks still gets, not a ceiling on what a config that declares its
+own can route to. **The set of routable agents is what the project's tracks say it is, and
+there is no `flutter-builder`, no `nextjs-builder`, and there never will be.** A Flutter
+project and a Next.js project dispatch the same roles their tracks name; what differs
+between them is the guidance a role is handed for one task, never who holds the
+responsibility — inventing a role per technology is exactly what this design refuses to do.
 
 Selection is a match, not a guess. A skill is offered to a component when the skill's own
 tags intersect that component's skill tags — the tags the accepted component map already
