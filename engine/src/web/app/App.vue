@@ -16,6 +16,7 @@ import Rail from './components/Rail.vue'
 import Toasts from './components/Toasts.vue'
 import Plans from './panels/Plans.vue'
 import Run from './panels/Run.vue'
+import Stories from './panels/Stories.vue'
 import { bootPane } from './composables/usePane.js'
 import { useHalt } from './composables/useHalt.js'
 
@@ -45,14 +46,13 @@ onBeforeUnmount(onNotice((message) => notify(message)))
  * stories' own frontmatter — pumped from here rather than from `Plans.vue`.
  *
  * `lib/plandoc.ts`'s own comment says "who pumps it is the caller's problem",
- * and a panel is the wrong owner: Plans and (later) Stories both read it, a
- * panel only exists behind `v-if` while its own tab is open, and
- * `mountPlanDoc()` resets the module's listener set on every call — a second
- * panel calling it after the first would silently drop the first panel's own
- * subscription (`plandoc.ts:47-52`'s own warning). `App.vue`'s `setup` runs
- * once, before either panel is ever instantiated, which is what the ordering
- * that comment asks for actually requires. Panels only `subscribe()` and
- * read `value()`.
+ * and a panel is the wrong owner: Plans and Stories both read it, a panel
+ * only exists behind `v-if` while its own tab is open, and `mountPlanDoc()`
+ * resets the module's listener set on every call — a second panel calling it
+ * after the first would silently drop the first panel's own subscription
+ * (`plandoc.ts:47-52`'s own warning). `App.vue`'s `setup` runs once, before
+ * any panel is ever instantiated, which is what the ordering that comment
+ * asks for actually requires. Panels only `subscribe()` and read `value()`.
  */
 const { activePlan } = useSelection()
 const planDocFeed = mountPlanDoc()
@@ -117,7 +117,7 @@ const highCount = computed(() => snapshot.value?.state.findings.high ?? 0)
        another tab opens — the same reason `Pane`'s own terminal is never
        remounted: a feed re-fetching from scratch on every tab switch is not
        what "the open tab is the subscription" (`lib/api.ts`) means. Panels
-       arrive one task at a time; Run and Plans exist so far.
+       arrive one task at a time; Run, Plans and Stories exist so far.
 
        `class="panel"` (`10-layout.css:100-108`: the capped, centred column
        and the `panel-in` fade) belongs on the panel *section* itself, the
@@ -132,6 +132,7 @@ const highCount = computed(() => snapshot.value?.state.findings.high ?? 0)
     <KeepAlive>
       <Run v-if="active === 'run'" />
       <Plans v-else-if="active === 'plans'" />
+      <Stories v-else-if="active === 'stories'" />
     </KeepAlive>
   </main>
 

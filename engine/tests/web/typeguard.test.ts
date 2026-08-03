@@ -249,10 +249,10 @@ describe('findBoundaryViolations', () => {
 })
 
 /**
- * `lib/local.ts`'s `read` (commonly imported `as prefs`) — and every getter
+ * `lib/local.ts`'s `read` (commonly imported `as prefs`) — every getter
  * `lib/selection.ts` wraps it in (`activePlan`, `storyFilter`, `activeStory`,
- * `openStories`, `recentlyClosed`) — must never be called to seed a
- * module-scope binding.
+ * `openStories`, `recentlyClosed`), and `composables/useSelection.ts`'s own
+ * `useSelection` — must never be called to seed a module-scope binding.
  *
  * `main.ts`'s very first statement, `import App from './App.vue'`, pulls in
  * every composable and panel `App.vue` imports transitively — and ES module
@@ -265,11 +265,15 @@ describe('findBoundaryViolations', () => {
  * of the Plans panel) — not as a direct call to `read`, but one hop out
  * through `lib/selection.ts`'s `activePlan`, which is why that module's own
  * getters are guarded here too, by name, rather than trying to trace an
- * arbitrary call graph. `usePane.ts` shipped the direct form earlier still
- * (Task 2) and survives only because `bootPane()` deliberately re-reads and
- * corrects it from `App.vue`'s `onMounted` — see the exemption below. The
- * fix in every case is the same: read storage lazily, from inside a function
- * a caller invokes after `installStorage()` has run, never at import time.
+ * arbitrary call graph. `useSelection` itself is guarded for the identical
+ * reason one hop further out: a module-scope `useSelection()` call in a
+ * `.ts` helper or a non-setup `<script>` block seeds every ref it returns
+ * from the same unset defaults, before `App.vue`'s own setup ever runs.
+ * `usePane.ts` shipped the direct form earlier still (Task 2) and survives
+ * only because `bootPane()` deliberately re-reads and corrects it from
+ * `App.vue`'s `onMounted` — see the exemption below. The fix in every case is
+ * the same: read storage lazily, from inside a function a caller invokes
+ * after `installStorage()` has run, never at import time.
  */
 function findLocalScopeSeeds(text: string): string[] {
   const violations: string[] = []
@@ -278,13 +282,17 @@ function findLocalScopeSeeds(text: string): string[] {
   // `local.ts`'s `read()` — see this function's header for why a name list
   // stands in for tracing the call graph through a second file.
   const selectionGetters = new Set(['activePlan', 'storyFilter', 'activeStory', 'openStories', 'recentlyClosed'])
+  // Aliases bound to `useSelection` itself, held apart from `aliases` below —
+  // see the `<script setup>` exemption, immediately after this loop, for why.
+  const useSelectionAliases = new Set<string>()
 
   for (const clause of extractClauses(text)) {
     const specifier = specifierOf(clause)
     if (specifier === undefined) continue
     const guardLocal = specifier.endsWith('/local.js')
     const guardSelection = specifier.endsWith('/selection.js')
-    if (!guardLocal && !guardSelection) continue
+    const guardUseSelection = specifier.endsWith('/useSelection.js')
+    if (!guardLocal && !guardSelection && !guardUseSelection) continue
     const named = clause.match(/\{([\s\S]*)\}/)?.[1] ?? ''
     for (const entry of named.split(',')) {
       const trimmed = entry.trim()
@@ -294,8 +302,18 @@ function findLocalScopeSeeds(text: string): string[] {
       const local = asMatch?.[2] ?? trimmed
       if (guardLocal && imported === 'read') aliases.add(local)
       if (guardSelection && selectionGetters.has(imported)) aliases.add(local)
+      if (guardUseSelection && imported === 'useSelection') useSelectionAliases.add(local)
     }
   }
+  // A `<script setup>` block's top-level statements are a component's own
+  // `setup()` body, not module-scope code: Vue runs them at instantiation,
+  // strictly after `main.ts` reaches `installStorage()`, for every component
+  // no matter how deep it mounts. `useSelection()` is safe to call there —
+  // `App.vue`, `Plans.vue` and `Stories.vue` all do — so it is exempted from
+  // this scan only inside such a block. A `.ts` helper or a non-setup
+  // `<script>` block gets no such exemption, which is the actual bug this
+  // guard exists to catch.
+  if (!/<script\s+setup\b/.test(text)) for (const alias of useSelectionAliases) aliases.add(alias)
   if (aliases.size === 0) return violations
 
   // A line at column 0 is a top-level statement — nothing under this
@@ -323,6 +341,22 @@ describe('findLocalScopeSeeds', () => {
       'an aliased call inside a single-line const, regardless of what wraps it',
       `import { read as prefs } from '../lib/local.js'\nconst DEFAULTS = { pane: prefs().pane }`,
     ],
+    // The `selection.js` branch (`guardSelection`, above) was widened for
+    // `useSelection.ts`'s own imports of `lib/selection.ts`'s getters, but
+    // the three fixtures above only ever exercise the `local.js` branch —
+    // this is the one that actually calls through `guardSelection` rather
+    // than proving it only by reading the source.
+    [
+      'a module-scope call through lib/selection.ts, one hop out from local.ts',
+      `import { activePlan } from '../lib/selection.js'\nconst x = ref(activePlan())`,
+    ],
+    // `useSelection` itself, one hop further out than `lib/selection.ts` — a
+    // helper or a non-setup `<script>` block that calls it at module scope
+    // seeds every ref it returns from the same unset defaults.
+    [
+      'a module-scope call to useSelection itself',
+      `import { useSelection } from '../composables/useSelection.js'\nconst { activeStory } = useSelection()`,
+    ],
   ]
   it.each(flagged)('flags %s', (_name, source) => {
     expect(findLocalScopeSeeds(source)).not.toEqual([])
@@ -338,6 +372,13 @@ describe('findLocalScopeSeeds', () => {
     [
       'write called at module scope alongside an unrelated read import — only the read/prefs alias is guarded',
       `import { read as prefs, write } from '../lib/local.js'\nfunction boot() {\n  return prefs().pane\n}\nconst x = write({ pane: 'docked' })`,
+    ],
+    // The exemption a `<script setup>` block gets: its top-level statements
+    // are a component's own `setup()` body, run at instantiation rather than
+    // at module-evaluation time — `App.vue`'s and `Plans.vue`'s own shape.
+    [
+      'useSelection called at the top of a <script setup> block',
+      `<script setup lang="ts">\nimport { useSelection } from '../composables/useSelection.js'\nconst { activeStory } = useSelection()\n</script>`,
     ],
   ]
   it.each(safe)('does not flag %s', (_name, source) => {

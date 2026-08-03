@@ -31,3 +31,24 @@ export function split(jobs: readonly Job[]): { running: Job[]; waiting: Job[]; h
       .reverse(),
   }
 }
+
+/**
+ * The job a story's own Attach control would attach to — the newest job the
+ * queue holds for this story that has actually started, running or finished.
+ * `panels/stories.js`'s `jobForStory`, ported.
+ *
+ * `Job.story` survives every status a job passes through, so more than one
+ * entry in one session can name the same story: a `/mjloop:build` that failed
+ * and a `/mjloop:fix` that followed it both would. `jobs` arrives
+ * `[...finished, ...active, ...pending]`, oldest first within each group,
+ * which makes the whole array a rough timeline — walking it from the end
+ * therefore answers with whichever job is the newest action against this
+ * story.
+ *
+ * `queued` is skipped deliberately: attaching to a job that has not started
+ * sends `{type:'attach', jobId}` for an id the server's transcript map has no
+ * entry for, which blanks whatever the reader was actually watching.
+ */
+export function jobForStory(jobs: readonly Job[], storyId: string): Job | null {
+  return jobs.slice().reverse().find((job) => job.story === storyId && job.status !== 'queued') ?? null
+}
