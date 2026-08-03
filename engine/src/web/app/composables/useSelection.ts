@@ -79,7 +79,7 @@ export function useSelection() {
     activePlan: activePlanRef,
     setActivePlan(id: string | null): void {
       writeActivePlan(id)
-      activePlanRef!.value = id
+      activePlanRef!.value = readActivePlan()
     },
 
     activeStory: activeStoryRef,
@@ -89,7 +89,7 @@ export function useSelection() {
 
     setStoryFilter(filter: string): void {
       writeStoryFilter(filter)
-      storyFilterRef!.value = filter
+      storyFilterRef!.value = readStoryFilter()
     },
     /** Open a story tab, or select it if it is already open. */
     openStory(id: string): void {

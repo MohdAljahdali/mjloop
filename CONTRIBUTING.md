@@ -70,6 +70,21 @@ that genuinely ships nothing to users — a docs-only commit, a CI tweak — `gi
 Unit and integration tests live under `engine/`; the shell-driven smoke tests live under
 `tests/e2e/`.
 
+## The cockpit (`engine/src/web/app/`)
+
+The dashboard is a Vue 3 + TypeScript + Vite app, built to `engine/dist/web/public/` — not
+a hand-written page. `npm run dev` (from `engine/`) starts Vite's dev server against a
+`mjloop-web` you already have running; set `MJLOOP_DEV_ORIGIN` to the origin it printed so
+Vite's `/api` proxy (`vite.config.ts`) reaches it — the WebSocket connects to that origin
+directly and needs no proxy. `npm run build` compiles the app and is what `dist/` in git
+must always match; `node scripts/verify-ship.mjs` is the byte-for-byte check.
+
+`vendor/` (xterm and its fit addon) is resolved from `node_modules` at build time and
+copied in rather than bundled through Vite — `scripts/vendor.mjs` is the one list shared
+by `scripts/build.mjs` and `verify-ship.mjs`, so the two cannot drift. `engine/src/web/*.ts`
+(the server, protocol, api, writes) is the one boundary the cockpit never crosses in
+either direction — the app only ever talks to it over the API and the socket.
+
 ## Verifying a change
 
 Run all three from `engine/`:

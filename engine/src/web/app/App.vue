@@ -1,4 +1,22 @@
 <script setup lang="ts">
+/**
+ * The Vue app's root — the tab rail, the one kept-alive panel, and the two
+ * dialogs that sit outside it. `app.js` and `index.html`, ported.
+ *
+ * Comments across `app/` cite the deleted vanilla-JS page by path —
+ * `ui/pane.js:70-77`, `app.js:362-365`, `index.html:47-96`, and dozens more.
+ * Those files are gone from the working tree (`git log` for the commit that
+ * removed `src/web/public/` names it as "the switch"), but not from history:
+ * every one of them still exists at `611119c`, the last commit before that
+ * removal, and opens with
+ *
+ *     git show 611119c:engine/src/web/public/<path>
+ *
+ * from the repo root — e.g. `git show 611119c:engine/src/web/public/ui/render.js`.
+ * These citations are this branch's best asset: the migration's worst-class
+ * defects each traced back to an old-page comment recording a *decision*,
+ * not a mechanism. Open them; don't take the citation on faith.
+ */
 import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
 import { installAnnouncer, online, onNotice, snapshot, type AnnouncedMessage } from './stores/session.js'
 import { useI18n } from './composables/useI18n.js'

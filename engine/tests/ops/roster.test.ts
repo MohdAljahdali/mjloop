@@ -5,7 +5,7 @@ import { RosterViolationError, RunNotClosedError, rosterSet, rosterValidity, ros
 import { initLoop } from '../../src/ops/init.js'
 import { runLog } from '../../src/ops/log.js'
 import { cycleAdvance, cycleDirPath, runDirPath, runStart, UnknownTrackError } from '../../src/ops/run.js'
-import { findTrack } from '../../src/schemas/config.js'
+import { findTrack, type Track } from '../../src/schemas/config.js'
 import { RosterSchema } from '../../src/schemas/contract.js'
 import { StateStore } from '../../src/store/state-store.js'
 import { loadConfig, writeConfig } from '../../src/store/config-store.js'
@@ -490,8 +490,11 @@ describe('rosterViolations — the composition rules, split out as a pure functi
     // Written and reloaded rather than used in-memory: `config.tracks.edit`
     // set as a bare literal has no `closing` — `ConfigSchema.parse`, which
     // `loadConfig` runs on the round trip through disk, is what defaults it.
+    // The cast is deliberate: `Config['tracks']['edit']` is the schema's
+    // *output* type, where `closing` is always present, so a literal missing
+    // it needs the escape hatch to reach `writeConfig` at all.
     const config = await loadConfig(project.dir)
-    config.tracks.edit = { required: ['editor', 'verifier'], available: ['critic'], closing: [], max_cycles: 3, order: [] }
+    config.tracks.edit = { required: ['editor', 'verifier'], available: ['critic'], max_cycles: 3, order: [] } as unknown as Track
     config.specialists = { critic: 'always' }
     await writeConfig(project.dir, config)
     const { config: reloaded, track } = await trackFor('edit')

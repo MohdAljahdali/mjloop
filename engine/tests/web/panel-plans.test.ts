@@ -39,13 +39,24 @@ class FakeSocket {
   }
 }
 
-/** A read api that answers the paths a test names and 404s everything else — `panels.test.ts`'s own `serve()`, ported. */
+/**
+ * A read api that answers the paths a test names and 404s everything else —
+ * `panels.test.ts`'s own `serve()`, ported.
+ *
+ * "Registered" is `hasOwnProperty`, not `!== undefined`: the earlier form
+ * used `body === undefined` for the 404 test but sent `body ?? { error }` for
+ * the body, so a route deliberately registered with a literal `null` — a
+ * legitimate "fetched, and the answer is empty" fixture — got a 200 status
+ * paired with an error body, a combination no real endpoint sends and no
+ * caller here is written to expect. `panel-memory.test.ts`'s own `serve()`
+ * already made this call; this one now agrees with it.
+ */
 function serve(routes: Record<string, unknown>): void {
   vi.stubGlobal('fetch', (url: string) => {
-    const body = routes[url.split('?')[0] ?? '']
-    return Promise.resolve(
-      new Response(JSON.stringify(body ?? { error: { code: 'error.notFound' } }), { status: body === undefined ? 404 : 200 }),
-    )
+    const key = url.split('?')[0] ?? ''
+    const known = Object.prototype.hasOwnProperty.call(routes, key)
+    const body = known ? routes[key] : { error: { code: 'error.notFound' } }
+    return Promise.resolve(new Response(JSON.stringify(body), { status: known ? 200 : 404 }))
   })
 }
 

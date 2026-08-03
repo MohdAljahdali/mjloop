@@ -546,21 +546,6 @@ button.primary:disabled {
   margin-block-start: 0;
 }
 
-.stories-block {
-  margin-block-start: 16px;
-  border-block-start: 1px solid var(--line);
-  padding-block-start: 12px;
-}
-
-.stories-block h3 {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--dim);
-  font-weight: 650;
-  margin: 0 0 10px;
-}
-
 .acceptance {
   flex-basis: 100%;
   list-style: none;
