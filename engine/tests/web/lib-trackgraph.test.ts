@@ -34,5 +34,11 @@ describe('refusing a connection at the moment it is drawn', () => {
     expect(wouldCycle(ORDERED, 'a', 'a')).toBe(true)
     expect(wouldCycle(ORDERED, 'c', 'a')).toBe(true)
     expect(wouldCycle(ORDERED, 'a', 'd')).toBe(false)
+    // A gate is a hidden order edge (`blocks after proven_by`): 'y after x'
+    // here. Drawing 'x after y' would close a 2-cycle through that hidden
+    // edge, which wouldCycle must refuse even though the edge is not in
+    // `order` — see `gateEdges` in trackgraph.ts.
+    const gated = { ...PLAIN, gate: { proven_by: 'x', blocks: ['y'] } }
+    expect(wouldCycle(gated, 'y', 'x')).toBe(true)
   })
 })
