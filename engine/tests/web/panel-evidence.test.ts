@@ -383,7 +383,7 @@ describe('Evidence.vue', () => {
 
     expect(wrapper.find('[data-slot="verifyBlock"]').exists()).toBe(false)
     expect(wrapper.find('[data-slot="handoffDetails"]').exists()).toBe(false)
-    expect(wrapper.get('[data-slot="title"]').text()).toBe(english['evidence.cycle'].replace('{cycle}', '1'))
+    expect(wrapper.get('[data-slot="title"]').text()).toBe((english['evidence.cycle'] ?? '').replace('{cycle}', '1'))
   })
 
   it('fetches one cycle per entry the open run names', async () => {

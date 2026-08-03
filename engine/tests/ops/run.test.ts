@@ -180,7 +180,7 @@ describe('runStart', () => {
     // config schema refuses to define it and the state schema refuses to hold
     // it, so nothing reaches runDirName that could steer the write.
     const config = await loadConfig(project.dir)
-    config.tracks['../../../tmp/victim'] = { required: ['editor'], available: [], max_cycles: 1 }
+    config.tracks['../../../tmp/victim'] = { required: ['editor'], available: [], closing: [], max_cycles: 1, order: [] }
     await writeConfig(project.dir, config)
 
     await expect(loadConfig(project.dir)).rejects.toThrow(/tracks/)
@@ -267,7 +267,7 @@ describe('cycleAdvance', () => {
 
   it('opens the next cycle when the cap allows it', async () => {
     const config = await loadConfig(project.dir)
-    config.tracks.edit = { required: ['editor', 'verifier'], available: [], max_cycles: 3 }
+    config.tracks.edit = { required: ['editor', 'verifier'], available: [], closing: [], max_cycles: 3, order: [] }
     await writeConfig(project.dir, config)
 
     await runStart(project.dir, { track: 'edit', goal: 'Rename' }, clock)
@@ -285,7 +285,7 @@ describe('cycleAdvance', () => {
 
   it('never advances past the cycle cap under concurrent advances', async () => {
     const config = await loadConfig(project.dir)
-    config.tracks.edit = { required: ['editor', 'verifier'], available: [], max_cycles: 2 }
+    config.tracks.edit = { required: ['editor', 'verifier'], available: [], closing: [], max_cycles: 2, order: [] }
     await writeConfig(project.dir, config)
     await runStart(project.dir, { track: 'edit', goal: 'Rename' }, clock)
 
@@ -493,7 +493,7 @@ describe('stagnation guard', () => {
 
   it('halts on stagnation before the cap when both would fire', async () => {
     const config = await loadConfig(project.dir)
-    config.tracks.build = { required: ['builder', 'verifier'], available: [], max_cycles: 3 }
+    config.tracks.build = { required: ['builder', 'verifier'], available: [], closing: [], max_cycles: 3, order: [] }
     await writeConfig(project.dir, config)
 
     await failCycle()
@@ -1266,7 +1266,7 @@ describe('the closing set', () => {
     // A run that did not land its work has nothing to document, and documenting
     // it would describe a state of the code that no longer exists.
     const config = await loadConfig(project.dir)
-    config.tracks.build = { required: ['builder', 'verifier'], available: [], closing: ['docs'], max_cycles: 1 }
+    config.tracks.build = { required: ['builder', 'verifier'], available: [], closing: ['docs'], max_cycles: 1, order: [] }
     await writeConfig(project.dir, config)
 
     await runStart(project.dir, { track: 'build', goal: 'Add the endpoint' }, clock)
@@ -1299,6 +1299,7 @@ describe('the cycle handoff', () => {
       available: ['security'],
       closing: [],
       max_cycles: maxCycles,
+      order: [],
     }
     await writeConfig(project.dir, config)
   }

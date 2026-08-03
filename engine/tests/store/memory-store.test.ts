@@ -24,6 +24,8 @@ function entry(id: string, title: string, extra: Record<string, unknown> = {}) {
       at: AT,
       tags: ['auth'],
       run: null,
+      plan: null,
+      story: null,
       ...extra,
     },
     body: 'The reasoning, at length.',

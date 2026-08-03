@@ -1,0 +1,24 @@
+{
+  /*
+   * Type-checking for the test suite outside `tests/web/`.
+   *
+   * `npm run typecheck` never covered `tests/` at all — carried forward from
+   * the migration's foundation (`2026-08-03-vue-migration-carried-forward.md`)
+   * as a known gap, closed here now that the second plan has room for it.
+   * `tests/web/**` is excluded on purpose: those files mount Vue components
+   * and touch the DOM, so they typecheck through `tsconfig.web.json`/`vue-tsc`
+   * instead — see that config's own `include`.
+   *
+   * Extends the server program's compiler options rather than inventing a
+   * third set, but widens `rootDir` to the repo root: a file under `tests/`
+   * is outside `src`, `tsconfig.json`'s own `rootDir`, and nothing here emits
+   * anything for that mismatch to corrupt.
+   */
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "noEmit": true
+  },
+  "include": ["src/**/*.ts", "tests/**/*.ts"],
+  "exclude": ["src/web/app", "tests/web"]
+}

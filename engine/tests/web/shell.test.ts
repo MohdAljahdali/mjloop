@@ -386,7 +386,9 @@ describe('App', () => {
     await wrapper.get('#notice-toggle').trigger('click')
     const rows = wrapper.findAll('.notice-row')
     expect(rows).toHaveLength(1)
-    expect(rows[0]?.text()).toBe(english['write.ok.halt'])
+    // `.notice-row span`, not the row's whole text — a `<time>` sits beside
+    // it (`NoticeFeed.vue`), and the row's full text would also carry that.
+    expect(rows[0]?.get('span').text()).toBe(english['write.ok.halt'])
     expect(wrapper.find('#notice-toggle .nav-count').exists()).toBe(false)
 
     wrapper.unmount()
@@ -429,7 +431,7 @@ describe('App', () => {
 
     const wrapper = mount(App, { attachTo: document.body })
 
-    store.submit({ kind: 'gate', run: 'run-1', open: true })
+    store.submit({ kind: 'gate', plan: 'P001', from: null, to: 'approved', note: null })
     const id = JSON.parse((FakeSocket.last as FakeSocket).sent[0] as string).id
     FakeSocket.last?.deliver({ type: 'receipt', id, ok: false, code: 'write.stale.plan' })
     await nextTick()
@@ -439,7 +441,7 @@ describe('App', () => {
     await wrapper.get('#notice-toggle').trigger('click')
     const rows = wrapper.findAll('.notice-row')
     expect(rows).toHaveLength(1)
-    expect(rows[0]?.text()).toBe(english['write.stale.plan'])
+    expect(rows[0]?.get('span').text()).toBe(english['write.stale.plan'])
 
     wrapper.unmount()
   })
@@ -666,8 +668,19 @@ describe('NoticeFeed', () => {
     expect(wrapper.findAll('.notice-row')).toHaveLength(2)
   })
 
+  it('gives every row a <time>, which 20-rail.css:326 selects', async () => {
+    const wrapper = await freshWithNotices({ type: 'notice', message: { code: 'write.ok.halt' } })
+    await wrapper.get('#notice-toggle').trigger('click')
+    const time = wrapper.get('.notice-row time')
+    // A real, parseable timestamp — not a placeholder — and rendered text a
+    // reader can actually read, not the bare ISO string.
+    expect(Number.isNaN(new Date(time.attributes('datetime') ?? '').getTime())).toBe(false)
+    expect(time.text()).not.toBe('')
+    expect(time.text()).not.toBe(time.attributes('datetime'))
+  })
+
   it('sets the toggle\'s title from the notice.unreadCount plural, keyed the same as tabs.readyCount and tabs.highCount', async () => {
     const wrapper = await freshWithNotices({ type: 'notice', message: { code: 'write.ok.halt' } })
-    expect(wrapper.get('#notice-toggle').attributes('title')).toBe(english['notice.unreadCount.one'].replace('{count}', '1'))
+    expect(wrapper.get('#notice-toggle').attributes('title')).toBe((english['notice.unreadCount.one'] ?? '').replace('{count}', '1'))
   })
 })

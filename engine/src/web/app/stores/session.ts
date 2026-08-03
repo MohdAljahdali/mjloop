@@ -7,7 +7,20 @@
 import { computed, ref, shallowReadonly, shallowRef } from 'vue'
 import type { ClientMessage, Message, ServerMessage, Snapshot, Write } from '../types/protocol.js'
 
-export type Receipt = { id: string; ok: boolean; code: Message['code'] }
+/**
+ * The one code the client invents for itself, rather than the server ever
+ * saying it: a write refused before it left the page, because there was no
+ * live socket to carry it. Not a `WebCode` (`codes.ts`'s own closed union —
+ * the server never emits this) and not a `NoticeCode` (`lib/notifications.ts`
+ * — read off a `Snapshot` diff, and this is emitted at write time instead).
+ * Its own singleton union for the same reason those two are closed: a typo
+ * here is a compile error, not a raw identifier on screen.
+ */
+export type ClientCode = 'write.offline'
+
+export type Receipt = { id: string; ok: boolean; code: Message['code'] | ClientCode }
+/** What `announce()` is ever called with — a write receipt's code, or `ClientCode`. */
+export type AnnouncedMessage = { code: Message['code'] | ClientCode; params?: Record<string, string | number> }
 export type OutputFrame = { kind: 'append' | 'replace'; jobId: string; data: string }
 
 /** The slice of `WebSocket` this module uses, so a test can hand it a fake. */
@@ -132,15 +145,17 @@ export function submit(write: Write, options: { undo?: Write; settled?: (receipt
   if (!send({ type: 'write', id, write })) {
     // The socket is down. Refusing here rather than holding the write is the
     // same contract as a stale refusal from the server: nothing happened, and
-    // the page says so. The offline banner is already on screen with the why.
-    options.settled?.({ id, ok: false, code: 'write.failed' })
-    announce({ code: 'write.failed' })
+    // the page says so. `write.offline` — not `write.failed`, which points a
+    // reader at the server's terminal; nothing here is a server failure, and
+    // the offline banner is already on screen with the actual why.
+    options.settled?.({ id, ok: false, code: 'write.offline' })
+    announce({ code: 'write.offline' })
     return
   }
   pending.set(id, options)
 }
 
-type Announcer = (message: Message, action?: { code: string; run: () => void }) => void
+type Announcer = (message: AnnouncedMessage, action?: { code: string; run: () => void }) => void
 let announce: Announcer = () => {}
 
 /** Installed once from `App.vue`, so the store never imports a component. */

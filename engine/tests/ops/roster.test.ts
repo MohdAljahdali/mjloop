@@ -20,7 +20,7 @@ beforeEach(async () => {
   project = await makeTmpProject()
   await initLoop(project.dir, clock)
   const config = await loadConfig(project.dir)
-  config.tracks.edit = { required: ['editor', 'verifier'], available: ['scout', 'critic'], max_cycles: 3 }
+  config.tracks.edit = { required: ['editor', 'verifier'], available: ['scout', 'critic'], closing: [], max_cycles: 3, order: [] }
   await writeConfig(project.dir, config)
   await runStart(project.dir, { track: 'edit', goal: 'Rename submit label' }, clock)
 })
@@ -78,7 +78,7 @@ describe('rosterSet', () => {
 
   it('rejects a roster omitting a specialist forced to always', async () => {
     const config = await loadConfig(project.dir)
-    config.tracks.edit = { required: ['editor', 'verifier'], available: ['critic'], max_cycles: 3 }
+    config.tracks.edit = { required: ['editor', 'verifier'], available: ['critic'], closing: [], max_cycles: 3, order: [] }
     config.specialists = { critic: 'always' }
     await writeConfig(project.dir, config)
 
@@ -89,7 +89,7 @@ describe('rosterSet', () => {
 
   it('accepts a roster that includes the forced specialist', async () => {
     const config = await loadConfig(project.dir)
-    config.tracks.edit = { required: ['editor', 'verifier'], available: ['critic'], max_cycles: 3 }
+    config.tracks.edit = { required: ['editor', 'verifier'], available: ['critic'], closing: [], max_cycles: 3, order: [] }
     config.specialists = { critic: 'always' }
     await writeConfig(project.dir, config)
 
@@ -197,7 +197,7 @@ describe('an agent both drafted and skipped', () => {
 describe('specialists configured never', () => {
   beforeEach(async () => {
     const config = await loadConfig(project.dir)
-    config.tracks.edit = { required: ['editor', 'verifier'], available: ['critic', 'scout'], max_cycles: 3 }
+    config.tracks.edit = { required: ['editor', 'verifier'], available: ['critic', 'scout'], closing: [], max_cycles: 3, order: [] }
     config.specialists = { critic: 'never' }
     await writeConfig(project.dir, config)
   })
@@ -264,7 +264,7 @@ describe('an agent named roster', () => {
     // what puts the closing roster behind the same guard without a second rule:
     // the closing branch writes `closing/<agent>.json` beside it.
     const config = await loadConfig(project.dir)
-    config.tracks.edit = { required: ['editor', 'verifier'], available: [], closing: ['docs'], max_cycles: 3 }
+    config.tracks.edit = { required: ['editor', 'verifier'], available: [], closing: ['docs'], max_cycles: 3, order: [] }
     await writeConfig(project.dir, config)
     await cycleAdvance(project.dir, { agents: ['editor', 'verifier'], result: 'pass' }, clock)
 
@@ -280,7 +280,7 @@ describe('an agent named roster', () => {
  */
 async function closingTrack(closing: string[], available: string[] = []): Promise<void> {
   const config = await loadConfig(project.dir)
-  config.tracks.edit = { required: ['editor', 'verifier'], available, closing, max_cycles: 3 }
+  config.tracks.edit = { required: ['editor', 'verifier'], available, closing, max_cycles: 3, order: [] }
   await writeConfig(project.dir, config)
 }
 
@@ -423,7 +423,7 @@ describe('the closing roster', () => {
   it('refuses a closing roster after a halt', async () => {
     await closingTrack(['docs'])
     const config = await loadConfig(project.dir)
-    config.tracks.edit = { required: ['editor', 'verifier'], available: [], closing: ['docs'], max_cycles: 1 }
+    config.tracks.edit = { required: ['editor', 'verifier'], available: [], closing: ['docs'], max_cycles: 1, order: [] }
     await writeConfig(project.dir, config)
     await cycleAdvance(project.dir, { agents: ['editor', 'verifier'], result: 'fail' }, clock)
 
@@ -491,7 +491,7 @@ describe('rosterViolations — the composition rules, split out as a pure functi
     // set as a bare literal has no `closing` — `ConfigSchema.parse`, which
     // `loadConfig` runs on the round trip through disk, is what defaults it.
     const config = await loadConfig(project.dir)
-    config.tracks.edit = { required: ['editor', 'verifier'], available: ['critic'], max_cycles: 3 }
+    config.tracks.edit = { required: ['editor', 'verifier'], available: ['critic'], closing: [], max_cycles: 3, order: [] }
     config.specialists = { critic: 'always' }
     await writeConfig(project.dir, config)
     const { config: reloaded, track } = await trackFor('edit')
@@ -502,7 +502,7 @@ describe('rosterViolations — the composition rules, split out as a pure functi
 
   it('codes a forbidden specialist drafted as roster.forbidden', async () => {
     const config = await loadConfig(project.dir)
-    config.tracks.edit = { required: ['editor', 'verifier'], available: ['critic'], max_cycles: 3 }
+    config.tracks.edit = { required: ['editor', 'verifier'], available: ['critic'], closing: [], max_cycles: 3, order: [] }
     config.specialists = { critic: 'never' }
     await writeConfig(project.dir, config)
     const { config: reloaded, track } = await trackFor('edit')
@@ -512,7 +512,7 @@ describe('rosterViolations — the composition rules, split out as a pure functi
 
   it('codes a closing agent drafted into a working cycle as roster.closing', async () => {
     const config = await loadConfig(project.dir)
-    config.tracks.edit = { required: ['editor', 'verifier'], available: ['scout'], closing: ['docs'], max_cycles: 3 }
+    config.tracks.edit = { required: ['editor', 'verifier'], available: ['scout'], closing: ['docs'], max_cycles: 3, order: [] }
     const track = findTrack(config, 'edit')!
     const violations = rosterViolations('edit', track, config, ['editor', 'verifier', 'docs'], {
       scout: 'known files',
@@ -547,7 +547,7 @@ describe('rosterValidity — the read door behind /api/roster/<track>/valid', ()
     try {
       await initLoop(fresh.dir, clock)
       const config = await loadConfig(fresh.dir)
-      config.tracks.edit = { required: ['editor', 'verifier'], available: ['scout'], max_cycles: 3 }
+      config.tracks.edit = { required: ['editor', 'verifier'], available: ['scout'], closing: [], max_cycles: 3, order: [] }
       await writeConfig(fresh.dir, config)
 
       const result = await rosterValidity(fresh.dir, { track: 'edit', selected: ['editor'], skipped: {} })

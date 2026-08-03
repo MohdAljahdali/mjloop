@@ -137,7 +137,7 @@ describe('discoverCandidates — candidates are metadata only', () => {
       fetch: fakeFetch((url) => sameHostResponse(url, { items: [githubRepoItem({ content: 'should be dropped' })] })),
     }
     const candidates = await discoverCandidates(project.dir, { query: 'widgets', source: 'github' }, deps)
-    expect(Object.keys(candidates[0])).toEqual(['source', 'url', 'repository', 'ref', 'skillName', 'description', 'stars'])
+    expect(Object.keys(candidates[0]!)).toEqual(['source', 'url', 'repository', 'ref', 'skillName', 'description', 'stars'])
   })
 
   it('skips a malformed search item rather than returning a partial candidate', async () => {

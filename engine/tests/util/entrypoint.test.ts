@@ -9,7 +9,7 @@ const originalArgv1 = process.argv[1]
 let project: TmpProject | undefined
 
 afterEach(async () => {
-  process.argv[1] = originalArgv1
+  if (originalArgv1 !== undefined) process.argv[1] = originalArgv1
   await project?.cleanup()
   project = undefined
 })

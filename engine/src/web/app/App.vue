@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
-import type { Message } from './types/protocol.js'
-import { installAnnouncer, online, onNotice, snapshot } from './stores/session.js'
+import { installAnnouncer, online, onNotice, snapshot, type AnnouncedMessage } from './stores/session.js'
 import { useI18n } from './composables/useI18n.js'
 import { useNotices } from './composables/useNotices.js'
 import { useSelection } from './composables/useSelection.js'
@@ -55,7 +54,7 @@ const { notify } = useToasts()
 // door restored, the same guarantee `ui/notifications.js:15` names: "the
 // ephemeral toast and the durable log can never disagree".
 const { record } = useNotices()
-function announceAndLog(message: Message, action?: { code: string; run: () => void }): void {
+function announceAndLog(message: AnnouncedMessage, action?: { code: string; run: () => void }): void {
   notify(message, action)
   record(message)
 }

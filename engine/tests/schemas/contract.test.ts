@@ -139,6 +139,7 @@ describe('capEvidence', () => {
     findings,
     files_touched: [],
     next_hint: null,
+    skills_used: [],
   })
 
   it('keeps an excerpt under the ceiling byte for byte', () => {

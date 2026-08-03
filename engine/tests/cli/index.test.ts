@@ -482,6 +482,9 @@ describe('evaluateStopGuard', () => {
     last_cycle: { result: 'fail', agents: ['builder', 'verifier'] },
     halt_reason: null,
     reproduction: null,
+    design_system: false,
+    map: null,
+    config_error: null,
   }
 
   const input = { hook_event_name: 'Stop', cwd: '/repo', stop_hook_active: false }

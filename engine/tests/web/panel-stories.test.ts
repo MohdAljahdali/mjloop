@@ -27,7 +27,7 @@ class FakeSocket {
   static last: FakeSocket | null = null
   readyState = 1
   listeners = new Map<string, (event: unknown) => void>()
-  sent: unknown[] = []
+  sent: { id?: string }[] = []
   constructor(public url: string) {
     FakeSocket.last = this
   }
@@ -79,7 +79,11 @@ beforeEach(() => {
  * is what a real page never needs (there is only ever one `Stories.vue`
  * instance) but a suite that boots a fresh instance per test does.
  */
-const mounted: ReturnType<typeof mount>[] = []
+/** Only `unmount()` is used on the tracked list — every `mount()` result, whatever component it wraps, has one. */
+interface Unmountable {
+  unmount(): void
+}
+const mounted: Unmountable[] = []
 function mountTracked<T extends Parameters<typeof mount>[0]>(component: T, options?: Parameters<typeof mount>[1]) {
   const wrapper = mount(component, options as never)
   mounted.push(wrapper)
@@ -987,7 +991,7 @@ describe('Stories.vue', () => {
       await wrapper.get('[data-slot="open"][data-story="P001-S01"]').trigger('click')
       await vi.waitFor(() => expect(tabIds(wrapper)).toEqual(['P001-S01']))
       expect(wrapper.get('#story-tabs').attributes('role')).toBe('tablist')
-      expect(wrapper.get('.worktab').exists()).toBe(true)
+      expect(wrapper.find('.worktab').exists()).toBe(true)
       expect(wrapper.get('.worktab-open').attributes('role')).toBe('tab')
     })
 

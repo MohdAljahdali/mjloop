@@ -64,9 +64,9 @@ beforeEach(async () => {
 describe('useNotices', () => {
   it('records a server-pushed {type:"notice"} frame — door 1', () => {
     const { feed, unread } = notices.useNotices()
-    FakeSocket.last?.deliver({ type: 'notice', message: { code: 'notice.config.missing' } })
+    FakeSocket.last?.deliver({ type: 'notice', message: { code: 'job.abandoned' } })
     expect(unread.value).toBe(1)
-    expect(feed.value[0]?.message).toEqual({ code: 'notice.config.missing' })
+    expect(feed.value[0]?.message).toEqual({ code: 'job.abandoned' })
   })
 
   it('records whatever is passed to record() — door 2, the one App.vue calls alongside the toast', () => {

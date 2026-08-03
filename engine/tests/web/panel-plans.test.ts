@@ -24,7 +24,7 @@ class FakeSocket {
   static last: FakeSocket | null = null
   readyState = 1
   listeners = new Map<string, (event: unknown) => void>()
-  sent: unknown[] = []
+  sent: { id?: string }[] = []
   constructor(public url: string) {
     FakeSocket.last = this
   }
@@ -536,7 +536,7 @@ describe('structure (60-panels.css)', () => {
     const { Plans } = await boot(emptySnapshot({ plans: [planFixture({ id: 'P001' })] }))
     const wrapper = mount(Plans)
     await nextTick()
-    expect(wrapper.get('.panel-grid > .panel-side').exists()).toBe(true)
+    expect(wrapper.find('.panel-grid > .panel-side').exists()).toBe(true)
   })
 
   it('gives every plan row the ".plan" class and its progress bar the "progress"/"bar" structure the stylesheet keys on', async () => {
@@ -547,9 +547,9 @@ describe('structure (60-panels.css)', () => {
     await nextTick()
 
     const row = wrapper.get('#plans-list .plan')
-    expect(row.get('.plan-head').exists()).toBe(true)
+    expect(row.find('.plan-head').exists()).toBe(true)
     expect(row.get('.progress').get('.bar').attributes('style')).toContain('100%')
-    expect(row.get('.plan-title').exists()).toBe(true)
+    expect(row.find('.plan-title').exists()).toBe(true)
   })
 
   it('carries the state/approval family classes 60-panels.css keys colour on', async () => {
@@ -587,6 +587,6 @@ describe('structure (60-panels.css)', () => {
 
     expect(wrapper.get('#plan-evidence-list').classes()).toContain('runs')
     expect(wrapper.get('#plan-memory-list').classes()).toContain('memories')
-    expect(wrapper.get('#plan-memory-list .memory').exists()).toBe(true)
+    expect(wrapper.find('#plan-memory-list .memory').exists()).toBe(true)
   })
 })

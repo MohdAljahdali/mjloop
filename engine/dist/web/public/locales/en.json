@@ -616,6 +616,7 @@
   "write.stale.config": "The project settings changed in the meantime. Review the latest values and save again.",
   "write.invalid.config": "Those settings would make the project configuration invalid — nothing was changed.",
   "write.failed": "That could not be written — see the terminal the server was started from.",
+  "write.offline": "That could not be sent — the connection to the server is down. It will not be retried automatically.",
   "write.ok.gate": "Decision recorded.",
   "write.ok.story": "Story requeued.",
   "write.ok.halt": "Run halted. HALT.md is in the run directory.",

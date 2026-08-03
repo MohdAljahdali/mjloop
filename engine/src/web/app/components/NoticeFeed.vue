@@ -5,6 +5,7 @@
  */
 import { useI18n } from '../composables/useI18n.js'
 import { useNotices } from '../composables/useNotices.js'
+import { stamp } from '../lib/fmt.js'
 import Tx from './Tx.vue'
 
 const { t, tn } = useI18n()
@@ -40,6 +41,12 @@ const { open, feed, unread, toggle } = useNotices()
              agent names, tracks, paths and digests, so this is `Tx`, not
              `t()`, unconditionally. -->
         <span><Tx :key-name="entry.message.code" :params="entry.message.params" /></span>
+        <!-- `20-rail.css:326`'s `.notice-row time` — `useNotices.ts`'s `record()`
+             stamps every entry the moment it is recorded, the wall-clock time
+             this session showed it, not anything the server sent. `stamp()`,
+             not `time()`: this is a single event on record, `notifications.js`'s
+             own choice, ported. -->
+        <time :datetime="entry.at">{{ stamp(entry.at) }}</time>
       </li>
     </ul>
   </section>

@@ -59,7 +59,7 @@ describe('an autonomous run', () => {
 
   it('is released by the cycle cap when nothing repeats', async () => {
     const config = await loadConfig(project.dir)
-    config.tracks.build = { required: ['builder', 'verifier'], available: [], max_cycles: 2 }
+    config.tracks.build = { required: ['builder', 'verifier'], available: [], closing: [], max_cycles: 2, order: [] }
     await writeConfig(project.dir, config)
 
     await runStart(project.dir, { track: 'build', goal: 'Add the endpoint' }, clock)

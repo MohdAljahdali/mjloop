@@ -152,7 +152,7 @@ describe('runLog agent names', () => {
 
   it('accepts the ordinary agent names', async () => {
     const config = await loadConfig(project.dir)
-    config.tracks.edit = { required: ['editor', 'verifier'], available: ['ui-critic_2'], max_cycles: 1 }
+    config.tracks.edit = { required: ['editor', 'verifier'], available: ['ui-critic_2'], closing: [], max_cycles: 1, order: [] }
     await writeConfig(project.dir, config)
 
     await expect(runLog(project.dir, { agent: 'verifier', result: RESULT }, clock)).resolves.toBeDefined()
@@ -192,7 +192,7 @@ describe('runLog against the track roster', () => {
 
   it('refuses a specialist the config forbids, though the track defines it', async () => {
     const config = await loadConfig(project.dir)
-    config.tracks.edit = { required: ['editor', 'verifier'], available: ['security'], max_cycles: 3 }
+    config.tracks.edit = { required: ['editor', 'verifier'], available: ['security'], closing: [], max_cycles: 3, order: [] }
     config.specialists = { security: 'never' }
     await writeConfig(project.dir, config)
 
@@ -385,7 +385,7 @@ describe('runLog against the run pinned skill manifest', () => {
     // placed inside the ordinary path it would be the one result that could
     // carry an unbacked claim, and it is the result a commit rests on.
     const config = await loadConfig(project.dir)
-    config.tracks.edit = { ...config.tracks.edit, closing: ['docs'] }
+    config.tracks.edit = { ...config.tracks.edit!, closing: ['docs'] }
     await writeConfig(project.dir, config)
     await new StateStore(project.dir, clock).update((draft) => {
       draft.status = 'done'
@@ -400,7 +400,7 @@ describe('runLog against the run pinned skill manifest', () => {
 describe('runLog against a cycle that closes under it', () => {
   beforeEach(async () => {
     const config = await loadConfig(project.dir)
-    config.tracks.edit = { required: ['editor', 'verifier'], available: [], max_cycles: 3 }
+    config.tracks.edit = { required: ['editor', 'verifier'], available: [], closing: [], max_cycles: 3, order: [] }
     await writeConfig(project.dir, config)
   })
 
@@ -470,7 +470,9 @@ describe('the reproduction gate', () => {
     config.tracks.fix = {
       required: ['reproducer', 'fixer', 'verifier'],
       available: ['Fixer'],
+      closing: [],
       max_cycles: 5,
+      order: [],
       gate: { proven_by: 'reproducer', blocks: ['fixer'] },
     }
     await writeConfig(project.dir, config)
@@ -1185,6 +1187,7 @@ describe('a closing agent', () => {
       available: ['investigator'],
       closing: ['docs'],
       max_cycles: 5,
+      order: [],
       gate: { proven_by: 'reproducer', blocks: ['fixer', 'docs'] },
     }
     await writeConfig(project.dir, config)
@@ -1263,6 +1266,7 @@ describe('a closing agent', () => {
       available: ['investigator'],
       closing: ['docs'],
       max_cycles: 5,
+      order: [],
       gate: { proven_by: 'docs', blocks: ['fixer'] },
     }
     await writeConfig(project.dir, config)

@@ -175,7 +175,7 @@ describe('a multi-cycle build run', () => {
 
   it('still honours the cap when the work keeps changing', async () => {
     const config = await loadConfig(project.dir)
-    config.tracks.build = { required: ['builder', 'verifier'], available: [], max_cycles: 2 }
+    config.tracks.build = { required: ['builder', 'verifier'], available: [], closing: [], max_cycles: 2, order: [] }
     await writeConfig(project.dir, config)
 
     await runStart(project.dir, { track: 'build', goal: 'Add a Send button' }, clock)

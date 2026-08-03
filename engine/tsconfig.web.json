@@ -31,7 +31,7 @@
     "skipLibCheck": true,
     "allowImportingTsExtensions": true
   },
-  "include": ["src/web/app/**/*.ts", "src/web/app/**/*.vue", "src/web/app/env.d.ts"],
+  "include": ["src/web/app/**/*.ts", "src/web/app/**/*.vue", "src/web/app/env.d.ts", "tests/web/**/*.ts"],
   /*
    * `app/types/protocol.ts` re-exports types from `protocol.ts` and
    * `writes.ts`. Some of those (`ClientMessage`, `Write`) are `z.infer` of a

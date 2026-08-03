@@ -73,18 +73,20 @@ describe('Toasts', () => {
       expect(toasts.value).toHaveLength(1)
     })
 
-    it('cancels the pending timer when a toast is dismissed manually, so it does not later fire against a removed id', () => {
+    it('cancels the pending timer when a toast is dismissed manually, so it does not leave a stray timer behind', () => {
       const { notify, dismiss, toasts } = useToasts()
       notify({ code: 'write.ok.halt' })
       const id = toasts.value[0]?.id as number
       dismiss(id)
       expect(toasts.value).toHaveLength(0)
-
-      // Notify a second toast so a stray timer firing against the removed id
-      // would be visible as this one vanishing early or an error being thrown.
-      notify({ code: 'write.ok.halt' })
-      expect(() => vi.advanceTimersByTime(8000)).not.toThrow()
-      expect(toasts.value).toHaveLength(0)
+      // The real assertion: no timer survives a manual dismiss. A version of
+      // this test once asserted `toasts.value` had length 0 after advancing
+      // 8000ms — but a *second* toast notified in between would also reach
+      // length 0 on its own natural expiry, so that assertion passed whether
+      // or not the first toast's timer was actually cancelled. `getTimerCount`
+      // reads the fake-timer queue directly: if `remove()` merely filtered the
+      // array without calling `clearTimeout`, this is 1, not 0.
+      expect(vi.getTimerCount()).toBe(0)
     })
   })
 })

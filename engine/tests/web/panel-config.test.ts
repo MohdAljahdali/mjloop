@@ -465,7 +465,7 @@ describe('Config.vue', () => {
       await vi.waitFor(() => expect(wrapper.find('.track-editor').exists()).toBe(true))
 
       expect(wrapper.findAll('.track-preview-item')).toHaveLength(0)
-      expect(wrapper.get('.track-list-empty').exists()).toBe(true)
+      expect(wrapper.find('.track-list-empty').exists()).toBe(true)
 
       const row = wrapper.findAll('.track-order-agent').find((node) => node.attributes('data-agent') === 'alpha')
       const box = row?.get('input')
@@ -614,7 +614,7 @@ describe('Config.vue', () => {
       await gateCheckbox.setValue(true)
 
       const comments = wrapper.get('.track-preview-comments')
-      expect(comments.text()).toBe(english['config.preview.commentsLost.other'].replace('{count}', '2'))
+      expect(comments.text()).toBe((english['config.preview.commentsLost.other'] ?? '').replace('{count}', '2'))
     })
 
     it('keeps an order edge reachable, and its problem visible, after its own agent leaves required — the orphan row', async () => {
@@ -691,11 +691,11 @@ describe('Config.vue', () => {
       expect(root.classes()).toContain('panel')
       expect(root.attributes('aria-labelledby')).toBe('panel-config-title')
       expect(wrapper.get('#config-editor').classes()).toContain('config-editor')
-      expect(wrapper.get('.config-editor-head').exists()).toBe(true)
-      expect(wrapper.get('.config-editor-actions').exists()).toBe(true)
+      expect(wrapper.find('.config-editor-head').exists()).toBe(true)
+      expect(wrapper.find('.config-editor-actions').exists()).toBe(true)
       await vi.waitFor(() => expect(wrapper.find('.grid-telemetry').exists()).toBe(true))
-      expect(wrapper.get('.track-lists').exists()).toBe(true)
-      expect(wrapper.get('.track-editor-head').exists()).toBe(true)
+      expect(wrapper.find('.track-lists').exists()).toBe(true)
+      expect(wrapper.find('.track-editor-head').exists()).toBe(true)
     })
   })
 })

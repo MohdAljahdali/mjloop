@@ -11,7 +11,13 @@ const clock = () => NOW
 let project: TmpProject
 
 const PLAN = {
-  frontmatter: { id: 'P001', slug: 'user-auth', title: 'User authentication', created_at: '2026-07-27T09:00:00.000Z' },
+  frontmatter: {
+    id: 'P001',
+    slug: 'user-auth',
+    title: 'User authentication',
+    created_at: '2026-07-27T09:00:00.000Z',
+    approval: null,
+  },
   body: '',
 }
 

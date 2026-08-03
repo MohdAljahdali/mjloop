@@ -52,7 +52,16 @@ describe('memoryAdd', () => {
 
   it('says memory is full rather than failing on an id the caller never gave', async () => {
     await writeMemory(project.dir, {
-      frontmatter: { id: 'M999', kind: 'decision', title: 'Last', at: NOW.toISOString(), tags: [], run: null },
+      frontmatter: {
+        id: 'M999',
+        kind: 'decision',
+        title: 'Last',
+        at: NOW.toISOString(),
+        tags: [],
+        run: null,
+        plan: null,
+        story: null,
+      },
       body: 'x',
     })
     await expect(

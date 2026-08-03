@@ -165,10 +165,10 @@ describe('initLoop and the project profile', () => {
     const readdir = fs.readdir.bind(fs)
     let onDisk: { state: boolean; config: boolean } | null = null
 
-    const spy = vi.spyOn(fs, 'readdir').mockImplementation(async (...args: unknown[]) => {
+    const spy = vi.spyOn(fs, 'readdir').mockImplementation((async (...args: unknown[]) => {
       onDisk ??= { state: await present(paths.state), config: await present(paths.config) }
       return (readdir as (...rest: unknown[]) => Promise<unknown>)(...args)
-    })
+    }) as typeof fs.readdir)
     try {
       await initLoop(project.dir, () => NOW)
     } finally {

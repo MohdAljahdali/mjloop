@@ -24,7 +24,7 @@ beforeEach(async () => { project = await makeTmpProject() })
 afterEach(async () => { await project.cleanup() })
 
 const PLAN = {
-  frontmatter: { id: 'P001', slug: 'user-auth', title: 'User authentication', created_at: CREATED },
+  frontmatter: { id: 'P001', slug: 'user-auth', title: 'User authentication', created_at: CREATED, approval: null },
   body: 'The problem and the approach.',
   dir: '',
 }
@@ -288,7 +288,7 @@ describe('frontmatter repair', () => {
   })
 
   it('carries a recorded approval through a repair', async () => {
-    const approval = { decision: 'approved', by: 'mohd', at: '2026-07-27T11:20:00.000Z', note: 'Ship it.' }
+    const approval = { decision: 'approved' as const, by: 'mohd', at: '2026-07-27T11:20:00.000Z', note: 'Ship it.' }
     await writePlan(project.dir, { frontmatter: { ...PLAN.frontmatter, approval }, body: 'Body.' })
     const dir = await findPlanDir(project.dir, 'P001')
     const file = path.join(dir, 'PLAN.md')
@@ -383,7 +383,7 @@ describe('frontmatter repair', () => {
     const dir = await findPlanDir(project.dir, 'P001')
     const approved = {
       ...PLAN.frontmatter,
-      approval: { decision: 'approved', by: 'mohd', at: '2026-07-27T11:20:00.000Z', note: null },
+      approval: { decision: 'approved' as const, by: 'mohd', at: '2026-07-27T11:20:00.000Z', note: null },
     }
     await writePlan(project.dir, { frontmatter: approved, body: 'Body.' })
 

@@ -49,6 +49,7 @@ function result(overrides: Partial<AgentResult> = {}): AgentResult {
     findings: [],
     files_touched: [],
     next_hint: null,
+    skills_used: [],
     ...overrides,
   }
 }

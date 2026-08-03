@@ -23,30 +23,36 @@
  */
 import { ref, watch } from 'vue'
 import type { Message, Snapshot } from '../types/protocol.js'
-import { onNotice, snapshot } from '../stores/session.js'
+import { onNotice, snapshot, type ClientCode } from '../stores/session.js'
 import { deriveEvents, type NoticeCode } from '../lib/notifications.js'
 
 /** Bounded: this is a feed, not a log, and it is rendered. */
 const LIMIT = 50
 
 /**
- * `code` accepts either union `record` is ever called with — the server's
- * `WebCode` (a write receipt, or a `{type:'notice'}` frame) or `lib/notifications.ts`'s
- * own `NoticeCode` (a derived event) — deliberately disjoint from each other,
- * since nothing `deriveEvents` produces is a wire message. `record`/`Tx` only
- * ever need the `{code, params?}` shape, not which union `code` came from, so
- * widening it here is what lets both doors call `record` with no cast at all.
+ * `code` accepts every union `record` is ever called with — the server's
+ * `WebCode` (a write receipt, or a `{type:'notice'}` frame), `lib/notifications.ts`'s
+ * own `NoticeCode` (a derived event), or `stores/session.ts`'s `ClientCode`
+ * (a write refused before it ever reached the wire) — deliberately disjoint
+ * from each other, since neither `deriveEvents` nor a refused-offline write
+ * ever produces a wire message. `record`/`Tx` only ever need the
+ * `{code, params?}` shape, not which union `code` came from, so widening it
+ * here is what lets every door call `record` with no cast at all.
  */
-type Entry = { code: Message['code'] | NoticeCode; params?: Record<string, string | number> }
+type Entry = { code: Message['code'] | NoticeCode | ClientCode; params?: Record<string, string | number> }
 
 const open = ref(false)
-const feed = ref<{ id: number; message: Entry }[]>([])
+const feed = ref<{ id: number; at: string; message: Entry }[]>([])
 /** `notifications.js:130-131`: unread, not total — and it resets to zero on open. */
 const unread = ref(0)
 let counter = 0
 
 function record(message: Entry): void {
-  feed.value = [{ id: ++counter, message }, ...feed.value].slice(0, LIMIT)
+  // `notifications.js`'s own `Entry.at` — an ISO timestamp taken the moment
+  // the entry is recorded, not read off anything the server sent. `NoticeFeed.vue`
+  // renders it through `fmt.ts`'s `stamp()`, the same "date and time, for
+  // something that happened once" formatter an approval or a halt uses.
+  feed.value = [{ id: ++counter, at: new Date().toISOString(), message }, ...feed.value].slice(0, LIMIT)
   if (!open.value) unread.value += 1
 }
 

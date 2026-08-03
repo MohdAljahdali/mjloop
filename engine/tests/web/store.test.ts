@@ -1,8 +1,19 @@
 // @vitest-environment happy-dom
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { isProxy } from 'vue'
 import type { ServerMessage } from '../../src/web/protocol.js'
 import { emptySnapshot } from './helpers/page.js'
+
+/**
+ * `session.ts`'s own `RETRY_MS` — not exported, so mirrored here. A close
+ * event schedules a real `setTimeout(open, RETRY_MS)`; every test in this
+ * file runs under fake timers precisely so that a `'close'` emitted anywhere
+ * below never leaves a live 1000ms timer running past the test that fired
+ * it — the leak `store.test.ts` used to have, and the reason reconnection
+ * itself had no test at all: nothing here could advance a clock nobody
+ * controlled.
+ */
+const RETRY_MS = 1000
 
 /**
  * A socket the test drives by hand. The store must never construct a real one
@@ -33,9 +44,16 @@ class FakeSocket {
 let store: typeof import('../../src/web/app/stores/session.ts')
 
 beforeEach(async () => {
+  vi.useFakeTimers()
   vi.resetModules()
   store = await import('../../src/web/app/stores/session.ts')
   store.connect({ token: 'tok', socketFactory: (url) => new FakeSocket(url) as any })
+})
+
+afterEach(() => {
+  // Discards any timer a test left pending (a scheduled reconnect, chiefly)
+  // rather than letting it fire for real once fake timers stop intercepting it.
+  vi.useRealTimers()
 })
 
 describe('the connection', () => {
@@ -49,6 +67,31 @@ describe('the connection', () => {
     expect(store.online.value).toBe(true)
     FakeSocket.last?.emit('close')
     expect(store.online.value).toBe(false)
+  })
+})
+
+describe('reconnection', () => {
+  it('does not retry before the delay, then opens a new socket and reports online again once it does', () => {
+    FakeSocket.last?.emit('open')
+    expect(store.online.value).toBe(true)
+    const first = FakeSocket.last
+
+    FakeSocket.last?.emit('close')
+    expect(store.online.value).toBe(false)
+
+    // Silent and automatic, but not immediate — nothing has reconnected yet.
+    vi.advanceTimersByTime(RETRY_MS - 1)
+    expect(FakeSocket.last).toBe(first)
+
+    vi.advanceTimersByTime(1)
+    expect(FakeSocket.last).not.toBe(first)
+    expect(store.online.value).toBe(false)
+
+    // The new socket carries the same token, and coming online again is
+    // reported the same way the first connection was.
+    expect(FakeSocket.last?.url).toContain('t=tok')
+    FakeSocket.last?.emit('open')
+    expect(store.online.value).toBe(true)
   })
 })
 
@@ -121,13 +164,19 @@ describe('writes', () => {
     const announced: unknown[] = []
     store.installAnnouncer((message, action) => announced.push({ message, undo: action !== undefined }))
 
-    store.submit({ kind: 'gate', run: 'r', open: true }, { undo: { kind: 'gate', run: 'r', open: false } })
+    store.submit(
+      { kind: 'gate', plan: 'P001', from: null, to: 'approved', note: null },
+      { undo: { kind: 'gate', plan: 'P001', from: 'approved', to: 'rejected', note: null } },
+    )
     const first = JSON.parse(FakeSocket.last?.sent[0] ?? '{}').id
-    FakeSocket.last?.deliver({ type: 'receipt', id: first, ok: false, code: 'write.stale' })
+    FakeSocket.last?.deliver({ type: 'receipt', id: first, ok: false, code: 'write.stale.plan' })
     // Refused: announced, but there is nothing to undo — it did not happen.
-    expect(announced).toEqual([{ message: { code: 'write.stale' }, undo: false }])
+    expect(announced).toEqual([{ message: { code: 'write.stale.plan' }, undo: false }])
 
-    store.submit({ kind: 'gate', run: 'r', open: true }, { undo: { kind: 'gate', run: 'r', open: false } })
+    store.submit(
+      { kind: 'gate', plan: 'P001', from: null, to: 'approved', note: null },
+      { undo: { kind: 'gate', plan: 'P001', from: 'approved', to: 'rejected', note: null } },
+    )
     const second = JSON.parse(FakeSocket.last?.sent[1] ?? '{}').id
     FakeSocket.last?.deliver({ type: 'receipt', id: second, ok: true, code: 'write.ok.gate' })
     expect(announced[1]).toEqual({ message: { code: 'write.ok.gate' }, undo: true })
@@ -146,8 +195,8 @@ describe('writes', () => {
     expect(socket?.sent).toEqual([])
     // The caller is told immediately: a refusal, not silence.
     expect(settled).toHaveBeenCalledTimes(1)
-    expect(settled).toHaveBeenCalledWith(expect.objectContaining({ ok: false, code: 'write.failed' }))
-    expect(announced).toEqual([{ code: 'write.failed' }])
+    expect(settled).toHaveBeenCalledWith(expect.objectContaining({ ok: false, code: 'write.offline' }))
+    expect(announced).toEqual([{ code: 'write.offline' }])
 
     // A receipt that later arrives under the same id (e.g. the socket came
     // back and the server, coincidentally, reused a correlation id) does not

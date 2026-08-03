@@ -1,8 +1,9 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
-import { defineComponent, h, nextTick } from 'vue'
+import { defineComponent, h, nextTick, type PropType } from 'vue'
 import { ConfigSchema } from '../../src/schemas/config.js'
+import type { StateSummary } from '../../src/ops/summary.js'
 import type { Snapshot } from '../../src/web/protocol.js'
 import { emptySnapshot, readLocale } from './helpers/page.js'
 
@@ -105,7 +106,10 @@ async function boot(snapshot: Snapshot = emptySnapshot()) {
    */
   const halt = useHalt()
   const HaltHost = defineComponent({
-    props: { snapshot: { type: Object, required: true }, runId: { type: String, default: null } },
+    props: {
+      snapshot: { type: Object as PropType<Snapshot>, required: true },
+      runId: { type: String as PropType<string | null>, default: null },
+    },
     setup: (props) => () =>
       h('div', [h(Rail, { snapshot: props.snapshot }), h(HaltDialog, { open: halt.open.value, runId: props.runId, onClose: halt.closeHalt })]),
   })
@@ -113,7 +117,7 @@ async function boot(snapshot: Snapshot = emptySnapshot()) {
   return { store, Run, Banners, Rail, HaltDialog, HaltHost, halt, socket: FakeSocket.last as FakeSocket }
 }
 
-const runningState = (patch: Record<string, unknown> = {}) => ({
+const runningState = (patch: Partial<StateSummary> = {}): StateSummary => ({
   initialised: true,
   recovered: false,
   status: 'running',
@@ -130,6 +134,7 @@ const runningState = (patch: Record<string, unknown> = {}) => ({
   halt_reason: null,
   reproduction: null,
   design_system: true,
+  map: null,
   config_error: null,
   ...patch,
 })
@@ -204,7 +209,7 @@ describe('Run.vue', () => {
     const wrapper = mount(Run)
     await vi.waitFor(() => expect(wrapper.find('#preflight-basis').text()).not.toBe(''))
 
-    expect(wrapper.get('#preflight-basis').text()).toBe(english['preflight.basis.other'].replace('{count}', '3'))
+    expect(wrapper.get('#preflight-basis').text()).toBe((english['preflight.basis.other'] ?? '').replace('{count}', '3'))
     expect(wrapper.findAll('#preflight-past dt').map((n) => n.text())).toEqual([
       english['preflight.pastCycles'],
       english['preflight.pastDispatches'],
@@ -297,7 +302,7 @@ describe('Run.vue', () => {
     await vi.waitFor(() => expect(wrapper.find('#run-gate-block').exists()).toBe(true))
 
     expect(wrapper.get('#run-gate-state').text()).toBe(
-      english['run.gateState.provenBy'].replace('{agent}', 'reproducer').replace('{cycle}', '2'),
+      (english['run.gateState.provenBy'] ?? '').replace('{agent}', 'reproducer').replace('{cycle}', '2'),
     )
     expect(wrapper.get('#run-gate-ref').text()).toBe('npm test -- repro.spec.ts')
     expect(wrapper.get('#run-gate-excerpt').text()).toBe('AssertionError: expected true')

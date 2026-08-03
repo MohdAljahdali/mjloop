@@ -454,7 +454,7 @@ describe('Pane', () => {
     const { Pane } = await boot(snap)
     const wrapper = mount(Pane)
     expect(wrapper.find('#view-session').attributes('aria-current')).toBe('true')
-    expect(wrapper.find('#view-queue').text()).toBe(english['queue.tabCount.other'].replace('{count}', '3'))
+    expect(wrapper.find('#view-queue').text()).toBe((english['queue.tabCount.other'] ?? '').replace('{count}', '3'))
   })
 
   it('names the job on screen in the head, and warns only when it is not the live job', async () => {

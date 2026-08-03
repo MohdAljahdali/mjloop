@@ -39,7 +39,15 @@ async function writeJson(file: string, value: unknown): Promise<void> {
 }
 
 function result(): AgentResult {
-  return { status: 'pass', summary: 'did the thing', evidence: [], findings: [], files_touched: [], next_hint: null }
+  return {
+    status: 'pass',
+    summary: 'did the thing',
+    evidence: [],
+    findings: [],
+    files_touched: [],
+    next_hint: null,
+    skills_used: [],
+  }
 }
 
 /** A run of `cycles` cycles, each dispatching `agents`. */
@@ -92,7 +100,7 @@ describe('preflightEstimate', () => {
     // `fix` all carry an `order` edge and `plan` carries a gate — so the
     // base case dispatchWaves still has to handle is built by hand here.
     const config = await loadConfig(project.dir)
-    config.tracks.bare = { required: ['solo'], available: [], max_cycles: 1 }
+    config.tracks.bare = { required: ['solo'], available: [], closing: [], max_cycles: 1, order: [] }
     await writeConfig(project.dir, config)
 
     const preflight = await preflightEstimate(project.dir, { track: 'bare' })

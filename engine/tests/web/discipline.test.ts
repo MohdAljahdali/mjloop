@@ -80,7 +80,25 @@ describe('accessibility', () => {
     // The open tab needs a visible cue, not only `aria-current` — the old
     // test asserted this against `css/30-tabs.css`; `30-tabs.css` carries
     // across unchanged, only moved under `app/styles/`.
-    expect(readStyle('30-tabs.css')).toMatch(/\.tabs a\[aria-current="page"\][^{]*\{[^}]*background:/)
+    //
+    // A single `.toMatch` against the whole file does NOT discriminate: the
+    // stylesheet restyles `.tabs a[aria-current="page"]` twice — once as the
+    // base rule, once again inside the RTL/narrow-viewport media query — and
+    // `[^{]*` also lets the `::after` rule's own `background:` satisfy the
+    // match. Renaming the base rule's `background:` to `backgroundX:` left
+    // this passing regardless, because one of the other three rules always
+    // still had a real `background:` in it. Tightening `[^{]*` to `\s*\{`
+    // does not fix it either — the media-query rule is a second, exact
+    // match for the same selector text, so it alone keeps the loose version
+    // green. The fix: extract every block whose selector is exactly
+    // `.tabs a[aria-current="page"]` (immediately followed by `{`, which is
+    // what excludes the `::after`/`::before` variants) and require `background:`
+    // in EACH one — so either rule losing it fails the test.
+    const tabsCss = readStyle('30-tabs.css')
+    const openTabRules = [...tabsCss.matchAll(/\.tabs a\[aria-current="page"\]\s*\{([^}]*)\}/g)].map((match) => match[1] ?? '')
+    // Both the base rule and the media-query rule, or this is checking nothing.
+    expect(openTabRules.length).toBeGreaterThanOrEqual(2)
+    for (const rule of openTabRules) expect(rule).toMatch(/background:/)
   })
 
   it('links every stylesheet it ships', () => {
