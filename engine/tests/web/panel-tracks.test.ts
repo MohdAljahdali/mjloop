@@ -693,6 +693,15 @@ describe('Tracks.vue', () => {
       expect(wrapper.get('#tracks-view-list').attributes('tabindex')).toBe('-1')
       expect(wrapper.get('#tracks-graph-view').attributes('role')).toBe('tabpanel')
       expect(wrapper.get('#tracks-graph-view').attributes('aria-labelledby')).toBe('tracks-view-graph')
+      // aria-controls follows whichever panel is actually mounted — only one
+      // is, so the unselected tab must not point at an absent id.
+      expect(wrapper.get('#tracks-view-graph').attributes('aria-controls')).toBe('tracks-graph-view')
+      expect(wrapper.get('#tracks-view-list').attributes('aria-controls')).toBeUndefined()
+
+      await wrapper.get('#tracks-view-list').trigger('click')
+      await nextTick()
+      expect(wrapper.get('#tracks-view-list').attributes('aria-controls')).toBe('config-track-editors')
+      expect(wrapper.get('#tracks-view-graph').attributes('aria-controls')).toBeUndefined()
     })
 
     it('moves between the two tabs on an arrow key, in whichever direction the page runs', async () => {

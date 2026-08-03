@@ -356,14 +356,18 @@ function reset(): void {
            panels is rendered, which is what `role="tab"` means and what
            `aria-pressed` does not. Graph first, because it is the view the
            panel opens in and source order is what both a Tab press and a
-           screen reader follow. -->
+           screen reader follow. `aria-controls` is conditional, not static:
+           only one panel is ever mounted (`v-if`/`v-else` below, not a
+           visibility toggle), so the unselected tab omits the attribute
+           rather than pointing at an id that is briefly absent from the
+           document. -->
       <div class="track-view-toggle" role="tablist" :aria-label="t('config.trackView')" @keydown="onViewKeydown">
         <button
           type="button"
           id="tracks-view-graph"
           role="tab"
           :aria-selected="trackView === 'graph'"
-          aria-controls="tracks-graph-view"
+          :aria-controls="trackView === 'graph' ? 'tracks-graph-view' : undefined"
           :tabindex="trackView === 'graph' ? 0 : -1"
           @click="setView('graph')"
         >
@@ -374,7 +378,7 @@ function reset(): void {
           id="tracks-view-list"
           role="tab"
           :aria-selected="trackView === 'list'"
-          aria-controls="config-track-editors"
+          :aria-controls="trackView === 'list' ? 'config-track-editors' : undefined"
           :tabindex="trackView === 'list' ? 0 : -1"
           @click="setView('list')"
         >
