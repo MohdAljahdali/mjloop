@@ -59,6 +59,19 @@ async function boot(snapshot: Snapshot) {
   return mount(Agents)
 }
 
+/**
+ * `boot()`, plus every frame the page sends captured into the caller's own
+ * array — `store.test.ts`'s own way of watching a write leave the page,
+ * rather than a `fetch` stub: these are socket frames (`{ type: 'write', … }`),
+ * not HTTP requests.
+ */
+async function bootWithSocket(sent: unknown[], snapshot: Snapshot) {
+  const page = await boot(snapshot)
+  const socket = FakeSocket.last
+  if (socket !== null) socket.send = (data: string) => sent.push(JSON.parse(data))
+  return page
+}
+
 const agent = (patch: Partial<Record<string, unknown>> = {}): Record<string, unknown> => ({
   name: 'scribe',
   source: 'project',
@@ -124,5 +137,60 @@ describe('Agents.vue', () => {
     const page = await boot(snapshotWith())
     await flushPromises()
     expect(page.get('#agents-unreadable').text()).toContain('broken.md')
+  })
+
+  it('sends the digest it was shown, and nothing else', async () => {
+    serve({ '/api/agents': AGENTS })
+    const sent: unknown[] = []
+    const page = await bootWithSocket(sent, snapshotWith())
+    await flushPromises()
+    await page.get('[data-agent="scribe"] .agent-edit').trigger('click')
+    await page.get('#agent-description').setValue('Writes better notes.')
+    await page.get('#agent-form').trigger('submit')
+    expect(sent).toContainEqual(
+      expect.objectContaining({
+        write: expect.objectContaining({ kind: 'agent.update', name: 'scribe', digest: 'a'.repeat(64) }),
+      }),
+    )
+  })
+
+  it('warns when the body carries no output contract, and not when it does', async () => {
+    serve({
+      '/api/agents': {
+        project: [agent(), agent({ name: 'contracted', body: '```json\n{"status": "ok"}\n```' })],
+        plugin: [],
+        unreadable: [],
+      },
+    })
+    const page = await boot(snapshotWith())
+    await flushPromises()
+    await page.get('[data-agent="scribe"] .agent-edit').trigger('click')
+    expect(page.find('#agent-contract-warning').exists()).toBe(true)
+    await page.get('#agent-editor-cancel').trigger('click')
+    await page.get('[data-agent="contracted"] .agent-edit').trigger('click')
+    expect(page.find('#agent-contract-warning').exists()).toBe(false)
+  })
+
+  it('derives a copy of a plugin agent under a free name', async () => {
+    serve({ '/api/agents': AGENTS })
+    const sent: unknown[] = []
+    const page = await bootWithSocket(sent, snapshotWith())
+    await flushPromises()
+    await page.get('[data-agent="verifier"] .agent-derive').trigger('click')
+    await page.get('#agent-form').trigger('submit')
+    expect(sent).toContainEqual(
+      expect.objectContaining({ write: expect.objectContaining({ kind: 'agent.create', name: 'verifier-copy' }) }),
+    )
+  })
+
+  it('refuses to submit an empty description', async () => {
+    serve({ '/api/agents': AGENTS })
+    const sent: unknown[] = []
+    const page = await bootWithSocket(sent, snapshotWith())
+    await flushPromises()
+    await page.get('[data-agent="scribe"] .agent-edit').trigger('click')
+    await page.get('#agent-description').setValue('   ')
+    await page.get('#agent-form').trigger('submit')
+    expect(sent).toEqual([])
   })
 })

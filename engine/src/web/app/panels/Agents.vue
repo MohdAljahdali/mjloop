@@ -12,15 +12,24 @@
  *
  * `/api/config` (`revisions.config`) rides alongside it only so `AgentCard`
  * can call `usage(config, name)` — the track membership that makes deleting
- * an agent a decision rather than a gamble. This panel never mutates either
- * document: no editor, no delete, no copy. Those are later tasks; see
- * `AgentCard.vue`'s own header for why its buttons are inert.
+ * an agent a decision rather than a gamble.
+ *
+ * This panel owns the one `AgentEditor.vue` instance every card shares:
+ * `edit` opens it in `update` mode on the card's own agent, `derive` opens it
+ * in `create` mode seeded from that agent but under a free name. `:key` below
+ * forces a fresh instance on every open — including opening a second agent
+ * while one is already open — so the editor's own fields, seeded once at
+ * setup from its `agent` prop, are never asked to reseed themselves against a
+ * document that changed out from under them. See `AgentEditor.vue`'s own
+ * header for why this editor lives inside the panel rather than beside
+ * `HaltDialog`/`FeatureApproveDialog` outside `<KeepAlive>`.
  */
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from '../composables/useI18n.js'
 import { useFeed } from '../composables/useFeed.js'
-import type { AgentsView, ConfigView } from '../types/protocol.js'
+import type { AgentsView, AgentView, ConfigView } from '../types/protocol.js'
 import AgentCard from '../components/AgentCard.vue'
+import AgentEditor from '../components/AgentEditor.vue'
 import Bdi from '../components/Bdi.vue'
 
 const { t } = useI18n()
@@ -47,6 +56,25 @@ const configFeed = useFeed<ConfigView>({
 // missing or fails to parse gives `usage()` `null`, which it already reads
 // as "nothing names this agent" rather than throwing.
 const config = computed(() => configFeed.value.value?.parsed ?? null)
+
+// Every name already in use, project and plugin alike — `copyName`
+// (`AgentEditor.vue`) needs the whole set, not just one side, since a derived
+// copy must avoid shadowing *and* colliding either way.
+const takenNames = computed(() => [...project.value, ...plugin.value].map((entry) => entry.name))
+
+const editing = ref<{ mode: 'update' | 'create'; agent: AgentView } | null>(null)
+
+function openEdit(agent: AgentView): void {
+  editing.value = { mode: 'update', agent }
+}
+
+function openDerive(agent: AgentView): void {
+  editing.value = { mode: 'create', agent }
+}
+
+function closeEditor(): void {
+  editing.value = null
+}
 </script>
 
 <template>
@@ -63,7 +91,7 @@ const config = computed(() => configFeed.value.value?.parsed ?? null)
       <p class="hint">{{ t('agents.projectWhy') }}</p>
       <p class="empty" id="agents-project-empty" :hidden="!answered || project.length > 0">{{ t('agents.projectNone') }}</p>
       <div id="agents-project">
-        <AgentCard v-for="agent in project" :key="agent.name" :agent="agent" :config="config" />
+        <AgentCard v-for="agent in project" :key="agent.name" :agent="agent" :config="config" @edit="openEdit" @derive="openDerive" />
       </div>
     </section>
 
@@ -72,7 +100,7 @@ const config = computed(() => configFeed.value.value?.parsed ?? null)
       <p class="hint">{{ t('agents.pluginWhy') }}</p>
       <p class="empty" id="agents-plugin-empty" :hidden="!answered || plugin.length > 0">{{ t('agents.pluginNone') }}</p>
       <div id="agents-plugin">
-        <AgentCard v-for="agent in plugin" :key="agent.name" :agent="agent" :config="config" />
+        <AgentCard v-for="agent in plugin" :key="agent.name" :agent="agent" :config="config" @edit="openEdit" @derive="openDerive" />
       </div>
     </section>
 
@@ -86,5 +114,15 @@ const config = computed(() => configFeed.value.value?.parsed ?? null)
         <p class="banner warn" v-for="entry in unreadable" :key="entry.path"><Bdi :value="entry.path" /></p>
       </div>
     </section>
+
+    <!-- `:key` forces a fresh instance per open — see this file's own header. -->
+    <AgentEditor
+      v-if="editing !== null"
+      :key="`${editing.mode}-${editing.agent.name}-${editing.agent.digest}`"
+      :mode="editing.mode"
+      :agent="editing.agent"
+      :taken-names="takenNames"
+      @close="closeEditor"
+    />
   </section>
 </template>
