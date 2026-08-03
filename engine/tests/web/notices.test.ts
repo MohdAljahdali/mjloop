@@ -1,8 +1,11 @@
 // @vitest-environment happy-dom
+import fs from 'node:fs/promises'
+import path from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import type { ServerMessage } from '../../src/web/protocol.js'
-import { emptySnapshot } from './helpers/page.js'
+import { NOTICE_CODES } from '../../src/web/app/lib/notifications.ts'
+import { emptySnapshot, PUBLIC_DIR, readLocale } from './helpers/page.js'
 
 /**
  * A socket the test drives by hand — the same double `store.test.ts` uses.
@@ -101,6 +104,15 @@ describe('useNotices', () => {
     await nextTick()
     expect(unread.value).toBe(1)
     expect(feed.value[0]?.message).toEqual({ code: 'notice.story.done', params: { id: 'P001-S01' } })
+
+    // A third, identical broadcast — the poller re-sends the same snapshot
+    // on every tick a status has not moved on. Nothing repeats: `before ===
+    // story.status` in `deriveEvents` itself skips it, and this is the case
+    // that would have caught a diff taken against the wrong reference.
+    FakeSocket.last?.deliver({ type: 'snapshot', snapshot: done })
+    await nextTick()
+    expect(unread.value).toBe(1)
+    expect(feed.value).toHaveLength(1)
   })
 
   it('derives a plan-done event once every story in it is done', async () => {
@@ -144,5 +156,19 @@ describe('useNotices', () => {
     toggle()
     expect(unread.value).toBe(0)
     expect(feed.value).toHaveLength(2)
+  })
+
+  it('gives every NoticeCode a key in every shipped locale — the other half of the guard WEB_CODES gets from locales.test.ts', async () => {
+    const codes = (await fs.readdir(path.join(PUBLIC_DIR, 'locales')))
+      .filter((name) => name.endsWith('.json'))
+      .map((name) => name.replace(/\.json$/, ''))
+    expect(codes).toContain('en')
+    expect(codes).toContain('ar')
+
+    for (const code of codes) {
+      const dictionary = await readLocale(code)
+      const missing = NOTICE_CODES.filter((notice) => !(notice in dictionary))
+      expect(missing, `${code} is missing`).toEqual([])
+    }
   })
 })

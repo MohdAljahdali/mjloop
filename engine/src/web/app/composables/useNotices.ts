@@ -53,12 +53,16 @@ watch(
   snapshot,
   (current) => {
     if (current === null) return
-    // `deriveEvents` types its own `code` as a plain `string` — it has no
-    // reason to depend on the server's `WebCode` union — but every code it
-    // ever pushes is one of the eight `notice.*` keys above, all valid
-    // `Message['code']` values; `record`'s parameter type is what enforces
-    // that at every other call site, so this cast trades nothing away.
-    for (const event of deriveEvents(previous, current)) record(event as Message)
+    // `deriveEvents`' `Event.code` is `NoticeCode`, and `record`'s parameter
+    // is `Message`, whose `code` is the server's `WebCode` — two closed
+    // unions, deliberately disjoint: nothing here is a wire message, so the
+    // server has no reason to know these names. `record`/`feed` only ever
+    // need a `{code, params?}` shape to hand to `Tx`, not which union `code`
+    // came from, so the cast below is a shape widening, not a claim that the
+    // two unions overlap. Both ends are now guarded independently —
+    // `notices.test.ts` checks every `NoticeCode` has an `en`/`ar` key, the
+    // same guarantee `locales.test.ts` already gives `WebCode`.
+    for (const event of deriveEvents(previous, current)) record(event as unknown as Message)
     previous = current
   },
   { immediate: true },

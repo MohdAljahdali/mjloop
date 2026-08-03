@@ -16,8 +16,30 @@
  */
 import type { Snapshot, PlanView } from '../types/protocol.js'
 
+/**
+ * The closed set of codes this module can ever emit — deliberately disjoint
+ * from the server's `WebCode`. Nothing here is a wire message: every entry is
+ * read off a `Snapshot` diff, on the client, and the server has no reason to
+ * know these names. Closing the union the same way `WebCode` is closed
+ * (`codes.ts`'s own comment) is what turns a typo'd ninth code into a compile
+ * error instead of a raw identifier on screen — `notices.test.ts` is the
+ * other half, asserting every member has a key in both `en` and `ar`.
+ */
+export const NOTICE_CODES = [
+  'notice.story.done',
+  'notice.story.blocked',
+  'notice.plan.awaitingApproval',
+  'notice.plan.done',
+  'notice.job.storyFailed',
+  'notice.config.missing',
+  'notice.cycle.failed',
+  'notice.verify.failed',
+] as const
+
+export type NoticeCode = (typeof NOTICE_CODES)[number]
+
 export interface Event {
-  code: string
+  code: NoticeCode
   params?: Record<string, string | number>
 }
 
