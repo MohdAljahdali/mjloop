@@ -145,25 +145,57 @@ From `pane.js` and the queue describe block. At minimum: the two view tabs switc
 
 ---
 
-### Tasks 3-10: The eight panels
+### Task 3: The Run panel
 
-Each follows *The shape every panel task takes* above. Listed in dependency and risk order; do them in this order.
+Follows *The shape every panel task takes*. `src/web/public/panels/run.js` (687 lines) and `describe('run')` at `tests/web/panels.test.ts:1835`.
 
-- [ ] **Task 3 — Run.** `panels/run.js` (687 lines), `describe('run')` at `panels.test.ts:1835`. The busiest read surface: live state, drafted-vs-landed roster, guards, findings, cycle history. Also carries the **halt dialog** (`ui/dialog.js`) and the **stalled banner with its nudge button**, both deferred from the foundation — the run id they act on lives here. Reuse `lib/stories.ts`'s `draftedAgents`.
+The busiest read surface: live state, drafted-vs-landed roster, guards, findings, cycle history. It also carries two things the foundation deferred, because the run id they act on lives here: the **halt dialog** (`src/web/public/ui/dialog.js`) and the **stalled banner with its nudge button**. Reuse `app/lib/stories.ts`'s `draftedAgents`; do not re-derive it.
 
-- [ ] **Task 4 — Plans.** `panels/plans.js` (472 lines, exports `planRuns`, `planMemories`), `describe('plans')` at `panels.test.ts:194`. Owns the plan gate — approve / request changes / reject — which is a `submit()` with an inverse, so it is the first real user of the undo path the foundation built. Port `planRuns` and `planMemories` to `app/lib/plans.ts` with their tests; they are pure.
+Halt is not Stop and never shares a control: Stop kills the pty, halt writes `HALT.md` and only then closes the session. Halt is a `submit()` — go through the store's write door.
 
-- [ ] **Task 5 — Stories.** `panels/stories.js` (1,098 lines), `describe('stories')` at `panels.test.ts:577`, plus `ui/worktabs.js` (145 lines). The story work-tabs — open, close, pin, reopen — persist through `lib/selection.ts`, which is already ported; use it rather than adding state. Requeue is a `submit()`. The dependency tree, readiness and filtering all come from `lib/stories.ts`.
+### Task 4: The Plans panel
 
-- [ ] **Task 6 — Features.** `panels/features.js` (329 lines, exports `approvable`), `describe('features')` at `panels.test.ts:3258`. Approving a brief is **the one write on this page with no inverse** — the store refuses to touch an approved revision again — so it keeps its confirmation dialog. Everything else reversible must not gain one.
+Follows *The shape every panel task takes*. `src/web/public/panels/plans.js` (472 lines, exports `planRuns`, `planMemories`) and `describe('plans')` at `tests/web/panels.test.ts:194`.
 
-- [ ] **Task 7 — Skills.** `panels/skills.js` (495 lines, exports `shortDigest`, `joinAcceptances`), and four describe blocks: `skills` (3032), `skills library` (3436), `the skills a project has on disk` (3533), `searching for a skill from the cockpit` (3595). Search goes through `lib/api.ts`'s `get`, not the socket.
+Owns the plan gate — approve, request changes, reject — which is a `submit()` **with an inverse**, making it the first real user of the undo path the foundation built. Port `planRuns` and `planMemories` to `app/lib/plans.ts` with their tests; both are pure.
 
-- [ ] **Task 8 — Evidence.** `panels/evidence.js` (424 lines), `describe('evidence')` at `panels.test.ts:1904`. Run directories and their artefacts, read through `lib/api.ts`'s `feed` — the revision-driven refetch is the point; do not poll.
+### Task 5: The Stories panel
 
-- [ ] **Task 9 — Memory.** `panels/memory.js` (191 lines, exports `facet`, `memoryRow`), `describe('memory faceting')` at `panels.test.ts:1811`. The smallest panel. The query persists through `lib/local.ts`'s `memoryQuery`.
+Follows *The shape every panel task takes*. `src/web/public/panels/stories.js` (1,098 lines), `describe('stories')` at `tests/web/panels.test.ts:577`, plus `src/web/public/ui/worktabs.js` (145 lines).
 
-- [ ] **Task 10 — Config.** `panels/config.js` (1,838 lines, exports `mountConfig`, `collectConfigChanges`), `describe('config')` at `panels.test.ts:2023`. The largest and last. The structured `specialists:` and `tracks:` editors mutate a local draft and **the save button is the only thing that reaches the server** — keep that invariant explicit. Port `collectConfigChanges` to `app/lib/config.ts` with its tests. This panel also owns the **`config_error` banner** deferred from the foundation. Split the SFC by editor rather than shipping one 1,800-line component; a file that large is a file nobody reviews.
+The story work-tabs — open, close, pin, reopen — persist through `app/lib/selection.ts`, which is already ported: use it rather than adding state. Requeue is a `submit()`. The dependency tree, readiness and filtering all come from `app/lib/stories.ts`.
+
+### Task 6: The Features panel
+
+Follows *The shape every panel task takes*. `src/web/public/panels/features.js` (329 lines, exports `approvable`) and `describe('features')` at `tests/web/panels.test.ts:3258`.
+
+Approving a brief is **the one write on this page with no inverse** — the store refuses to touch an approved revision ever again — so it keeps its confirmation dialog. Nothing reversible may gain one.
+
+### Task 7: The Skills panel
+
+Follows *The shape every panel task takes*. `src/web/public/panels/skills.js` (495 lines, exports `shortDigest`, `joinAcceptances`), and four describe blocks in `tests/web/panels.test.ts`: `skills` (3032), `skills library` (3436), `the skills a project has on disk` (3533), `searching for a skill from the cockpit` (3595).
+
+Search goes through `app/lib/api.ts`'s `get`, not the socket.
+
+### Task 8: The Evidence panel
+
+Follows *The shape every panel task takes*. `src/web/public/panels/evidence.js` (424 lines) and `describe('evidence')` at `tests/web/panels.test.ts:1904`.
+
+Run directories and their artefacts, read through `app/lib/api.ts`'s `feed`. The revision-driven refetch is the point — do not poll.
+
+### Task 9: The Memory panel
+
+Follows *The shape every panel task takes*. `src/web/public/panels/memory.js` (191 lines, exports `facet`, `memoryRow`) and `describe('memory faceting')` at `tests/web/panels.test.ts:1811`.
+
+The smallest panel. The query persists through `app/lib/local.ts`'s `memoryQuery`.
+
+### Task 10: The Config panel
+
+Follows *The shape every panel task takes*. `src/web/public/panels/config.js` (1,838 lines, exports `mountConfig`, `collectConfigChanges`) and `describe('config')` at `tests/web/panels.test.ts:2023`.
+
+The largest, and last for a reason. The structured `specialists:` and `tracks:` editors mutate a local draft and **the save button is the only thing that reaches the server** — keep that invariant explicit in the code, not just in a comment. Port `collectConfigChanges` to `app/lib/config.ts` with its tests. This panel also owns the **`config_error` banner** deferred from the foundation.
+
+Split the SFC by editor rather than shipping one 1,800-line component. A file that large is a file nobody reviews.
 
 ---
 
