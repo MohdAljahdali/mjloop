@@ -247,6 +247,28 @@ This is the commit that makes the migration real. Nothing here is mechanical —
 
 ---
 
+### Task 14: Bidi isolation for parameterised sentences
+
+**Runs out of numerical order: immediately after Task 6, before Tasks 7-10.** It is numbered last only because Tasks 7-13 were already written when this defect was found.
+
+The old page had one content-text function, `ui/dom.js:196`'s `phrase()`, and it rendered through `ui/dom.js:164`'s `tx()`, which wraps **every parameter hole in its own bare `<bdi>`** — no `dir` attribute, unlike `verbatim()`, which pins `dir="ltr"`. Fifty-three call sites, around thirty of them parameterised, across every panel plus `ui/toasts.js`, `ui/notifications.js`, `ui/rail.js` and `ui/pane.js`. `app/lib/i18n.ts:146` states the contract in its own docstring: `t()` is **"For attributes only"**.
+
+The Vue port uses `{{ t(key, params) }}` in content position, which yields a plain string with no isolation. That violates the contract at 25 sites across every panel merged so far.
+
+**What actually breaks**, as opposed to merely losing isolation:
+- **`Toasts.vue` and `NoticeFeed.vue` are the widest, and belong to no panel task** — both render server-sent `{code, params}`, and 45 locale keys carry ids, agent names, tracks, paths and digests. `notice.story.done` in Arabic is `اكتملت {id}.` — a Latin `P001-S02` before a neutral `.` in an RTL paragraph puts the period on the wrong side. `roster.*` wraps `«{agent}»` in guillemets and both quotes flip.
+- `Features.vue`'s `features.record.*`, `FeatureApproveDialog`'s `features.confirmSubject`, `Plans.vue`'s `plans.decidedBy`, `Run.vue`'s `run.gateState.provenBy`, `FeatureDecisionRow`'s `features.recommended` (free interview prose).
+- Digit-only holes do **not** break: `Intl.NumberFormat('ar')` yields Arabic-Indic digits, which are neutral-safe. Do not churn them.
+
+That the project already knows this failure class: `story.tab.openTitle`, `close`, `pin` and `unpin` carry hand-inserted U+200F around `{id}` in `ar.json` — the attribute cases `tx()` could not reach.
+
+**The work:**
+- Add `src/web/app/components/Tx.vue` — props `{ keyName, params }` — iterating `parts()` from `app/lib/i18n.ts`, emitting text segments plainly and parameter segments as **bare `<bdi>`**, matching `tx()` exactly. `<Bdi>` is the `verbatim()` analogue and is the wrong tool here.
+- Expose `parts` from `useI18n` for the sites that build a computed string.
+- Convert all 25 content-position sites. **Leave attribute uses of `t()` alone** — they are correct.
+- Settle `String(brief.revision)` in `Features.vue` and `FeatureApproveDialog.vue`: the old page passed a number, so Arabic rendered `المراجعة ١` where the port renders `المراجعة 1`. Either restore the number or record the divergence deliberately.
+- Test under `code: 'ar'` that one `<bdi>` is emitted per hole, for at least `notice.story.done` and `features.record.draft`.
+
 ## Done when
 
 - `npm run build && npm run typecheck && npx vitest run && node scripts/verify-ship.mjs` are all green.
