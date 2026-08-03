@@ -16,6 +16,8 @@ Set up the loop for this project.
    - `/mjloop:build <what to build | P001-S02 | --next>` — as many verified cycles as it
      takes, optionally against a story from a plan
    - `/mjloop:fix <problem>` — reproduce the defect first, then fix the root cause
+   - `/mjloop:run <track> <goal>` — run any track by name, including one created in the
+     cockpit's Tracks tab
    - `/mjloop:status` — where the current run stands
    - `/mjloop:stop [reason]` — halt the run and write a report
    - `/mjloop:resume` — continue a run that was interrupted

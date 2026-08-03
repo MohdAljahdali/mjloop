@@ -1,11 +1,14 @@
 import crypto from 'node:crypto'
 import fs from 'node:fs/promises'
+import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { initLoop } from '../../src/ops/init.js'
 import { gateSet, planCreate, storyAdd, storyUpdate } from '../../src/ops/plan.js'
 import { runStart } from '../../src/ops/run.js'
+import { agentDigest, readAgent } from '../../src/store/agent-store.js'
 import { configRevision } from '../../src/store/config-mutation.js'
+import { loadConfig, writeConfig } from '../../src/store/config-store.js'
 import {
   createFeatureBrief,
   readFeatureBrief,
@@ -14,6 +17,10 @@ import {
 } from '../../src/store/feature-store.js'
 import { resolveLoopPaths } from '../../src/store/paths.js'
 import { acceptProfile } from '../../src/store/project-profile-store.js'
+import { acceptSkill, acceptanceDigest, readAcceptance } from '../../src/store/skill-acceptance-store.js'
+import { writePackage } from '../../src/store/skill-library-store.js'
+import type { SkillPackage } from '../../src/schemas/skill-library.js'
+import { StateStore } from '../../src/store/state-store.js'
 import type { ProjectComponent } from '../../src/schemas/project-profile.js'
 import { WEB_CODES } from '../../src/web/codes.js'
 import { buildSnapshot } from '../../src/web/snapshot.js'
@@ -30,6 +37,9 @@ const NOW = new Date('2026-07-28T09:00:00.000Z')
 const clock = (): Date => NOW
 
 let project: TmpProject
+/** The shared skill library's data home and content dir, only ever created by `acceptScribeSkill`. */
+let skillDataHome: string | null = null
+let skillContentDir: string | null = null
 beforeEach(async () => {
   project = await makeTmpProject()
   await initLoop(project.dir, clock)
@@ -41,6 +51,15 @@ beforeEach(async () => {
   await planCreate(project.dir, { slug: 'billing', title: 'Billing' }, clock)
 })
 afterEach(async () => {
+  if (skillDataHome !== null) {
+    delete process.env.MJLOOP_DATA_HOME
+    await fs.rm(skillDataHome, { recursive: true, force: true })
+    skillDataHome = null
+  }
+  if (skillContentDir !== null) {
+    await fs.rm(skillContentDir, { recursive: true, force: true })
+    skillContentDir = null
+  }
   await project.cleanup()
 })
 
@@ -83,6 +102,78 @@ const NO_SUCH_DIGEST = '0'.repeat(64)
 
 function component(id: string): ProjectComponent {
   return { id, root: id, technology: 'unknown', verification: { test: null, lint: null, build: null }, skillTags: [] }
+}
+
+/**
+ * Adds to `edit`'s required list, for the delete-in-use case — appended
+ * rather than replacing it outright, since `edit`'s default `order` names
+ * agents this track already runs, and replacing `required` wholesale would
+ * make those edges name an agent the track no longer has.
+ */
+async function writeConfigWithTrack(dir: string, patch: { required: string[] }): Promise<void> {
+  const config = await loadConfig(dir)
+  const edit = config.tracks.edit
+  if (edit === undefined) throw new Error('this project has no edit track to test against')
+  await writeConfig(dir, {
+    ...config,
+    tracks: { ...config.tracks, edit: { ...edit, required: [...edit.required, ...patch.required] } },
+  })
+}
+
+/** The other direction — drops a name back out of `edit`'s required list. */
+async function dropFromTrack(dir: string, name: string): Promise<void> {
+  const config = await loadConfig(dir)
+  const edit = config.tracks.edit
+  if (edit === undefined) throw new Error('this project has no edit track to test against')
+  await writeConfig(dir, {
+    ...config,
+    tracks: { ...config.tracks, edit: { ...edit, required: edit.required.filter((agent) => agent !== name) } },
+  })
+}
+
+/** Sets `state.json` to `running` directly — no run need actually be dispatched to prove the guard. */
+async function setStatusRunning(dir: string): Promise<void> {
+  await new StateStore(dir).update((draft) => {
+    draft.status = 'running'
+  })
+}
+
+const CREATE = {
+  kind: 'agent.create' as const,
+  name: 'scribe',
+  description: 'Writes notes.',
+  tools: 'Read, Write',
+  model: 'sonnet',
+  body: 'You write notes.\n\n```json\n{"status":"pass"}\n```',
+}
+
+const SKILL_DIGEST = 'a'.repeat(64)
+
+function skillPackage(digest: string): SkillPackage {
+  return {
+    schema: 1,
+    packageId: 'flutter-widgets',
+    digest,
+    source: { kind: 'github', url: 'https://github.com/example/flutter-widgets', revision: 'a1b2c3d' },
+    license: { spdx: 'MIT', file: 'LICENSE' },
+    skillName: 'Flutter Widgets',
+    description: 'Shared widget kit conventions for the mobile component.',
+    tags: ['flutter'],
+    dependencies: { executables: [], packages: ['flutter'] },
+    audit: { state: 'passed', findings: [], at: '2026-07-30T09:00:00.000Z' },
+    guidance: 'Use the shared widget kit under lib/widgets.',
+    importedAt: '2026-07-30T09:00:00.000Z',
+  }
+}
+
+/** An accepted skill, routed to `scribe` once `writeConfigWithTrack` has named it. */
+async function acceptScribeSkill(dir: string): Promise<void> {
+  skillContentDir = await fs.mkdtemp(path.join(os.tmpdir(), 'loop-content-'))
+  await fs.writeFile(path.join(skillContentDir, 'SKILL.md'), '# Flutter Widgets\n', 'utf8')
+  skillDataHome = await fs.mkdtemp(path.join(os.tmpdir(), 'loop-library-'))
+  process.env.MJLOOP_DATA_HOME = skillDataHome
+  await writePackage(dir, skillPackage(SKILL_DIGEST), skillContentDir)
+  await acceptSkill(dir, { packageDigest: SKILL_DIGEST, agents: ['scribe'], updatePolicy: 'review', acceptedBy: 'tester' }, clock)
 }
 
 describe('applyWrite', () => {
@@ -464,6 +555,139 @@ describe('WriteSchema', () => {
         changes: [{ kind: 'raw', path: '../state.json', value: 'x' }],
       }).success,
     ).toBe(false)
+  })
+})
+
+describe('the agent write doors', () => {
+  it('creates an agent, then refuses a name that shadows a plugin agent', async () => {
+    // The plain create case, folded in here rather than given its own test:
+    // it is the setup every other assertion in this suite needs anyway.
+    expect(await applyWrite(project.dir, CREATE)).toEqual({ ok: true })
+    const created = await readAgent(project.dir, 'scribe')
+    expect(created?.description).toBe('Writes notes.')
+
+    // `verifier` is a real agent shipped by this plugin — the shadow case has
+    // to be a name that actually collides, not an arbitrary reserved word.
+    // `hashTree` only covers `.mjloop`, so the property that actually matters
+    // — the agent file itself did not move and no `verifier.md` appeared next
+    // to it — is checked directly.
+    const result = await applyWrite(project.dir, { ...CREATE, name: 'verifier' })
+    expect(result).toEqual({ ok: false, code: 'write.refused.agent.shadow' })
+    expect(await readAgent(project.dir, 'scribe')).toEqual(created)
+    expect(await readAgent(project.dir, 'verifier')).toBeNull()
+  })
+
+  it('refuses an update whose digest has moved, then carries an unrecognised field forward on a real one', async () => {
+    // A hand-edited file this layer has never heard of `color:` on. Written
+    // directly rather than through `applyWrite`, since the browser never
+    // sends `extra` and could not have produced this file itself.
+    await fs.mkdir(path.join(project.dir, '.claude', 'agents'), { recursive: true })
+    const file = path.join(project.dir, '.claude', 'agents', 'scribe.md')
+    const raw = '---\nname: scribe\ndescription: a\ncolor: blue\n---\n\nbody\n'
+    await fs.writeFile(file, raw, 'utf8')
+
+    const stale = await applyWrite(project.dir, {
+      kind: 'agent.update',
+      name: 'scribe',
+      digest: agentDigest('stale'),
+      description: 'b',
+      tools: null,
+      model: null,
+      body: 'edited',
+    })
+    expect(stale).toEqual({ ok: false, code: 'write.stale.agent' })
+    expect(await fs.readFile(file, 'utf8')).toBe(raw)
+
+    // The correct digest this time — the browser did not author `color`, and
+    // it survives the round trip anyway because the store reads it from the
+    // file itself, inside the same lock the digest check runs under.
+    const ok = await applyWrite(project.dir, {
+      kind: 'agent.update',
+      name: 'scribe',
+      digest: agentDigest(raw),
+      description: 'b',
+      tools: null,
+      model: null,
+      body: 'body',
+    })
+    expect(ok).toEqual({ ok: true })
+    const after = await readAgent(project.dir, 'scribe')
+    expect(after?.description).toBe('b')
+    expect(after?.extra).toEqual({ color: 'blue' })
+  })
+
+  it('refuses to delete an agent a track still names', async () => {
+    await applyWrite(project.dir, CREATE)
+    const doc = await readAgent(project.dir, 'scribe')
+    await writeConfigWithTrack(project.dir, { required: ['scribe'] })
+
+    const result = await applyWrite(project.dir, { kind: 'agent.delete', name: 'scribe', digest: doc?.digest ?? '' })
+    expect(result).toEqual({ ok: false, code: 'write.refused.agent.inUse' })
+    // Not `hashTree` — the agent file lives outside `.mjloop` entirely, so the
+    // check that matters is the file itself, unmoved.
+    expect(await readAgent(project.dir, 'scribe')).toEqual(doc)
+
+    // Proof that it is `deleteAgent`'s own `guard` doing the refusing, run
+    // live inside its lock, and not a cached answer from a check made before
+    // this handler was ever called: take the same agent back out of the
+    // track's `required` list and the very same digest now succeeds.
+    await dropFromTrack(project.dir, 'scribe')
+    const retried = await applyWrite(project.dir, { kind: 'agent.delete', name: 'scribe', digest: doc?.digest ?? '' })
+    expect(retried).toEqual({ ok: true })
+    expect(await readAgent(project.dir, 'scribe')).toBeNull()
+  })
+
+  it('refuses every agent write while a run is open', async () => {
+    await applyWrite(project.dir, CREATE)
+    await setStatusRunning(project.dir)
+
+    const before = await hashTree()
+    const result = await applyWrite(project.dir, { ...CREATE, name: 'second-scribe' })
+    expect(result).toEqual({ ok: false, code: 'write.refused.running' })
+    expect(await readAgent(project.dir, 'second-scribe')).toBeNull()
+    expect(await hashTree()).toEqual(before)
+  })
+})
+
+describe('the skill.agents door', () => {
+  it('sets which agents a skill routes to, refuses a stale digest, and refuses while a run is open', async () => {
+    await writeConfigWithTrack(project.dir, { required: ['scribe', 'critic'] })
+    await acceptScribeSkill(project.dir)
+    const before = await readAcceptance(project.dir, 'flutter-widgets')
+
+    const result = await applyWrite(project.dir, {
+      kind: 'skill.agents',
+      skill: 'flutter-widgets',
+      digest: acceptanceDigest(before!),
+      agents: ['critic'],
+    })
+    expect(result).toEqual({ ok: true })
+    const after = await readAcceptance(project.dir, 'flutter-widgets')
+    expect(after?.agents).toEqual(['critic'])
+    // The one field this door may touch — nothing else moved.
+    expect({ ...after, agents: [] }).toEqual({ ...before, agents: [] })
+
+    // The page was looking at the digest above, which has since moved.
+    const staleResult = await applyWrite(project.dir, {
+      kind: 'skill.agents',
+      skill: 'flutter-widgets',
+      digest: acceptanceDigest(before!),
+      agents: ['scribe'],
+    })
+    expect(staleResult).toEqual({ ok: false, code: 'write.stale.skill' })
+    expect((await readAcceptance(project.dir, 'flutter-widgets'))?.agents).toEqual(['critic'])
+
+    // Same guard the agent doors take: the skill manifest is pinned once a
+    // run starts, so routing edited mid-run would make what ran and what is
+    // recorded two different things.
+    await setStatusRunning(project.dir)
+    const runningResult = await applyWrite(project.dir, {
+      kind: 'skill.agents',
+      skill: 'flutter-widgets',
+      digest: acceptanceDigest(after!),
+      agents: ['scribe'],
+    })
+    expect(runningResult).toEqual({ ok: false, code: 'write.refused.running' })
   })
 })
 

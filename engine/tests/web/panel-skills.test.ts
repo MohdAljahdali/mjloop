@@ -4,7 +4,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import type { Snapshot } from '../../src/web/protocol.js'
 import type { SkillPackage } from '../../src/schemas/skill-library.js'
-import type { ProjectSkillAcceptance } from '../../src/schemas/skill-acceptance.js'
+import type { AcceptanceView } from '../../src/web/read.js'
 import { emptySnapshot, readLocale } from './helpers/page.js'
 
 /**
@@ -172,11 +172,16 @@ describe('lib/skills.ts — joinAcceptances', () => {
     ...patch,
   })
 
-  const acceptance = (patch: Partial<ProjectSkillAcceptance> = {}): ProjectSkillAcceptance => ({
+  const acceptance = (patch: Partial<AcceptanceView> = {}): AcceptanceView => ({
     schema: 1,
     skillId: 'flutter-forms',
     packageId: 'flutter-forms',
+    // The package's own digest — never overwritten by `recordDigest` below,
+    // which is a different hash over a different thing (C1's fix).
     digest: 'b'.repeat(64),
+    // A distinct value on purpose: fixtures that accidentally swap this with
+    // `digest` above would still both be 64 hex chars and easy to miss.
+    recordDigest: 'd'.repeat(64),
     components: ['apps-mobile'],
     agents: ['builder'],
     tags: ['flutter'],

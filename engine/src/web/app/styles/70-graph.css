@@ -1,0 +1,106 @@
+/* Task 12: the track graph, drawn with @vue-flow/core.
+ *
+ * Vue Flow's own two stylesheets first — the pane, the zoom controls, the
+ * default edge markers, the handle dots. `theme-default.css` on top of
+ * `style.css` is the pairing Vue Flow's own docs use; neither ships a font
+ * or an image (`tests/web/assets.test.ts` is what actually proves that, not
+ * this comment), so `assetsInlineLimit: Infinity` has nothing to inline
+ * here beyond text. What follows is only the part that is this project's
+ * own: the four list colours, the cyclic-node warning, and the gate edge's
+ * own look. */
+@import '@vue-flow/core/dist/style.css';
+@import '@vue-flow/core/dist/theme-default.css';
+
+/* No `.terminal`-style `direction: ltr`/`overflow: hidden` escape hatch is
+ * added here for `.track-graph`, its own wrapper — `@vue-flow/core`'s own
+ * `style.css` already pins both on `.vue-flow`, the root class Vue Flow
+ * renders inside this wrapper: `.vue-flow { overflow: hidden; direction:
+ * ltr; }` (`node_modules/@vue-flow/core/dist/style.css:1-8`, imported two
+ * lines up). That is the same fix `.terminal` (`app.css`) carries by hand
+ * for xterm, applied at the source for the same reason: Vue Flow's own pane,
+ * zoom controls and edge paths are positioned in absolute pixel/transform
+ * math that assumes left-to-right, physical-left coordinates, unrelated to
+ * this project's own `dir="rtl"`. Confirmed by reading the vendor
+ * stylesheet directly rather than assuming parity with `.terminal` — a
+ * second escape hatch here would be redundant, not merely unnecessary. */
+
+.track-graph {
+  position: relative;
+  block-size: 360px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel-2);
+  margin-block-end: 16px;
+}
+
+.track-graphs {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.track-view-toggle {
+  display: flex;
+  gap: 8px;
+  margin-block-end: 12px;
+}
+
+.track-view-toggle button[aria-pressed='true'] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* One node per agent. The colour names the list it is drawn from — the same
+ * three a reader already knows from the list editor's own three chip rows —
+ * never the only cue: the label text beside it already says the agent's
+ * name, so colour is decoration on top of a reachable fact, not the fact
+ * itself. */
+.graph-node {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: var(--raise);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.graph-node.node-required {
+  border-color: var(--accent);
+}
+
+.graph-node.node-available {
+  border-color: var(--accent-3);
+}
+
+.graph-node.node-closing {
+  border-color: var(--accent-2);
+}
+
+/* A starved node — `GraphNode.cyclic` — is never drawn as an ordinary node
+ * pushed to the last column: the border turns to `--bad` and the badge below
+ * says why in words, so a reader who cannot see colour still gets the fact. */
+.graph-node.node-cyclic {
+  border-color: var(--bad);
+  border-style: dashed;
+}
+
+.graph-node-cyclic-badge {
+  font-size: 11px;
+  color: var(--bad);
+}
+
+.vue-flow__edge.edge-order .vue-flow__edge-path {
+  stroke: var(--dim);
+}
+
+/* A gate edge is drawn, never dragged — `selectable: false` on the edge
+ * itself keeps the pointer out of it; this is only the visible half of that
+ * same rule, so it never reads as an ordinary order edge a drag could have
+ * made. */
+.vue-flow__edge.edge-gate .vue-flow__edge-path {
+  stroke: var(--accent-2);
+  stroke-dasharray: 4 3;
+}

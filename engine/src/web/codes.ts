@@ -75,6 +75,24 @@ export const WEB_CODES = [
   'error.skillSourceDisabled',
   'error.skillsShTokenMissing',
   'error.webSearchUnavailable',
+
+  /* the agent doors. A refusal names which door closed and nothing else: the
+     five below are five different next steps for the person reading the
+     screen — reopen the editor, pick another name, edit the track first, wait
+     for the run, or fix the field. */
+  'write.stale.agent',
+  'write.invalid.agent',
+  'write.refused.agent.shadow',
+  'write.refused.agent.inUse',
+  'write.refused.running',
+  'write.ok.agent',
+
+  /* the skill.agents door. `write.refused.running` above already covers the
+     while-a-run-is-open refusal — it joined the agent doors' guarded set
+     rather than growing a code of its own — so this pair is only the two a
+     compare-and-swap write always needs: the digest moved, or it landed. */
+  'write.stale.skill',
+  'write.ok.skill',
 ] as const
 
 export type WebCode = (typeof WEB_CODES)[number]

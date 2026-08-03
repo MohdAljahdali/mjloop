@@ -3,7 +3,7 @@
  * The `specialists:` fieldset — a structured editor over the draft's own
  * `specialists` map, ported from the two JSON textareas `config.js`'s own
  * header describes. Every control here writes through `mutate`, the one
- * function `Config.vue` hands down that is allowed to touch the draft; this
+ * function `Tracks.vue` hands down that is allowed to touch the draft; this
  * component never reaches the server.
  */
 import { computed, ref } from 'vue'
@@ -36,7 +36,7 @@ const rules = computed(() => {
 // parsed. `config.js`'s own `drawStructured` keeps this hidden in exactly
 // that case (`flag(specialistEmpty, 'hidden', true)` on its `model === null`
 // branch) rather than defaulting to the empty-document message — see
-// `Config.vue`'s own comment on why `draft === null` is carried rather than
+// `Tracks.vue`'s own comment on why `draft === null` is carried rather than
 // defaulted away.
 const showEmpty = computed(() => props.draft !== null && rules.value.length === 0)
 

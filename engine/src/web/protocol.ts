@@ -51,6 +51,35 @@ export interface Job {
   endedAt: string | null
 }
 
+/**
+ * One agent, as the browser draws it.
+ *
+ * The same shape as `AgentDoc` minus `path`: an absolute path on the wire is
+ * exactly what nothing here is allowed to send.
+ */
+export interface AgentView {
+  name: string
+  source: 'project' | 'plugin'
+  description: string
+  tools: string | null
+  model: string | null
+  extra: Record<string, unknown>
+  body: string
+  digest: string
+}
+
+/**
+ * The two agent directories, side by side and never merged — a project agent
+ * shadows a plugin one of the same name, and folding them into one list would
+ * hide exactly that.
+ */
+export interface AgentsView {
+  project: AgentView[]
+  plugin: AgentView[]
+  /** The plugin's own unreadable files are not reported here — see `readAgentsView`. */
+  unreadable: { path: string }[]
+}
+
 export interface StoryView {
   id: string
   title: string

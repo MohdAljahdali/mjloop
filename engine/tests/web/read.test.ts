@@ -740,6 +740,13 @@ describe('read', () => {
       expect(view.acceptances[0]?.skillId).toBe('flutter-widgets')
       expect(view.acceptances[0]?.status).toBe('active')
       expect(view.unreadable).toEqual([])
+      // `recordDigest` (a hash over the whole acceptance record, for the
+      // `skill.agents` write door's compare-and-swap) must never collide with
+      // — let alone overwrite — `digest`, the *package* digest `acceptSkill`
+      // pinned: both are 64 hex chars, so a field that clobbered the other
+      // would still typecheck and still look plausible.
+      expect(view.acceptances[0]?.digest).toBe(DIGEST_A)
+      expect(view.acceptances[0]?.recordDigest).not.toBe(view.acceptances[0]?.digest)
     })
 
     it('reports an unreadable digest directory rather than dropping it — evidence an import can now leave behind', async () => {

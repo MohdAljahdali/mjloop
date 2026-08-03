@@ -48,6 +48,10 @@ const OK_CODES = {
   halt: 'write.ok.halt',
   'config.patch': 'write.ok.config',
   'feature.approve': 'write.ok.feature',
+  'agent.create': 'write.ok.agent',
+  'agent.update': 'write.ok.agent',
+  'agent.delete': 'write.ok.agent',
+  'skill.agents': 'write.ok.skill',
 } as const
 
 /**

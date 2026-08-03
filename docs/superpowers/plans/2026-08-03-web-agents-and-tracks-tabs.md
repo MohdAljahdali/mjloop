@@ -19,6 +19,7 @@
 - **لا فواصل منقوطة** في نهايات الجُمل؛ الأسلوب القائم في المستودع (`prettier`-less، بلا `;`).
 - **التعليقات تشرح القرار لا الآلية.** هذا المستودع يوثّق «لماذا رُفض البديل»؛ اتّبع النبرة القائمة في الملف الذي تعدّله.
 - **أوامر التحقّق**: `cd engine && npm test` و`cd engine && npm run typecheck` و`cd engine && npm run build`. تُشغَّل من جذر المستودع.
+- **اقتصاد الاختبارات (قرار المستخدم، يعلو على تعداد الحالات في نصّ كل مهمّة).** كتل الاختبار في المهام هي **سقفٌ لا حصّة**: نفّذ منها الحالات التي تحرس حدّاً أو رفضاً — البصمة البائتة، الاسم المرفوض، الحجب، الاستخدام في مسار، التشغيلة النشطة، الدورة في المخطّط — واطوِ ما تبقّى من حالات «الحالة السعيدة» المتشابهة في اختبارٍ واحد. **أربعة اختبارات لكل مهمّة حدٌّ أعلى معقول.** اختبارٌ مطويّ ليس اختباراً مفقوداً: الحارس هو ما يُختبَر، والباقي يثبته `typecheck`. لا تُسقط حالة رفضٍ أبداً بحجّة الاقتصاد.
 - **الالتزام بعد كل مهمّة**، برسالة `<type>(scope): …` تنتهي بسطر `Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>`.
 - **`dist/` ملتزَمة في git**، لكنها تُبنى في مهمّة واحدة فقط (المهمّة 12) لا بعد كل مهمّة.
 
@@ -679,7 +680,7 @@ Expected: FAIL — المسار 404، و`revisions.agents` غير معرّف
  * `ENGINE_DIR`: three levels up from this module lands on the plugin root
  * both from `src/web/` under vitest and from `dist/web/` in a build.
  */
-export const PLUGIN_AGENTS_DIR = fileURLToPath(new URL('../../agents/', import.meta.url))
+export const PLUGIN_AGENTS_DIR = fileURLToPath(new URL('../../../agents/', import.meta.url))
 
 /**
  * The two agent directories, side by side and never merged.
@@ -999,7 +1000,7 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
   // web/writes.ts
   { kind: 'skill.agents', skill: string, digest: string, agents: string[] }
   ```
-- `/api/skills` يكتسب `digest` على كل قبول.
+- `/api/skills` يكتسب `recordDigest` على كل قبول. **ليس `digest`**: `ProjectSkillAcceptanceSchema` يحمل حقلاً بهذا الاسم أصلاً (`schemas/skill-acceptance.ts:39`) وهو بصمة *محتوى الحزمة* التي يتمّ عليها الوصل في `lib/skills.ts`. اسمٌ ثانٍ بنفس الكلمة يدهسه في `{ ...record, digest }` دون خطأ ترجمة، لأن كليهما `string`.
 
 **القاعدة الجديدة:** الأدوار المقبولة = أسماء الوكلاء التي يذكرها أي مسار في `config.yaml`، بدل القائمة الرباعية الثابتة. اتّجاه الطبقات يمنع `schemas/` من الاستيراد من `ops/`، فالمجموعة تُمرَّر **إلى** موضع التحقّق.
 
@@ -1743,7 +1744,7 @@ Expected: FAIL — الوحدة غير موجودة
 
 - [ ] **Step 3: التنفيذ**
 
-`engine/src/web/app/lib/trackgraph.ts` — ترتيب طوبولوجي بسيط: طبقة الوكيل = أطول مسار من عقدةٍ بلا أسلاف. `closing` على طبقةٍ بعد الجميع، لأن الوكيل الخاتم يغلق التشغيلة لا الدورة. `wouldCycle` بحث عمقٍ من `to` بحثاً عن `from` عبر حواف `order`.
+`engine/src/web/app/lib/trackgraph.ts` — ترتيب طوبولوجي بسيط: طبقة الوكيل = أطول مسار من عقدةٍ بلا أسلاف. `closing` على طبقةٍ بعد الجميع، لأن الوكيل الخاتم يغلق التشغيلة لا الدورة. `wouldCycle` بحث عمقٍ من `to` بحثاً عن `from` عبر حواف `order` **وحافة البوابة معاً**: البوابة هي حافة ترتيبٍ مضمرة (`blocks` بعد `proven_by`)، و`TrackSchema.superRefine` و`dispatchWaves` كلاهما يطويها لهذا السبب بالذات. فحصٌ يتجاهلها يسمح بربطٍ يُنتج دورةً يرفضها المحرّك.
 
 > **المواضع لا تُحفظ.** `layout()` تُنتج `layer` و`index`، والمكوّن يحوّلهما إلى إحداثيات. `config.yaml` لا يكتسب حقل إحداثيات، لأنه مستندٌ يقرأه إنسان ويراجعه في git.
 
@@ -1943,7 +1944,7 @@ exactly this reason.
 
 `TrackRunForm.vue` — حقلٌ وزرّ، يستدعي `send({ type: 'enqueue', command, story: null })` و`pane.setView('queue')` كما يفعل `Launcher.vue`.
 
-حدّث `CLAUDE.md` و`README.md` و`docs/usage*.md` بسطر الأمر الجديد.
+حدّث `README.md` و`docs/usage*.md` بسطر الأمر الجديد. **لا تحدّث `CLAUDE.md` في هذا المستودع**: `.gitignore` يستثنيه لأن هذا مستودع البِلَغن نفسه، وذلك الملف فيه تسجيلٌ يولَّد لكل مشروع لا تعليماتٌ تُنسَّخ.
 
 - [ ] **Step 4: شغّل كل شيء**
 
@@ -1953,7 +1954,7 @@ Expected: PASS
 - [ ] **Step 5: الالتزام**
 
 ```bash
-git add commands/ skills/ engine/ CLAUDE.md README.md docs/
+git add commands/ skills/ engine/ README.md docs/
 git commit -m "feat: /mjloop:run — open any track by name
 
 A track built from the dashboard had nothing to run it: the four commands

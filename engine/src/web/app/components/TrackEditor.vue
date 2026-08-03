@@ -5,16 +5,18 @@
  * and a gate's `blocks` are all `TrackAgentList.vue` rather than four
  * templates.
  *
- * Every control here writes through `mutate` — the one function `Config.vue`
+ * Every control here writes through `mutate` — the one function `Tracks.vue`
  * hands down that is allowed to touch the draft — and nothing here ever
  * calls `submit()`. That is the invariant this whole panel exists to
- * protect; see `Config.vue`'s own comment on `save()`.
+ * protect; see `Tracks.vue`'s own comment on `save()`.
  */
 import { computed } from 'vue'
 import { useI18n } from '../composables/useI18n.js'
 import {
+  addOrderEdge,
   edgeAfter,
   orderEdgeChanges,
+  removeOrderEdge,
   trackCommentLoss,
   trackFieldChanges,
   trackPending,
@@ -26,6 +28,7 @@ import Bdi from './Bdi.vue'
 import Tx from './Tx.vue'
 import TrackAgentList from './TrackAgentList.vue'
 import TrackOrderRow from './TrackOrderRow.vue'
+import TrackRunForm from './TrackRunForm.vue'
 
 const props = defineProps<{
   name: string
@@ -178,26 +181,15 @@ const orderRows = computed(() => {
  * @param pred The predecessor being added — the edge's `after` side.
  */
 function edgeAdd(agent: string, pred: string): void {
-  if (pred === agent) return
-  mutateTrack((entry) => {
-    const order = Array.isArray(entry.order) ? entry.order : (entry.order = [])
-    // The engine supports more than one edge naming the same agent —
-    // `findOrderViolation` (ops/log.ts:598-611) filters `track.order` for
-    // every edge naming `agent` and loops all of them, and `dispatchWaves`
-    // (schemas/config.ts:767-773) does the same — so membership has to be
-    // checked across every edge already naming `agent`, not just the first
-    // one `.find` would return, or a second edge's predecessor could be
-    // re-added here even though the row (whose chips are that same union,
-    // see `edgeAfter` in `lib/config.ts`) already shows it as present.
-    const edges = order.filter((candidate) => candidate.agent === agent)
-    if (edges.some((edge) => edge.after.includes(pred))) return false
-    let edge = edges[0]
-    if (edge === undefined) {
-      edge = { agent, after: [] }
-      order.push(edge)
-    }
-    edge.after.push(pred)
-  })
+  // `addOrderEdge` (`lib/config.ts`) is the actual rule: the engine supports
+  // more than one edge naming the same agent — `findOrderViolation`
+  // (ops/log.ts:598-611) filters `track.order` for every edge naming `agent`
+  // and loops all of them, and `dispatchWaves` (schemas/config.ts:767-773)
+  // does the same — so membership has to be checked across every edge
+  // already naming `agent`, not just the first one `.find` would return.
+  // Task 12's `TrackGraph.vue` calls the same function through `Tracks.vue`'s
+  // own `mutate`, rather than a second copy of this rule.
+  mutateTrack((entry) => addOrderEdge(entry, agent, pred))
 }
 
 /**
@@ -205,31 +197,13 @@ function edgeAdd(agent: string, pred: string): void {
  * @param pred The predecessor leaving — the chip's own `×`.
  */
 function edgeRemove(agent: string, pred: string): void {
-  mutateTrack((entry) => {
-    if (!Array.isArray(entry.order)) return false
-    const order = entry.order
-    // The chip this row shows is the union across every edge naming `agent`
-    // (`edgeAfter`, `lib/config.ts`), so removing one has to clear `pred`
-    // from every one of those edges too — walked back-to-front so the splice
-    // below cannot skip the edge after the one just removed.
-    let removed = false
-    for (let i = order.length - 1; i >= 0; i--) {
-      const edge = order[i]
-      if (edge === undefined || edge.agent !== agent) continue
-      const at = edge.after.indexOf(pred)
-      if (at < 0) continue
-      edge.after.splice(at, 1)
-      removed = true
-      // `OrderEdgeSchema.after` is `.min(1)` (schemas/config.ts:62) — an edge
-      // with zero predecessors is not "no constraint", it is a shape the
-      // server refuses outright. Dropping the whole edge here is what lets
-      // removing its last predecessor read as clearing the constraint, the
-      // way every other chip removal on this card does, rather than leaving
-      // a draft that Save can never reach.
-      if (edge.after.length === 0) order.splice(i, 1)
-    }
-    if (!removed) return false
-  })
+  // `removeOrderEdge` (`lib/config.ts`): the chip this row shows is the union
+  // across every edge naming `agent` (`edgeAfter`, same file), so removing one
+  // has to clear `pred` from every one of those edges too, and
+  // `OrderEdgeSchema.after` is `.min(1)` (schemas/config.ts:62) — an edge left
+  // with zero predecessors is not "no constraint", it is a shape the server
+  // refuses outright, so the whole edge is dropped rather than kept empty.
+  mutateTrack((entry) => removeOrderEdge(entry, agent, pred))
 }
 
 /* ── C1: why this track would be refused ──────────────────────────────── */
@@ -275,6 +249,12 @@ const commentsLost = computed(() => {
       <button type="button" :disabled="!props.enabled" @click="duplicate">{{ t('config.duplicate') }}</button>
       <button type="button" class="danger" :disabled="!props.enabled" @click="remove">{{ t('config.delete') }}</button>
     </header>
+
+    <!-- A track built here has nothing else that can open it — the four
+         static commands each pin their own track name in their own text.
+         This is the same enqueue path as the command bar, scoped to this
+         card's own track; see `TrackRunForm.vue`'s own header. -->
+    <TrackRunForm :track="props.name" :enabled="props.enabled" />
 
     <div class="track-lists">
       <TrackAgentList

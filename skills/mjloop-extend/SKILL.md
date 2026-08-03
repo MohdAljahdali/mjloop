@@ -32,6 +32,14 @@ Put that block **inline in the agent's own file**, not as a reference to another
 real run proved the difference: agents pointed at the contract violated it on their first
 attempt and each cost a corrective retry; agents carrying it inline complied first time.
 
+The Agents tab in `/mjloop:web` writes that same file the same way, behind a guarded door
+instead of the Write tool — create, edit, and delete all compare-and-swap on the file's own
+sha256, and a plugin agent stays read-only there until you derive it into a project copy.
+Neither constraint above changes because the write moved: the contract still has to live
+inline in the agent's own file, not behind a reference the dashboard's editor cannot check,
+and an agent no track offers still cannot be drafted, whether you wrote the file by hand or
+the dashboard wrote it for you.
+
 **Give it one job and a stated limit.** Every agent in this plugin says what it must never
 do — the verifier never edits, the builder never verifies or commits, the critic never
 fixes what it found. A limit is what makes a second opinion worth having.

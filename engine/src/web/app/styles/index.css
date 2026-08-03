@@ -1,4 +1,4 @@
-/* The six stylesheets carry across unchanged; only their entry point moved. */
+/* The original six stylesheets carry across unchanged, plus `70-graph.css` (Task 12). */
 @import './app.css';
 @import './10-layout.css';
 @import './20-rail.css';
@@ -6,3 +6,4 @@
 @import './40-terminal.css';
 @import './50-controls.css';
 @import './60-panels.css';
+@import './70-graph.css';

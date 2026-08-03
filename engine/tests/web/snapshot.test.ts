@@ -286,4 +286,29 @@ describe('revisions', () => {
     expect(snapshot.roster).toEqual({ cycle: 1, selected: ['editor', 'verifier'], landed: ['editor'] })
     expect(snapshot.guards).toMatchObject({ strikes: 0, strikesAllowed: 2 })
   })
+
+  it('moves the agents revision when an agent file is edited in place', async () => {
+    await fs.mkdir(path.join(project.dir, '.claude', 'agents'), { recursive: true })
+    const file = path.join(project.dir, '.claude', 'agents', 'scribe.md')
+    await fs.writeFile(file, '---\nname: scribe\ndescription: a\n---\n\nbody\n', 'utf8')
+    const before = (await buildSnapshot(project.dir)).revisions.agents
+    await fs.writeFile(file, '---\nname: scribe\ndescription: b\n---\n\nbody\n', 'utf8')
+    // `revision.ts`'s own `stamp()` is `Math.trunc(mtimeMs).size` — mtime
+    // truncated to the millisecond, plus byte size — and `description: a` to
+    // `description: b` is the same length, so `size` cannot tell the two
+    // writes apart. Nothing forces the two `writeFile`s above to land in
+    // different truncated milliseconds; on a fast enough run they do not,
+    // which is exactly the fingerprint's own documented hazard (`cycle`'s
+    // own comment above: "mtime granularity loses writes inside the same
+    // second"). Advancing the second write's mtime by hand is what makes
+    // this test assert the thing `stamp()` actually promises — "a file whose
+    // mtime moved gets a new revision" — rather than racing the clock to
+    // prove it by accident. Do not fix this by making the second write a
+    // different byte length instead: that would stop exercising `stamp()`'s
+    // mtime half at all, and would go green even if that half broke.
+    const stats = await fs.stat(file)
+    await fs.utimes(file, stats.atime, new Date(stats.mtimeMs + 2))
+    const after = (await buildSnapshot(project.dir)).revisions.agents
+    expect(after).not.toBe(before)
+  })
 })

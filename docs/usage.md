@@ -20,6 +20,10 @@ Then pick the command that matches the work:
 | Something is broken and you do not know why | `/mjloop:fix <problem>` |
 | An idea that needs to become buildable work | `/mjloop:plan <idea>` |
 
+A track with none of the four commands above still runs: `/mjloop:run <track> <goal>` opens
+any track named in `config.yaml`, including one built from the cockpit's Tracks tab that no
+command was ever written for. See **`/mjloop:run <track> <goal>`** below.
+
 Choosing the smallest track that fits is not a formality. `/mjloop:edit` is capped at one
 cycle and skips critique entirely, which is why it is cheap; `/mjloop:plan` runs five
 agents through two gates, which is why it is not.
@@ -85,6 +89,20 @@ The track can be preceded by an interview. Under `orchestration.discovery.mode` 
 first asks whether the request is understood well enough to plan at all — see **Feature
 discovery** below. The setting defaults to `off`, so a project that has not changed it gets
 exactly the command described here.
+
+### `/mjloop:run <track> <goal>`
+
+The other four commands each name their own track in their own text, which is exactly why a
+track that exists only in `config.yaml` — one created from the cockpit's Tracks tab, say —
+had nothing that could open it. `/mjloop:run` fixes that by naming no track at all: it reads
+the first word of its argument, checks that word against `tracks:` in `config.yaml`, and
+runs whichever one matches.
+
+It adds no rules of its own. The roster still comes from the track's own `required`,
+`available`, and `closing` sets; its gate and its order graph still apply exactly as they do
+under any of the four named commands. If the first word names `edit`, `build`, `fix`, or
+`plan`, it still runs — but the leader also says that the matching named command carries
+guidance this one does not, so you know it exists next time.
 
 ## Feature discovery
 
@@ -255,6 +273,25 @@ queue of commands. Plans and Stories are two tabs, not one: **Plans** is where a
 read, approved and tracked, and **Stories** is where its stories are filtered and run.
 Whichever plan you have open under Plans is the one Stories shows. Click a story's Run and
 it is queued; type any loop command into the box and it is queued too.
+
+### Agents and Tracks
+
+Two more tabs sit beside Plans and Stories. **Agents** lists every agent a run can draft —
+project and plugin, drawn in two separate sections rather than merged, because a project
+agent shadows a plugin agent of the same name and one list would hide exactly that — and
+shows which tracks use each one. It creates, edits, and deletes `.claude/agents/<name>.md`
+from there: each write compares and swaps on the file's own sha256, the name is confined by
+the same schema that keeps it from ever becoming a path outside `.claude/agents/`, deleting
+an agent a track still names is refused, and every agent write is refused outright while a
+run is open — an edit mid-run would make what ran and what is recorded two different
+things. A plugin agent stays read-only; deriving one copies it into a project agent you can
+then edit, the same way a hand-written one works.
+
+**Tracks** is where `tracks:` and `specialists:` moved to, out of Config and into their own
+tab: a Vue Flow graph of the track's order beside the full list view, not a summary of it —
+the list is what a keyboard reaches the same edits through. A track built here needs no
+command written for it before it runs: `/mjloop:run <track> <goal>` opens it by name, as
+described above.
 
 Opening a session in a project that has `.mjloop/` starts it for you and puts it on
 screen. Only on a genuine session start — not on `/clear` and not on a resume, which happen
@@ -453,10 +490,10 @@ guarded write behind `config set` does three things an editor cannot:
 
 A hand edit gets none of the three, and its damage does not surface at the keystroke: the
 config is next loaded when somebody starts a run, so a broken document turns up as a
-failed `/mjloop:build`, in another session, with no obvious cause. The cockpit's Config
-tab writes through the same guarded route. `config set` reaches the `orchestration` block
-and nothing else — change `tracks`, `verify`, `gates`, `specialists` and `limits` in the
-cockpit.
+failed `/mjloop:build`, in another session, with no obvious cause. The cockpit's Config and
+Tracks tabs write through the same guarded route. `config set` reaches the `orchestration`
+block and nothing else — change `verify`, `gates` and `limits` in Config, and `tracks` and
+`specialists` in Tracks.
 
 ## The component map
 
@@ -554,13 +591,14 @@ resolves it.
 
 ## Skill selection
 
-A run built against an approved feature brief can hand each of four existing roles —
-`planner`, `builder`, `critic`, and `verifier` — skill guidance drawn from what the project
-has itself accepted. **The roles do not change, and there is no `flutter-builder`, no
-`nextjs-builder`, and there never will be.** A Flutter project and a Next.js project
-dispatch the same four roles; what differs between them is the guidance a role is handed
-for one task, never who holds the responsibility — inventing a role per technology is
-exactly what this design refuses to do.
+A run built against an approved feature brief can hand skill guidance to any agent this
+project's own tracks name — `planner`, `builder`, `critic`, and `verifier` are the floor a
+config that declares no tracks still gets, not a ceiling on what a config that declares its
+own can route to. **The set of routable agents is what the project's tracks say it is, and
+there is no `flutter-builder`, no `nextjs-builder`, and there never will be.** A Flutter
+project and a Next.js project dispatch the same roles their tracks name; what differs
+between them is the guidance a role is handed for one task, never who holds the
+responsibility — inventing a role per technology is exactly what this design refuses to do.
 
 Selection is a match, not a guess. A skill is offered to a component when the skill's own
 tags intersect that component's skill tags — the tags the accepted component map already

@@ -15,17 +15,14 @@ import { IdSchema } from './state.js'
 import { DigestSchema } from './skill-library.js'
 
 /**
- * The fixed agent roles dynamic skill selection ever routes to.
+ * The roles skill selection routes to when a project declares no tracks at all.
  *
- * This mirrors `SKILL_SELECTION_AGENTS` in `ops/run.ts` exactly, and cannot
- * import it: `ops/run.ts` is the *ops* layer and this store's schema sits
- * below it, alongside every other schema in this codebase, and nothing under
- * `store/` or `schemas/` imports from `ops/` anywhere in this codebase — that
- * direction is the one this repository's layering runs. Restated here
- * rather than promoted to a shared location outside this story's owned
- * files, so an `agents` entry an acceptance names can be checked against the
- * only roles skill selection will ever offer a skill to. If the fixed roles
- * in `ops/run.ts` ever change, this list must change with them.
+ * It used to be the whole answer, and a fixed four. The set is now whichever
+ * agents a track in `config.yaml` names, because a project that adds an agent
+ * to a track has already said that agent is one this loop runs — and a skill it
+ * cannot be offered to is a skill that silently does nothing. This constant
+ * remains as the floor: a config with no tracks routes to these four rather
+ * than to nothing.
  */
 export const SKILL_ACCEPTANCE_AGENTS = ['planner', 'builder', 'critic', 'verifier'] as const
 

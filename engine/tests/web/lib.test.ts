@@ -23,7 +23,8 @@ import { planMemories, planRuns } from '../../src/web/app/lib/plans.ts'
 import { facet } from '../../src/web/app/lib/memory.ts'
 import {
   broken,
-  collectConfigChanges,
+  collectSettingsChanges,
+  collectTrackChanges,
   commandRows,
   edgeAfter,
   findOrderCycle,
@@ -350,17 +351,26 @@ describe('skill inspection (C7)', () => {
     ])
   })
 
-  it("narrows drafted agents to the roles an acceptance's own `agents` field can ever name, dropping the ones the CLI refuses", () => {
+  it("narrows drafted agents to the agents an acceptance's own `agents` field can ever name, project-wide rather than to the old fixed four", () => {
     // `track()` mirrors the project's real default `build` track shape
-    // (required builder/verifier, available scout/critic) — not a
-    // hand-narrowed fixture, which is how C7 shipped this unnoticed.
-    expect(routableAgents(track())).toEqual(['builder', 'verifier', 'critic'])
-    // `scout` is drafted (`available`) but `acceptSkill` throws
-    // `UnknownAcceptanceAgentError` for any `agents` entry outside
-    // `SKILL_ACCEPTANCE_AGENTS` (`store/skill-acceptance-store.ts:263-266`) —
-    // no acceptance can ever name it, so it never draws a row.
-    expect(routableAgents(track())).not.toContain('scout')
-    expect(routableAgents(undefined)).toEqual([])
+    // (required builder/verifier, available scout/critic, closing docs) — not
+    // a hand-narrowed fixture, which is how C7 shipped this unnoticed.
+    //
+    // `scout` is drafted (`available`) and used to be dropped no matter what,
+    // because the old rule was a fixed four regardless of what any track
+    // named. It is routable now: this track is itself one of `config.yaml`'s
+    // own tracks, so anything it drafts (or closes with) is named by *some*
+    // track — exactly `store/skill-acceptance-store.ts`'s `routableAgents`.
+    expect(routableAgents(track(), { build: track() })).toEqual(['builder', 'verifier', 'scout', 'critic'])
+
+    // The floor still applies when the config names no tracks at all — the
+    // one case `store/skill-acceptance-store.ts`'s `routableAgents` falls
+    // back to `SKILL_ACCEPTANCE_AGENTS` for, and `scout` is not one of the
+    // fixed four.
+    expect(routableAgents(track(), {})).toEqual(['builder', 'verifier', 'critic'])
+    expect(routableAgents(track(), {})).not.toContain('scout')
+
+    expect(routableAgents(undefined, { build: track() })).toEqual([])
   })
 
   it('keeps only the acceptances that name a drafted agent, plus every acceptance that names none at all', () => {
@@ -663,12 +673,17 @@ describe('lib/memory', () => {
 })
 
 /**
- * `Config.vue`'s pure half — ported from `panels/config.js`'s own
- * `collectConfigChanges`, `trackProblems`, `findOrderCycle` and the C6
- * change-impact preview, with `panels.test.ts:2023`'s `describe('config')`
- * as the requirements list. What is under test here is the diff and the
+ * `Config.vue`'s and `Tracks.vue`'s shared pure half — ported from
+ * `panels/config.js`'s own `collectConfigChanges`, `trackProblems`,
+ * `findOrderCycle` and the C6 change-impact preview, with
+ * `panels.test.ts:2023`'s `describe('config')` as the requirements list.
+ * `collectConfigChanges` itself later split into `collectSettingsChanges`
+ * (the plain fields `Config.vue` now owns) and `collectTrackChanges` (the
+ * structured `specialists:`/`tracks:` maps `Tracks.vue` now owns) — see
+ * `lib/config.ts`'s own header. What is under test here is the diff and the
  * refusal logic; the DOM this drives (the editor banner, disabled buttons,
- * the draft-only-until-Save invariant) is `panel-config.test.ts`'s own.
+ * the draft-only-until-Save invariant) is `panel-config.test.ts`'s and
+ * `panel-tracks.test.ts`'s own.
  */
 describe('lib/config', () => {
   const baseline = (patch: Record<string, unknown> = {}): Config =>
@@ -678,12 +693,31 @@ describe('lib/config', () => {
       ...patch,
     })
 
-  describe('seedFormValues / collectConfigChanges', () => {
+  describe('seedFormValues / collectSettingsChanges / collectTrackChanges', () => {
     it('emits nothing for a form and draft seeded straight from the baseline', () => {
       const config = baseline()
       const form = seedFormValues(config)
       const draft = seedDraft(config)
-      expect(collectConfigChanges(form, draft, config)).toEqual([])
+      expect(collectSettingsChanges(form, config)).toEqual([])
+      expect(collectTrackChanges(draft, config)).toEqual([])
+    })
+
+    it('splits the change list at the tracks boundary', () => {
+      const config = baseline()
+      const form = seedFormValues(config)
+      form.autonomous = !config.autonomous
+      const draft = seedDraft(config)
+      const build = draft.tracks['build']
+      if (build !== undefined) build.max_cycles = 9
+
+      const settings = collectSettingsChanges(form, config)
+      const tracks = collectTrackChanges(draft, config)
+
+      // Neither half reaches into the other's keys.
+      expect(settings.every((change) => change.kind !== 'track')).toBe(true)
+      expect(tracks.every((change) => change.kind === 'track')).toBe(true)
+      // And together they are still the whole change set.
+      expect(settings.length + tracks.length).toBe(2)
     })
 
     it('emits only the plain fields and the structured maps that actually moved', () => {
@@ -701,9 +735,11 @@ describe('lib/config', () => {
       const build = draft.tracks['build']
       if (build !== undefined) build.max_cycles = 7
 
-      expect(collectConfigChanges(form, draft, config)).toEqual([
+      expect(collectSettingsChanges(form, config)).toEqual([
         { kind: 'root', key: 'autonomous', value: true },
         { kind: 'verify.command', key: 'test', value: 'npm run test:ci' },
+      ])
+      expect(collectTrackChanges(draft, config)).toEqual([
         { kind: 'specialist', agent: 'security', value: 'always' },
         {
           kind: 'track',
@@ -720,7 +756,7 @@ describe('lib/config', () => {
       const config = baseline()
       const form = seedFormValues(config)
       expect(form.orchDiscoveryQuestionBudget).toBe(8)
-      expect(collectConfigChanges(form, seedDraft(config), config)).toEqual([])
+      expect(collectSettingsChanges(form, config)).toEqual([])
 
       form.orchProfileAutoAccept = true
       // `always` before `auto-plan`: the pair is one document-level rule, and
@@ -738,7 +774,7 @@ describe('lib/config', () => {
       form.orchSkillsTrustedRegistries = 'https://skills.example.com\n\n'
       form.orchSkillsUpdateMode = 'pinned'
 
-      const changes = collectConfigChanges(form, seedDraft(config), config)
+      const changes = collectSettingsChanges(form, config)
       expect(changes).toEqual([
         { kind: 'orchestration.profile.auto_accept', value: true },
         { kind: 'orchestration.discovery.mode', value: 'always' },
@@ -763,7 +799,7 @@ describe('lib/config', () => {
     it('compares skill sources as a set, never rewriting the order a document already holds', () => {
       const config = baseline({ orchestration: { skills: { sources: ['web', 'github'] } } })
       const form = seedFormValues(config)
-      expect(collectConfigChanges(form, seedDraft(config), config)).toEqual([])
+      expect(collectSettingsChanges(form, config)).toEqual([])
     })
 
     it("carries an order edge added through an agent's own row into the change set, and drops it once its last predecessor is removed", () => {
@@ -771,12 +807,11 @@ describe('lib/config', () => {
         tracks: { build: { required: ['builder', 'verifier'], available: ['ui-designer'], max_cycles: 5 } },
       })
       const draft = seedDraft(config)
-      const form = seedFormValues(config)
       const track = draft.tracks['build']
       if (track === undefined) throw new Error('fixture')
       track.order = [{ agent: 'verifier', after: ['builder'] }]
 
-      expect(collectConfigChanges(form, draft, config)).toEqual([
+      expect(collectTrackChanges(draft, config)).toEqual([
         {
           kind: 'track',
           track: 'build',
@@ -791,7 +826,7 @@ describe('lib/config', () => {
       ])
 
       track.order = []
-      expect(collectConfigChanges(form, draft, config)).toEqual([])
+      expect(collectTrackChanges(draft, config)).toEqual([])
     })
   })
 

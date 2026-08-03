@@ -3,6 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { SkillPackage } from '../../src/schemas/skill-library.js'
+import { skillSelectionAgents } from '../../src/ops/run.js'
 import {
   InvalidSkillAcceptanceRecordError,
   InvalidSkillIdError,
@@ -13,15 +14,48 @@ import {
   UnknownAcceptanceAgentError,
   UnknownAcceptanceComponentError,
   acceptSkill,
+  acceptanceDigest,
   listAcceptances,
   readAcceptance,
   removeAcceptance,
+  routableAgents,
+  setAcceptanceAgents,
   setAcceptanceStatus,
 } from '../../src/store/skill-acceptance-store.js'
 import { writePackage } from '../../src/store/skill-library-store.js'
 import { acceptProfile } from '../../src/store/project-profile-store.js'
+import { ConfigMissingError, loadConfig, writeConfig } from '../../src/store/config-store.js'
+import { initLoop } from '../../src/ops/init.js'
 import { resolveLoopPaths } from '../../src/store/paths.js'
+import { routableAgentSet } from '../../src/web/app/lib/stories.js'
 import { makeTmpProject, type TmpProject } from '../helpers/tmp-project.js'
+
+/**
+ * Adds to `edit`'s required list, the same way `tests/web/writes.test.ts`'s
+ * helper of the same name does — appended rather than replacing it outright,
+ * so the default project's other tracks (and `edit`'s own `editor`/`verifier`)
+ * stay exactly as `initLoop` wrote them.
+ *
+ * Most of this file's tests deliberately run against a bare `makeTmpProject`
+ * with no `config.yaml` at all — proving the floor applies when there is
+ * nothing to read. The handful that need a *custom* track call this, and it
+ * provisions one first (`initLoop`) rather than requiring every caller to
+ * remember to: a config only these tests need is these tests' own setup, not
+ * a change to what a bare project starts with.
+ */
+async function writeConfigWithTrack(dir: string, patch: { required: string[] }): Promise<void> {
+  const config = await loadConfig(dir).catch(async (error) => {
+    if (!(error instanceof ConfigMissingError)) throw error
+    await initLoop(dir, clock)
+    return loadConfig(dir)
+  })
+  const edit = config.tracks.edit
+  if (edit === undefined) throw new Error('this project has no edit track to test against')
+  await writeConfig(dir, {
+    ...config,
+    tracks: { ...config.tracks, edit: { ...edit, required: [...edit.required, ...patch.required] } },
+  })
+}
 
 const DIGEST_A = 'a'.repeat(64)
 const DIGEST_B = 'b'.repeat(64)
@@ -105,12 +139,16 @@ describe('acceptSkill', () => {
   })
 
   it('accepts a passed-audit package and derives the skill id from the package id', async () => {
-    // No `--agents`, so the acceptance takes every role dynamic selection
-    // dispatches to. Omitting the flag means "wherever this skill fits", not
+    // No `--agents`, so the acceptance takes every agent this project's own
+    // tracks name. Omitting the flag means "wherever this skill fits", not
     // "nowhere": selection joins on the component id AND on a tag, so a wide
-    // role set cannot widen what actually matches, while an empty one matches
+    // agent set cannot widen what actually matches, while an empty one matches
     // nothing at all and would have recorded a live-looking acceptance that
     // routed nothing on every run.
+    //
+    // This project (`makeTmpProject`, not `initLoop`) has no `config.yaml` at
+    // all, which `routableAgents` treats the same as one whose config names no
+    // tracks — the floor applies, so this is still the fixed four.
     await writePackage(project.dir, skillPackage(DIGEST_A, { audit: AUDITED }), contentDir)
     const record = await acceptSkill(
       project.dir,
@@ -164,6 +202,7 @@ describe('acceptSkill', () => {
       clock,
     )
     expect(record.components).toEqual(['admin', 'mobile'])
+    // Same floor as above — this project has no `config.yaml` either.
     expect(record.agents).toEqual(['planner', 'builder', 'critic', 'verifier'])
   })
 
@@ -200,12 +239,15 @@ describe('acceptSkill', () => {
     expect(record.agents).toEqual(['builder'])
   })
 
-  it('refuses an agent name that is not one of the fixed roles', async () => {
+  it('refuses an agent name no track in this project names', async () => {
+    // `hypothesis-tester` no longer proves this — it is `fix`'s own `available`
+    // agent under the default tracks `initLoop` writes, and is routable now.
+    // `ghost` is named by nothing this project's config declares.
     await writePackage(project.dir, skillPackage(DIGEST_A, { audit: AUDITED }), contentDir)
     await expect(
       acceptSkill(
         project.dir,
-        { packageDigest: DIGEST_A, agents: ['hypothesis-tester'], updatePolicy: 'review', acceptedBy: 'tester' },
+        { packageDigest: DIGEST_A, agents: ['ghost'], updatePolicy: 'review', acceptedBy: 'tester' },
         clock,
       ),
     ).rejects.toThrow(UnknownAcceptanceAgentError)
@@ -230,6 +272,70 @@ describe('setAcceptanceStatus', () => {
     expect((await readAcceptance(project.dir, 'flutter-widgets'))?.status).toBe('disabled')
 
     await expect(setAcceptanceStatus(project.dir, 'no-such-skill', 'active')).rejects.toThrow(SkillAcceptanceNotFoundError)
+  })
+})
+
+describe('setAcceptanceAgents', () => {
+  it('accepts an agent any track names, not only the four fixed roles, and leaves every other field alone', async () => {
+    await writeConfigWithTrack(project.dir, { required: ['scribe', 'verifier'] })
+    await writePackage(project.dir, skillPackage(DIGEST_A, { audit: AUDITED }), contentDir)
+    await acceptSkill(project.dir, { packageDigest: DIGEST_A, agents: ['scribe'], updatePolicy: 'review', acceptedBy: 'tester' }, clock)
+
+    const before = await readAcceptance(project.dir, 'flutter-widgets')
+    // What `acceptSkill` actually produced, before `setAcceptanceAgents` ever
+    // touches it — the fixture this test's own title is about.
+    expect(before?.agents).toEqual(['scribe'])
+    await setAcceptanceAgents(project.dir, 'flutter-widgets', ['verifier'], acceptanceDigest(before!))
+    const after = await readAcceptance(project.dir, 'flutter-widgets')
+
+    expect(after?.agents).toEqual(['verifier'])
+    // The one field this door may set — status, components, update policy,
+    // digest, everything else — is untouched.
+    expect({ ...after, agents: [] }).toEqual({ ...before, agents: [] })
+  })
+
+  it('still refuses an agent no track names', async () => {
+    await writeConfigWithTrack(project.dir, { required: ['scribe'] })
+    await writePackage(project.dir, skillPackage(DIGEST_A, { audit: AUDITED }), contentDir)
+    await acceptSkill(project.dir, { packageDigest: DIGEST_A, agents: ['scribe'], updatePolicy: 'review', acceptedBy: 'tester' }, clock)
+
+    const before = await readAcceptance(project.dir, 'flutter-widgets')
+    await expect(setAcceptanceAgents(project.dir, 'flutter-widgets', ['ghost'], acceptanceDigest(before!))).rejects.toThrow(
+      UnknownAcceptanceAgentError,
+    )
+  })
+
+  it('refuses a digest that has moved, and changes nothing', async () => {
+    await writeConfigWithTrack(project.dir, { required: ['scribe'] })
+    await writePackage(project.dir, skillPackage(DIGEST_A, { audit: AUDITED }), contentDir)
+    await acceptSkill(project.dir, { packageDigest: DIGEST_A, agents: ['scribe'], updatePolicy: 'review', acceptedBy: 'tester' }, clock)
+
+    await expect(setAcceptanceAgents(project.dir, 'flutter-widgets', ['scribe'], 'x'.repeat(64))).rejects.toThrow()
+    expect((await readAcceptance(project.dir, 'flutter-widgets'))?.agents).toEqual(['scribe'])
+  })
+})
+
+/**
+ * The rule restated three times over — here, in `ops/run.ts`'s
+ * `skillSelectionAgents`, and in `web/app/lib/stories.ts`'s `routableAgentSet`
+ * — cannot be one shared function: nothing under `store/` or `schemas/`
+ * imports from `ops/`, and the browser bundle cannot reach into either at all.
+ * This is the guard that keeps the three copies honest: the same config,
+ * fed to each of the three, must name the same set.
+ */
+describe('the three copies of "which agents are routable" stay in step', () => {
+  it('agree on a project with custom tracks and on a project with none', async () => {
+    await writeConfigWithTrack(project.dir, { required: ['scribe'] })
+    const withTracks = await loadConfig(project.dir)
+
+    expect(await routableAgents(project.dir)).toEqual(new Set(skillSelectionAgents(withTracks)))
+    expect(await routableAgents(project.dir)).toEqual(routableAgentSet(withTracks.tracks))
+
+    // The floor: a config with no tracks at all routes to the fixed four,
+    // identically in all three places.
+    const empty = { ...withTracks, tracks: {} }
+    expect(routableAgentSet(empty.tracks)).toEqual(new Set(skillSelectionAgents(empty)))
+    expect([...routableAgentSet(empty.tracks)].sort()).toEqual(['builder', 'critic', 'planner', 'verifier'])
   })
 })
 

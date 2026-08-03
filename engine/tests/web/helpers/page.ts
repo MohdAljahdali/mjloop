@@ -63,6 +63,7 @@ export function emptySnapshot(patch: Partial<Snapshot> = {}): Snapshot {
       profile: '-',
       features: '',
       skills: '',
+      agents: '-',
     },
     ...patch,
   }

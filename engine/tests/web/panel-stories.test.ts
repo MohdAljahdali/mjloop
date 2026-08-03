@@ -769,7 +769,15 @@ describe('Stories.vue', () => {
     expect(rows[1]?.find('.tag.next').attributes('hidden')).toBeDefined()
   })
 
-  it("shows a row only for the drafted agents an acceptance's own agents field could ever name, and leaves out an off-track skill", async () => {
+  it("shows a row for every drafted agent this project's own tracks make routable, and leaves out an off-track skill", async () => {
+    // `config.tracks` names only `build` here, so — since a skill now routes
+    // to whichever agent *any* track names, project-wide — every agent this
+    // one track drafts (required and available, never `docs`, which is
+    // `closing`) is routable: `builder`, `verifier`, `scout`, `critic`,
+    // `ui-designer`, `ui-critic`, `security`, `perf`. That is the whole
+    // widening this story made: `scout` used to be dropped no matter what
+    // (the old rule was a fixed four regardless of what any track named); it
+    // draws its own row now.
     serve({
       '/api/plans/P001': planDetail({ id: 'P001', stories: [detailStory({ id: 'P001-S01', title: 'One' })] }),
       '/api/config': configView({ tracks: { build: DEFAULT_TRACKS.build } }),
@@ -786,9 +794,18 @@ describe('Stories.vue', () => {
     const wrapper = mountTracked(Stories)
     await vi.waitFor(() => expect(wrapper.findAll('#stories-list .story')).toHaveLength(1))
     await wrapper.get('[data-slot="open"][data-story="P001-S01"]').trigger('click')
-    await vi.waitFor(() => expect(wrapper.findAll('#story-open-skills-agents .skill-agent')).toHaveLength(3))
+    await vi.waitFor(() => expect(wrapper.findAll('#story-open-skills-agents .skill-agent')).toHaveLength(8))
 
-    expect(wrapper.findAll('#story-open-skills-agents .skill-agent h4').map((n) => n.text())).toEqual(['builder', 'verifier', 'critic'])
+    expect(wrapper.findAll('#story-open-skills-agents .skill-agent h4').map((n) => n.text())).toEqual([
+      'builder',
+      'verifier',
+      'scout',
+      'critic',
+      'ui-designer',
+      'ui-critic',
+      'security',
+      'perf',
+    ])
 
     const rows = wrapper.findAll('#story-open-skills-agents .skill-agent')
     const builderRow = rows.find((row) => row.find('h4').text() === 'builder')!
@@ -801,8 +818,10 @@ describe('Stories.vue', () => {
     expect(verifierRow.get('[data-slot="none"]').attributes('hidden')).toBeUndefined()
     expect(verifierRow.get('[data-slot="none"]').text()).toBe(english['story.skills.agentNone'])
 
+    // `planner` is not drafted by the one track this config names, so
+    // `brief-writer` is still off-track and still left out — the one case
+    // this widening did not change.
     expect(wrapper.get('#story-open-skills-agents').text()).not.toContain('brief-writer')
-    expect(wrapper.get('#story-open-skills-agents').text()).not.toContain('scout')
   })
 
   it('flags an acceptance accepted for no agent, a disabled one, and an incompatible one — never off-track — and says so when nothing is flagged', async () => {

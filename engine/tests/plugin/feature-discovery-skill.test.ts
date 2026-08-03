@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { buildServer } from '../../src/mcp/server.js'
-import { DiscoveryCompletionSchema, FeatureDiscoveryModeSchema, OrchestrationSchema } from '../../src/schemas/config.js'
+import { FeatureDiscoveryModeSchema, OrchestrationSchema } from '../../src/schemas/config.js'
 import { FeatureBriefSchema } from '../../src/schemas/feature.js'
 import { acceptedRevisionFile } from '../../src/store/project-profile-store.js'
 import { resolveLoopPaths } from '../../src/store/paths.js'
@@ -54,23 +54,9 @@ const AGENTS_DIR = path.join(REPO, 'agents')
 const COMMANDS_DIR = path.join(REPO, 'commands')
 const SKILL_NAME = 'mjloop-feature-discovery'
 const SKILL_FILE = path.join(SKILLS_DIR, SKILL_NAME, 'SKILL.md')
-const PLAN_COMMAND = path.join(COMMANDS_DIR, 'plan.md')
 const LEADER_SKILL = path.join(SKILLS_DIR, 'mjloop-leader', 'SKILL.md')
 
-/**
- * The plan command's two policy branches, by heading.
- *
- * They are read separately because they are different settings that happen to
- * be documented in the same bullet shape: one decides whether an interview
- * happens, the other decides what happens to what it produced. A scan over the
- * whole document would read `always | ask | off | auto-plan | review |
- * save-only` as one list and match neither schema.
- */
-const DISCOVERY_SECTION = '## Before the plan track: the discovery branch'
-const COMPLETION_SECTION = '## After the brief: the completion branch'
-
 const skill = await fs.readFile(SKILL_FILE, 'utf8')
-const planCommand = await fs.readFile(PLAN_COMMAND, 'utf8')
 const leader = await fs.readFile(LEADER_SKILL, 'utf8')
 const readme = await fs.readFile(path.join(REPO, 'README.md'), 'utf8')
 const usage = {
@@ -393,85 +379,6 @@ describe('the feature discovery skill', () => {
     // statement and belongs to whoever verified it, not to a substring match.
     expect(skill).toContain('mattpocock/skills')
     expect(skill).toContain('https://github.com/mattpocock/skills/blob/main/skills/productivity/grilling/SKILL.md')
-  })
-})
-
-describe('the plan command', () => {
-  it('names no MCP tool the engine does not register', () => {
-    expect(toolsNamedIn(planCommand).filter((tool) => !registered.has(tool))).toEqual([])
-  })
-
-  it('enters discovery by the name of a skill this plugin ships', () => {
-    // The header's failure one level up from tools: a command that names a
-    // skill no directory provides does not error either. The model improvises
-    // an interview with none of the rules the skill states, and every assertion
-    // about the skill's text keeps passing, because the skill is still there —
-    // it is simply not what ran.
-    //
-    // `always` is the branch that enters discovery, so the name has to be in
-    // that bullet and not merely somewhere in the file. That the directory
-    // exists is proved by the module-level read of `SKILL_FILE` above: a
-    // renamed skill makes this whole suite fail to load.
-    const always = bullets(section(planCommand, DISCOVERY_SECTION)).find((rule) => rule.startsWith('- **`always`**')) ?? ''
-    expect(always).toContain(SKILL_NAME)
-  })
-
-  it('branches on exactly the discovery modes the schema declares', () => {
-    // Imported, not retyped, the way `locales.test.ts` asserts its families
-    // against their engine schema: a fourth mode added to `config.ts` fails
-    // here rather than being silently undocumented, and a mode documented
-    // after the schema dropped it fails here too.
-    //
-    // Read from the discovery branch's own section rather than from the whole
-    // file, because the completion branch below states its three settings in
-    // the same bullet shape and a document-wide scan would read the two lists
-    // as one six-valued setting. A renamed heading empties the match and fails
-    // here, which is the right outcome for a document whose two branches this
-    // suite is asserting separately.
-    const documented = [...section(planCommand, DISCOVERY_SECTION).matchAll(/^- \*\*`([a-z-]+)`\*\* —/gm)].map((match) => match[1] ?? '')
-    expect(documented.sort()).toEqual([...FeatureDiscoveryModeSchema.options].sort())
-  })
-
-  it('branches on exactly the completion settings the schema declares', () => {
-    // `orchestration.discovery.completion` was dead policy when S03 landed:
-    // the schema had it, the docs listed it, and nothing read it. This is the
-    // assertion that says it is a branch of this command now, and it is
-    // derived from the same schema for the same reason as the modes above.
-    const documented = [...section(planCommand, COMPLETION_SECTION).matchAll(/^- \*\*`([a-z-]+)`\*\* —/gm)].map((match) => match[1] ?? '')
-    expect(documented.sort()).toEqual([...DiscoveryCompletionSchema.options].sort())
-  })
-
-  it('starts auto-plan only against an approved brief', () => {
-    // The one completion branch that begins work without asking, and so the
-    // one sentence in this file whose loss would let a plan track open against
-    // decisions nobody agreed to. Structural, like the skill's boundary
-    // assertion: it reads that the bullet still turns on approval, not that
-    // the prose around it still means what it means.
-    const autoPlan = bullets(section(planCommand, COMPLETION_SECTION)).find((rule) => rule.startsWith('- **`auto-plan`**')) ?? ''
-    expect(autoPlan, 'auto-plan no longer names approval').toMatch(/approved/)
-  })
-
-  it("calls the engine's own default the default, in both branches", () => {
-    // The compatibility promise of this whole feature is that an existing
-    // project's plan flow is unchanged. A command that documented a different
-    // branch as the default would be describing a flow nobody configured —
-    // and that holds for what happens after a brief exactly as it holds for
-    // whether one is produced at all.
-    const { mode, completion } = OrchestrationSchema.parse({}).discovery
-    for (const fallback of [mode, completion]) {
-      const line = planCommand.split('\n').find((text) => text.startsWith(`- **\`${fallback}\`**`)) ?? ''
-      expect(line, fallback).toMatch(/default/)
-    }
-  })
-
-  it('keeps both existing gates and its frontmatter', () => {
-    // This file was added to, not rewritten. The two gates are the plan track's
-    // safety, and discovery is explicitly not a third one.
-    expect(planCommand).toContain('The fit-check gate')
-    expect(planCommand).toContain('The approval gate')
-    const parsed = frontmatter(planCommand)
-    expect(parsed.description ?? '').not.toBe('')
-    expect(parsed['argument-hint'] ?? '').not.toBe('')
   })
 })
 

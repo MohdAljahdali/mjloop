@@ -48,6 +48,7 @@ const holes = (value: string): string[] => [...value.matchAll(/\{(\w+)\}/g)].map
 
 /** Every namespace a key may open with. A new one is a decision, not a typo. */
 const NAMESPACES = [
+  'agents',
   'app',
   'banner',
   'command',

@@ -1,22 +1,36 @@
 import os from 'node:os'
 import * as z from 'zod'
+import { AgentNameSchema } from '../schemas/contract.js'
 import { FeatureIdSchema } from '../schemas/feature.js'
 import { ApprovalDecisionSchema, PlanIdSchema, StoryIdSchema, StoryStatusSchema } from '../schemas/plan.js'
+import { IdSchema } from '../schemas/state.js'
 import { gateSet } from '../ops/plan.js'
 import { storyUpdate } from '../ops/plan.js'
 import { halt } from '../ops/run.js'
+import { stateSummary } from '../ops/summary.js'
 import {
   ConfigChangeSchema,
   ConfigMutationError,
   mutateConfig,
 } from '../store/config-mutation.js'
+import { loadConfig } from '../store/config-store.js'
 import {
   ApprovedRevisionImmutableError,
   StaleFeatureContentError,
   StaleFeatureRevisionError,
   approveFeatureBrief,
 } from '../store/feature-store.js'
-import { StalePreconditionError } from '../store/precondition.js'
+import {
+  AgentWriteError,
+  deleteAgent,
+  listAgents,
+  readAgent,
+  writeAgent,
+  type AgentWriteFailure,
+} from '../store/agent-store.js'
+import { setAcceptanceAgents } from '../store/skill-acceptance-store.js'
+import { PLUGIN_AGENTS_DIR } from './read.js'
+import { StalePreconditionError, type PreconditionSubject } from '../store/precondition.js'
 import type { WebCode } from './codes.js'
 
 /**
@@ -25,8 +39,8 @@ import type { WebCode } from './codes.js'
  *
  * Everything else on the page either reads, or composes a loop command and
  * enqueues it — there is one execution model and not a second, weaker one
- * beside it. These four cannot be expressed as a command, and each is
- * something a person is stuck on today:
+ * beside it. Nine doors reach past that model. The original four cannot be
+ * expressed as a command, and each is something a person is stuck on today:
  *
  *  - **Plan approval.** `gates.plan_approval` defaults to `human` and the build
  *    is refused until somebody decides. Spawning a whole `claude` session to
@@ -74,6 +88,57 @@ import type { WebCode } from './codes.js'
  * actually showing, and a draft's revision number does not move when those
  * words do.
  *
+ * **The three agent doors** — `agent.create`, `agent.update`, `agent.delete`
+ * — are the other four, and a different class from the original four above:
+ * not a repair for something the loop leaves broken, but `config.patch`'s
+ * class restated for a different file. `config.patch` is an operator's own
+ * decision about `config.yaml`, recorded compare-and-swap; these are the same
+ * decision about a file under `.claude/agents/`. Never `runStart`'s class —
+ * nothing here reports work the loop did, wipes history, or claims a cycle
+ * happened — which is exactly why they get two refusals of their own rather
+ * than none:
+ *
+ *  - **While a run is open.** Checked in `applyWrite`, before any handler
+ *    runs, via `stateSummary` (already read elsewhere under `src/web/`, so
+ *    importing it here does not open a new door of its own). The roster is
+ *    pinned and the briefs are already sent once a run starts, so an agent
+ *    edited mid-run would make what ran and what is recorded two different
+ *    things.
+ *  - **When a track still names the agent being deleted.** `agentUsedByTrack`
+ *    reads the same config `config.patch` already reads (`loadConfig`, same
+ *    story as `stateSummary` above on the import). It runs as `deleteAgent`'s
+ *    own `guard` — *inside* the project lock that write already takes, after
+ *    the digest check and before the file is removed — because the check and
+ *    the delete have to be atomic against a `config.patch` racing in between
+ *    them; a check made before calling `deleteAgent` would be reading the
+ *    config outside the very lock `agent-store.ts` takes to prevent that.
+ *
+ * **The fourth door**, `skill.agents`, is `setAcceptanceAgents`'s only caller
+ * and sets exactly the one field that store function lets it set — an
+ * acceptance's `agents`, never its status, its components, its update policy
+ * or the digest of the package it pins. It joins the two agent-door refusals
+ * above rather than getting a fresh pair: `GUARDED_WHILE_RUNNING` (renamed
+ * from `AGENT_KINDS` for exactly this reason) now names all four kinds this
+ * class shares, so it is refused while a run is open the same way an agent
+ * edit is — a run's pinned skill manifest is frozen at `runStart`, so an
+ * acceptance's routing edited mid-run would make what a cycle was actually
+ * offered and what is recorded two different things, the identical hazard an
+ * agent file edited mid-run is refused for. It has no in-use guard of its own:
+ * unlike deleting an agent a track still names, narrowing which agents a
+ * skill routes to never leaves a track pointing at a file that stopped
+ * existing.
+ *
+ * These are also the first writes anywhere in this server to land outside
+ * `.mjloop/` at all — into `.claude/agents/`. That is confined at exactly one
+ * seam: the name arrives typed as `AgentNameSchema` (`schemas/contract.ts`),
+ * which admits only `[A-Za-z0-9_-]`, and `agent-store.ts`'s `agentFile`
+ * (`agent-store.ts:150-155`) is the only place that name is ever joined onto
+ * a path, and only onto the agents directory — `.` and `/` sit outside the
+ * schema's character class, so `..` and `a/b` can never reach it. A project
+ * agent may also shadow a plugin agent of the same name; `reservedAgentNames`
+ * below reads `PLUGIN_AGENTS_DIR` fresh rather than a hard-coded list, and
+ * `writeAgent`'s `reserved` option refuses the collision outright.
+ *
  * This path bypasses the `PreToolUse` state guard entirely — it is the server
  * process, not a `claude` tool call — so the boundary is structural rather than
  * a hook. Four layers hold it:
@@ -84,8 +149,12 @@ import type { WebCode } from './codes.js'
  *  2. **Schema.** `strictObject` throughout, so an undeclared wire field is
  *     rejected before `applyWrite` is reached.
  *  3. **An import allowlist**, asserted from source text: this file may import
- *     exactly the three ops and the guarded config mutator; `server.ts` may
- *     import none.
+ *     the three original ops, the guarded config mutator, the agent store's
+ *     two writers (`writeAgent`, `deleteAgent`), the skill acceptance store's
+ *     one writer for this door (`setAcceptanceAgents`), and the two reads the
+ *     agent doors need above (`stateSummary`, `loadConfig`) — the last two
+ *     already imported elsewhere under `src/web/` with no single-importer
+ *     assertion to widen; `server.ts` may import none.
  *  4. **A forbidden list**, asserted to appear nowhere under `src/web/`.
  */
 
@@ -156,6 +225,41 @@ export const WriteSchema = z.discriminatedUnion('kind', [
     digest: z.string().regex(/^[a-f0-9]{64}$/),
     note: z.string().max(2000).nullable().default(null),
   }),
+  z.strictObject({
+    kind: z.literal('agent.create'),
+    name: AgentNameSchema,
+    description: z.string().min(1).max(500),
+    tools: z.string().max(500).nullable(),
+    model: z.string().max(100).nullable(),
+    /**
+     * The agent's own prompt. Free text, and that is not a violation of the
+     * no-prose rule: that rule constrains *server-authored* prose. This is the
+     * user's own words travelling into a project file, the same category as
+     * `note` and `reason` above.
+     */
+    body: z.string().max(100000),
+  }),
+  z.strictObject({
+    kind: z.literal('agent.update'),
+    name: AgentNameSchema,
+    digest: z.string().regex(/^[a-f0-9]{64}$/),
+    description: z.string().min(1).max(500),
+    tools: z.string().max(500).nullable(),
+    model: z.string().max(100).nullable(),
+    body: z.string().max(100000),
+  }),
+  z.strictObject({
+    kind: z.literal('agent.delete'),
+    name: AgentNameSchema,
+    digest: z.string().regex(/^[a-f0-9]{64}$/),
+  }),
+  z.strictObject({
+    kind: z.literal('skill.agents'),
+    skill: IdSchema,
+    /** `AcceptanceView.recordDigest` (`web/read.ts`) — the compare-and-swap token this write checks inside the store's lock. */
+    digest: z.string().regex(/^[a-f0-9]{64}$/),
+    agents: z.array(AgentNameSchema).max(50),
+  }),
 ])
 
 export type Write = z.infer<typeof WriteSchema>
@@ -178,6 +282,58 @@ function decidedBy(): string {
   }
   return `dashboard:${who}`
 }
+
+/**
+ * Every write kind refused while a run is open — the three agent doors, and
+ * `skill.agents` beside them for the identical reason: a run's roster and its
+ * pinned skill manifest are both frozen at `runStart`, so any of the four
+ * edited mid-run would make what a cycle actually ran and what is recorded
+ * two different things.
+ */
+const GUARDED_WHILE_RUNNING: readonly Write['kind'][] = ['agent.create', 'agent.update', 'agent.delete', 'skill.agents']
+
+/**
+ * The plugin's own agent names — a project agent may not shadow one of these.
+ *
+ * Read fresh from `PLUGIN_AGENTS_DIR` rather than hard-coded: the reserved set
+ * is exactly what `readAgentsView` already lists as `plugin`, and duplicating
+ * it here as a literal array would be a second place for a new plugin agent
+ * to go unreserved.
+ */
+async function reservedAgentNames(): Promise<string[]> {
+  const { agents } = await listAgents(PLUGIN_AGENTS_DIR, 'plugin')
+  return agents.map((agent) => agent.name)
+}
+
+/**
+ * Which tracks name an agent, and in which list.
+ *
+ * Read from the config rather than remembered: an agent's membership is the
+ * track's business, and a cached answer here is one that can be wrong at
+ * exactly the moment it matters — when somebody is deleting the agent.
+ */
+async function agentUsedByTrack(projectDir: string, name: string): Promise<boolean> {
+  const config = await loadConfig(projectDir)
+  return Object.values(config.tracks).some((track) =>
+    [
+      ...track.required,
+      ...(track.available ?? []),
+      ...(track.closing ?? []),
+      ...(track.gate?.blocks ?? []),
+      track.gate?.proven_by ?? '',
+      track.map?.drafted_by ?? '',
+    ].includes(name),
+  )
+}
+
+/**
+ * Raised inside a handler and translated to `write.refused.agent.inUse` in the
+ * `catch` below — not an `AgentWriteError` kind, because the store has no
+ * opinion on tracks at all; that reasoning belongs to this layer, the same way
+ * `agentUsedByTrack` above reads the config this layer already reads for
+ * `config.patch`.
+ */
+class AgentInUseError extends Error {}
 
 type Handlers = {
   [K in Write['kind']]: (projectDir: string, write: Extract<Write, { kind: K }>) => Promise<void>
@@ -222,13 +378,89 @@ const HANDLERS: Handlers = {
       note: write.note,
     })
   },
+  'agent.create': async (projectDir, write) => {
+    // `extra` is always empty on a create: there is no existing file for an
+    // unknown field to have come from.
+    await writeAgent(
+      projectDir,
+      { name: write.name, description: write.description, tools: write.tools, model: write.model, extra: {}, body: write.body },
+      { expectDigest: null, reserved: await reservedAgentNames() },
+    )
+  },
+  'agent.update': async (projectDir, write) => {
+    // The browser never sends `extra`: a field it has never heard of is read
+    // from the file here and carried forward unchanged. This read is not
+    // inside `writeAgent`'s own lock, but that is not a race — `expectDigest`
+    // below is a hash of the *whole* file, `extra` included, so if the file
+    // moved between this read and the write landing, the digest check inside
+    // `writeAgent` refuses the write outright rather than letting a stale
+    // `extra` land.
+    const existing = await readAgent(projectDir, write.name)
+    await writeAgent(
+      projectDir,
+      {
+        name: write.name,
+        description: write.description,
+        tools: write.tools,
+        model: write.model,
+        extra: existing?.extra ?? {},
+        body: write.body,
+      },
+      { expectDigest: write.digest, reserved: await reservedAgentNames() },
+    )
+  },
+  'agent.delete': async (projectDir, write) => {
+    // The in-use check runs as `deleteAgent`'s `guard`, *inside* its lock and
+    // after the digest check, not before this handler calls it. Checking here
+    // first would read the config outside the very lock `agent-store.ts`
+    // takes to prevent this exact race: a `config.patch` naming this agent
+    // into a track between an outside check and the `fs.rm` would leave the
+    // config pointing at a file that no longer exists, and nothing — there is
+    // no digest over the config — would ever catch that.
+    await deleteAgent(projectDir, write.name, write.digest, {
+      guard: async () => {
+        if (await agentUsedByTrack(projectDir, write.name)) throw new AgentInUseError()
+      },
+    })
+  },
+  'skill.agents': async (projectDir, write) => {
+    // The one field this door may set. Not the status, the components, the
+    // update policy, or the digest of the package it pins — those are
+    // `mjloop-cli skills accept|disable`'s decisions, not the dashboard's.
+    await setAcceptanceAgents(projectDir, write.skill, write.agents, write.digest)
+  },
 }
 
 export async function applyWrite(projectDir: string, write: Write): Promise<WriteResult> {
+  if (GUARDED_WHILE_RUNNING.includes(write.kind)) {
+    // Refused while a run is open, for a reason the config editor does not
+    // have: the roster and the skill manifest are both pinned once a run
+    // starts, so an agent or a skill's routing edited mid-run makes what ran
+    // and what is recorded two different things.
+    const state = await stateSummary(projectDir)
+    if (state.status === 'running') return { ok: false, code: 'write.refused.running' }
+  }
   try {
     await HANDLERS[write.kind](projectDir, write as never)
     return { ok: true }
   } catch (error) {
+    if (error instanceof AgentInUseError) {
+      return { ok: false, code: 'write.refused.agent.inUse' }
+    }
+    if (error instanceof AgentWriteError) {
+      const code = {
+        stale: 'write.stale.agent',
+        exists: 'write.invalid.agent',
+        // For the browser this is one fact, not three: the screen the click
+        // was made from is out of date and nothing was changed. `stale` and
+        // `missing` share a code for the same reason `write.stale.feature`
+        // folds three store distinctions into one above.
+        missing: 'write.stale.agent',
+        invalid: 'write.invalid.agent',
+        reserved: 'write.refused.agent.shadow',
+      } as const satisfies Record<AgentWriteFailure, WebCode>
+      return { ok: false, code: code[error.kind] }
+    }
     if (error instanceof ConfigMutationError) {
       return {
         ok: false,
@@ -277,4 +509,5 @@ const STALE = {
   plan: 'write.stale.plan',
   story: 'write.stale.story',
   run: 'write.stale.run',
-} as const satisfies Record<string, WebCode>
+  skill: 'write.stale.skill',
+} as const satisfies Record<PreconditionSubject, WebCode>

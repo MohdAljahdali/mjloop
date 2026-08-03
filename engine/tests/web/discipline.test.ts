@@ -67,11 +67,13 @@ describe('accessibility', () => {
       stories: 'panels/Stories.vue',
       features: 'panels/Features.vue',
       skills: 'panels/Skills.vue',
+      agents: 'panels/Agents.vue',
       evidence: 'panels/Evidence.vue',
       memory: 'panels/Memory.vue',
       config: 'panels/Config.vue',
+      tracks: 'panels/Tracks.vue',
     }
-    for (const route of ['run', 'plans', 'stories', 'features', 'skills', 'evidence', 'memory', 'config']) {
+    for (const route of ['run', 'plans', 'stories', 'features', 'skills', 'agents', 'evidence', 'memory', 'config', 'tracks']) {
       const panel = read(panelFile[route] ?? '')
       expect(panel, `${panelFile[route]} has no content`).not.toBe('')
       expect(panel).toMatch(new RegExp(`id="panel-${route}"[^>]+aria-labelledby="panel-${route}-title"`))
@@ -159,14 +161,26 @@ describe('accessibility', () => {
     // only reads the two files it already expects the answer from would never
     // see a third added somewhere else — `Banners.vue`, which actually holds
     // the second region, included.
-    const total = vueFiles.reduce((sum, name) => sum + [...read(name).matchAll(/aria-live="polite"/g)].length, 0)
+    //
+    // `role="status"` and `role="alert"` are both an *implicit*
+    // `aria-live` — a bare `aria-live="polite"` grep missed exactly that:
+    // a `role="status"` added to a third element (Task 12's own graph
+    // refusal, in a since-reverted draft of this file) slipped straight
+    // past the old regex while still being a third announced region in
+    // every way that matters to a screen reader. One match per *tag*, not
+    // per attribute: `Toasts.vue` and `Banners.vue` both carry
+    // `role="status"` and `aria-live="polite"` on the very same element, so
+    // counting attribute occurrences directly would double-count each of
+    // them and make "two live regions" impossible to assert correctly.
+    const liveRegionTag = /<[^>]+?(?:aria-live="polite"|role="status"|role="alert")[^>]*>/g
+    const total = vueFiles.reduce((sum, name) => sum + [...read(name).matchAll(liveRegionTag)].length, 0)
     expect(total).toBe(2)
     // `NoticeFeed.vue` itself still carries no live region of its own —
     // `role="status"` lives on `Toasts.vue`'s root, the one place a message
     // must interrupt without the reader opening anything. The panel below it
     // is opened by hand, so announcing it too would repeat every toast a
     // second time.
-    expect(read('components/NoticeFeed.vue')).not.toMatch(/aria-live="polite"/)
+    expect(read('components/NoticeFeed.vue')).not.toMatch(liveRegionTag)
   })
 })
 

@@ -261,6 +261,19 @@ Order it like this:
 Report at the end: the plan id, how many stories, whether a human approved it, and the
 command that builds the first one — `/mjloop:build --next`.
 
+### 3e. Running a track no command is named after
+
+`/mjloop:run <track>` opens any track in `config.yaml`, including one this skill has
+never heard of. Nothing changes: compose the roster from that track's own `required`,
+`available` and `closing` sets, honour its `gate` and its `order` exactly as you would
+the four above, and stop at its `max_cycles`.
+
+The sections above name `edit`, `build`, `fix` and `plan` because those four have
+commands and standing guidance. They are not the list of tracks that exist. If you find
+yourself reasoning about which of the four a custom track "really is", stop: the track's
+own sets already say what it runs, and the engine never learns an agent's name for
+exactly this reason.
+
 ### 4. Dispatch
 
 Dispatch the `waves` step 3 returned, one wave at a time. Send every agent named in one

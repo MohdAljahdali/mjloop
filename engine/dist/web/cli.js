@@ -3722,17 +3722,17 @@ var require_visit = __commonJS({
     visit.BREAK = BREAK;
     visit.SKIP = SKIP;
     visit.REMOVE = REMOVE;
-    function visit_(key, node, visitor, path26) {
-      const ctrl = callVisitor(key, node, visitor, path26);
+    function visit_(key, node, visitor, path27) {
+      const ctrl = callVisitor(key, node, visitor, path27);
       if (identity.isNode(ctrl) || identity.isPair(ctrl)) {
-        replaceNode(key, path26, ctrl);
-        return visit_(key, ctrl, visitor, path26);
+        replaceNode(key, path27, ctrl);
+        return visit_(key, ctrl, visitor, path27);
       }
       if (typeof ctrl !== "symbol") {
         if (identity.isCollection(node)) {
-          path26 = Object.freeze(path26.concat(node));
+          path27 = Object.freeze(path27.concat(node));
           for (let i = 0; i < node.items.length; ++i) {
-            const ci = visit_(i, node.items[i], visitor, path26);
+            const ci = visit_(i, node.items[i], visitor, path27);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -3743,13 +3743,13 @@ var require_visit = __commonJS({
             }
           }
         } else if (identity.isPair(node)) {
-          path26 = Object.freeze(path26.concat(node));
-          const ck = visit_("key", node.key, visitor, path26);
+          path27 = Object.freeze(path27.concat(node));
+          const ck = visit_("key", node.key, visitor, path27);
           if (ck === BREAK)
             return BREAK;
           else if (ck === REMOVE)
             node.key = null;
-          const cv = visit_("value", node.value, visitor, path26);
+          const cv = visit_("value", node.value, visitor, path27);
           if (cv === BREAK)
             return BREAK;
           else if (cv === REMOVE)
@@ -3770,17 +3770,17 @@ var require_visit = __commonJS({
     visitAsync.BREAK = BREAK;
     visitAsync.SKIP = SKIP;
     visitAsync.REMOVE = REMOVE;
-    async function visitAsync_(key, node, visitor, path26) {
-      const ctrl = await callVisitor(key, node, visitor, path26);
+    async function visitAsync_(key, node, visitor, path27) {
+      const ctrl = await callVisitor(key, node, visitor, path27);
       if (identity.isNode(ctrl) || identity.isPair(ctrl)) {
-        replaceNode(key, path26, ctrl);
-        return visitAsync_(key, ctrl, visitor, path26);
+        replaceNode(key, path27, ctrl);
+        return visitAsync_(key, ctrl, visitor, path27);
       }
       if (typeof ctrl !== "symbol") {
         if (identity.isCollection(node)) {
-          path26 = Object.freeze(path26.concat(node));
+          path27 = Object.freeze(path27.concat(node));
           for (let i = 0; i < node.items.length; ++i) {
-            const ci = await visitAsync_(i, node.items[i], visitor, path26);
+            const ci = await visitAsync_(i, node.items[i], visitor, path27);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -3791,13 +3791,13 @@ var require_visit = __commonJS({
             }
           }
         } else if (identity.isPair(node)) {
-          path26 = Object.freeze(path26.concat(node));
-          const ck = await visitAsync_("key", node.key, visitor, path26);
+          path27 = Object.freeze(path27.concat(node));
+          const ck = await visitAsync_("key", node.key, visitor, path27);
           if (ck === BREAK)
             return BREAK;
           else if (ck === REMOVE)
             node.key = null;
-          const cv = await visitAsync_("value", node.value, visitor, path26);
+          const cv = await visitAsync_("value", node.value, visitor, path27);
           if (cv === BREAK)
             return BREAK;
           else if (cv === REMOVE)
@@ -3824,23 +3824,23 @@ var require_visit = __commonJS({
       }
       return visitor;
     }
-    function callVisitor(key, node, visitor, path26) {
+    function callVisitor(key, node, visitor, path27) {
       if (typeof visitor === "function")
-        return visitor(key, node, path26);
+        return visitor(key, node, path27);
       if (identity.isMap(node))
-        return visitor.Map?.(key, node, path26);
+        return visitor.Map?.(key, node, path27);
       if (identity.isSeq(node))
-        return visitor.Seq?.(key, node, path26);
+        return visitor.Seq?.(key, node, path27);
       if (identity.isPair(node))
-        return visitor.Pair?.(key, node, path26);
+        return visitor.Pair?.(key, node, path27);
       if (identity.isScalar(node))
-        return visitor.Scalar?.(key, node, path26);
+        return visitor.Scalar?.(key, node, path27);
       if (identity.isAlias(node))
-        return visitor.Alias?.(key, node, path26);
+        return visitor.Alias?.(key, node, path27);
       return void 0;
     }
-    function replaceNode(key, path26, node) {
-      const parent = path26[path26.length - 1];
+    function replaceNode(key, path27, node) {
+      const parent = path27[path27.length - 1];
       if (identity.isCollection(parent)) {
         parent.items[key] = node;
       } else if (identity.isPair(parent)) {
@@ -4450,10 +4450,10 @@ var require_Collection = __commonJS({
     var createNode = require_createNode();
     var identity = require_identity();
     var Node = require_Node();
-    function collectionFromPath(schema, path26, value) {
+    function collectionFromPath(schema, path27, value) {
       let v = value;
-      for (let i = path26.length - 1; i >= 0; --i) {
-        const k = path26[i];
+      for (let i = path27.length - 1; i >= 0; --i) {
+        const k = path27[i];
         if (typeof k === "number" && Number.isInteger(k) && k >= 0) {
           const a = [];
           a[k] = v;
@@ -4472,7 +4472,7 @@ var require_Collection = __commonJS({
         sourceObjects: /* @__PURE__ */ new Map()
       });
     }
-    var isEmptyPath = (path26) => path26 == null || typeof path26 === "object" && !!path26[Symbol.iterator]().next().done;
+    var isEmptyPath = (path27) => path27 == null || typeof path27 === "object" && !!path27[Symbol.iterator]().next().done;
     var Collection = class extends Node.NodeBase {
       constructor(type, schema) {
         super(type);
@@ -4502,11 +4502,11 @@ var require_Collection = __commonJS({
        * be a Pair instance or a `{ key, value }` object, which may not have a key
        * that already exists in the map.
        */
-      addIn(path26, value) {
-        if (isEmptyPath(path26))
+      addIn(path27, value) {
+        if (isEmptyPath(path27))
           this.add(value);
         else {
-          const [key, ...rest] = path26;
+          const [key, ...rest] = path27;
           const node = this.get(key, true);
           if (identity.isCollection(node))
             node.addIn(rest, value);
@@ -4520,8 +4520,8 @@ var require_Collection = __commonJS({
        * Removes a value from the collection.
        * @returns `true` if the item was found and removed.
        */
-      deleteIn(path26) {
-        const [key, ...rest] = path26;
+      deleteIn(path27) {
+        const [key, ...rest] = path27;
         if (rest.length === 0)
           return this.delete(key);
         const node = this.get(key, true);
@@ -4535,8 +4535,8 @@ var require_Collection = __commonJS({
        * scalar values from their surrounding node; to disable set `keepScalar` to
        * `true` (collections are always returned intact).
        */
-      getIn(path26, keepScalar) {
-        const [key, ...rest] = path26;
+      getIn(path27, keepScalar) {
+        const [key, ...rest] = path27;
         const node = this.get(key, true);
         if (rest.length === 0)
           return !keepScalar && identity.isScalar(node) ? node.value : node;
@@ -4554,8 +4554,8 @@ var require_Collection = __commonJS({
       /**
        * Checks if the collection includes a value with the key `key`.
        */
-      hasIn(path26) {
-        const [key, ...rest] = path26;
+      hasIn(path27) {
+        const [key, ...rest] = path27;
         if (rest.length === 0)
           return this.has(key);
         const node = this.get(key, true);
@@ -4565,8 +4565,8 @@ var require_Collection = __commonJS({
        * Sets a value in this collection. For `!!set`, `value` needs to be a
        * boolean to add/remove the item from the set.
        */
-      setIn(path26, value) {
-        const [key, ...rest] = path26;
+      setIn(path27, value) {
+        const [key, ...rest] = path27;
         if (rest.length === 0) {
           this.set(key, value);
         } else {
@@ -7081,9 +7081,9 @@ var require_Document = __commonJS({
           this.contents.add(value);
       }
       /** Adds a value to the document. */
-      addIn(path26, value) {
+      addIn(path27, value) {
         if (assertCollection(this.contents))
-          this.contents.addIn(path26, value);
+          this.contents.addIn(path27, value);
       }
       /**
        * Create a new `Alias` node, ensuring that the target `node` has the required anchor.
@@ -7158,14 +7158,14 @@ var require_Document = __commonJS({
        * Removes a value from the document.
        * @returns `true` if the item was found and removed.
        */
-      deleteIn(path26) {
-        if (Collection.isEmptyPath(path26)) {
+      deleteIn(path27) {
+        if (Collection.isEmptyPath(path27)) {
           if (this.contents == null)
             return false;
           this.contents = null;
           return true;
         }
-        return assertCollection(this.contents) ? this.contents.deleteIn(path26) : false;
+        return assertCollection(this.contents) ? this.contents.deleteIn(path27) : false;
       }
       /**
        * Returns item at `key`, or `undefined` if not found. By default unwraps
@@ -7180,10 +7180,10 @@ var require_Document = __commonJS({
        * scalar values from their surrounding node; to disable set `keepScalar` to
        * `true` (collections are always returned intact).
        */
-      getIn(path26, keepScalar) {
-        if (Collection.isEmptyPath(path26))
+      getIn(path27, keepScalar) {
+        if (Collection.isEmptyPath(path27))
           return !keepScalar && identity.isScalar(this.contents) ? this.contents.value : this.contents;
-        return identity.isCollection(this.contents) ? this.contents.getIn(path26, keepScalar) : void 0;
+        return identity.isCollection(this.contents) ? this.contents.getIn(path27, keepScalar) : void 0;
       }
       /**
        * Checks if the document includes a value with the key `key`.
@@ -7194,10 +7194,10 @@ var require_Document = __commonJS({
       /**
        * Checks if the document includes a value at `path`.
        */
-      hasIn(path26) {
-        if (Collection.isEmptyPath(path26))
+      hasIn(path27) {
+        if (Collection.isEmptyPath(path27))
           return this.contents !== void 0;
-        return identity.isCollection(this.contents) ? this.contents.hasIn(path26) : false;
+        return identity.isCollection(this.contents) ? this.contents.hasIn(path27) : false;
       }
       /**
        * Sets a value in this document. For `!!set`, `value` needs to be a
@@ -7214,13 +7214,13 @@ var require_Document = __commonJS({
        * Sets a value in this document. For `!!set`, `value` needs to be a
        * boolean to add/remove the item from the set.
        */
-      setIn(path26, value) {
-        if (Collection.isEmptyPath(path26)) {
+      setIn(path27, value) {
+        if (Collection.isEmptyPath(path27)) {
           this.contents = value;
         } else if (this.contents == null) {
-          this.contents = Collection.collectionFromPath(this.schema, Array.from(path26), value);
+          this.contents = Collection.collectionFromPath(this.schema, Array.from(path27), value);
         } else if (assertCollection(this.contents)) {
-          this.contents.setIn(path26, value);
+          this.contents.setIn(path27, value);
         }
       }
       /**
@@ -9180,9 +9180,9 @@ var require_cst_visit = __commonJS({
     visit.BREAK = BREAK;
     visit.SKIP = SKIP;
     visit.REMOVE = REMOVE;
-    visit.itemAtPath = (cst, path26) => {
+    visit.itemAtPath = (cst, path27) => {
       let item = cst;
-      for (const [field, index] of path26) {
+      for (const [field, index] of path27) {
         const tok = item?.[field];
         if (tok && "items" in tok) {
           item = tok.items[index];
@@ -9191,23 +9191,23 @@ var require_cst_visit = __commonJS({
       }
       return item;
     };
-    visit.parentCollection = (cst, path26) => {
-      const parent = visit.itemAtPath(cst, path26.slice(0, -1));
-      const field = path26[path26.length - 1][0];
+    visit.parentCollection = (cst, path27) => {
+      const parent = visit.itemAtPath(cst, path27.slice(0, -1));
+      const field = path27[path27.length - 1][0];
       const coll = parent?.[field];
       if (coll && "items" in coll)
         return coll;
       throw new Error("Parent collection not found");
     };
-    function _visit(path26, item, visitor) {
-      let ctrl = visitor(item, path26);
+    function _visit(path27, item, visitor) {
+      let ctrl = visitor(item, path27);
       if (typeof ctrl === "symbol")
         return ctrl;
       for (const field of ["key", "value"]) {
         const token = item[field];
         if (token && "items" in token) {
           for (let i = 0; i < token.items.length; ++i) {
-            const ci = _visit(Object.freeze(path26.concat([[field, i]])), token.items[i], visitor);
+            const ci = _visit(Object.freeze(path27.concat([[field, i]])), token.items[i], visitor);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -9218,10 +9218,10 @@ var require_cst_visit = __commonJS({
             }
           }
           if (typeof ctrl === "function" && field === "key")
-            ctrl = ctrl(item, path26);
+            ctrl = ctrl(item, path27);
         }
       }
-      return typeof ctrl === "function" ? ctrl(item, path26) : ctrl;
+      return typeof ctrl === "function" ? ctrl(item, path27) : ctrl;
     }
     exports.visit = visit;
   }
@@ -10523,14 +10523,14 @@ var require_parser = __commonJS({
             case "scalar":
             case "single-quoted-scalar":
             case "double-quoted-scalar": {
-              const fs26 = this.flowScalar(this.type);
+              const fs27 = this.flowScalar(this.type);
               if (atNextItem || it.value) {
-                map.items.push({ start, key: fs26, sep: [] });
+                map.items.push({ start, key: fs27, sep: [] });
                 this.onKeyLine = true;
               } else if (it.sep) {
-                this.stack.push(fs26);
+                this.stack.push(fs27);
               } else {
-                Object.assign(it, { key: fs26, sep: [] });
+                Object.assign(it, { key: fs27, sep: [] });
                 this.onKeyLine = true;
               }
               return;
@@ -10658,13 +10658,13 @@ var require_parser = __commonJS({
             case "scalar":
             case "single-quoted-scalar":
             case "double-quoted-scalar": {
-              const fs26 = this.flowScalar(this.type);
+              const fs27 = this.flowScalar(this.type);
               if (!it || it.value)
-                fc.items.push({ start: [], key: fs26, sep: [] });
+                fc.items.push({ start: [], key: fs27, sep: [] });
               else if (it.sep)
-                this.stack.push(fs26);
+                this.stack.push(fs27);
               else
-                Object.assign(it, { key: fs26, sep: [] });
+                Object.assign(it, { key: fs27, sep: [] });
               return;
             }
             case "flow-map-end":
@@ -10974,9 +10974,9 @@ var require_dist = __commonJS({
 
 // src/web/cli.ts
 import { spawn } from "node:child_process";
-import fs25 from "node:fs/promises";
-import path25 from "node:path";
-import { fileURLToPath as fileURLToPath2 } from "node:url";
+import fs26 from "node:fs/promises";
+import path26 from "node:path";
+import { fileURLToPath as fileURLToPath3 } from "node:url";
 
 // src/store/paths.ts
 import path from "node:path";
@@ -11087,11 +11087,11 @@ async function isEntrypoint(moduleUrl) {
 }
 
 // src/web/server.ts
-import crypto4 from "node:crypto";
-import fs24 from "node:fs/promises";
+import crypto6 from "node:crypto";
+import fs25 from "node:fs/promises";
 import http from "node:http";
-import path24 from "node:path";
-import { fileURLToPath } from "node:url";
+import path25 from "node:path";
+import { fileURLToPath as fileURLToPath2 } from "node:url";
 
 // node_modules/ws/wrapper.mjs
 var import_stream = __toESM(require_stream(), 1);
@@ -11101,7 +11101,7 @@ var import_websocket = __toESM(require_websocket(), 1);
 var import_websocket_server = __toESM(require_websocket_server(), 1);
 
 // src/web/api.ts
-import crypto3 from "node:crypto";
+import crypto5 from "node:crypto";
 
 // node_modules/zod/v4/core/core.js
 var _a;
@@ -11344,10 +11344,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj, path26) {
-  if (!path26)
+function getElementAtPath(obj, path27) {
+  if (!path27)
     return obj;
-  return path26.reduce((acc, key) => acc?.[key], obj);
+  return path27.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -11756,11 +11756,11 @@ function explicitlyAborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path26, issues) {
+function prefixIssues(path27, issues) {
   return issues.map((iss) => {
     var _a3;
     (_a3 = iss).path ?? (_a3.path = []);
-    iss.path.unshift(path26);
+    iss.path.unshift(path27);
     return iss;
   });
 }
@@ -11907,16 +11907,16 @@ function flattenError(error2, mapper = (issue2) => issue2.message) {
 }
 function formatError(error2, mapper = (issue2) => issue2.message) {
   const fieldErrors = { _errors: [] };
-  const processError = (error3, path26 = []) => {
+  const processError = (error3, path27 = []) => {
     for (const issue2 of error3.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path26, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path27, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path26, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path27, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path26, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path27, ...issue2.path]);
       } else {
-        const fullpath = [...path26, ...issue2.path];
+        const fullpath = [...path27, ...issue2.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue2));
         } else {
@@ -11943,8 +11943,8 @@ function formatError(error2, mapper = (issue2) => issue2.message) {
 }
 function toDotPath(_path) {
   const segs = [];
-  const path26 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
-  for (const seg of path26) {
+  const path27 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
+  for (const seg of path27) {
     if (typeof seg === "number")
       segs.push(`[${seg}]`);
     else if (typeof seg === "symbol")
@@ -16578,15 +16578,15 @@ function findOrderCycle(order) {
   const GRAY = 1;
   const BLACK = 2;
   const color = /* @__PURE__ */ new Map();
-  const path26 = [];
+  const path27 = [];
   function visit(node) {
     color.set(node, GRAY);
-    path26.push(node);
+    path27.push(node);
     for (const next of successors.get(node) ?? []) {
       const state = color.get(next) ?? WHITE;
       if (state === GRAY) {
-        const start = path26.indexOf(next);
-        return [...path26.slice(start), next];
+        const start = path27.indexOf(next);
+        return [...path27.slice(start), next];
       }
       if (state === WHITE) {
         const found = visit(next);
@@ -16594,7 +16594,7 @@ function findOrderCycle(order) {
       }
     }
     color.set(node, BLACK);
-    path26.pop();
+    path27.pop();
     return null;
   }
   for (const node of nodes) {
@@ -17064,8 +17064,9 @@ var ManifestSchema = strictObject({
 });
 
 // src/web/read.ts
-import fs17 from "node:fs/promises";
-import path16 from "node:path";
+import fs18 from "node:fs/promises";
+import path17 from "node:path";
+import { fileURLToPath } from "node:url";
 
 // src/ops/history.ts
 import fs12 from "node:fs/promises";
@@ -17319,6 +17320,105 @@ var StateStore = class {
 import fs11 from "node:fs/promises";
 import path11 from "node:path";
 
+// src/schemas/skill-library.ts
+var DigestSchema = string2().regex(/^[a-f0-9]{64}$/, "a digest is 64 lower-case hex characters");
+var SkillPackageSchema = strictObject({
+  schema: literal(1),
+  /**
+   * Stable across revisions of one source. Two imports of the same GitHub
+   * repository at two different pinned revisions share a `packageId` and
+   * differ in `digest` — `packageId` is "which skill", `digest` is "which
+   * bytes of it".
+   */
+  packageId: IdSchema,
+  /** Of the content; also the directory name under the library root. */
+  digest: DigestSchema,
+  source: strictObject({
+    kind: SkillSourceSchema,
+    url: string2().url().startsWith("https://"),
+    /**
+     * A pinned commit or tag, never a moving ref such as a branch name. A
+     * branch would let the *same recorded revision* resolve to different
+     * bytes over time, which is precisely what content-addressing by digest
+     * is here to make impossible — the revision has to hold that promise on
+     * its own terms, not merely happen to agree with the digest today.
+     */
+    revision: string2().min(1)
+  }),
+  license: strictObject({
+    spdx: string2().min(1).nullable(),
+    file: string2().min(1).nullable()
+  }),
+  skillName: string2().min(1).max(200),
+  description: string2().min(1).max(1e3),
+  tags: array(string2().min(1)),
+  dependencies: strictObject({
+    /** An inventory of what the package declares — never a resolution. */
+    executables: array(string2().min(1)),
+    /** Likewise: named, not installed. */
+    packages: array(string2().min(1))
+  }),
+  audit: strictObject({
+    state: _enum(["pending", "passed", "failed"]),
+    findings: array(string2().min(1)),
+    at: iso_exports.datetime().nullable()
+  }),
+  /**
+   * The bounded text S05 hands an agent. Capped at the same 4000 characters
+   * `AcceptedProjectSkill.guidance` is, for the same reason stated there: it
+   * is copied into a brief on every dispatch, so an unbounded string here
+   * would make every dispatch as large as the largest guidance any package
+   * in the library has ever carried.
+   */
+  guidance: string2().min(1).max(4e3),
+  importedAt: iso_exports.datetime()
+});
+
+// src/schemas/skill-acceptance.ts
+var SKILL_ACCEPTANCE_AGENTS = ["planner", "builder", "critic", "verifier"];
+var ProjectSkillAcceptanceSchema = strictObject({
+  schema: literal(1),
+  skillId: IdSchema,
+  /** Stable across revisions of one source — see `SkillPackageSchema.packageId`. */
+  packageId: IdSchema,
+  /**
+   * A digest, never a path. The stop condition is explicit: no global-library
+   * path may be stored in a project record, because the library moves per
+   * machine and this record is committed.
+   */
+  digest: DigestSchema,
+  components: array(IdSchema),
+  agents: array(AgentNameSchema),
+  tags: array(string2().min(1)),
+  /**
+   * No global fallback of any kind. `orchestration.skills.update_mode` is
+   * only ever a *default offered* at acceptance time by whichever caller
+   * assembles this input — never consulted afterwards — because a global
+   * policy could otherwise silently change what a project's already-accepted
+   * skill does on its next run without that project ever having decided so.
+   */
+  updatePolicy: SkillUpdateModeSchema,
+  status: _enum(["active", "disabled"]),
+  /**
+   * The per-project host compatibility result.
+   *
+   * Nothing in this story determines host compatibility — no field on
+   * `SkillPackage` records what a host needs, and checking `dependencies.
+   * executables` against the machine that will run an agent is squarely the
+   * sandboxed problem S07 owns. `acceptSkill` accepts this as an explicit
+   * input rather than computing it, and defaults it to `true` when the
+   * caller does not know better yet: today nothing here can prove a package
+   * is *incompatible*, so recording an unearned `false` would be a claim as
+   * ungrounded as an unearned `true` — the honest default is the one that
+   * matches what this story can actually establish. A later story that can
+   * compute this for real overwrites it rather than reads a fabricated one.
+   */
+  compatible: boolean2(),
+  /** Who accepted it. Free text; the engine cannot verify it. */
+  acceptedBy: string2().min(1),
+  acceptedAt: iso_exports.datetime()
+});
+
 // src/schemas/skill-selection.ts
 var AcceptedProjectSkillSchema = strictObject({
   skillId: IdSchema,
@@ -17437,18 +17537,18 @@ async function loadConfig(projectDir) {
     if (error2.code === "ENOENT") throw new ConfigMissingError(file);
     throw error2;
   }
-  let document;
+  let document2;
   try {
-    document = YAML.parse(raw);
+    document2 = YAML.parse(raw);
   } catch (error2) {
     throw new Error(`${file} is not valid YAML:
 ${error2.message}`);
   }
-  const stripped = typeof document === "object" && document !== null && !Array.isArray(document) ? Object.fromEntries(
-    Object.entries(document).filter(
+  const stripped = typeof document2 === "object" && document2 !== null && !Array.isArray(document2) ? Object.fromEntries(
+    Object.entries(document2).filter(
       ([key]) => !LEGACY_CONFIG_KEYS.includes(key)
     )
-  ) : document;
+  ) : document2;
   const parsed = ConfigSchema.safeParse(stripped);
   if (!parsed.success) throw new Error(`${file} is invalid:
 ${prettifyError(parsed.error)}`);
@@ -18127,106 +18227,9 @@ function normaliseFile(file) {
 }
 
 // src/store/skill-acceptance-store.ts
+import crypto2 from "node:crypto";
 import fs10 from "node:fs/promises";
 import path10 from "node:path";
-
-// src/schemas/skill-library.ts
-var DigestSchema = string2().regex(/^[a-f0-9]{64}$/, "a digest is 64 lower-case hex characters");
-var SkillPackageSchema = strictObject({
-  schema: literal(1),
-  /**
-   * Stable across revisions of one source. Two imports of the same GitHub
-   * repository at two different pinned revisions share a `packageId` and
-   * differ in `digest` — `packageId` is "which skill", `digest` is "which
-   * bytes of it".
-   */
-  packageId: IdSchema,
-  /** Of the content; also the directory name under the library root. */
-  digest: DigestSchema,
-  source: strictObject({
-    kind: SkillSourceSchema,
-    url: string2().url().startsWith("https://"),
-    /**
-     * A pinned commit or tag, never a moving ref such as a branch name. A
-     * branch would let the *same recorded revision* resolve to different
-     * bytes over time, which is precisely what content-addressing by digest
-     * is here to make impossible — the revision has to hold that promise on
-     * its own terms, not merely happen to agree with the digest today.
-     */
-    revision: string2().min(1)
-  }),
-  license: strictObject({
-    spdx: string2().min(1).nullable(),
-    file: string2().min(1).nullable()
-  }),
-  skillName: string2().min(1).max(200),
-  description: string2().min(1).max(1e3),
-  tags: array(string2().min(1)),
-  dependencies: strictObject({
-    /** An inventory of what the package declares — never a resolution. */
-    executables: array(string2().min(1)),
-    /** Likewise: named, not installed. */
-    packages: array(string2().min(1))
-  }),
-  audit: strictObject({
-    state: _enum(["pending", "passed", "failed"]),
-    findings: array(string2().min(1)),
-    at: iso_exports.datetime().nullable()
-  }),
-  /**
-   * The bounded text S05 hands an agent. Capped at the same 4000 characters
-   * `AcceptedProjectSkill.guidance` is, for the same reason stated there: it
-   * is copied into a brief on every dispatch, so an unbounded string here
-   * would make every dispatch as large as the largest guidance any package
-   * in the library has ever carried.
-   */
-  guidance: string2().min(1).max(4e3),
-  importedAt: iso_exports.datetime()
-});
-
-// src/schemas/skill-acceptance.ts
-var ProjectSkillAcceptanceSchema = strictObject({
-  schema: literal(1),
-  skillId: IdSchema,
-  /** Stable across revisions of one source — see `SkillPackageSchema.packageId`. */
-  packageId: IdSchema,
-  /**
-   * A digest, never a path. The stop condition is explicit: no global-library
-   * path may be stored in a project record, because the library moves per
-   * machine and this record is committed.
-   */
-  digest: DigestSchema,
-  components: array(IdSchema),
-  agents: array(AgentNameSchema),
-  tags: array(string2().min(1)),
-  /**
-   * No global fallback of any kind. `orchestration.skills.update_mode` is
-   * only ever a *default offered* at acceptance time by whichever caller
-   * assembles this input — never consulted afterwards — because a global
-   * policy could otherwise silently change what a project's already-accepted
-   * skill does on its next run without that project ever having decided so.
-   */
-  updatePolicy: SkillUpdateModeSchema,
-  status: _enum(["active", "disabled"]),
-  /**
-   * The per-project host compatibility result.
-   *
-   * Nothing in this story determines host compatibility — no field on
-   * `SkillPackage` records what a host needs, and checking `dependencies.
-   * executables` against the machine that will run an agent is squarely the
-   * sandboxed problem S07 owns. `acceptSkill` accepts this as an explicit
-   * input rather than computing it, and defaults it to `true` when the
-   * caller does not know better yet: today nothing here can prove a package
-   * is *incompatible*, so recording an unearned `false` would be a claim as
-   * ungrounded as an unearned `true` — the honest default is the one that
-   * matches what this story can actually establish. A later story that can
-   * compute this for real overwrites it rather than reads a fabricated one.
-   */
-  compatible: boolean2(),
-  /** Who accepted it. Free text; the engine cannot verify it. */
-  acceptedBy: string2().min(1),
-  acceptedAt: iso_exports.datetime()
-});
 
 // src/store/skill-library-store.ts
 import fs9 from "node:fs/promises";
@@ -18364,6 +18367,30 @@ ${detail}`);
     this.name = "InvalidSkillAcceptanceRecordError";
   }
 };
+var SkillAcceptanceNotFoundError = class extends Error {
+  constructor(skillId, dir) {
+    super(`no accepted skill "${skillId}" under ${dir}`);
+    this.name = "SkillAcceptanceNotFoundError";
+  }
+};
+var UnknownAcceptanceAgentError = class extends Error {
+  constructor(unknown2, known) {
+    super(
+      `${quoted2(unknown2)} is not an agent any track in this project's config.yaml names (${known.join(", ")}) \u2014 an unknown role here would select a skill for a dispatch that never happens.`
+    );
+    this.unknown = unknown2;
+    this.known = known;
+    this.name = "UnknownAcceptanceAgentError";
+  }
+};
+async function routableAgents(projectDir) {
+  const config2 = await loadConfig(projectDir).catch((error2) => {
+    if (error2 instanceof ConfigMissingError) return null;
+    throw error2;
+  });
+  const names = config2 === null ? [] : Object.values(config2.tracks).flatMap((track) => [...track.required, ...track.available ?? [], ...track.closing ?? []]);
+  return names.length === 0 ? new Set(SKILL_ACCEPTANCE_AGENTS) : new Set(names);
+}
 function validateSkillId(skillId) {
   const parsed = IdSchema.safeParse(skillId);
   if (!parsed.success) throw new InvalidSkillIdError(skillId);
@@ -18403,12 +18430,37 @@ async function readAcceptance(projectDir, skillId) {
   if (!parsed.success) throw new InvalidSkillAcceptanceRecordError(file, prettifyError(parsed.error));
   return parsed.data;
 }
+function acceptanceDigest(record2) {
+  return crypto2.createHash("sha256").update(JSON.stringify(record2)).digest("hex");
+}
+async function setAcceptanceAgents(projectDir, skillId, agents, expectDigest) {
+  const routable = await routableAgents(projectDir);
+  const unknown2 = agents.filter((agent) => !routable.has(agent));
+  if (unknown2.length > 0) throw new UnknownAcceptanceAgentError(unknown2, [...routable]);
+  await locked2(projectDir, async () => {
+    const current = await readAcceptance(projectDir, skillId);
+    if (current === null) throw new SkillAcceptanceNotFoundError(skillId, resolveLoopPaths(projectDir).skills);
+    if (acceptanceDigest(current) !== expectDigest) {
+      throw new StalePreconditionError("skill", skillId, acceptanceDigest(current));
+    }
+    const parsed = ProjectSkillAcceptanceSchema.parse({ ...current, agents });
+    await writeJsonAtomic(acceptanceFile(projectDir, skillId), parsed, { backup: false });
+  });
+}
+async function locked2(projectDir, fn) {
+  const paths = resolveLoopPaths(projectDir);
+  await fs10.mkdir(paths.root, { recursive: true });
+  return withLock(paths.lock, fn);
+}
 function parseJson3(raw) {
   try {
     return JSON.parse(raw);
   } catch {
     return void 0;
   }
+}
+function quoted2(ids) {
+  return ids.map((id) => `"${id}"`).join(", ");
 }
 
 // src/ops/run.ts
@@ -18947,7 +18999,7 @@ var CacheSchema = array(CacheEntrySchema);
 
 // src/store/config-mutation.ts
 var YAML3 = __toESM(require_dist(), 1);
-import crypto2 from "node:crypto";
+import crypto3 from "node:crypto";
 import fs15 from "node:fs/promises";
 var VerifySlotSchema2 = _enum(["test", "lint", "build"]);
 var ConfigChangeSchema = discriminatedUnion("kind", [
@@ -19054,15 +19106,15 @@ var ConfigPatchSchema = strictObject({
 var ConfigMutationError = class extends Error {
   kind;
   path;
-  constructor(kind, path26 = []) {
+  constructor(kind, path27 = []) {
     super(kind);
     this.name = "ConfigMutationError";
     this.kind = kind;
-    this.path = path26;
+    this.path = path27;
   }
 };
 function configRevision(raw) {
-  return crypto2.createHash("sha256").update(raw).digest("hex");
+  return crypto3.createHash("sha256").update(raw).digest("hex");
 }
 async function mutateConfig(projectDir, patch) {
   const parsedPatch = ConfigPatchSchema.parse(patch);
@@ -19076,12 +19128,12 @@ async function mutateConfig(projectDir, patch) {
       throw error2;
     }
     if (configRevision(raw) !== parsedPatch.revision) throw new ConfigMutationError("stale");
-    const document = YAML3.parseDocument(raw, { keepSourceTokens: true });
-    if (document.errors.length > 0) throw new ConfigMutationError("invalid");
-    for (const change of parsedPatch.changes) applyChange(document, change);
+    const document2 = YAML3.parseDocument(raw, { keepSourceTokens: true });
+    if (document2.errors.length > 0) throw new ConfigMutationError("invalid");
+    for (const change of parsedPatch.changes) applyChange(document2, change);
     let candidate;
     try {
-      candidate = document.toJS();
+      candidate = document2.toJS();
     } catch {
       throw new ConfigMutationError("invalid");
     }
@@ -19091,44 +19143,44 @@ async function mutateConfig(projectDir, patch) {
       const issuePath = issue2?.path.filter((part) => typeof part === "string" || typeof part === "number") ?? [];
       throw new ConfigMutationError("invalid", issuePath);
     }
-    const next = document.toString({ lineWidth: 100 });
+    const next = document2.toString({ lineWidth: 100 });
     await writeTextAtomic(paths.config, next);
     return { revision: configRevision(next) };
   });
 }
-function stripLegacy(document) {
-  if (typeof document !== "object" || document === null || Array.isArray(document)) return document;
+function stripLegacy(document2) {
+  if (typeof document2 !== "object" || document2 === null || Array.isArray(document2)) return document2;
   return Object.fromEntries(
-    Object.entries(document).filter(
+    Object.entries(document2).filter(
       ([key]) => !LEGACY_CONFIG_KEYS.includes(key)
     )
   );
 }
-function applyChange(document, change) {
+function applyChange(document2, change) {
   switch (change.kind) {
     case "root":
-      document.setIn([change.key], change.value);
+      document2.setIn([change.key], change.value);
       return;
     case "limit":
-      document.setIn(["limits", change.key], change.value);
+      document2.setIn(["limits", change.key], change.value);
       return;
     case "verify.command":
     case "verify.number":
-      document.setIn(["verify", change.key], change.value);
+      document2.setIn(["verify", change.key], change.value);
       return;
     case "verify.patterns":
-      document.setIn(["verify", "failure_patterns", change.key], change.value);
+      document2.setIn(["verify", "failure_patterns", change.key], change.value);
       return;
     case "gate":
-      document.setIn(["gates", change.key], change.value);
+      document2.setIn(["gates", change.key], change.value);
       return;
     case "specialist":
-      if (change.value === null) document.deleteIn(["specialists", change.agent]);
-      else document.setIn(["specialists", change.agent], change.value);
+      if (change.value === null) document2.deleteIn(["specialists", change.agent]);
+      else document2.setIn(["specialists", change.agent], change.value);
       return;
     case "track":
-      if (change.value === null) document.deleteIn(["tracks", change.track]);
-      else document.setIn(["tracks", change.track], change.value);
+      if (change.value === null) document2.deleteIn(["tracks", change.track]);
+      else document2.setIn(["tracks", change.track], change.value);
       return;
     // `setIn` builds the intermediate maps it needs, which is what lets the
     // very first orchestration setting land in a config.yaml written before
@@ -19137,37 +19189,37 @@ function applyChange(document, change) {
     // from the schema's prefaults, so one changed setting never rewrites
     // twelve lines of somebody's hand-edited file.
     case "orchestration.profile.auto_accept":
-      document.setIn(["orchestration", "profile", "auto_accept"], change.value);
+      document2.setIn(["orchestration", "profile", "auto_accept"], change.value);
       return;
     case "orchestration.discovery.mode":
-      document.setIn(["orchestration", "discovery", "mode"], change.value);
+      document2.setIn(["orchestration", "discovery", "mode"], change.value);
       return;
     case "orchestration.discovery.question_budget":
-      document.setIn(["orchestration", "discovery", "question_budget"], change.value);
+      document2.setIn(["orchestration", "discovery", "question_budget"], change.value);
       return;
     case "orchestration.discovery.completion":
-      document.setIn(["orchestration", "discovery", "completion"], change.value);
+      document2.setIn(["orchestration", "discovery", "completion"], change.value);
       return;
     case "orchestration.execution.after_plan_approval":
-      document.setIn(["orchestration", "execution", "after_plan_approval"], change.value);
+      document2.setIn(["orchestration", "execution", "after_plan_approval"], change.value);
       return;
     case "orchestration.execution.uncertain_concurrency":
-      document.setIn(["orchestration", "execution", "uncertain_concurrency"], change.value);
+      document2.setIn(["orchestration", "execution", "uncertain_concurrency"], change.value);
       return;
     case "orchestration.execution.repair_attempts":
-      document.setIn(["orchestration", "execution", "repair_attempts"], change.value);
+      document2.setIn(["orchestration", "execution", "repair_attempts"], change.value);
       return;
     case "orchestration.quality":
-      document.setIn(["orchestration", "quality", change.key], change.value);
+      document2.setIn(["orchestration", "quality", change.key], change.value);
       return;
     case "orchestration.skills.sources":
-      document.setIn(["orchestration", "skills", "sources"], change.value);
+      document2.setIn(["orchestration", "skills", "sources"], change.value);
       return;
     case "orchestration.skills.trusted_registries":
-      document.setIn(["orchestration", "skills", "trusted_registries"], change.value);
+      document2.setIn(["orchestration", "skills", "trusted_registries"], change.value);
       return;
     case "orchestration.skills.update_mode":
-      document.setIn(["orchestration", "skills", "update_mode"], change.value);
+      document2.setIn(["orchestration", "skills", "update_mode"], change.value);
   }
 }
 
@@ -19249,6 +19301,138 @@ async function readMemory(projectDir, id) {
   return found;
 }
 
+// src/store/agent-store.ts
+import crypto4 from "node:crypto";
+import fs17 from "node:fs/promises";
+import path16 from "node:path";
+function agentDigest(raw) {
+  return crypto4.createHash("sha256").update(raw).digest("hex");
+}
+function projectAgentsDir(projectDir) {
+  return path16.join(projectDir, ".claude", "agents");
+}
+var KNOWN = ["name", "description", "tools", "model"];
+function toDoc(name, raw, file, source) {
+  const { data, body } = parseFrontmatter(raw);
+  if (typeof data !== "object" || data === null || Array.isArray(data)) {
+    throw new Error("frontmatter is not a mapping");
+  }
+  const record2 = data;
+  const text = (key) => typeof record2[key] === "string" ? record2[key] : null;
+  const extra = Object.fromEntries(
+    Object.entries(record2).filter(([key]) => !KNOWN.includes(key))
+  );
+  return {
+    // The filename wins over a `name:` that disagrees with it: the filename is
+    // what Claude Code dispatches on, so trusting the field would show a name
+    // no track can ever draft.
+    name,
+    source,
+    description: text("description") ?? "",
+    tools: text("tools"),
+    model: text("model"),
+    extra,
+    body,
+    digest: agentDigest(raw),
+    path: file
+  };
+}
+async function listAgents(dir, source) {
+  let names;
+  try {
+    names = (await fs17.readdir(dir)).filter((name) => name.endsWith(".md")).sort();
+  } catch {
+    return { agents: [], unreadable: [] };
+  }
+  const agents = [];
+  const unreadable = [];
+  for (const entry of names) {
+    const file = path16.join(dir, entry);
+    try {
+      agents.push(toDoc(entry.slice(0, -3), await fs17.readFile(file, "utf8"), file, source));
+    } catch {
+      unreadable.push({ path: file });
+    }
+  }
+  return { agents, unreadable };
+}
+async function readAgent(projectDir, name) {
+  const file = agentFile(projectDir, name);
+  let raw;
+  try {
+    raw = await fs17.readFile(file, "utf8");
+  } catch {
+    return null;
+  }
+  return toDoc(name, raw, file, "project");
+}
+var AgentWriteError = class extends Error {
+  constructor(kind, message) {
+    super(message);
+    this.kind = kind;
+    this.name = "AgentWriteError";
+  }
+};
+function agentFile(projectDir, name) {
+  if (!AgentNameSchema.safeParse(name).success) {
+    throw new AgentWriteError("invalid", "not an agent name");
+  }
+  return path16.join(projectAgentsDir(projectDir), `${name}.md`);
+}
+function document(input) {
+  const data = { name: input.name, description: input.description };
+  if (input.tools !== null) data["tools"] = input.tools;
+  if (input.model !== null) data["model"] = input.model;
+  Object.assign(data, input.extra);
+  return serialiseFrontmatter(data, input.body);
+}
+async function writeAgent(projectDir, input, options) {
+  const file = agentFile(projectDir, input.name);
+  if (options.reserved.includes(input.name)) {
+    throw new AgentWriteError("reserved", "that name shadows a plugin agent");
+  }
+  if (input.description.trim().length === 0) {
+    throw new AgentWriteError("invalid", "an agent needs a description");
+  }
+  return withLock(resolveLoopPaths(projectDir).lock, async () => {
+    let current = null;
+    try {
+      current = await fs17.readFile(file, "utf8");
+    } catch {
+      current = null;
+    }
+    if (options.expectDigest === null && current !== null) {
+      throw new AgentWriteError("exists", "that agent already exists");
+    }
+    if (options.expectDigest !== null) {
+      if (current === null) throw new AgentWriteError("missing", "that agent is gone");
+      if (agentDigest(current) !== options.expectDigest) {
+        throw new AgentWriteError("stale", "the file moved underneath the editor");
+      }
+    }
+    const next = document(input);
+    await fs17.mkdir(projectAgentsDir(projectDir), { recursive: true });
+    await writeTextAtomic(file, next);
+    return { digest: agentDigest(next) };
+  });
+}
+async function deleteAgent(projectDir, name, expectDigest, options) {
+  const file = agentFile(projectDir, name);
+  await withLock(resolveLoopPaths(projectDir).lock, async () => {
+    let current;
+    try {
+      current = await fs17.readFile(file, "utf8");
+    } catch {
+      throw new AgentWriteError("missing", "that agent is gone");
+    }
+    if (agentDigest(current) !== expectDigest) {
+      throw new AgentWriteError("stale", "the file moved underneath the editor");
+    }
+    if (options?.guard !== void 0) await options.guard();
+    await fs17.rm(file);
+  });
+}
+
 // src/web/read.ts
 var NotFoundError = class extends Error {
   constructor(what) {
@@ -19266,7 +19450,7 @@ async function readState(projectDir) {
 }
 async function readConfigView(projectDir) {
   const paths = resolveLoopPaths(projectDir);
-  const raw = await fs17.readFile(paths.config, "utf8").catch(() => null);
+  const raw = await fs18.readFile(paths.config, "utf8").catch(() => null);
   try {
     return {
       raw,
@@ -19316,9 +19500,25 @@ async function readSkillsView(projectDir) {
   return {
     packages: library.packages,
     unreadable: library.unreadable,
-    acceptances,
+    acceptances: acceptances.map((record2) => ({ ...record2, recordDigest: acceptanceDigest(record2) })),
     onDisk: onDisk.skills,
     onDiskUnreadable: onDisk.unreadable
+  };
+}
+var PLUGIN_AGENTS_DIR = fileURLToPath(new URL("../../../agents/", import.meta.url));
+async function readAgentsView(projectDir) {
+  const [project, plugin] = await Promise.all([
+    listAgents(projectAgentsDir(projectDir), "project"),
+    listAgents(PLUGIN_AGENTS_DIR, "plugin")
+  ]);
+  const view = ({ path: _path, ...rest }) => rest;
+  return {
+    project: project.agents.map(view),
+    plugin: plugin.agents.map(view),
+    // The plugin's own unreadable files are not this project's problem to
+    // report — a broken plugin file is a bug in the plugin, and a project
+    // cannot act on it.
+    unreadable: project.unreadable.map((entry) => ({ path: path17.basename(entry.path) }))
   };
 }
 async function readFeatures(projectDir) {
@@ -19345,17 +19545,17 @@ async function readPlanDetail(projectDir, planId) {
   } catch {
     throw new NotFoundError("plan");
   }
-  const raw = await fs17.readFile(path16.join(dir, "PLAN.md"), "utf8").catch(() => null);
+  const raw = await fs18.readFile(path17.join(dir, "PLAN.md"), "utf8").catch(() => null);
   const parsed = raw === null ? null : PlanFrontmatterSchema.safeParse(parseFrontmatter(raw).data);
   const frontmatter = parsed?.success === true ? parsed.data : null;
   const [review, stories, manifestTitle] = await Promise.all([
-    fs17.readFile(path16.join(dir, "REVIEW.md"), "utf8").catch(() => null),
+    fs18.readFile(path17.join(dir, "REVIEW.md"), "utf8").catch(() => null),
     readStoryDetails(projectDir, planId),
     readManifestTitle(dir)
   ]);
   return {
     id: planId,
-    title: frontmatter?.title ?? manifestTitle ?? path16.basename(dir),
+    title: frontmatter?.title ?? manifestTitle ?? path17.basename(dir),
     // The whole record — `decision`, `by`, `at`, `note` — where the snapshot
     // carries only the decision. An approval is auditable or it is a flag.
     approval: frontmatter?.approval ?? null,
@@ -19387,26 +19587,26 @@ async function readStoryDetail(projectDir, storyId) {
 }
 async function readManifestTitle(dir) {
   try {
-    const parsed = ManifestSchema.safeParse(JSON.parse(await fs17.readFile(path16.join(dir, "manifest.json"), "utf8")));
+    const parsed = ManifestSchema.safeParse(JSON.parse(await fs18.readFile(path17.join(dir, "manifest.json"), "utf8")));
     return parsed.success ? parsed.data.title : null;
   } catch {
     return null;
   }
 }
 async function readTranscript(projectDir, jobId) {
-  const file = path16.join(resolveLoopPaths(projectDir).webTranscripts, `${jobId}.log`);
+  const file = path17.join(resolveLoopPaths(projectDir).webTranscripts, `${jobId}.log`);
   try {
-    return await fs17.readFile(file, "utf8");
+    return await fs18.readFile(file, "utf8");
   } catch {
     throw new NotFoundError("transcript");
   }
 }
 async function readRuns(projectDir) {
   const runs = resolveLoopPaths(projectDir).runs;
-  const names = await fs17.readdir(runs, { withFileTypes: true }).then((found) => found.filter((entry) => entry.isDirectory()).map((entry) => entry.name)).catch(() => []);
+  const names = await fs18.readdir(runs, { withFileTypes: true }).then((found) => found.filter((entry) => entry.isDirectory()).map((entry) => entry.name)).catch(() => []);
   const out = [];
   for (const name of names.sort().reverse()) {
-    const inside = await fs17.readdir(path16.join(runs, name)).catch(() => []);
+    const inside = await fs18.readdir(path17.join(runs, name)).catch(() => []);
     const [, story, track] = name.split("--");
     out.push({
       id: name,
@@ -19423,35 +19623,35 @@ async function readStoryRuns(projectDir, storyId) {
   return runs.filter((run) => run.story === storyId);
 }
 async function readRunDetail(projectDir, runId) {
-  const dir = path16.join(resolveLoopPaths(projectDir).runs, runId);
-  const inside = await fs17.readdir(dir).catch(() => null);
+  const dir = path17.join(resolveLoopPaths(projectDir).runs, runId);
+  const inside = await fs18.readdir(dir).catch(() => null);
   if (inside === null) throw new NotFoundError("run");
   return {
     id: runId,
-    halt: await fs17.readFile(path16.join(dir, "HALT.md"), "utf8").catch(() => null),
+    halt: await fs18.readFile(path17.join(dir, "HALT.md"), "utf8").catch(() => null),
     cycles: inside.filter((entry) => /^cycle-\d+$/.test(entry)).map((entry) => Number(entry.slice("cycle-".length))).sort((a, b) => a - b)
   };
 }
 async function readSkillManifest(projectDir, runId) {
-  const dir = path16.join(resolveLoopPaths(projectDir).runs, runId);
-  const exists = await fs17.readdir(dir).catch(() => null);
+  const dir = path17.join(resolveLoopPaths(projectDir).runs, runId);
+  const exists = await fs18.readdir(dir).catch(() => null);
   if (exists === null) throw new NotFoundError("run");
-  return readJson2(path16.join(dir, "skill-selection.json"), SkillManifestSchema);
+  return readJson2(path17.join(dir, "skill-selection.json"), SkillManifestSchema);
 }
 var CYCLE_VERIFY_MAX = 50;
 var CYCLE_HANDOFF_MAX = 12e3;
 async function readCycleDetail(projectDir, runId, cycle) {
-  const dir = path16.join(resolveLoopPaths(projectDir).runs, runId, `cycle-${String(cycle).padStart(2, "0")}`);
-  const inside = await fs17.readdir(dir).catch(() => null);
+  const dir = path17.join(resolveLoopPaths(projectDir).runs, runId, `cycle-${String(cycle).padStart(2, "0")}`);
+  const inside = await fs18.readdir(dir).catch(() => null);
   if (inside === null) throw new NotFoundError("cycle");
-  const roster = await readJson2(path16.join(dir, "roster.json"), RosterSchema);
-  const findings = await readJson2(path16.join(dir, "findings.json"), FindingSchema.array());
+  const roster = await readJson2(path17.join(dir, "roster.json"), RosterSchema);
+  const findings = await readJson2(path17.join(dir, "findings.json"), FindingSchema.array());
   const ledger = await readVerifyLedger(dir);
-  const handoff = await fs17.readFile(path16.join(dir, "handoff.md"), "utf8").catch(() => null);
+  const handoff = await fs18.readFile(path17.join(dir, "handoff.md"), "utf8").catch(() => null);
   const agents = [];
   for (const entry of inside.filter((name) => name.endsWith(".json")).sort()) {
     if (entry === "roster.json" || entry === "findings.json") continue;
-    const result = await readJson2(path16.join(dir, entry), AgentResultSchema);
+    const result = await readJson2(path17.join(dir, entry), AgentResultSchema);
     if (result !== null) agents.push({ agent: entry.replace(/\.json$/, ""), result });
   }
   return {
@@ -19469,10 +19669,10 @@ async function readCycleDetail(projectDir, runId, cycle) {
   };
 }
 async function readRosterProgress(projectDir, runId, cycle) {
-  const dir = path16.join(resolveLoopPaths(projectDir).runs, runId, `cycle-${String(cycle).padStart(2, "0")}`);
-  const roster = await readJson2(path16.join(dir, "roster.json"), RosterSchema);
+  const dir = path17.join(resolveLoopPaths(projectDir).runs, runId, `cycle-${String(cycle).padStart(2, "0")}`);
+  const roster = await readJson2(path17.join(dir, "roster.json"), RosterSchema);
   if (roster === null) return null;
-  const inside = await fs17.readdir(dir).catch(() => []);
+  const inside = await fs18.readdir(dir).catch(() => []);
   const landed = roster.selected.filter((agent) => inside.includes(`${agent}.json`));
   return { cycle, selected: roster.selected, landed };
 }
@@ -19511,7 +19711,7 @@ async function readRosterValidity(projectDir, track, candidate) {
 }
 async function readJson2(file, schema) {
   try {
-    const parsed = schema.safeParse(JSON.parse(await fs17.readFile(file, "utf8")));
+    const parsed = schema.safeParse(JSON.parse(await fs18.readFile(file, "utf8")));
     return parsed.success ? parsed.data : null;
   } catch {
     return null;
@@ -19806,11 +20006,11 @@ var ok = (body) => ({ status: 200, body });
 var fail = (status, code) => ({ status, body: { error: { code } } });
 async function handleApi(projectDir, method, pathname) {
   const mark = pathname.indexOf("?");
-  const path26 = mark === -1 ? pathname : pathname.slice(0, mark);
+  const path27 = mark === -1 ? pathname : pathname.slice(0, mark);
   const query = new URLSearchParams(mark === -1 ? "" : pathname.slice(mark + 1));
-  if (!path26.startsWith("/api/") && path26 !== "/api") return null;
+  if (!path27.startsWith("/api/") && path27 !== "/api") return null;
   if (method !== "GET") return fail(405, "error.badRequest");
-  const segments = path26.split("/").filter((part) => part.length > 0).slice(1);
+  const segments = path27.split("/").filter((part) => part.length > 0).slice(1);
   try {
     return await route(projectDir, segments, query);
   } catch (error2) {
@@ -19850,6 +20050,9 @@ async function route(projectDir, segments, query) {
         return ok(await readCycleDetail(projectDir, first, cycle));
       }
       break;
+    case "agents":
+      if (segments.length !== 1) break;
+      return ok(await readAgentsView(projectDir));
     case "telemetry":
       if (segments.length !== 1) break;
       return ok(await readTelemetryReport(projectDir));
@@ -19912,7 +20115,7 @@ async function route(projectDir, segments, query) {
   return fail(404, "error.notFound");
 }
 function etag(body) {
-  return `W/"${crypto3.createHash("sha1").update(body).digest("base64url")}"`;
+  return `W/"${crypto5.createHash("sha1").update(body).digest("base64url")}"`;
 }
 function sendApi(request, response, result) {
   const body = JSON.stringify(result.body);
@@ -19933,8 +20136,8 @@ function sendApi(request, response, result) {
 }
 
 // src/web/queue.ts
-import fs18 from "node:fs/promises";
-import path17 from "node:path";
+import fs19 from "node:fs/promises";
+import path18 from "node:path";
 
 // src/web/completion.ts
 var NEW_TRACKER = { started: false, runId: null };
@@ -20222,14 +20425,14 @@ var JobQueue = class {
    * it must never be a job that stops running because of it.
    */
   async writeTranscriptChunk(jobId, chunk) {
-    const file = path17.join(this.transcriptDir(), `${jobId}.log`);
+    const file = path18.join(this.transcriptDir(), `${jobId}.log`);
     try {
-      await fs18.appendFile(file, chunk);
+      await fs19.appendFile(file, chunk);
     } catch (error2) {
       if (error2.code !== "ENOENT") return;
       try {
-        await fs18.mkdir(this.transcriptDir(), { recursive: true });
-        await fs18.appendFile(file, chunk);
+        await fs19.mkdir(this.transcriptDir(), { recursive: true });
+        await fs19.appendFile(file, chunk);
       } catch {
       }
     }
@@ -20261,14 +20464,14 @@ var JobQueue = class {
     const dir = this.transcriptDir();
     let names;
     try {
-      names = await fs18.readdir(dir);
+      names = await fs19.readdir(dir);
     } catch {
       return;
     }
     const stamped = await Promise.all(
       names.filter((name) => name.endsWith(".log") && !protectedIds.has(name.slice(0, -".log".length))).map(async (name) => {
-        const file = path17.join(dir, name);
-        const stats = await fs18.stat(file).catch(() => null);
+        const file = path18.join(dir, name);
+        const stats = await fs19.stat(file).catch(() => null);
         return stats === null ? null : { file, mtimeMs: stats.mtimeMs, size: stats.size };
       })
     );
@@ -20290,7 +20493,7 @@ var JobQueue = class {
       toDelete.add(oldest.file);
       total -= oldest.size;
     }
-    await Promise.all([...toDelete].map((file) => fs18.unlink(file).catch(() => {
+    await Promise.all([...toDelete].map((file) => fs19.unlink(file).catch(() => {
     })));
   }
   beginShutdown(active, outcome) {
@@ -20359,8 +20562,8 @@ var JobQueue = class {
 };
 
 // src/web/marker.ts
-import fs19 from "node:fs/promises";
-import path18 from "node:path";
+import fs20 from "node:fs/promises";
+import path19 from "node:path";
 var ServerMarkerSchema = strictObject({
   port: number2().int().positive().max(65535),
   /**
@@ -20381,15 +20584,15 @@ var ServerMarkerSchema = strictObject({
 async function writeServerMarker(projectDir, marker) {
   const file = resolveLoopPaths(projectDir).webServer;
   try {
-    await fs19.mkdir(path18.dirname(file), { recursive: true });
-    await fs19.writeFile(file, `${JSON.stringify(marker, null, 2)}
+    await fs20.mkdir(path19.dirname(file), { recursive: true });
+    await fs20.writeFile(file, `${JSON.stringify(marker, null, 2)}
 `, "utf8");
   } catch {
   }
 }
 async function clearServerMarker(projectDir) {
   try {
-    await fs19.rm(resolveLoopPaths(projectDir).webServer, { force: true });
+    await fs20.rm(resolveLoopPaths(projectDir).webServer, { force: true });
   } catch {
   }
 }
@@ -20398,13 +20601,13 @@ async function clearServerMarker(projectDir) {
 import os2 from "node:os";
 
 // src/ops/plan.ts
-import fs20 from "node:fs/promises";
-import path20 from "node:path";
+import fs21 from "node:fs/promises";
+import path21 from "node:path";
 
 // src/ops/manifest.ts
-import path19 from "node:path";
+import path20 from "node:path";
 function manifestPath(planDir) {
-  return path19.join(planDir, "manifest.json");
+  return path20.join(planDir, "manifest.json");
 }
 async function renderManifest(projectDir, planId, now = () => /* @__PURE__ */ new Date()) {
   const plan = await readPlan(projectDir, planId);
@@ -20421,7 +20624,7 @@ async function renderManifest(projectDir, planId, now = () => /* @__PURE__ */ ne
       status: story.frontmatter.status,
       ui: story.frontmatter.ui,
       depends_on: story.frontmatter.depends_on,
-      file: path19.relative(plan.dir, story.file)
+      file: path20.relative(plan.dir, story.file)
     }))
   });
   await writeJsonAtomic(manifestPath(plan.dir), manifest, { backup: false });
@@ -20501,12 +20704,102 @@ async function storyUpdate(projectDir, storyId, patch, now = () => /* @__PURE__ 
       );
       assertDependenciesResolve(siblings, merged.data);
     }
-    const renamed = path20.join(path20.dirname(current.file), storyFileName(merged.data));
-    if (renamed !== current.file) await fs20.rename(current.file, renamed);
+    const renamed = path21.join(path21.dirname(current.file), storyFileName(merged.data));
+    if (renamed !== current.file) await fs21.rename(current.file, renamed);
     const file = await writeStory(projectDir, { frontmatter: merged.data, body: current.body });
     const manifest = await renderManifest(projectDir, planId, now);
     return { id: storyId, file, manifest };
   });
+}
+
+// src/ops/summary.ts
+import fs22 from "node:fs/promises";
+import path22 from "node:path";
+var NO_FINDINGS = { high: 0, medium: 0, low: 0 };
+var MAP_FILE = "map.md";
+async function hasDesignSystem(projectDir) {
+  try {
+    return (await fs22.stat(resolveLoopPaths(projectDir).designSystem)).isFile();
+  } catch {
+    return false;
+  }
+}
+async function runMap(projectDir, state) {
+  if (state.run_id === null || state.track === null) return null;
+  try {
+    if (!(await fs22.stat(path22.join(runDirPath(projectDir, state), MAP_FILE))).isFile()) return null;
+  } catch {
+    return null;
+  }
+  return path22.join(".mjloop", "runs", runDirName(state), MAP_FILE);
+}
+async function stateSummary(projectDir) {
+  let config2 = null;
+  let configError = null;
+  try {
+    config2 = await loadConfig(projectDir);
+  } catch (error2) {
+    configError = error2 instanceof ConfigMissingError ? null : error2.message;
+  }
+  let state;
+  let recovered;
+  try {
+    ;
+    ({ state, recovered } = await new StateStore(projectDir).read());
+  } catch {
+    return {
+      initialised: false,
+      recovered: false,
+      status: "uninitialised",
+      track: null,
+      run_id: null,
+      cycle: 0,
+      max_cycles: null,
+      plan: null,
+      story: null,
+      stage: "idle",
+      goal: null,
+      findings: { ...NO_FINDINGS },
+      last_cycle: null,
+      halt_reason: null,
+      reproduction: null,
+      design_system: false,
+      map: null,
+      config_error: configError
+    };
+  }
+  let maxCycles = null;
+  let reproduction = null;
+  if (config2 !== null) {
+    const track = state.track === null ? void 0 : findTrack(config2, state.track);
+    maxCycles = track?.max_cycles ?? null;
+    if (track?.gate !== void 0) {
+      reproduction = { proven: state.reproduction !== null, ref: state.reproduction?.ref ?? null };
+    }
+  }
+  const findings = { ...NO_FINDINGS };
+  for (const finding of state.findings) findings[finding.severity] += 1;
+  const last = state.history.at(-1);
+  return {
+    initialised: true,
+    recovered,
+    status: state.status,
+    track: state.track,
+    run_id: state.run_id,
+    cycle: state.cycle,
+    max_cycles: maxCycles,
+    plan: state.current.plan,
+    story: state.current.story,
+    stage: state.current.stage,
+    goal: state.goal,
+    findings,
+    last_cycle: last === void 0 ? null : { result: last.result, agents: last.agents },
+    halt_reason: state.halt_reason,
+    reproduction,
+    design_system: await hasDesignSystem(projectDir),
+    map: await runMap(projectDir, state),
+    config_error: configError
+  };
 }
 
 // src/web/writes.ts
@@ -20560,6 +20853,41 @@ var WriteSchema = discriminatedUnion("kind", [
      */
     digest: string2().regex(/^[a-f0-9]{64}$/),
     note: string2().max(2e3).nullable().default(null)
+  }),
+  strictObject({
+    kind: literal("agent.create"),
+    name: AgentNameSchema,
+    description: string2().min(1).max(500),
+    tools: string2().max(500).nullable(),
+    model: string2().max(100).nullable(),
+    /**
+     * The agent's own prompt. Free text, and that is not a violation of the
+     * no-prose rule: that rule constrains *server-authored* prose. This is the
+     * user's own words travelling into a project file, the same category as
+     * `note` and `reason` above.
+     */
+    body: string2().max(1e5)
+  }),
+  strictObject({
+    kind: literal("agent.update"),
+    name: AgentNameSchema,
+    digest: string2().regex(/^[a-f0-9]{64}$/),
+    description: string2().min(1).max(500),
+    tools: string2().max(500).nullable(),
+    model: string2().max(100).nullable(),
+    body: string2().max(1e5)
+  }),
+  strictObject({
+    kind: literal("agent.delete"),
+    name: AgentNameSchema,
+    digest: string2().regex(/^[a-f0-9]{64}$/)
+  }),
+  strictObject({
+    kind: literal("skill.agents"),
+    skill: IdSchema,
+    /** `AcceptanceView.recordDigest` (`web/read.ts`) — the compare-and-swap token this write checks inside the store's lock. */
+    digest: string2().regex(/^[a-f0-9]{64}$/),
+    agents: array(AgentNameSchema).max(50)
   })
 ]);
 function decidedBy() {
@@ -20570,6 +20898,26 @@ function decidedBy() {
   }
   return `dashboard:${who}`;
 }
+var GUARDED_WHILE_RUNNING = ["agent.create", "agent.update", "agent.delete", "skill.agents"];
+async function reservedAgentNames() {
+  const { agents } = await listAgents(PLUGIN_AGENTS_DIR, "plugin");
+  return agents.map((agent) => agent.name);
+}
+async function agentUsedByTrack(projectDir, name) {
+  const config2 = await loadConfig(projectDir);
+  return Object.values(config2.tracks).some(
+    (track) => [
+      ...track.required,
+      ...track.available ?? [],
+      ...track.closing ?? [],
+      ...track.gate?.blocks ?? [],
+      track.gate?.proven_by ?? "",
+      track.map?.drafted_by ?? ""
+    ].includes(name)
+  );
+}
+var AgentInUseError = class extends Error {
+};
 var HANDLERS = {
   gate: async (projectDir, write) => {
     await gateSet(
@@ -20596,13 +20944,66 @@ var HANDLERS = {
       by: decidedBy(),
       note: write.note
     });
+  },
+  "agent.create": async (projectDir, write) => {
+    await writeAgent(
+      projectDir,
+      { name: write.name, description: write.description, tools: write.tools, model: write.model, extra: {}, body: write.body },
+      { expectDigest: null, reserved: await reservedAgentNames() }
+    );
+  },
+  "agent.update": async (projectDir, write) => {
+    const existing = await readAgent(projectDir, write.name);
+    await writeAgent(
+      projectDir,
+      {
+        name: write.name,
+        description: write.description,
+        tools: write.tools,
+        model: write.model,
+        extra: existing?.extra ?? {},
+        body: write.body
+      },
+      { expectDigest: write.digest, reserved: await reservedAgentNames() }
+    );
+  },
+  "agent.delete": async (projectDir, write) => {
+    await deleteAgent(projectDir, write.name, write.digest, {
+      guard: async () => {
+        if (await agentUsedByTrack(projectDir, write.name)) throw new AgentInUseError();
+      }
+    });
+  },
+  "skill.agents": async (projectDir, write) => {
+    await setAcceptanceAgents(projectDir, write.skill, write.agents, write.digest);
   }
 };
 async function applyWrite(projectDir, write) {
+  if (GUARDED_WHILE_RUNNING.includes(write.kind)) {
+    const state = await stateSummary(projectDir);
+    if (state.status === "running") return { ok: false, code: "write.refused.running" };
+  }
   try {
     await HANDLERS[write.kind](projectDir, write);
     return { ok: true };
   } catch (error2) {
+    if (error2 instanceof AgentInUseError) {
+      return { ok: false, code: "write.refused.agent.inUse" };
+    }
+    if (error2 instanceof AgentWriteError) {
+      const code = {
+        stale: "write.stale.agent",
+        exists: "write.invalid.agent",
+        // For the browser this is one fact, not three: the screen the click
+        // was made from is out of date and nothing was changed. `stale` and
+        // `missing` share a code for the same reason `write.stale.feature`
+        // folds three store distinctions into one above.
+        missing: "write.stale.agent",
+        invalid: "write.invalid.agent",
+        reserved: "write.refused.agent.shadow"
+      };
+      return { ok: false, code: code[error2.kind] };
+    }
     if (error2 instanceof ConfigMutationError) {
       return {
         ok: false,
@@ -20623,7 +21024,8 @@ async function applyWrite(projectDir, write) {
 var STALE = {
   plan: "write.stale.plan",
   story: "write.stale.story",
-  run: "write.stale.run"
+  run: "write.stale.run",
+  skill: "write.stale.skill"
 };
 
 // src/web/protocol.ts
@@ -20735,105 +21137,15 @@ var spawnPtySession = ({ cwd, command, cols, rows }) => {
 };
 
 // src/web/snapshot.ts
-import fs23 from "node:fs/promises";
-import path23 from "node:path";
-
-// src/ops/summary.ts
-import fs21 from "node:fs/promises";
-import path21 from "node:path";
-var NO_FINDINGS = { high: 0, medium: 0, low: 0 };
-var MAP_FILE = "map.md";
-async function hasDesignSystem(projectDir) {
-  try {
-    return (await fs21.stat(resolveLoopPaths(projectDir).designSystem)).isFile();
-  } catch {
-    return false;
-  }
-}
-async function runMap(projectDir, state) {
-  if (state.run_id === null || state.track === null) return null;
-  try {
-    if (!(await fs21.stat(path21.join(runDirPath(projectDir, state), MAP_FILE))).isFile()) return null;
-  } catch {
-    return null;
-  }
-  return path21.join(".mjloop", "runs", runDirName(state), MAP_FILE);
-}
-async function stateSummary(projectDir) {
-  let config2 = null;
-  let configError = null;
-  try {
-    config2 = await loadConfig(projectDir);
-  } catch (error2) {
-    configError = error2 instanceof ConfigMissingError ? null : error2.message;
-  }
-  let state;
-  let recovered;
-  try {
-    ;
-    ({ state, recovered } = await new StateStore(projectDir).read());
-  } catch {
-    return {
-      initialised: false,
-      recovered: false,
-      status: "uninitialised",
-      track: null,
-      run_id: null,
-      cycle: 0,
-      max_cycles: null,
-      plan: null,
-      story: null,
-      stage: "idle",
-      goal: null,
-      findings: { ...NO_FINDINGS },
-      last_cycle: null,
-      halt_reason: null,
-      reproduction: null,
-      design_system: false,
-      map: null,
-      config_error: configError
-    };
-  }
-  let maxCycles = null;
-  let reproduction = null;
-  if (config2 !== null) {
-    const track = state.track === null ? void 0 : findTrack(config2, state.track);
-    maxCycles = track?.max_cycles ?? null;
-    if (track?.gate !== void 0) {
-      reproduction = { proven: state.reproduction !== null, ref: state.reproduction?.ref ?? null };
-    }
-  }
-  const findings = { ...NO_FINDINGS };
-  for (const finding of state.findings) findings[finding.severity] += 1;
-  const last = state.history.at(-1);
-  return {
-    initialised: true,
-    recovered,
-    status: state.status,
-    track: state.track,
-    run_id: state.run_id,
-    cycle: state.cycle,
-    max_cycles: maxCycles,
-    plan: state.current.plan,
-    story: state.current.story,
-    stage: state.current.stage,
-    goal: state.goal,
-    findings,
-    last_cycle: last === void 0 ? null : { result: last.result, agents: last.agents },
-    halt_reason: state.halt_reason,
-    reproduction,
-    design_system: await hasDesignSystem(projectDir),
-    map: await runMap(projectDir, state),
-    config_error: configError
-  };
-}
+import fs24 from "node:fs/promises";
+import path24 from "node:path";
 
 // src/web/revision.ts
-import fs22 from "node:fs/promises";
-import path22 from "node:path";
+import fs23 from "node:fs/promises";
+import path23 from "node:path";
 async function stamp(file) {
   try {
-    const stats = await fs22.stat(file);
+    const stats = await fs23.stat(file);
     return `${Math.trunc(stats.mtimeMs)}.${stats.size}`;
   } catch {
     return "-";
@@ -20841,12 +21153,12 @@ async function stamp(file) {
 }
 async function stampDir(dir, documents) {
   const parts = [await stamp(dir)];
-  for (const document of documents) parts.push(await stamp(path22.join(dir, document)));
+  for (const document2 of documents) parts.push(await stamp(path23.join(dir, document2)));
   return parts.join(":");
 }
 async function entries(dir) {
   try {
-    return (await fs22.readdir(dir)).sort();
+    return (await fs23.readdir(dir)).sort();
   } catch {
     return [];
   }
@@ -20858,7 +21170,7 @@ async function stampListing(dir) {
 async function stampTree(dir) {
   const parts = [await stamp(dir)];
   for (const name of await entries(dir)) {
-    const child = path22.join(dir, name);
+    const child = path23.join(dir, name);
     parts.push(`${name}=${await stamp(child)}=${await stampListing(child)}`);
   }
   return parts.join("|");
@@ -20866,9 +21178,9 @@ async function stampTree(dir) {
 async function stampProjectSkills(dir) {
   const parts = [await stamp(dir)];
   for (const name of await entries(dir)) {
-    const child = path22.join(dir, name);
+    const child = path23.join(dir, name);
     parts.push(
-      `${name}=${await stamp(child)}=${await stampListing(child)}=${await stamp(path22.join(child, "SKILL.md"))}`
+      `${name}=${await stamp(child)}=${await stampListing(child)}=${await stamp(path23.join(child, "SKILL.md"))}`
     );
   }
   return parts.join("|");
@@ -20885,13 +21197,13 @@ async function readRevisions(projectDir, tick, running) {
   const planDirs = await entries(paths.plans);
   const plans = {};
   for (const dir of planDirs) {
-    const documents = await stampDir(path22.join(paths.plans, dir), PLAN_DOCUMENTS);
-    const stories = await stamp(path22.join(paths.plans, dir, "stories"));
+    const documents = await stampDir(path23.join(paths.plans, dir), PLAN_DOCUMENTS);
+    const stories = await stamp(path23.join(paths.plans, dir, "stories"));
     const key = /^P\d{3}(?=-|$)/.exec(dir)?.[0] ?? dir;
     const stamped = `${documents}:${stories}`;
     plans[key] = plans[key] === void 0 ? stamped : `${plans[key]}|${stamped}`;
   }
-  const [state, config2, memory, runs, profile, features, acceptances, library, projectSkills] = await Promise.all([
+  const [state, config2, memory, runs, profile, features, acceptances, library, projectSkills, agents] = await Promise.all([
     stamp(paths.state),
     stamp(paths.config),
     stampListing(paths.memory),
@@ -20911,7 +21223,11 @@ async function readRevisions(projectDir, tick, running) {
     // when the thing it draws changes is a panel showing yesterday.
     // `stampProjectSkills`, not `stampTree`: a `SKILL.md` is a level deeper
     // than `stampTree` reaches, so an in-place edit needs its own stamp.
-    stampProjectSkills(path22.join(projectDir, ".claude", "skills"))
+    stampProjectSkills(path23.join(projectDir, ".claude", "skills")),
+    // `.claude/agents/` — same rationale as `.claude/skills/` above. `stampTree`
+    // is enough: an agent is one file directly inside the directory, not a
+    // level deeper the way a `SKILL.md` is.
+    stampTree(path23.join(projectDir, ".claude", "agents"))
   ]);
   return {
     state,
@@ -20922,7 +21238,8 @@ async function readRevisions(projectDir, tick, running) {
     memory,
     profile,
     features,
-    skills: `${acceptances}|${library}|${projectSkills}`
+    skills: `${acceptances}|${library}|${projectSkills}`,
+    agents
   };
 }
 
@@ -20990,14 +21307,14 @@ async function readPlanView(projectDir, id) {
     id,
     // The directory name is the last resort, and it always exists — `findPlanDir`
     // found the plan by it.
-    title: frontmatter?.title ?? manifest?.title ?? path23.basename(dir),
+    title: frontmatter?.title ?? manifest?.title ?? path24.basename(dir),
     approval: frontmatter?.approval?.decision ?? null,
     stories: manifest?.stories ?? []
   };
 }
 async function readPlanFrontmatter(dir) {
   try {
-    const raw = await fs23.readFile(path23.join(dir, "PLAN.md"), "utf8");
+    const raw = await fs24.readFile(path24.join(dir, "PLAN.md"), "utf8");
     const parsed = PlanFrontmatterSchema.safeParse(parseFrontmatter(raw).data);
     if (!parsed.success) return null;
     return { title: parsed.data.title, approval: parsed.data.approval };
@@ -21007,7 +21324,7 @@ async function readPlanFrontmatter(dir) {
 }
 async function readManifest(dir) {
   try {
-    const raw = await fs23.readFile(path23.join(dir, "manifest.json"), "utf8");
+    const raw = await fs24.readFile(path24.join(dir, "manifest.json"), "utf8");
     const parsed = ManifestSchema.safeParse(JSON.parse(raw));
     if (!parsed.success) return null;
     return {
@@ -21026,7 +21343,7 @@ async function readManifest(dir) {
 }
 async function listRuns(projectDir) {
   try {
-    const entries2 = await fs23.readdir(resolveLoopPaths(projectDir).runs, { withFileTypes: true });
+    const entries2 = await fs24.readdir(resolveLoopPaths(projectDir).runs, { withFileTypes: true });
     return entries2.filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort().reverse();
   } catch {
     return [];
@@ -21042,17 +21359,21 @@ var MIME = {
   ".json": "application/json; charset=utf-8",
   ".map": "application/json; charset=utf-8"
 };
-var PUBLIC_DIR = fileURLToPath(new URL("./public/", import.meta.url));
+var PUBLIC_DIR = fileURLToPath2(new URL("./public/", import.meta.url));
 var OK_CODES = {
   gate: "write.ok.gate",
   "story.status": "write.ok.story",
   halt: "write.ok.halt",
   "config.patch": "write.ok.config",
-  "feature.approve": "write.ok.feature"
+  "feature.approve": "write.ok.feature",
+  "agent.create": "write.ok.agent",
+  "agent.update": "write.ok.agent",
+  "agent.delete": "write.ok.agent",
+  "skill.agents": "write.ok.skill"
 };
 function tokenMatches(expected, given) {
   if (given === null || given.length !== expected.length) return false;
-  return crypto4.timingSafeEqual(Buffer.from(expected), Buffer.from(given));
+  return crypto6.timingSafeEqual(Buffer.from(expected), Buffer.from(given));
 }
 var COOKIE = "mjloop_token";
 function readCookie(header, name) {
@@ -21068,7 +21389,7 @@ function suppliedToken(url, cookieHeader) {
 }
 async function startServer(options) {
   const { projectDir } = options;
-  const token = crypto4.randomBytes(32).toString("hex");
+  const token = crypto6.randomBytes(32).toString("hex");
   const sockets = /* @__PURE__ */ new Set();
   const broadcast = (message) => {
     const payload = JSON.stringify(message);
@@ -21244,15 +21565,15 @@ async function handleRequest(request, response, token, projectDir) {
     return;
   }
   const requested = url.pathname === "/" ? "/index.html" : url.pathname;
-  const file = path24.resolve(PUBLIC_DIR, `.${requested}`);
+  const file = path25.resolve(PUBLIC_DIR, `.${requested}`);
   if (!file.startsWith(PUBLIC_DIR)) {
     response.writeHead(403).end();
     return;
   }
   try {
-    const body = await fs24.readFile(file);
+    const body = await fs25.readFile(file);
     response.writeHead(200, {
-      "content-type": MIME[path24.extname(file)] ?? "application/octet-stream",
+      "content-type": MIME[path25.extname(file)] ?? "application/octet-stream",
       // The page carries a token in its URL. Keeping it out of caches and
       // referrers is most of what stops it leaking.
       "cache-control": "no-store",
@@ -21284,7 +21605,7 @@ function parseArgs(argv, cwd) {
       case "--dir": {
         const value = argv[++index];
         if (value === void 0) throw new UsageError("--dir needs a path");
-        args.dir = path25.resolve(cwd, value);
+        args.dir = path26.resolve(cwd, value);
         break;
       }
       case "--port": {
@@ -21312,7 +21633,7 @@ function openBrowser(url) {
   } catch {
   }
 }
-var ENGINE_DIR = fileURLToPath2(new URL("../../", import.meta.url));
+var ENGINE_DIR = fileURLToPath3(new URL("../../", import.meta.url));
 async function ensurePty() {
   if (isPtyAvailable()) return true;
   process.stdout.write("Preparing the dashboard \u2014 installing node-pty, this happens once.\n");
@@ -21347,7 +21668,7 @@ ${USAGE}`);
     return 1;
   }
   try {
-    await fs25.stat(resolveLoopPaths(args.dir).root);
+    await fs26.stat(resolveLoopPaths(args.dir).root);
   } catch {
     process.stderr.write(`no .mjloop/ in ${args.dir} \u2014 run /mjloop:init there first.
 `);

@@ -6,9 +6,30 @@
 import { ref, type Ref } from 'vue'
 import { startRouter } from '../lib/router.js'
 
-export type TabId = 'run' | 'plans' | 'stories' | 'features' | 'skills' | 'evidence' | 'memory' | 'config'
+export type TabId =
+  | 'run'
+  | 'plans'
+  | 'stories'
+  | 'features'
+  | 'skills'
+  | 'agents'
+  | 'evidence'
+  | 'memory'
+  | 'config'
+  | 'tracks'
 
-export const TABS: readonly TabId[] = ['run', 'plans', 'stories', 'features', 'skills', 'evidence', 'memory', 'config']
+export const TABS: readonly TabId[] = [
+  'run',
+  'plans',
+  'stories',
+  'features',
+  'skills',
+  'agents',
+  'evidence',
+  'memory',
+  'config',
+  'tracks',
+]
 
 const active = ref<TabId>('run') as Ref<TabId>
 
