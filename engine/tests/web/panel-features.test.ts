@@ -428,5 +428,83 @@ describe('Features.vue', () => {
       expect(socket.sent).toEqual([])
       wrapper.unmount()
     })
+
+    it("keeps the feature approval dialog usable across a tab switch — it is a sibling of <main>, never inside the panels' <KeepAlive>", async () => {
+      // The regression this guards against: `HaltDialog` used to live inside
+      // a kept-alive panel and died the same way — `shell.test.ts`'s own
+      // halt tab-switch test. `boot()`'s `FeaturesHost` above wires
+      // `FeatureApproveDialog` as a sibling by hand, the same shape
+      // `App.vue` uses, but nothing there fails if someone later moves the
+      // dialog back inside `Features.vue` — only mounting the real `App.vue`,
+      // with its real `<KeepAlive>`, exercises the placement itself.
+      vi.resetModules()
+      // `App.vue` mounts `Terminal.vue` too, which touches the xterm globals
+      // `vendor/` installs on `window` in production — `shell.test.ts`'s own
+      // `describe('App')` fills the same seam the same way.
+      ;(globalThis as any).Terminal = class {
+        cols = 80
+        rows = 24
+        loadAddon() {}
+        open() {}
+        onData() {}
+        write() {}
+        reset() {}
+      }
+      ;(globalThis as any).FitAddon = { FitAddon: class { fit() {} } }
+      ;(globalThis as any).ResizeObserver = class {
+        observe() {}
+        disconnect() {}
+      }
+      const freshI18n = await import('../../src/web/app/lib/i18n.ts')
+      freshI18n.installForTest({ code: 'en', strings: english })
+      serve({ '/api/features': [summary()], '/api/features/F001': detail() })
+      const store = await import('../../src/web/app/stores/session.ts')
+      const { default: App } = await import('../../src/web/app/App.vue')
+
+      store.connect({ token: 'tok', socketFactory: (url) => new FakeSocket(url) as unknown as WebSocket })
+      FakeSocket.last?.deliver({ type: 'snapshot', snapshot: emptySnapshot() })
+
+      const wrapper = mount(App, { attachTo: document.body })
+      location.hash = '#features'
+      window.dispatchEvent(new Event('hashchange'))
+      await nextTick()
+
+      await vi.waitFor(() => expect(wrapper.findAll('#features-list .plan')).toHaveLength(1))
+      await wrapper.get('.plan-open').trigger('click')
+      await vi.waitFor(() => expect(wrapper.get('#feature-detail').attributes('hidden')).toBeUndefined())
+      await wrapper.get('#feature-approve').trigger('click')
+      await nextTick()
+
+      const dialog = document.getElementById('feature-dialog') as HTMLDialogElement
+      expect(dialog.open).toBe(true)
+      expect(wrapper.find('#panel-features').exists()).toBe(true)
+
+      // Away and back — the panel deactivates (KeepAlive, not destroyed)
+      // while the dialog, outside it, is never touched.
+      location.hash = '#plans'
+      window.dispatchEvent(new Event('hashchange'))
+      await nextTick()
+      expect(wrapper.find('#panel-features').exists()).toBe(false)
+      expect(dialog.open).toBe(true)
+
+      location.hash = '#features'
+      window.dispatchEvent(new Event('hashchange'))
+      await nextTick()
+      expect(wrapper.find('#panel-features').exists()).toBe(true)
+      expect(dialog.open).toBe(true)
+
+      // Still live: a confirmation submitted now still reaches the write door.
+      await wrapper.get('#feature-note').setValue('checking it survives a tab switch')
+      await wrapper.get('#feature-form').trigger('submit')
+      await nextTick()
+      expect((FakeSocket.last as FakeSocket).sent).toEqual([
+        {
+          type: 'write',
+          id: expect.any(String),
+          write: { kind: 'feature.approve', feature: 'F001', revision: 1, digest: 'a'.repeat(64), note: 'checking it survives a tab switch' },
+        },
+      ])
+      wrapper.unmount()
+    })
   })
 })

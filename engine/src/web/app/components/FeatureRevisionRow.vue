@@ -7,6 +7,7 @@
  */
 import { useI18n } from '../composables/useI18n.js'
 import type { FeatureRevisionView } from '../types/protocol.js'
+import Bdi from './Bdi.vue'
 
 const props = defineProps<{ entry: FeatureRevisionView }>()
 
@@ -15,7 +16,7 @@ const { t } = useI18n()
 
 <template>
   <div class="grid-row" role="row">
-    <span role="cell"><code data-slot="revision">{{ entry.revision }}</code></span>
+    <span role="cell"><code data-slot="revision"><Bdi :value="String(entry.revision)" /></code></span>
     <span role="cell" data-slot="status" :data-status="entry.status">{{ t(`features.status.${entry.status}`) }}</span>
   </div>
 </template>

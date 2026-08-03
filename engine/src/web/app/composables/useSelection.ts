@@ -33,6 +33,14 @@
  * stale. Every mutator re-reads `lib/selection.ts`'s getters afterwards
  * rather than computing the new value locally, so a ref can never disagree
  * with what `read()` would answer.
+ *
+ * **Not every selection lives here.** `lib/featuredoc.ts` keeps the open
+ * feature's own `opened` ref outside this module, deliberately: the old page
+ * never persisted which feature was open — it was a plain module variable,
+ * reset on every reload — and routing it through `lib/selection.ts` would
+ * give it a door into storage the spec never asked for. A selection earns a
+ * home here specifically because it is persisted; one that is not stays with
+ * whatever module fetches its document.
  */
 import { ref, type Ref } from 'vue'
 import {
