@@ -1944,7 +1944,7 @@ exactly this reason.
 
 `TrackRunForm.vue` — حقلٌ وزرّ، يستدعي `send({ type: 'enqueue', command, story: null })` و`pane.setView('queue')` كما يفعل `Launcher.vue`.
 
-حدّث `CLAUDE.md` و`README.md` و`docs/usage*.md` بسطر الأمر الجديد.
+حدّث `README.md` و`docs/usage*.md` بسطر الأمر الجديد. **لا تحدّث `CLAUDE.md` في هذا المستودع**: `.gitignore` يستثنيه لأن هذا مستودع البِلَغن نفسه، وذلك الملف فيه تسجيلٌ يولَّد لكل مشروع لا تعليماتٌ تُنسَّخ.
 
 - [ ] **Step 4: شغّل كل شيء**
 
@@ -1954,7 +1954,7 @@ Expected: PASS
 - [ ] **Step 5: الالتزام**
 
 ```bash
-git add commands/ skills/ engine/ CLAUDE.md README.md docs/
+git add commands/ skills/ engine/ README.md docs/
 git commit -m "feat: /mjloop:run — open any track by name
 
 A track built from the dashboard had nothing to run it: the four commands
