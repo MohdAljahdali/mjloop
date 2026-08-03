@@ -7,6 +7,16 @@ import type { MemoryView } from '../../src/web/read.js'
 import { emptySnapshot, readLocale } from './helpers/page.js'
 
 /**
+ * `lib/fmt.ts`'s `stamp()`, computed independently rather than imported: the
+ * app module is dynamically re-imported per test inside `boot()`, after
+ * `vi.resetModules()`, so a *statically* imported copy here would read a
+ * different, never-installed `lib/i18n.ts` instance's locale.
+ */
+function expectedStamp(iso: string): string {
+  return new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(iso))
+}
+
+/**
  * The Memory panel — `panels/memory.js`, `describe('memory faceting')` at
  * `panels.test.ts:1811`, and the memory section of `index.html` — ported to
  * `Memory.vue`.
@@ -100,9 +110,10 @@ async function boot(snapshot: Snapshot = emptySnapshot(), seed?: string) {
   const store = await import('../../src/web/app/stores/session.ts')
   store.connect({ token: 'tok', socketFactory: (url) => new FakeSocket(url) as unknown as WebSocket })
   const { default: Memory } = await import('../../src/web/app/panels/Memory.vue')
+  const useI18n = await import('../../src/web/app/composables/useI18n.ts')
   FakeSocket.last?.deliver({ type: 'snapshot', snapshot })
   await nextTick()
-  return { store, Memory, local, held, socket: FakeSocket.last as FakeSocket }
+  return { store, Memory, local, held, i18n: freshI18n, useI18n, socket: FakeSocket.last as FakeSocket }
 }
 
 const memory = (patch: Partial<MemoryView> & { id: string }): MemoryView => ({
@@ -160,6 +171,7 @@ describe('Memory.vue', () => {
     expect(row.get('[data-slot="kind"]').classes()).toContain('tag')
     expect(row.get('[data-slot="title"]').text()).toBe('Retry the flake')
     expect(row.get('[data-slot="at"]').classes()).toContain('when')
+    expect(row.get('[data-slot="at"]').text()).toBe(expectedStamp('2026-07-28T09:00:00.000Z'))
     const chips = row.findAll('[data-slot="tags"] .chip')
     expect(chips.map((chip) => chip.text())).toEqual(['ci', 'flaky'])
     expect(row.get('[data-slot="tags"]').classes()).toContain('chips')
@@ -176,6 +188,47 @@ describe('Memory.vue', () => {
     expect(wrapper.get('[data-slot="kind"]').text()).toBe('invented-kind')
     const options = wrapper.findAll('#memory-kind option')
     expect(options.map((option) => option.text())).toEqual([english['memory.allKinds'], 'invented-kind'])
+  })
+
+  it('isolates an unknown kind in its own bdi, so it cannot reorder inside an RTL row — a known kind gets no such wrapper', async () => {
+    document.documentElement.dir = 'rtl'
+    serve({
+      '/api/memory': [
+        memory({ id: 'M001', kind: 'invented-kind' }),
+        memory({ id: 'M002', kind: 'lesson' }),
+      ],
+    })
+    const { Memory } = await boot()
+    const wrapper = mount(Memory)
+    await vi.waitFor(() => expect(wrapper.findAll('#memory-list .memory')).toHaveLength(2))
+
+    const rows = wrapper.findAll('#memory-list .memory')
+    expect(rows[0]?.get('[data-slot="kind"]').find('bdi').exists()).toBe(true)
+    expect(rows[0]?.get('[data-slot="kind"] bdi').attributes('dir')).toBe('ltr')
+    expect(rows[1]?.get('[data-slot="kind"]').find('bdi').exists()).toBe(false)
+  })
+
+  it('repaints the kind picker and the row badge on a locale switch — memory.js:76-86\'s own bug, guarded', async () => {
+    // The old page tracked this with a five-line comment: switching locale
+    // left the picker reading "Every kind" until a memory of a new kind
+    // happened to arrive, because the options were built outside a row's own
+    // `update()`. `useI18n`'s epoch makes every `t()`/`known()` read here a
+    // reactive dependency, so nothing has to watch for it explicitly — this
+    // test is what proves that structural claim rather than assuming it.
+    serve({ '/api/memory': [memory({ id: 'M001', kind: 'lesson' })] })
+    const { Memory, i18n, useI18n } = await boot()
+    const wrapper = mount(Memory)
+    await vi.waitFor(() => expect(wrapper.find('#memory-list .memory').exists()).toBe(true))
+
+    expect(wrapper.get('[data-slot="kind"]').text()).toBe(english['memory.kind.lesson'])
+    expect(wrapper.get('#memory-kind option').text()).toBe(english['memory.allKinds'])
+
+    i18n.installForTest({ code: 'ar', strings: { ...english, 'memory.kind.lesson': 'درس', 'memory.allKinds': 'كل الأنواع' } })
+    await useI18n.applyLocale('ar')
+    await nextTick()
+
+    expect(wrapper.get('[data-slot="kind"]').text()).toBe('درس')
+    expect(wrapper.get('#memory-kind option').text()).toBe('كل الأنواع')
   })
 
   it('offers only the kinds actually present, sorted, and keeps the query and kind filters independent', async () => {

@@ -41,7 +41,7 @@ import Bdi from '../components/Bdi.vue'
 import Tx from '../components/Tx.vue'
 import PlanRow from '../components/PlanRow.vue'
 import PlanEvidenceRow from '../components/PlanEvidenceRow.vue'
-import PlanMemoryRow from '../components/PlanMemoryRow.vue'
+import MemoryRow from '../components/MemoryRow.vue'
 
 const { t } = useI18n()
 
@@ -248,7 +248,7 @@ function submitNewPlan(): void {
                 <p class="hint">{{ t('plans.memory.hint') }}</p>
                 <p class="empty" id="plan-memory-empty" :hidden="memoryRows.length > 0">{{ t('plans.memory.empty') }}</p>
                 <ul class="memories" id="plan-memory-list">
-                  <PlanMemoryRow v-for="memory in shownMemory" :key="memory.id" :memory="memory" />
+                  <MemoryRow v-for="memory in shownMemory" :key="memory.id" :memory="memory" />
                 </ul>
                 <p class="more" id="plan-memory-more" :hidden="shownMemory.length >= memoryRows.length">
                   {{ t('plans.memory.more', { shown: shownMemory.length, total: memoryRows.length }) }}

@@ -621,6 +621,11 @@ describe('lib/memory', () => {
       expect(facet(all, '', '')).toHaveLength(2)
     })
 
+    it('matches on the id field too, not only title/tags/body', () => {
+      const all = [entry({ id: 'M001', title: 'Cookies over tokens' }), entry({ id: 'M002', title: 'Something else' })]
+      expect(facet(all, 'm002', '').map((memory) => memory.id)).toEqual(['M002'])
+    })
+
     it('is case-insensitive and ignores extra whitespace between terms', () => {
       const all = [entry({ id: 'M001', title: 'Cookies Over Tokens' })]
       expect(facet(all, '  COOKIES   tokens  ', '').map((memory) => memory.id)).toEqual(['M001'])
