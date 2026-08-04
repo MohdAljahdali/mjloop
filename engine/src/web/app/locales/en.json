@@ -669,6 +669,7 @@
   "roster.unknown": "“{agent}” is not part of the {track} track.",
   "roster.contradiction": "“{agent}” is both drafted and skipped — pick one.",
   "roster.unexplained": "“{agent}” was left out with no reason given.",
+  "roster.quality": "“{agent}” is required by the pinned quality plan and cannot be dropped.",
 
   "write.stale.plan": "That plan was decided on somewhere else in the meantime — nothing was changed.",
   "write.stale.story": "That story moved on in the meantime — nothing was changed.",

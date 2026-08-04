@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { RosterViolationError, RunNotClosedError, rosterSet, rosterValidity, rosterViolations } from '../../src/ops/roster.js'
 import { initLoop } from '../../src/ops/init.js'
 import { runLog } from '../../src/ops/log.js'
@@ -8,8 +8,17 @@ import { cycleAdvance, cycleDirPath, runDirPath, runStart, UnknownTrackError } f
 import { findTrack, type Track } from '../../src/schemas/config.js'
 import { RosterSchema } from '../../src/schemas/contract.js'
 import { StateStore } from '../../src/store/state-store.js'
+import { configRevision, mutateConfig } from '../../src/store/config-mutation.js'
 import { loadConfig, writeConfig } from '../../src/store/config-store.js'
 import { makeTmpProject, type TmpProject } from '../helpers/tmp-project.js'
+
+// `roster.quality` is the one violation this task's brief permits `rosterSet`
+// to start enforcing, and only once both `qualityRuntimeEnabled` is open and
+// a run's own pinned policy is `enforcement: active`. The gate stays closed
+// (`false`) in production until Task 17; mocking it here is the only way this
+// file can exercise the branch at all before then.
+vi.mock('../../src/ops/quality-capability.js', () => ({ qualityRuntimeEnabled: vi.fn(() => false) }))
+import { qualityRuntimeEnabled } from '../../src/ops/quality-capability.js'
 
 const NOW = new Date('2026-07-26T10:36:00.000Z')
 const clock = () => NOW
@@ -24,7 +33,10 @@ beforeEach(async () => {
   await writeConfig(project.dir, config)
   await runStart(project.dir, { track: 'edit', goal: 'Rename submit label' }, clock)
 })
-afterEach(async () => { await project.cleanup() })
+afterEach(async () => {
+  await project.cleanup()
+  vi.mocked(qualityRuntimeEnabled).mockReturnValue(false)
+})
 
 describe('rosterSet', () => {
   it('writes roster.json into the cycle directory', async () => {
@@ -577,5 +589,96 @@ describe('rosterValidity — the read door behind /api/roster/<track>/valid', ()
     await expect(rosterValidity(project.dir, { track: 'nonsense', selected: [], skipped: {} })).rejects.toBeInstanceOf(
       UnknownTrackError,
     )
+  })
+})
+
+describe('quality_dispatches — the counterfactual plan rosterSet returns alongside waves', () => {
+  it('is present on a cycle roster even while the runtime gate stays closed', async () => {
+    const result = await rosterSet(project.dir, {
+      cycle: 1,
+      selected: ['editor', 'verifier'],
+      skipped: { scout: 'known files', critic: 'single-file change' },
+    })
+    expect(result.quality_dispatches.length).toBeGreaterThan(0)
+    expect(result.quality_dispatches.every((d) => d.agent === 'verifier')).toBe(true)
+  })
+
+  it('never blocks an otherwise-valid roster while the gate stays closed', async () => {
+    // The legacy-pinned policy on this project's run is shadow, not active,
+    // so this composition is accepted purely on rosterViolations's own rules.
+    const result = await rosterSet(project.dir, {
+      cycle: 1,
+      selected: ['editor', 'verifier'],
+      skipped: { scout: 'known files', critic: 'single-file change' },
+    })
+    expect(result.path).toContain('roster.json')
+  })
+
+  it('is empty for a closing pass, which carries no quality dispatch of its own', async () => {
+    const config = await loadConfig(project.dir)
+    config.tracks.edit = { required: ['editor', 'verifier'], available: [], closing: ['docs'], max_cycles: 3, order: [] }
+    await writeConfig(project.dir, config)
+    await cycleAdvance(project.dir, { agents: ['editor', 'verifier'], result: 'pass' }, clock)
+
+    const result = await rosterSet(project.dir, { closing: true, selected: ['docs'], skipped: {} })
+    expect(result.quality_dispatches).toEqual([])
+  })
+})
+
+describe('roster.quality — enforced only once the runtime gate opens on an active policy', () => {
+  let enabledProject: TmpProject
+
+  const skipAllAvailable = {
+    scout: 'goal names the endpoint',
+    critic: 'single-file change',
+    'ui-designer': 'no UI surface touched',
+    'ui-critic': 'no UI surface touched',
+    security: 'no auth or input path touched',
+    perf: 'not a hot path',
+  }
+
+  beforeEach(async () => {
+    enabledProject = await makeTmpProject()
+    await initLoop(enabledProject.dir, clock)
+    const raw = await fs.readFile(path.join(enabledProject.dir, '.mjloop', 'config.yaml'), 'utf8')
+    // An explicit mode is what pins `enforcement: active` — the same
+    // distinction `quality-policy.test.ts` exercises for `buildQualityPolicy`.
+    await mutateConfig(enabledProject.dir, {
+      revision: configRevision(raw),
+      changes: [{ kind: 'orchestration.quality.mode', value: 'strict' }],
+    })
+    await runStart(enabledProject.dir, { track: 'build', goal: 'Speed up the checkout API' }, clock)
+  })
+  afterEach(async () => { await enabledProject.cleanup() })
+
+  it('leaves the strict plan\'s specialists out of the composition while the gate stays closed', async () => {
+    const result = await rosterSet(enabledProject.dir, {
+      cycle: 1,
+      selected: ['builder', 'verifier'],
+      skipped: skipAllAvailable,
+    })
+    expect(result.quality_dispatches.some((d) => d.agent === 'security')).toBe(true)
+  })
+
+  it('adds a roster.quality violation for a strict specialist the roster omitted, once the gate opens', async () => {
+    vi.mocked(qualityRuntimeEnabled).mockReturnValue(true)
+    await expect(
+      rosterSet(enabledProject.dir, { cycle: 1, selected: ['builder', 'verifier'], skipped: skipAllAvailable }),
+    ).rejects.toThrow(/security/)
+  })
+
+  it('accepts the same roster once the strict plan\'s specialists are drafted too', async () => {
+    vi.mocked(qualityRuntimeEnabled).mockReturnValue(true)
+    const result = await rosterSet(enabledProject.dir, {
+      cycle: 1,
+      selected: ['builder', 'verifier', 'security', 'critic'],
+      skipped: {
+        scout: 'goal names the endpoint',
+        'ui-designer': 'no UI surface touched',
+        'ui-critic': 'no UI surface touched',
+        perf: 'not a hot path',
+      },
+    })
+    expect(result.path).toContain('roster.json')
   })
 })

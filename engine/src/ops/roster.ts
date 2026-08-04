@@ -22,7 +22,10 @@ import { StateStore } from '../store/state-store.js'
 // not reach certain `ops/` writes), but that test says nothing about `ops/`
 // reaching a *type* under `src/web/`, and this reaches nothing else there.
 import type { WebCode } from '../web/codes.js'
+import { qualityRuntimeEnabled } from './quality-capability.js'
+import { planQualityDispatches, qualityRosterViolations, type PlannedQualityDispatch, type QualityRosterInput } from './quality-roster.js'
 import { NoActiveRunError, UnknownTrackError, cycleDirPath, runDirPath } from './run.js'
+import { readPolicy } from '../store/quality-store.js'
 
 /** Every code `rosterViolations` and `cycleRosterSet`'s cycle check can produce. */
 export type RosterViolationCode = Extract<WebCode, `roster.${string}`>
@@ -63,6 +66,8 @@ function describeViolation(violation: RosterViolation): string {
       return `"${agent}" is both drafted and skipped — a roster must say one or the other`
     case 'roster.unexplained':
       return `"${agent}" was omitted without a reason — add it to skipped`
+    case 'roster.quality':
+      return `"${agent}" is required by the pinned quality plan's dispatch schedule and cannot be dropped`
   }
 }
 
@@ -155,7 +160,7 @@ export type RosterDeclaration = Roster | ClosingRoster
 export async function rosterSet(
   projectDir: string,
   roster: RosterDeclaration,
-): Promise<{ path: string; waves: string[][] }> {
+): Promise<{ path: string; waves: string[][]; quality_dispatches: PlannedQualityDispatch[] }> {
   return isClosingRoster(roster)
     ? closingRosterSet(projectDir, ClosingRosterSchema.parse(roster))
     : cycleRosterSet(projectDir, RosterSchema.parse(roster))
@@ -304,11 +309,28 @@ export async function rosterValidity(
 }
 
 /** One working cycle's composition, written to `cycle-NN/roster.json`. */
-async function cycleRosterSet(projectDir: string, parsed: Roster): Promise<{ path: string; waves: string[][] }> {
+async function cycleRosterSet(
+  projectDir: string,
+  parsed: Roster,
+): Promise<{ path: string; waves: string[][]; quality_dispatches: PlannedQualityDispatch[] }> {
   const state = await new StateStore(projectDir).get()
   if (state.status !== 'running' || state.track === null) throw new NoActiveRunError()
 
   const { config, track } = await loadTrack(projectDir, state.track)
+
+  // Planned regardless of whether enforcement is live: `qualityRuntimeEnabled`
+  // stays closed until Task 17, so today this is counterfactual data only —
+  // what the pinned mode *would* dispatch — never a change to which roster is
+  // accepted. `readPolicy` never fails here: `runStart` pins a policy before a
+  // run can reach `running`, and a policy is never rewritten after that.
+  const policy = await readPolicy(projectDir, state)
+  const qualityDispatches = planQualityDispatches({
+    trackName: state.track,
+    track,
+    config,
+    policy,
+    goal: state.goal ?? '',
+  })
 
   const violations: (string | RosterViolation)[] = []
 
@@ -330,6 +352,15 @@ async function cycleRosterSet(projectDir: string, parsed: Roster): Promise<{ pat
 
   violations.push(...rosterViolations(state.track, track, config, parsed.selected, parsed.skipped))
 
+  // The one behaviour change this task is allowed to make, and only under two
+  // conditions at once: the release gate is open (a test may inject this; it
+  // is `false` in production until Task 17) and this run's own pinned policy
+  // opted in (`enforcement === 'active'`, which requires an explicit quality
+  // mode — a shadow policy enforces nothing, same as the gate being closed).
+  if (qualityRuntimeEnabled() && policy.enforcement === 'active') {
+    violations.push(...qualityRosterViolations(qualityDispatches, parsed.selected))
+  }
+
   if (violations.length > 0) throw new RosterViolationError(violations)
 
   // Per cycle, alongside that cycle's agent results: a roster is validated
@@ -338,7 +369,7 @@ async function cycleRosterSet(projectDir: string, parsed: Roster): Promise<{ pat
   // omission, which is the whole product of the invariant, is not recoverable
   // from anywhere else.
   const { path: file } = await write(path.join(cycleDirPath(projectDir, state), 'roster.json'), parsed)
-  return { path: file, waves: dispatchWaves(track, parsed.selected) }
+  return { path: file, waves: dispatchWaves(track, parsed.selected), quality_dispatches: qualityDispatches }
 }
 
 /**
@@ -355,7 +386,10 @@ async function cycleRosterSet(projectDir: string, parsed: Roster): Promise<{ pat
  * an agent its own track closes with, so the combination cannot reach this
  * function.
  */
-async function closingRosterSet(projectDir: string, parsed: ClosingRoster): Promise<{ path: string; waves: string[][] }> {
+async function closingRosterSet(
+  projectDir: string,
+  parsed: ClosingRoster,
+): Promise<{ path: string; waves: string[][]; quality_dispatches: PlannedQualityDispatch[] }> {
   const state = await new StateStore(projectDir).get()
   // `done`, not `running`. This is also what keeps a late closing roster out of
   // a run that replaced this one — the hazard §12 gives `runLog` a `run_id`
@@ -421,7 +455,9 @@ async function closingRosterSet(projectDir: string, parsed: ClosingRoster): Prom
   // it and to the strict `RosterSchema`, which will refuse it if it ever
   // reaches a cycle reader by mistake.
   const { path: file } = await write(path.join(runDirPath(projectDir, state), 'closing', 'roster.json'), parsed)
-  return { path: file, waves: dispatchWaves(track, parsed.selected) }
+  // Closing agents document a run that already ended; they carry no quality
+  // dispatch of their own, so the counterfactual plan is always empty here.
+  return { path: file, waves: dispatchWaves(track, parsed.selected), quality_dispatches: [] }
 }
 
 /**
