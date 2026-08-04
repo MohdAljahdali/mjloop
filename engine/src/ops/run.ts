@@ -28,7 +28,9 @@ import {
   buildProjectQualityPolicy,
   createInitialQualityLedger,
 } from './quality-policy.js'
-import { writeLedger, writePolicyOnce } from '../store/quality-store.js'
+import { qualityRuntimeEnabled } from './quality-capability.js'
+import { assertQualityCloseable, invalidateQualityEvidence } from './quality-ledger.js'
+import { readLedger, readPolicy, writeLedger, writePolicyOnce } from '../store/quality-store.js'
 
 export class UnknownTrackError extends Error {
   constructor(track: string, known: string[]) {
@@ -481,6 +483,36 @@ export interface CycleAdvanceResult {
 }
 
 /**
+ * Refuse a terminal `pass` this run's quality evidence does not support.
+ *
+ * Deliberately takes no lock and reads only records: it is called from *inside*
+ * `cycleAdvance`'s locked update, against that update's own draft, which is the
+ * only way the cycle it judges against is the cycle the run is actually
+ * closing. `StateStore.update` and `updateLedger` share one lock and it is not
+ * reentrant, so anything here that took a lock would deadlock the transition it
+ * exists to guard.
+ *
+ * The rollout gate lives here rather than at the call site so there is one
+ * answer to "may quality refuse this run", and it is the same pair of
+ * conditions `cycleRosterSet` uses: the release capability is open *and* this
+ * run's own pinned policy opted in. A shadow run — every run that never named a
+ * quality mode — closes exactly as it does today while the ledger behind it is
+ * still written.
+ */
+export async function assertRunCanPass(projectDir: string, state: State): Promise<void> {
+  // The marker, not the file: a run pinned before quality policies existed has
+  // no policy to enforce, and `readPolicy` would turn that into a corruption.
+  // Once the marker is 1 both records are mandatory, so an unreadable one is an
+  // integrity failure and must surface rather than wave the run through.
+  if (state.quality_policy_version !== 1) return
+
+  const policy = await readPolicy(projectDir, state)
+  if (!qualityRuntimeEnabled() || policy.enforcement !== 'active') return
+
+  assertQualityCloseable(policy, await readLedger(projectDir, state), state.cycle)
+}
+
+/**
  * Close the current cycle. `pass` finishes the run; anything else opens the
  * next cycle unless the track's cap is reached, in which case the run halts.
  */
@@ -513,11 +545,18 @@ export async function cycleAdvance(
   // report to the wording.
   let cause: HaltCause = 'manual'
 
+  // Before the lock, because `invalidateQualityEvidence` takes the same one and
+  // `withLock` is not reentrant. It is safe there: the transition below has not
+  // happened yet, and `updateLedger`'s own drift check compares the state this
+  // read saw against the state it finds under the lock — so an advance that
+  // raced this one aborts rather than invalidating against the wrong cycle.
+  if (input.result !== 'pass') await invalidateClosedCycleEvidence(projectDir, now)
+
   // Status and cap are evaluated against the draft inside the locked update,
   // not a pre-lock snapshot: two racing advances (or an advance racing a
   // halt) must each judge the state the other one left behind, or a run can
   // step past its cycle cap.
-  const after = await store.update((draft) => {
+  const after = await store.update(async (draft) => {
     if (draft.status !== 'running' || draft.track === null) throw new NoActiveRunError()
     const track = findTrack(config, draft.track)
     if (track === undefined) throw new UnknownTrackError(draft.track, Object.keys(config.tracks))
@@ -544,6 +583,13 @@ export async function cycleAdvance(
     })
 
     if (input.result === 'pass') {
+      // Re-read under this lock and against this draft, never against a
+      // pre-lock snapshot: the caller's `pass` is a claim about a cycle, and a
+      // ledger read before the lock could describe a cycle that has since been
+      // closed or a run that has since been replaced. Throwing here aborts the
+      // whole transaction — the history entry pushed above included — so a
+      // refused close leaves the run exactly where it was.
+      await assertRunCanPass(projectDir, draft)
       draft.status = 'done'
       draft.current.stage = 'done'
       closing = [...track.closing]
@@ -628,6 +674,67 @@ export async function cycleAdvance(
     handoff,
     closing_agents: closing,
   }
+}
+
+/**
+ * Age out the evidence a failing cycle's own work invalidated, and only that.
+ *
+ * The files come from the results the cycle actually logged, so a cycle that
+ * touched one stylesheet does not cost the database review its receipt —
+ * `invalidateQualityEvidence` decides which dimensions a path reaches, and
+ * every unrelated passing entry survives. `criteriaChanged` is `false` because
+ * nothing at this seam knows the goal or the acceptance criteria moved; a
+ * change to either arrives through the run-start path that pins them.
+ *
+ * Never fatal. The state transition it precedes is what actually closes the
+ * cycle, and a ledger write that could not land must not stop a run advancing —
+ * the same rule the handoff and the run map follow. It can only cost freshness
+ * on a run whose evidence the *next* dispatch re-records anyway.
+ */
+async function invalidateClosedCycleEvidence(projectDir: string, now: Clock): Promise<void> {
+  try {
+    const state = await new StateStore(projectDir, now).get()
+    if (state.status !== 'running' || state.run_id === null || state.quality_policy_version !== 1) return
+    const reports = await readAgentReports(cycleDirPath(projectDir, state))
+    const files = [...new Set(reports.flatMap((report) => report.result.files_touched))].sort()
+    for (const batch of invalidationBatches(files)) {
+      await invalidateQualityEvidence(projectDir, state, { files: batch, criteriaChanged: false }, now)
+    }
+  } catch (error) {
+    process.stderr.write(`mjloop: quality evidence was not invalidated: ${String(error)}\n`)
+  }
+}
+
+/**
+ * The ledger writes the paths it invalidated into each entry's `reason`, which
+ * is prose and bounded at 4 000 characters. A wide cycle — a rename across two
+ * hundred files, a generated directory — overflows that, and the *whole*
+ * transition is then rejected by the schema: the loosening direction, since
+ * evidence that should have aged out keeps standing.
+ *
+ * So the list is split rather than truncated. Every batch is a complete call,
+ * the union of the batches names exactly the files the cycle touched, and the
+ * dimensions each batch reaches are decided by the ledger's own rules — no
+ * copy of them here. Ordinary cycles produce one batch and one call. The
+ * budget sits under the ceiling with room for the sentence around the list.
+ */
+const INVALIDATION_REASON_BUDGET = 3_500
+
+function invalidationBatches(files: string[]): string[][] {
+  const batches: string[][] = []
+  let batch: string[] = []
+  let width = 0
+  for (const file of files) {
+    if (batch.length > 0 && width + file.length + 2 > INVALIDATION_REASON_BUDGET) {
+      batches.push(batch)
+      batch = []
+      width = 0
+    }
+    batch.push(file)
+    width += file.length + 2
+  }
+  if (batch.length > 0) batches.push(batch)
+  return batches
 }
 
 /** The command from a `<ref> :: <headline>` signature. */

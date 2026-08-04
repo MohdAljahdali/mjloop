@@ -3,11 +3,12 @@ import crypto from 'node:crypto'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { promisify } from 'node:util'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   ClosingAgentError,
   ContradictedEvidenceError,
   CycleClosedError,
+  DuplicateQualityDispatchError,
   ForbiddenSpecialistError,
   GateClosedError,
   InvalidAgentNameError,
@@ -20,12 +21,21 @@ import {
 } from '../../src/ops/log.js'
 import { initLoop } from '../../src/ops/init.js'
 import { rosterSet } from '../../src/ops/roster.js'
-import { NoActiveRunError, UnknownTrackError, cycleAdvance, runDirPath, runStart } from '../../src/ops/run.js'
+import { NoActiveRunError, UnknownTrackError, cycleAdvance, cycleDirPath, runDirPath, runStart } from '../../src/ops/run.js'
 import { EVIDENCE_EXCERPT_MAX } from '../../src/schemas/contract.js'
 import { SkillManifestSchema } from '../../src/schemas/skill-selection.js'
+import type { State } from '../../src/schemas/state.js'
+import { configRevision, mutateConfig } from '../../src/store/config-mutation.js'
 import { loadConfig, writeConfig } from '../../src/store/config-store.js'
+import { readLedger } from '../../src/store/quality-store.js'
 import { StateStore } from '../../src/store/state-store.js'
 import { makeTmpProject, type TmpProject } from '../helpers/tmp-project.js'
+
+// The rollout gate this milestone's runtime behaviour hangs off. It is `false`
+// in production until Task 17, so the only way this file can exercise the one
+// branch that refuses — a repeated dispatch — is to open it here.
+vi.mock('../../src/ops/quality-capability.js', () => ({ qualityRuntimeEnabled: vi.fn(() => false) }))
+import { qualityRuntimeEnabled } from '../../src/ops/quality-capability.js'
 
 const NOW = new Date('2026-07-26T10:36:00.000Z')
 const clock = () => NOW
@@ -1276,5 +1286,181 @@ describe('a closing agent', () => {
 
     const { path: file } = await runLog(project.dir, { agent: 'docs', result: reverified }, clock)
     expect(path.basename(file)).toBe('docs.json')
+  })
+})
+
+/* ── the quality ledger a dispatch feeds ──────────────────────────────────── */
+
+describe('quality evidence recorded from an answered dispatch', () => {
+  /**
+   * A second project rather than the file's own: the pinned quality plan is a
+   * property of the run, and only an *explicit* mode pins
+   * `enforcement: active` — the state every refusal below is gated on.
+   */
+  let quality: TmpProject
+
+  beforeEach(async () => {
+    quality = await makeTmpProject()
+    await initLoop(quality.dir, clock)
+    const raw = await fs.readFile(path.join(quality.dir, '.mjloop', 'config.yaml'), 'utf8')
+    await mutateConfig(quality.dir, {
+      revision: configRevision(raw),
+      changes: [{ kind: 'orchestration.quality.mode', value: 'strict' }],
+    })
+    await runStart(quality.dir, { track: 'edit', goal: 'Rename submit label' }, clock)
+  })
+  afterEach(async () => {
+    await quality.cleanup()
+    vi.mocked(qualityRuntimeEnabled).mockReturnValue(false)
+  })
+
+  const state = async (): Promise<State> => new StateStore(quality.dir).get()
+
+  /** The engine's own record that it ran `command` and saw it fail. */
+  async function seedFailedVerifyLedger(dir: string, command: string): Promise<void> {
+    const current = await state()
+    const verifyDir = path.join(cycleDirPath(dir, current), 'verify')
+    await fs.mkdir(verifyDir, { recursive: true })
+    await fs.writeFile(path.join(verifyDir, 'test.log'), '2 failed\n', 'utf8')
+    await fs.writeFile(
+      path.join(verifyDir, 'index.json'),
+      `${JSON.stringify([ledgerEntry({ command, exit_code: 1 })], null, 2)}\n`,
+      'utf8',
+    )
+  }
+
+  /** The green counterpart: one completed `test` receipt the engine stands behind. */
+  async function seedGreenVerifyLedger(command = 'npm test'): Promise<void> {
+    const current = await state()
+    const verifyDir = path.join(cycleDirPath(quality.dir, current), 'verify')
+    await fs.mkdir(verifyDir, { recursive: true })
+    await fs.writeFile(path.join(verifyDir, 'test.log'), 'all green\n', 'utf8')
+    await fs.writeFile(
+      path.join(verifyDir, 'index.json'),
+      `${JSON.stringify([ledgerEntry({ command, exit_code: 0 })], null, 2)}\n`,
+      'utf8',
+    )
+  }
+
+  function passingVerifier(command: string): { agent: string; result: unknown } {
+    return {
+      agent: 'verifier',
+      result: {
+        status: 'pass',
+        summary: 'The suite is green.',
+        evidence: [{ kind: 'command', ref: command, excerpt: 'tests 40, pass 40, fail 0' }],
+        findings: [],
+        files_touched: ['src/Button.tsx'],
+        next_hint: null,
+      },
+    }
+  }
+
+  /** One planned dispatch, answered with a pass carrying no command claim of its own. */
+  async function logDispatch(dir: string, agent: string, instance: string): Promise<unknown> {
+    return runLog(dir, {
+      agent,
+      instance,
+      result: {
+        status: 'pass',
+        summary: 'Reviewed the change against the pinned plan.',
+        evidence: [{ kind: 'file', ref: 'src/Button.tsx', excerpt: 'label renamed' }],
+        findings: [],
+        files_touched: ['src/Button.tsx'],
+        next_hint: null,
+      },
+    }, clock)
+  }
+
+  it('does not let a passing agent override a red engine verify receipt', async () => {
+    await seedFailedVerifyLedger(quality.dir, 'npm test')
+    await expect(runLog(quality.dir, passingVerifier('npm test'), clock)).rejects.toBeInstanceOf(ContradictedEvidenceError)
+    expect((await readLedger(quality.dir, await state())).dimensions.regression.status).not.toBe('pass')
+  })
+
+  it('rejects a repeated dispatch with the same input fingerprint and no new information', async () => {
+    vi.mocked(qualityRuntimeEnabled).mockReturnValue(true)
+    await seedGreenVerifyLedger()
+    await logDispatch(quality.dir, 'verifier', 'independent')
+    await expect(logDispatch(quality.dir, 'verifier', 'independent')).rejects.toBeInstanceOf(DuplicateQualityDispatchError)
+  })
+
+  it('records a dimension the pinned plan assigned this dispatch, from the engine\'s own receipts', async () => {
+    await seedGreenVerifyLedger()
+    await logDispatch(quality.dir, 'verifier', 'independent')
+
+    const ledger = await readLedger(quality.dir, await state())
+    expect(ledger.dimensions.correctness).toMatchObject({ status: 'pass', recorded_cycle: 1 })
+    expect(ledger.dimensions.correctness.evidence_refs).toContain('cycle-01/verify/test.log')
+    expect(ledger.dimensions.regression.status).toBe('pass')
+  })
+
+  it('leaves a command dimension pending when a pass carries only file evidence', async () => {
+    // The green ledger holds a `test` receipt only, and `security` declares
+    // `command`. A pass may not promote the agent's own file evidence into the
+    // kind the pinned plan asked for.
+    await seedGreenVerifyLedger()
+    await logDispatch(quality.dir, 'verifier', 'independent')
+
+    const ledger = await readLedger(quality.dir, await state())
+    expect(ledger.dimensions.security).toMatchObject({ status: 'pending', evidence_refs: [] })
+  })
+
+  it('never turns a queued or running verify entry into evidence', async () => {
+    const current = await state()
+    const verifyDir = path.join(cycleDirPath(quality.dir, current), 'verify')
+    await fs.mkdir(verifyDir, { recursive: true })
+    await fs.writeFile(path.join(verifyDir, 'test.log'), '', 'utf8')
+    await fs.writeFile(path.join(verifyDir, 'index.json'), `${JSON.stringify([
+      ledgerEntry({ phase: 'queued', exit_code: null }),
+      ledgerEntry({ phase: 'running', exit_code: null, log: 'test--two.log' }),
+    ], null, 2)}\n`, 'utf8')
+
+    await logDispatch(quality.dir, 'verifier', 'independent')
+
+    const ledger = await readLedger(quality.dir, await state())
+    expect(ledger.dimensions.correctness.status).toBe('pending')
+    expect(ledger.dimensions.correctness.evidence_refs).toEqual([])
+  })
+
+  it('records nothing for an agent the pinned plan never scheduled', async () => {
+    await seedGreenVerifyLedger()
+    const before = await readLedger(quality.dir, await state())
+    await runLog(quality.dir, {
+      agent: 'editor',
+      result: {
+        status: 'pass',
+        summary: 'Renamed the label.',
+        evidence: [{ kind: 'file', ref: 'src/Button.tsx', excerpt: 'label renamed' }],
+        findings: [],
+        files_touched: ['src/Button.tsx'],
+        next_hint: null,
+      },
+    }, clock)
+    expect(await readLedger(quality.dir, await state())).toEqual(before)
+  })
+
+  it('records nothing at all for a run pinned before quality policies existed', async () => {
+    // The marker, not the file: such a run has no pinned plan, so it schedules
+    // no dispatch and there is nothing for a result to be recorded against.
+    // `rosterSet` is the seam that bootstraps one; a logged result never does.
+    await seedGreenVerifyLedger()
+    const current = await state()
+    await new StateStore(quality.dir, clock).update((draft) => { draft.quality_policy_version = null })
+    await fs.rm(path.join(runDirPath(quality.dir, current), 'quality-policy.json'))
+
+    await expect(logDispatch(quality.dir, 'verifier', 'independent')).resolves.toMatchObject({
+      path: expect.stringContaining('verifier--independent.json'),
+    })
+    expect((await readLedger(quality.dir, current)).dimensions.alignment.status).toBe('pending')
+  })
+
+  it('records the same repeat as telemetry, and refuses nothing, while the gate stays closed', async () => {
+    await seedGreenVerifyLedger()
+    await logDispatch(quality.dir, 'verifier', 'independent')
+    await expect(logDispatch(quality.dir, 'verifier', 'independent')).resolves.toMatchObject({
+      path: expect.stringContaining('verifier--independent.json'),
+    })
+    expect((await readLedger(quality.dir, await state())).dimensions.correctness.status).toBe('pass')
   })
 })
