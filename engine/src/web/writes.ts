@@ -6,7 +6,14 @@ import { ApprovalDecisionSchema, PlanIdSchema, StoryIdSchema, StoryStatusSchema 
 import { IdSchema } from '../schemas/state.js'
 import { gateSet } from '../ops/plan.js'
 import { storyUpdate } from '../ops/plan.js'
+import {
+  QualityAmendmentRefusedError,
+  QualityDecisionRefusedError,
+  amendQualityBudget,
+  decideDestructiveRequest,
+} from '../ops/quality-control.js'
 import { halt } from '../ops/run.js'
+import { QualityBudgetFieldSchema } from '../schemas/quality.js'
 import { stateSummary } from '../ops/summary.js'
 import {
   ConfigChangeSchema,
@@ -254,6 +261,32 @@ export const WriteSchema = z.discriminatedUnion('kind', [
     digest: z.string().regex(/^[a-f0-9]{64}$/),
   }),
   z.strictObject({
+    kind: z.literal('quality.decision'),
+    run: z.string().min(1).max(200),
+    /**
+     * The operation being decided, as the server fingerprinted it. Matched
+     * against the request the run is waiting on rather than joined onto a path,
+     * exactly as `feature.approve`'s digest is a token to be matched.
+     */
+    fingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+    decision: z.enum(['approve', 'reject']),
+    note: z.string().max(2000).nullable().default(null),
+  }),
+  z.strictObject({
+    kind: z.literal('quality.budget'),
+    run: z.string().min(1).max(200),
+    /**
+     * A ceiling, and never the mode. The mode is pinned for the life of a run —
+     * a run that changed modes halfway would have no single policy its evidence
+     * was measured against — so it is not a field this door has rather than a
+     * value it refuses.
+     */
+    field: QualityBudgetFieldSchema,
+    from: z.number().int().nonnegative(),
+    to: z.number().int().positive(),
+    reason: z.string().min(1).max(2000),
+  }),
+  z.strictObject({
     kind: z.literal('skill.agents'),
     skill: IdSchema,
     /** `AcceptanceView.recordDigest` (`web/read.ts`) — the compare-and-swap token this write checks inside the store's lock. */
@@ -423,6 +456,29 @@ const HANDLERS: Handlers = {
       },
     })
   },
+  'quality.decision': async (projectDir, write) => {
+    // `decided_by` is `decidedBy()` for the same reason a gate's is, and it
+    // matters most here: this is the record that a person authorised an
+    // irreversible operation, and an approver the page could type would be a
+    // forgeable authorisation for one.
+    await decideDestructiveRequest(projectDir, {
+      run: write.run,
+      fingerprint: write.fingerprint,
+      decision: write.decision,
+      note: write.note,
+      decided_by: decidedBy(),
+    })
+  },
+  'quality.budget': async (projectDir, write) => {
+    await amendQualityBudget(projectDir, {
+      run: write.run,
+      field: write.field,
+      from: write.from,
+      to: write.to,
+      reason: write.reason,
+      decided_by: decidedBy(),
+    })
+  },
   'skill.agents': async (projectDir, write) => {
     // The one field this door may set. Not the status, the components, the
     // update policy, or the digest of the package it pins — those are
@@ -460,6 +516,18 @@ export async function applyWrite(projectDir: string, write: Write): Promise<Writ
         reserved: 'write.refused.agent.shadow',
       } as const satisfies Record<AgentWriteFailure, WebCode>
       return { ok: false, code: code[error.kind] }
+    }
+    // Both operator quality doors report the same one fact to a page: the screen
+    // the decision was made from is out of date and nothing was changed. Each
+    // op distinguishes several refusals in its message — the run moved on, the
+    // ceiling moved, a decrease, an operation nobody is waiting on — because it
+    // has to name the way forward on a terminal; the page only has to say which
+    // button to read again.
+    if (error instanceof QualityDecisionRefusedError) {
+      return { ok: false, code: 'write.stale.qualityDecision' }
+    }
+    if (error instanceof QualityAmendmentRefusedError) {
+      return { ok: false, code: 'write.stale.qualityBudget' }
     }
     if (error instanceof ConfigMutationError) {
       return {

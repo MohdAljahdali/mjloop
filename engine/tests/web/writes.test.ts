@@ -5,6 +5,7 @@ import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { initLoop } from '../../src/ops/init.js'
 import { gateSet, planCreate, storyAdd, storyUpdate } from '../../src/ops/plan.js'
+import { destructiveRequestsFile, operationFingerprint } from '../../src/ops/destructive-risk.js'
 import { runStart } from '../../src/ops/run.js'
 import { agentDigest, readAgent } from '../../src/store/agent-store.js'
 import { configRevision } from '../../src/store/config-mutation.js'
@@ -702,5 +703,91 @@ describe('the engine ops themselves', () => {
     await expect(gateSet(project.dir, { plan: 'P001', decision: 'approved', by: 'Mohd' }, clock)).resolves.toMatchObject(
       { plan: 'P001' },
     )
+  })
+})
+
+describe('the operator quality doors', () => {
+  const DROP_USERS = {
+    kind: 'table_drop' as const,
+    targets: ['users'],
+    operation: 'psql -c DROP TABLE users',
+    rollback: null,
+  }
+
+  /**
+   * A run suspended on a destructive decision, seeded as the guard writes it.
+   *
+   * Seeded rather than produced through `guardDestructiveOperation`, because the
+   * guard only runs with the rollout gate open and mocking that module here
+   * would open it for every other test in this file. The subject is the door,
+   * not the classifier that knocked on it.
+   */
+  async function suspendOnDecision(): Promise<{ run: string; fingerprint: string }> {
+    await runStart(project.dir, { track: 'edit', goal: 'Rename the submit label' }, clock)
+    const state = await new StateStore(project.dir, clock).get()
+    const run = state.run_id ?? ''
+    const fingerprint = operationFingerprint(run, DROP_USERS)
+    const requests = {
+      version: 1,
+      requests: [{
+        run,
+        fingerprint,
+        candidate: DROP_USERS,
+        status: 'pending',
+        // Stopped at the tool boundary, so nothing ran and nothing needs
+        // reverting — the shape the decision door resumes a run from.
+        applied: false,
+        note: null,
+        requested_at: NOW.toISOString(),
+        decided_at: null,
+        decided_by: null,
+      }],
+    }
+    await fs.writeFile(destructiveRequestsFile(project.dir, state), `${JSON.stringify(requests, null, 2)}\n`, 'utf8')
+    await new StateStore(project.dir, clock).update((draft) => {
+      draft.status = 'waiting_for_user'
+      draft.halt_reason = 'destructive operation waiting for a human decision'
+    })
+    return { run, fingerprint }
+  }
+
+  it('approves only the request and fingerprint currently shown', async () => {
+    const { run, fingerprint } = await suspendOnDecision()
+
+    const result = await applyWrite(project.dir, {
+      kind: 'quality.decision', run, fingerprint, decision: 'approve', note: null,
+    })
+
+    expect(result).toEqual({ ok: true })
+    expect((await new StateStore(project.dir).get()).status).toBe('running')
+  })
+
+  it('refuses a stale decision and changes nothing', async () => {
+    const { run } = await suspendOnDecision()
+    const before = await hashTree()
+
+    const result = await applyWrite(project.dir, {
+      kind: 'quality.decision', run, fingerprint: 'f'.repeat(64), decision: 'approve', note: null,
+    })
+
+    expect(result).toEqual({ ok: false, code: 'write.stale.qualityDecision' })
+    expect(await hashTree()).toEqual(before)
+  })
+
+  it('amends a ceiling through the engine and can never reach the mode', async () => {
+    // The mode is pinned for the life of a run, so it is not a field this door
+    // has: the refusal is the wire schema's, before any handler is reached.
+    expect(WriteSchema.safeParse({
+      kind: 'quality.budget', run: 'r', field: 'mode', from: 1, to: 2, reason: 'switch it',
+    }).success).toBe(false)
+
+    await runStart(project.dir, { track: 'edit', goal: 'Rename the submit label' }, clock)
+    const before = await hashTree()
+    const result = await applyWrite(project.dir, {
+      kind: 'quality.budget', run: 'some-older-run', field: 'max_cycles', from: 3, to: 5, reason: 'one more cycle',
+    })
+
+    expect(result).toEqual({ ok: false, code: 'write.stale.qualityBudget' })
+    expect(await hashTree()).toEqual(before)
   })
 })

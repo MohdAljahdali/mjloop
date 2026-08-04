@@ -52,6 +52,8 @@ const OK_CODES = {
   'agent.update': 'write.ok.agent',
   'agent.delete': 'write.ok.agent',
   'skill.agents': 'write.ok.skill',
+  'quality.decision': 'write.ok.qualityDecision',
+  'quality.budget': 'write.ok.qualityBudget',
 } as const
 
 /**

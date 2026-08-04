@@ -732,6 +732,10 @@
   "write.ok.agent": "طُبِّق التغيير على الوكيل.",
   "write.stale.skill": "تحرّك قبول تلك المهارة في هذه الأثناء — لم يتغيّر شيء.",
   "write.ok.skill": "حُدِّثت وكلاء المهارة.",
+  "write.stale.qualityDecision": "لم تعد تلك العمليّة هي ما ينتظره هذا التشغيل — لم يتغيّر شيء.",
+  "write.ok.qualityDecision": "سُجّل القرار.",
+  "write.stale.qualityBudget": "تحرّك ذلك السقف في هذه الأثناء — لم يتغيّر شيء.",
+  "write.ok.qualityBudget": "رُفع السقف. يستطيع التشغيل المتابعة.",
   "write.undo": "تراجع",
 
   "toast.dismiss": "إخفاء",

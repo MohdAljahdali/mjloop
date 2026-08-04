@@ -49,9 +49,27 @@ const DestructiveRequestSchema = z.strictObject({
   fingerprint: z.string().min(1),
   candidate: DestructiveCandidateSchema,
   status: z.enum(['pending', 'approved', 'rejected', 'used']),
+  /**
+   * Whether the operation had already touched the worktree when it was caught.
+   *
+   * The two guards catch an operation at opposite ends of it: a command stopped
+   * at the tool boundary has done nothing, while a feature deleted through edits
+   * is already gone from disk by the time the result names it. Nothing about the
+   * operation itself says which, and the difference decides what a *rejection*
+   * means — nothing to undo, or a revert somebody has to perform and prove — so
+   * it is recorded when the request is written rather than guessed at later.
+   *
+   * A record without the field defaults to `true`, which is the direction every
+   * other unreadable-record rule here fails in: over-suspending costs an
+   * operator one more step, while defaulting to `false` would resume a run whose
+   * destructive action had already happened.
+   */
+  applied: z.boolean().default(true),
   requested_at: z.string().min(1),
   decided_at: z.string().nullable(),
   decided_by: z.string().nullable(),
+  /** The operator's own words for the decision, once there is one. */
+  note: z.string().max(2000).nullable().default(null),
 })
 
 const DestructiveRequestsSchema = z.strictObject({
@@ -222,12 +240,17 @@ export async function guardDestructiveOperation(
   state: State,
   candidate: DestructiveCandidate,
   now: Clock = () => new Date(),
+  /** `true` from the seam that catches an operation *after* its edits landed. */
+  options: { applied?: boolean } = {},
 ): Promise<DestructiveGuardOutcome> {
   if (!(await enforcementActive(projectDir, state)) || state.run_id === null) return { allowed: true, reason: '' }
 
   const fingerprint = operationFingerprint(state.run_id, candidate)
   if (await consumeApproval(projectDir, state, fingerprint, now)) return { allowed: true, reason: '' }
-  return { allowed: false, reason: await requestDestructiveDecision(projectDir, state, candidate, fingerprint, now) }
+  return {
+    allowed: false,
+    reason: await requestDestructiveDecision(projectDir, state, candidate, fingerprint, now, options.applied === true),
+  }
 }
 
 /**
@@ -300,6 +323,7 @@ async function requestDestructiveDecision(
   candidate: DestructiveCandidate,
   fingerprint: string,
   now: Clock,
+  applied: boolean,
 ): Promise<string> {
   const file = destructiveRequestsFile(projectDir, state)
   await withLock(resolveLoopPaths(projectDir).lock, async (ownership) => {
@@ -312,9 +336,11 @@ async function requestDestructiveDecision(
         fingerprint,
         candidate: { ...candidate, targets: normaliseTargets(candidate.targets) },
         status: 'pending',
+        applied,
         requested_at: now().toISOString(),
         decided_at: null,
         decided_by: null,
+        note: null,
       }],
     }
     await ownership.runIfOwned(async (stagingDir) => { await writeJsonAtomic(file, next, { stagingDir }) })

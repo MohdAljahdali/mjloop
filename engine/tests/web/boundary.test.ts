@@ -39,6 +39,8 @@ async function walk(dir: string, prefix = ''): Promise<string[]> {
   return out
 }
 
+const mcpSource = await fs.readFile(fileURLToPath(new URL('../../src/mcp/server.ts', import.meta.url)), 'utf8')
+
 const files = await walk(WEB_DIR)
 const source = new Map<string, string>()
 for (const name of files) source.set(name, await fs.readFile(path.join(WEB_DIR, name), 'utf8'))
@@ -110,6 +112,20 @@ describe('the engine surface the browser can reach', () => {
       const importers = files.filter((file) => imported(read(file)).has(op))
       expect(importers, op).toEqual(['writes.ts'])
     }
+  })
+
+  it('reaches the two operator quality doors from exactly one file, and never from a tool', () => {
+    for (const op of ['decideDestructiveRequest', 'amendQualityBudget']) {
+      const importers = files.filter((file) => imported(read(file)).has(op))
+      expect(importers, op).toEqual(['writes.ts'])
+    }
+    // The other half of the same rule. Approving a destructive operation and
+    // raising a ceiling are the two decisions the engine exists to take *away*
+    // from a model, so neither may be an MCP tool a model can call: they are
+    // operator writes through the local control plane and nothing else.
+    const source = stripComments(mcpSource)
+    expect(source).not.toMatch(/quality\.decision|quality\.budget/)
+    expect(source).not.toMatch(/\bdecideDestructiveRequest\b|\bamendQualityBudget\b/)
   })
 
   it('reaches the skill acceptance store\'s one writer for this door from exactly one file', () => {

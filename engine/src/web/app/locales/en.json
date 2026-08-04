@@ -692,6 +692,10 @@
   "write.ok.agent": "Agent change applied.",
   "write.stale.skill": "That skill's acceptance moved in the meantime — nothing was changed.",
   "write.ok.skill": "Skill agents updated.",
+  "write.stale.qualityDecision": "That operation is no longer the one this run is waiting on — nothing was changed.",
+  "write.ok.qualityDecision": "Decision recorded.",
+  "write.stale.qualityBudget": "That ceiling moved in the meantime — nothing was changed.",
+  "write.ok.qualityBudget": "Ceiling raised. The run can continue.",
   "write.undo": "Undo",
 
   "toast.dismiss": "Dismiss",

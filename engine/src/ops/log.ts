@@ -862,7 +862,10 @@ async function refuseDestructiveResult(projectDir: string, state: State, result:
   const candidate = classifyDestructiveResult({ goal: state.goal ?? '', deletedFiles, summary: result.summary })
   if (candidate === null) return
 
-  const outcome = await guardDestructiveOperation(projectDir, state, candidate, now)
+  // `applied`: these edits have already landed in the worktree, which is what
+  // makes a rejection here a revert somebody has to perform and prove rather
+  // than a proposal to drop.
+  const outcome = await guardDestructiveOperation(projectDir, state, candidate, now, { applied: true })
   if (!outcome.allowed) throw new DestructiveApprovalRequiredError(outcome.reason)
 }
 

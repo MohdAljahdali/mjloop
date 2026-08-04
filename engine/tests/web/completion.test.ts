@@ -41,6 +41,16 @@ describe('observe', () => {
   it('stays waiting on a recovered summary before any run started', () => {
     expect(observe(NEW_TRACKER, summary({ status: 'running', recovered: true })).verdict).toBe('waiting')
   })
+
+  it.each(['waiting_for_user', 'budget_exhausted'] as const)('holds the job open on %s', (status) => {
+    const started = observe(NEW_TRACKER, running()).tracker
+    expect(observe(started, summary({ status, run_id: '2026-07-28-001' })).verdict).toBe('suspended')
+  })
+
+  it.each(['waiting_for_user', 'budget_exhausted'] as const)('attaches to a run first seen %s', (status) => {
+    const result = observe(NEW_TRACKER, summary({ status, run_id: '2026-07-28-001' }))
+    expect(result).toEqual({ tracker: { started: true, runId: '2026-07-28-001' }, verdict: 'suspended' })
+  })
 })
 
 describe('isStalled', () => {
@@ -52,5 +62,11 @@ describe('isStalled', () => {
   it('never fires when no run is under way', () => {
     expect(isStalled('waiting', 600_000, 90_000)).toBe(false)
     expect(isStalled('complete', 600_000, 90_000)).toBe(false)
+  })
+
+  it('never fires on a run suspended for an operator', () => {
+    // A suspension is silence with a reason. Prompting about it repeatedly is
+    // the polling the design forbids while a run waits for a person.
+    expect(isStalled('suspended', 600_000, 90_000)).toBe(false)
   })
 })

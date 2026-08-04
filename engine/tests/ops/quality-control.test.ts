@@ -3,8 +3,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { initLoop } from '../../src/ops/init.js'
 import { runLog } from '../../src/ops/log.js'
 import {
+  destructiveRequestsFile,
+  guardDestructiveOperation,
+  operationFingerprint,
+  readDestructiveRequests,
+  type DestructiveCandidate,
+} from '../../src/ops/destructive-risk.js'
+import {
   QualityBudgetExhaustedError,
+  QualityDecisionRefusedError,
   amendQualityBudget,
+  decideDestructiveRequest,
   reserveQualityDispatches,
   type QualityBudgetField,
 } from '../../src/ops/quality-control.js'
@@ -219,5 +228,138 @@ describe('amendQualityBudget', () => {
 
     expect(await readAmendments(project.dir, suspended)).toHaveLength(0)
     expect((await new StateStore(project.dir).get()).status).toBe('budget_exhausted')
+  })
+})
+
+describe('decideDestructiveRequest', () => {
+  const dropUsers: DestructiveCandidate = {
+    kind: 'table_drop',
+    targets: ['users'],
+    operation: 'psql -c DROP TABLE users',
+    rollback: null,
+  }
+
+  /** Suspend the run the way the guard does, so a decision answers a request the engine actually wrote. */
+  async function askForDecision(): Promise<{ run: string; fingerprint: string }> {
+    const state = await new StateStore(project.dir).get()
+    await guardDestructiveOperation(project.dir, state, dropUsers, clock)
+    return { run: state.run_id as string, fingerprint: operationFingerprint(state.run_id as string, dropUsers) }
+  }
+
+  it('approves the operation the operator was shown, and resumes where the run stopped', async () => {
+    const { run, fingerprint } = await askForDecision()
+    const suspended = await new StateStore(project.dir).get()
+
+    const resumed = await decideDestructiveRequest(
+      project.dir,
+      { run, fingerprint, decision: 'approve', note: null, decided_by: 'operator' },
+      clock,
+    )
+
+    expect(resumed.status).toBe('running')
+    expect(resumed.current.stage).toBe(suspended.current.stage)
+    expect((await readDestructiveRequests(project.dir, resumed)).requests.at(-1)).toMatchObject({
+      fingerprint,
+      status: 'approved',
+      decided_by: 'operator',
+    })
+    // The approval the operator wrote is the one the guard spends.
+    expect((await guardDestructiveOperation(project.dir, resumed, dropUsers, clock)).allowed).toBe(true)
+  })
+
+  it('records a rejection and leaves the refused operation unspendable', async () => {
+    const { run, fingerprint } = await askForDecision()
+
+    const decided = await decideDestructiveRequest(
+      project.dir,
+      { run, fingerprint, decision: 'reject', note: 'Not this table.', decided_by: 'operator' },
+      clock,
+    )
+
+    // The command was stopped at the tool boundary and never ran, so there is
+    // nothing to undo and the cycle may try a non-destructive alternative.
+    expect(decided.status).toBe('running')
+    expect((await readDestructiveRequests(project.dir, decided)).requests.at(-1)).toMatchObject({ status: 'rejected' })
+    expect((await guardDestructiveOperation(project.dir, decided, dropUsers, clock)).allowed).toBe(false)
+  })
+
+  it('holds the run suspended when the rejected deletion is already in the worktree', async () => {
+    const deleted: DestructiveCandidate = {
+      kind: 'feature_delete',
+      targets: ['src/billing'],
+      operation: 'delete 3 files under src/billing while working on: Rename the submit label',
+      rollback: 'the deletions are recoverable from the worktree until this cycle is committed',
+    }
+    const state = await new StateStore(project.dir).get()
+    await guardDestructiveOperation(project.dir, state, deleted, clock, { applied: true })
+
+    const held = await decideDestructiveRequest(
+      project.dir,
+      {
+        run: state.run_id as string,
+        fingerprint: operationFingerprint(state.run_id as string, deleted),
+        decision: 'reject',
+        note: null,
+        decided_by: 'operator',
+      },
+      clock,
+    )
+
+    // Recorded, and still suspended: reverting the edits is the executor's work
+    // and the engine never claims to have done it.
+    expect((await readDestructiveRequests(project.dir, held)).requests.at(-1)).toMatchObject({ status: 'rejected' })
+    expect(held.status).toBe('waiting_for_user')
+    expect(held.halt_reason).toContain('new worktree fingerprint')
+  })
+
+  it('reads a record written before `applied` existed as the worse case', async () => {
+    // Over-suspending costs an operator one more step. The other default would
+    // resume a run whose destructive action had already happened, which is the
+    // one mistake this gate exists to make impossible.
+    const state = await new StateStore(project.dir).get()
+    const run = state.run_id as string
+    const fingerprint = operationFingerprint(run, dropUsers)
+    const legacy = {
+      version: 1,
+      requests: [{
+        run,
+        fingerprint,
+        candidate: dropUsers,
+        status: 'pending',
+        requested_at: NOW.toISOString(),
+        decided_at: null,
+        decided_by: null,
+      }],
+    }
+    await fs.writeFile(destructiveRequestsFile(project.dir, state), `${JSON.stringify(legacy, null, 2)}\n`, 'utf8')
+    await new StateStore(project.dir, clock).update((draft) => { draft.status = 'waiting_for_user' })
+
+    expect((await readDestructiveRequests(project.dir, state)).requests[0]).toMatchObject({ applied: true, note: null })
+
+    const held = await decideDestructiveRequest(
+      project.dir,
+      { run, fingerprint, decision: 'reject', note: null, decided_by: 'operator' },
+      clock,
+    )
+    expect(held.status).toBe('waiting_for_user')
+  })
+
+  it.each([
+    { why: 'an operation nobody is waiting on', patch: { fingerprint: 'f'.repeat(64) } },
+    { why: 'a run that is not the current one', patch: { run: '2026-01-01-001' } },
+  ])('refuses $why and changes nothing', async ({ patch }) => {
+    const { run, fingerprint } = await askForDecision()
+    const before = await new StateStore(project.dir).get()
+
+    await expect(
+      decideDestructiveRequest(
+        project.dir,
+        { run, fingerprint, decision: 'approve', note: null, decided_by: 'operator', ...patch },
+        clock,
+      ),
+    ).rejects.toBeInstanceOf(QualityDecisionRefusedError)
+
+    expect(await new StateStore(project.dir).get()).toEqual(before)
+    expect((await readDestructiveRequests(project.dir, before)).requests).toHaveLength(1)
   })
 })

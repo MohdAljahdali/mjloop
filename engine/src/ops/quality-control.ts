@@ -17,6 +17,12 @@ import { withLock } from '../store/lock.js'
 import { resolveLoopPaths } from '../store/paths.js'
 import { appendAmendment, readAmendments, readPolicy } from '../store/quality-store.js'
 import { StateStore, type Clock } from '../store/state-store.js'
+import {
+  destructiveRequestsFile,
+  readDestructiveRequests,
+  type DestructiveRequest,
+  type DestructiveRequests,
+} from './destructive-risk.js'
 import { effectiveBudget, isRepairInstance, type ContextPacketResult } from './quality-budget.js'
 import { qualityRuntimeEnabled } from './quality-capability.js'
 import { runDirPath } from './run.js'
@@ -92,6 +98,25 @@ export class QualityAmendmentRefusedError extends Error {
     super(`quality budget amendment refused: ${detail}`)
     this.name = 'QualityAmendmentRefusedError'
   }
+}
+
+/** An operator decision that does not match the operation it claims to answer. */
+export class QualityDecisionRefusedError extends Error {
+  constructor(detail: string) {
+    super(`destructive decision refused: ${detail}`)
+    this.name = 'QualityDecisionRefusedError'
+  }
+}
+
+/** One operator's answer to one operation this run proposed. */
+export interface DestructiveDecisionInput {
+  /** The run the decision is for; a decision never applies to a different one. */
+  run: string
+  /** The exact operation, as `operationFingerprint` identified it on the screen the decision was made from. */
+  fingerprint: string
+  decision: 'approve' | 'reject'
+  note: string | null
+  decided_by: string
 }
 
 /** `halt_reason` is read by the summary line and by HALT.md; a ceiling story does not need more than this. */
@@ -266,6 +291,102 @@ export async function amendQualityBudget(
     draft.status = 'running'
     draft.halt_reason = null
   })
+}
+
+/**
+ * Answer one proposed destructive operation, and resume the run only where a
+ * decision is the whole of what was in the way.
+ *
+ * Compare-and-swap on three things at once, exactly as an amendment is on its
+ * own three: the run, the run's suspended status, and the operation itself. The
+ * fingerprint is what makes the third real — it is taken over the operation's
+ * own text, so an approval written against what the screen said buys nothing
+ * once a single target or word has moved, and the operator is asked again.
+ * Nothing else in the request is trusted from the caller: the record being
+ * decided is the one already on disk.
+ *
+ * The decision is appended first and the state moved second, for the reason
+ * `amendQualityBudget` appends its amendment first: a crash between the two
+ * leaves an answered request and a still-suspended run, which an operator can
+ * see and repeat. The other order would resume a run on a decision no record
+ * shows anybody made.
+ *
+ * A rejection resumes the run only when there is nothing to undo — a command
+ * stopped at the tool boundary never ran, so the cycle may go on and try a
+ * declared non-destructive alternative. When the edits had already landed, the
+ * run stays suspended: reverting them is the executor's work, and the engine
+ * says so rather than claiming it reverted anything itself. An operator with no
+ * revert and no alternative ends the run through the halt door, which states a
+ * reason — a suspension nobody can lift is not an ending.
+ */
+export async function decideDestructiveRequest(
+  projectDir: string,
+  input: DestructiveDecisionInput,
+  now: Clock = () => new Date(),
+): Promise<State> {
+  const state = await new StateStore(projectDir, now).get()
+  if (state.status !== 'waiting_for_user') {
+    throw new QualityDecisionRefusedError(
+      `an operation is decided only while a run is waiting for one; this one is "${state.status}"`,
+    )
+  }
+  if (state.run_id === null || state.run_id !== input.run) {
+    throw new QualityDecisionRefusedError(`it names run "${input.run}" and the current run is "${String(state.run_id)}"`)
+  }
+
+  const file = destructiveRequestsFile(projectDir, state)
+  const answered: { request: DestructiveRequest | null } = { request: null }
+  await withLock(resolveLoopPaths(projectDir).lock, async (ownership) => {
+    const current = await readDestructiveRequests(projectDir, state)
+    // The last word recorded about this operation. An earlier spent approval or
+    // refusal answers the proposal it was written for and no later one.
+    const live = current.requests.filter((request) => request.fingerprint === input.fingerprint).at(-1)
+    if (live === undefined || live.status !== 'pending') return
+
+    const decided: DestructiveRequest = {
+      ...live,
+      status: input.decision === 'approve' ? 'approved' : 'rejected',
+      decided_at: now().toISOString(),
+      decided_by: input.decided_by,
+      note: input.note,
+    }
+    answered.request = decided
+    const next: DestructiveRequests = { version: 1, requests: [...current.requests, decided] }
+    await ownership.runIfOwned(async (stagingDir) => { await writeJsonAtomic(file, next, { stagingDir }) })
+  })
+
+  const request = answered.request
+  if (request === null) {
+    throw new QualityDecisionRefusedError(
+      `no operation ${input.fingerprint.slice(0, 12)}… is waiting for a decision on this run`,
+    )
+  }
+
+  const held = request.status === 'rejected' && request.applied ? revertReason(request) : null
+
+  // Outside the lock the decision was recorded under, which `StateStore.update`
+  // takes again. `current.stage` is untouched either way: a decision resumes the
+  // run where it stopped, and a suspension that holds holds where it is.
+  return new StateStore(projectDir, now).update((draft) => {
+    if (draft.status !== 'waiting_for_user' || draft.run_id !== state.run_id) {
+      throw new QualityDecisionRefusedError('the run moved on while the decision was being recorded')
+    }
+    if (held !== null) {
+      draft.halt_reason = held
+      return
+    }
+    draft.status = 'running'
+    draft.halt_reason = null
+  })
+}
+
+function revertReason(request: DestructiveRequest): string {
+  const reason =
+    `destructive operation rejected (${request.candidate.kind}): ${request.candidate.operation}. ` +
+    `Its edits are already in the worktree, so this run stays suspended until the executor reverts them and ` +
+    'reports the reverted diff under a new worktree fingerprint. The engine does not revert files itself. ' +
+    'Halt the run with a reason if there is no revert and no non-destructive alternative.'
+  return reason.length > REASON_MAX ? `${reason.slice(0, REASON_MAX)}…` : reason
 }
 
 /**

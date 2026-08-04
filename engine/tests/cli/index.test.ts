@@ -606,7 +606,11 @@ describe('evaluateStopGuard', () => {
   })
 
   it('allows the stop for every status that is not running', () => {
-    for (const status of ['idle', 'done', 'halted', 'paused', 'failed'] as const) {
+    // `waiting_for_user` and `budget_exhausted` are in the list for a reason of
+    // their own: a suspended run is waiting on a person, and a hook that blocked
+    // the turn would spend a model's attention once per turn on a decision no
+    // agent is allowed to make.
+    for (const status of ['idle', 'done', 'halted', 'paused', 'failed', 'waiting_for_user', 'budget_exhausted'] as const) {
       expect(evaluateStopGuard(input, { ...running, status }, true).block).toBe(false)
     }
   })
