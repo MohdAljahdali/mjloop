@@ -29,6 +29,7 @@ import {
   createInitialQualityLedger,
 } from './quality-policy.js'
 import { qualityRuntimeEnabled } from './quality-capability.js'
+import { QualityBudgetExhaustedError, nextCycleRefusal, suspendDraft } from './quality-control.js'
 import { assertQualityCloseable, invalidateQualityEvidence } from './quality-ledger.js'
 import { readLedger, readPolicy, writeLedger, writePolicyOnce } from '../store/quality-store.js'
 
@@ -544,6 +545,10 @@ export async function cycleAdvance(
   // step per guard, and parsing the sentence back apart would couple the
   // report to the wording.
   let cause: HaltCause = 'manual'
+  // The suspension reason, carried out of the update for the same reason
+  // `cause` is: `StateStore.update` rolls its whole transaction back on a throw,
+  // so a suspension that threw from inside it would never be written down.
+  let exhausted: string | null = null
 
   // Before the lock, because `invalidateQualityEvidence` takes the same one and
   // `withLock` is not reentrant. It is safe there: the transition below has not
@@ -560,6 +565,20 @@ export async function cycleAdvance(
     if (draft.status !== 'running' || draft.track === null) throw new NoActiveRunError()
     const track = findTrack(config, draft.track)
     if (track === undefined) throw new UnknownTrackError(draft.track, Object.keys(config.tracks))
+
+    // Before anything on the draft moves, and only for a result that would need
+    // another cycle: a pass closes the run and costs none. Suspending here
+    // rather than beside the cap check below is what keeps a resumed run
+    // repeatable — this cycle has not been recorded in `history`, so the same
+    // `cycleAdvance` call can simply be made again once the ceiling is raised.
+    if (input.result !== 'pass') {
+      const refusal = await nextCycleRefusal(projectDir, draft)
+      if (refusal !== null) {
+        suspendDraft(draft, refusal)
+        exhausted = refusal
+        return
+      }
+    }
 
     carried = distinctFindings(draft.findings)
     // Sorted because `runLog` appends each agent's signatures as that agent
@@ -649,6 +668,11 @@ export async function cycleAdvance(
     draft.cycle += 1
     draft.current.stage = 'compose'
   })
+
+  // Immediately after the write that recorded it, and before every artefact
+  // below: a suspended cycle produced no archive, no handoff and no next cycle,
+  // and it will produce all three when it is resumed and closed for real.
+  if (exhausted !== null) throw new QualityBudgetExhaustedError('max_cycles', exhausted)
 
   await archiveFindings(projectDir, after, closedCycle, carried)
   // Never fatal, and never inside the lock. The state transition has already

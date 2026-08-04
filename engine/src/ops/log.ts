@@ -12,7 +12,9 @@ import { headSha, worktreeDigest } from '../store/git.js'
 import { readLedger, readPolicy } from '../store/quality-store.js'
 import { StateStore, type Clock } from '../store/state-store.js'
 import { errorSignature } from './fingerprint.js'
+import { isRepairInstance } from './quality-budget.js'
 import { qualityRuntimeEnabled } from './quality-capability.js'
+import { reserveQualityDispatches } from './quality-control.js'
 import { recordQualityEvidenceBatch, type QualityEvidenceInput } from './quality-ledger.js'
 import { resolveQualityContextEvidence } from './quality-policy.js'
 import { planQualityDispatches, type PlannedQualityDispatch } from './quality-roster.js'
@@ -447,6 +449,14 @@ export async function runLog(
   // `tests/ops/log.test.ts` asserts for every refusal in this function: a
   // rejected result leaves no file, no finding and no state change behind.
 
+  /* 6c — the repair attempt, charged before the result it would pay for. */
+
+  // Below the line above rather than beside the refusals, because this one does
+  // write: charging a repair is what makes the ceiling real, and a charge taken
+  // after the result file exists could not stop the dispatch it was meant to
+  // stop. With the rollout gate closed it reads nothing and writes nothing.
+  await reserveRepairAttempt(projectDir, state, { agent: agent.data, instance: input.instance ?? null }, now)
+
   /* 7 — the cap, and the spill it must not point at before writing. */
 
   const capped = await capAndSpill(projectDir, cycleDir, basename, parsed.value, ledger)
@@ -791,6 +801,30 @@ async function refuseRepeatedDispatch(
 
   if (answerIdentity(previous) !== answerIdentity(result)) return
   throw new DuplicateQualityDispatchError(dispatch.agent, dispatch.instance, plan.dispatch.inputFingerprint)
+}
+
+/**
+ * Charge a targeted repair against this run's repair ceiling, and suspend
+ * rather than let it exceed one.
+ *
+ * A repair is identified the one way the engine names one: the `repair-N`
+ * instance `buildQualityPolicy` gives the attempts it budgeted for. The charged
+ * dispatch is the policy's own base dispatch under that instance — the same
+ * shape the budget counted at run start, read from the pin rather than composed
+ * here.
+ */
+async function reserveRepairAttempt(
+  projectDir: string,
+  state: State,
+  dispatch: { agent: string; instance: string | null },
+  now: Clock,
+): Promise<void> {
+  if (!qualityRuntimeEnabled() || !isRepairInstance(dispatch.instance)) return
+  if (state.quality_policy_version !== 1) return
+
+  const base = (await readPolicy(projectDir, state)).dispatches[0]
+  if (base === undefined) return
+  await reserveQualityDispatches(projectDir, state, [{ ...base, agent: dispatch.agent, instance: dispatch.instance }], now)
 }
 
 /** What a dispatch actually told the ledger: its verdict, the receipts it cited, and the files it touched. */

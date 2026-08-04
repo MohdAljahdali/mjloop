@@ -128,6 +128,11 @@ export const PROTECTED_BASENAMES = [
   'quality-policy.json',
   'quality-ledger.json',
   'quality-amendments.jsonl',
+  // What a run has spent against those ceilings. It belongs here for the same
+  // reason the amendments journal does: an edit to either raises a budget
+  // without the explicit, recorded decision that is the only way a suspended
+  // run is meant to continue.
+  'quality-usage.json',
 ] as const
 
 /**

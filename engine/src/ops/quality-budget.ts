@@ -78,6 +78,17 @@ const CONTEXT_CEILINGS: Record<QualityMode, number> = {
   strict: 16_000,
 }
 
+/**
+ * The instance `buildQualityPolicy` gives a targeted repair (`repair-1`,
+ * `repair-2`, …). The budget counts repair attempts by exactly that spelling,
+ * so the pin and the ceiling that limits it agree on one name rather than two.
+ */
+const REPAIR_INSTANCE = /^repair-\d+$/
+
+export function isRepairInstance(instance: string | null): boolean {
+  return instance !== null && REPAIR_INSTANCE.test(instance)
+}
+
 export function measureTokens(text: string, tokenizer?: Tokenizer): TokenMeasurement {
   if (tokenizer !== undefined) {
     const value = tokenizer.count(text)
@@ -98,7 +109,8 @@ export function deriveQualityBudget(input: BudgetInput): QualityBudget {
   assertNonNegativeInteger(input.repairAttempts, 'repair attempts')
   const closingAgents = new Set(input.track.closing ?? [])
   const targetedRepairs = input.targetedRepairs.slice(0, input.repairAttempts)
-  const maxDispatches = input.dispatches.length + targetedRepairs.length + closingAgents.size
+  const maxDispatches =
+    input.dispatches.length + strictSpecialists(input) + targetedRepairs.length + closingAgents.size
   assertPositiveInteger(maxDispatches, 'maximum dispatches')
 
   return {
@@ -108,6 +120,20 @@ export function deriveQualityBudget(input: BudgetInput): QualityBudget {
     max_repair_attempts: input.repairAttempts,
     cost_estimate: costEstimate(input.cost),
   }
+}
+
+/**
+ * The further dispatches strict mode's roster adds on top of the policy's own:
+ * one per dimension the pinned plan marks required (`planQualityDispatches`).
+ *
+ * Counted here because a ceiling that did not cover the roster its own mode
+ * plans would suspend every strict run on its first cycle. The policy's base
+ * dispatch carries exactly the required dimensions, so the count is available
+ * without the track and config `planQualityDispatches` needs to decide *who*
+ * runs — which is the part this budget does not care about.
+ */
+function strictSpecialists(input: BudgetInput): number {
+  return input.mode === 'strict' ? (input.dispatches[0]?.dimensions.length ?? 0) : 0
 }
 
 export function fitContextPacket(input: ContextPacketInput): ContextPacketResult {

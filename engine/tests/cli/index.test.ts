@@ -497,6 +497,7 @@ describe('evaluateStopGuard', () => {
     design_system: false,
     map: null,
     config_error: null,
+    quality: null,
   }
 
   const input = { hook_event_name: 'Stop', cwd: '/repo', stop_hook_active: false }

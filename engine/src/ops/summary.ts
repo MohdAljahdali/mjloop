@@ -5,6 +5,7 @@ import type { Severity, State } from '../schemas/state.js'
 import { ConfigMissingError, loadConfig } from '../store/config-store.js'
 import { resolveLoopPaths } from '../store/paths.js'
 import { StateStore } from '../store/state-store.js'
+import { qualityStateSummary, type QualityStateSummary } from './quality-control.js'
 import { runDirName, runDirPath } from './run.js'
 
 export interface StateSummary {
@@ -57,6 +58,13 @@ export interface StateSummary {
    * because a user whose config has a typo currently sees nothing at all.
    */
   config_error: string | null
+  /**
+   * The pinned quality policy's mode, supervision, enforcement, what it has
+   * spent, and what it is waiting on — `null` for a run with no pin, which is
+   * every run that predates the policy. Reported for shadow runs too: observing
+   * what an active policy *would* have done is the point of the shadow phase.
+   */
+  quality: QualityStateSummary | null
 }
 
 const NO_FINDINGS: Record<Severity, number> = { high: 0, medium: 0, low: 0 }
@@ -140,6 +148,7 @@ export async function stateSummary(projectDir: string): Promise<StateSummary> {
       design_system: false,
       map: null,
       config_error: configError,
+      quality: null,
     }
   }
 
@@ -177,6 +186,10 @@ export async function stateSummary(projectDir: string): Promise<StateSummary> {
     design_system: await hasDesignSystem(projectDir),
     map: await runMap(projectDir, state),
     config_error: configError,
+    // Degrades rather than fails, exactly as `config_error` does: this line is
+    // rendered on every session start, and an unreadable run record must not
+    // turn it into a stack trace.
+    quality: await qualityStateSummary(projectDir, state).catch(() => null),
   }
 }
 

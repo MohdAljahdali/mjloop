@@ -23,6 +23,7 @@ import { StateStore } from '../store/state-store.js'
 // reaching a *type* under `src/web/`, and this reaches nothing else there.
 import type { WebCode } from '../web/codes.js'
 import { qualityRuntimeEnabled } from './quality-capability.js'
+import { reserveQualityDispatches } from './quality-control.js'
 import { ensureRunQualityPolicy, resolveQualityContextEvidence } from './quality-policy.js'
 import { planQualityDispatches, qualityRosterViolations, type PlannedQualityDispatch } from './quality-roster.js'
 import { NoActiveRunError, UnknownTrackError, cycleDirPath, runDirPath } from './run.js'
@@ -371,6 +372,13 @@ async function cycleRosterSet(
   }
 
   if (violations.length > 0) throw new RosterViolationError(violations)
+
+  // Reserved before the roster is written, never after: a suspension must leave
+  // no artefact behind for the action it refused, and this is the last point at
+  // which nothing about this cycle exists yet. The rollout gate and the run's
+  // own pinned intent are checked inside, so a shadow run reserves nothing and
+  // reads nothing.
+  await reserveQualityDispatches(projectDir, state, qualityDispatches)
 
   // Per cycle, alongside that cycle's agent results: a roster is validated
   // against `state.cycle`, so one file per run would leave a multi-cycle run
