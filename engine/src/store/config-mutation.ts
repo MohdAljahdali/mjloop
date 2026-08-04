@@ -180,7 +180,7 @@ async function mutateConfigWithoutBootstrap(
   parsedPatch: ConfigPatch,
   paths: ReturnType<typeof resolveLoopPaths>,
 ): Promise<{ revision: string }> {
-  return withLock(paths.lock, async () => {
+  return withLock(paths.lock, async (ownership) => {
     let raw: string
     try {
       raw = await fs.readFile(paths.config, 'utf8')
@@ -212,7 +212,9 @@ async function mutateConfigWithoutBootstrap(
     }
 
     const next = document.toString({ lineWidth: 100 })
-    await writeTextAtomic(paths.config, next)
+    await ownership.runIfOwned(async (stagingDir) => {
+      await writeTextAtomic(paths.config, next, { stagingDir })
+    })
     return { revision: configRevision(next) }
   })
 }

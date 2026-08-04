@@ -5,6 +5,7 @@ import { runStart } from '../../src/ops/run.js'
 import { defaultConfig, type Config } from '../../src/schemas/config.js'
 import { initialState } from '../../src/schemas/state.js'
 import { writeJsonAtomic } from '../../src/store/atomic.js'
+import { LockOwnershipLostError } from '../../src/store/lock.js'
 import {
   ConfigMutationError,
   ConfigPatchSchema,
@@ -149,6 +150,58 @@ describe('mutateConfig', () => {
       await Promise.allSettled([started, ...(mutation === null ? [] : [mutation])])
       writeSpy.mockRestore()
       mkdirSpy.mockRestore()
+    }
+  })
+
+  it('does not let a stale-reclaimed run publish its old policy or state', async () => {
+    await seedIdleState()
+    const before = await raw()
+    const paths = resolveLoopPaths(project.dir)
+    const statePublishEntered = deferred()
+    const releaseStatePublish = deferred()
+    const realRename = fs.rename.bind(fs)
+    let heldStatePublish = false
+    const renameSpy = vi.spyOn(fs, 'rename').mockImplementation(async (source: any, target: any) => {
+      if (!heldStatePublish && String(target) === paths.state) {
+        heldStatePublish = true
+        statePublishEntered.resolve()
+        await releaseStatePublish.promise
+      }
+      return realRename(source, target)
+    })
+
+    const staleStart = runStart(project.dir, { track: 'edit', goal: 'Use the old adaptive policy' }, clock)
+    try {
+      // The policy and ledger now exist, and StateStore has staged its final
+      // atomic state rename *inside the owned lock directory*. Pause at that
+      // last syscall so the test also covers reclaim after the ownership
+      // identity check, not only reclaim before it.
+      await statePublishEntered.promise
+      const past = new Date(Date.now() - 60_000)
+      await fs.utimes(paths.lock, past, past)
+      await fs.utimes(`${paths.lock}.reclaiming`, past, past)
+
+      await mutateConfig(project.dir, {
+        revision: configRevision(before),
+        changes: [{ kind: 'orchestration.quality.mode', value: 'strict' }],
+      })
+      expect(YAML.parse(await raw()).orchestration.quality.mode).toBe('strict')
+
+      releaseStatePublish.resolve()
+      await expect(staleStart).rejects.toBeInstanceOf(LockOwnershipLostError)
+      expect(await new StateStore(project.dir).get()).toMatchObject({
+        status: 'idle',
+        run_id: null,
+        quality_policy_version: null,
+      })
+
+      const current = await runStart(project.dir, { track: 'edit', goal: 'Use current strict policy' }, clock)
+      expect(current.status).toBe('running')
+      expect((await readPolicy(project.dir, current)).mode).toBe('strict')
+    } finally {
+      releaseStatePublish.resolve()
+      await staleStart.catch(() => undefined)
+      renameSpy.mockRestore()
     }
   })
 

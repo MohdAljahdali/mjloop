@@ -40,7 +40,7 @@ export class StateStore {
   }
 
   async update(mutate: (draft: State) => void | Promise<void>): Promise<State> {
-    return withLock(this.paths.lock, async () => {
+    return withLock(this.paths.lock, async (ownership) => {
       const { value, recovered } = await readJsonValidated(this.paths.state, StateSchema)
       const draft = structuredClone(value)
       await mutate(draft)
@@ -51,7 +51,9 @@ export class StateStore {
 
       // When the read recovered from `.bak`, the file currently on disk is
       // the corrupt primary — backing it up would replace the good backup.
-      await writeJsonAtomic(this.paths.state, parsed.data, { backup: !recovered })
+      await ownership.runIfOwned(async (stagingDir) => {
+        await writeJsonAtomic(this.paths.state, parsed.data, { backup: !recovered, stagingDir })
+      })
       return parsed.data
     })
   }

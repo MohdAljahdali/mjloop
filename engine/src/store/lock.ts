@@ -7,6 +7,30 @@ export class LockTimeoutError extends Error {
   }
 }
 
+export class LockOwnershipLostError extends Error {
+  constructor(lockDir: string) {
+    super(`lost ownership of ${lockDir} before guarded publish`)
+    this.name = 'LockOwnershipLostError'
+  }
+}
+
+/**
+ * A capability tied to the exact directory instance acquired by `withLock`.
+ * Long callbacks must put their final externally-visible write inside
+ * `runIfOwned`: stale reclamation is serialised through the same marker, then
+ * ownership is checked immediately before the write while that marker stays
+ * held.
+ */
+export interface LockOwnership {
+  assertOwned(): Promise<void>
+  /**
+   * `stagingDir` is the owned lock directory. A guarded atomic writer stages
+   * its rename source there: if this lock is reclaimed even after the identity
+   * check, reclamation removes that source and the stale rename cannot land.
+   */
+  runIfOwned<T>(publish: (stagingDir: string) => Promise<T>): Promise<T>
+}
+
 export interface LockOptions {
   /** How long to wait for the lock before giving up. Default 5000ms. */
   timeoutMs?: number
@@ -61,7 +85,11 @@ interface LockSnapshot {
  * window where the directory exists but has no identity yet for a
  * concurrent waiter to be misled by.
  */
-export async function withLock<T>(lockDir: string, fn: () => Promise<T>, options: LockOptions = {}): Promise<T> {
+export async function withLock<T>(
+  lockDir: string,
+  fn: (ownership: LockOwnership) => Promise<T>,
+  options: LockOptions = {},
+): Promise<T> {
   const { timeoutMs = 5000, staleMs = 30_000, pollMs = 25, onWait } = options
   const deadline = Date.now() + timeoutMs
 
@@ -99,7 +127,7 @@ export async function withLock<T>(lockDir: string, fn: () => Promise<T>, options
   }
 
   try {
-    return await fn()
+    return await fn(createOwnership(lockDir, ownedSnapshot, { timeoutMs, staleMs, pollMs }))
   } finally {
     // Only remove the lock if it is still the exact directory instance this
     // call created. If a different instance now sits at this path, some
@@ -109,6 +137,67 @@ export async function withLock<T>(lockDir: string, fn: () => Promise<T>, options
     const current = await statSnapshot(lockDir)
     if (current !== null && isSameInstance(current, ownedSnapshot)) {
       await fs.rm(lockDir, { recursive: true, force: true })
+    }
+  }
+}
+
+function createOwnership(
+  lockDir: string,
+  ownedSnapshot: LockSnapshot,
+  options: Required<Pick<LockOptions, 'timeoutMs' | 'staleMs' | 'pollMs'>>,
+): LockOwnership {
+  const assertOwned = async (): Promise<void> => {
+    const current = await statSnapshot(lockDir)
+    if (current === null || !isSameInstance(current, ownedSnapshot)) throw new LockOwnershipLostError(lockDir)
+  }
+
+  return {
+    assertOwned,
+    async runIfOwned<T>(publish: (stagingDir: string) => Promise<T>): Promise<T> {
+      const markerDir = `${lockDir}.reclaiming`
+      const markerSnapshot = await acquireMarker(
+        markerDir,
+        options.pollMs,
+        options.staleMs,
+        Date.now() + options.timeoutMs,
+      )
+      try {
+        await assertOwned()
+        try {
+          return await publish(lockDir)
+        } catch (error) {
+          // A reclaim that wins after the identity check deletes the staging
+          // directory. Prefer the useful ownership error over the resulting
+          // ENOENT from the guarded atomic rename.
+          await assertOwned()
+          throw error
+        }
+      } finally {
+        await removeIfSameInstance(markerDir, markerSnapshot)
+      }
+    },
+  }
+}
+
+async function acquireMarker(
+  markerDir: string,
+  pollMs: number,
+  staleMs: number,
+  deadline: number,
+): Promise<LockSnapshot> {
+  while (true) {
+    try {
+      await fs.mkdir(markerDir)
+      const snapshot = await statSnapshot(markerDir)
+      if (snapshot !== null) return snapshot
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
+      if (Date.now() >= deadline) {
+        throw new LockTimeoutError(`could not acquire ${markerDir} within the lock timeout`)
+      }
+      const marker = await statSnapshot(markerDir)
+      if (marker !== null && marker.ageMs >= staleMs) await removeIfSameInstance(markerDir, marker)
+      else await new Promise((resolve) => setTimeout(resolve, pollMs))
     }
   }
 }
@@ -139,8 +228,11 @@ async function reclaimIfSameInstance(
   staleMs: number,
 ): Promise<void> {
   const reclaimMarker = `${lockDir}.reclaiming`
+  let markerSnapshot: LockSnapshot | null = null
   try {
     await fs.mkdir(reclaimMarker)
+    markerSnapshot = await statSnapshot(reclaimMarker)
+    if (markerSnapshot === null) return
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
       // Someone else is already reclaiming this round; let them finish —
@@ -150,7 +242,7 @@ async function reclaimIfSameInstance(
       // without this check an orphaned marker blocks reclaiming forever.
       const marker = await statSnapshot(reclaimMarker)
       if (marker !== null && marker.ageMs >= staleMs) {
-        await fs.rm(reclaimMarker, { recursive: true, force: true })
+        await removeIfSameInstance(reclaimMarker, marker)
       } else {
         await new Promise((resolve) => setTimeout(resolve, pollMs))
       }
@@ -164,7 +256,14 @@ async function reclaimIfSameInstance(
     if (current === null || !isSameInstance(current, observed)) return // it changed hands; leave it alone
     await fs.rm(lockDir, { recursive: true, force: true })
   } finally {
-    await fs.rm(reclaimMarker, { recursive: true, force: true })
+    await removeIfSameInstance(reclaimMarker, markerSnapshot)
+  }
+}
+
+async function removeIfSameInstance(path: string, ownedSnapshot: LockSnapshot): Promise<void> {
+  const current = await statSnapshot(path)
+  if (current !== null && isSameInstance(current, ownedSnapshot)) {
+    await fs.rm(path, { recursive: true, force: true })
   }
 }
 
