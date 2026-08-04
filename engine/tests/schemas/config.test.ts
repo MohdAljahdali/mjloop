@@ -7,6 +7,7 @@ import {
   dispatchWaves,
   permittedAgents,
   pinnedAgents,
+  QualityModeSchema,
 } from '../../src/schemas/config.js'
 
 const VERIFY = { test: 'npm test', lint: 'npm run lint', build: null }
@@ -16,7 +17,7 @@ const DEFAULT_ORCHESTRATION = {
   profile: { auto_accept: false },
   discovery: { mode: 'off', question_budget: 8, completion: 'review' },
   execution: { after_plan_approval: 'manual', uncertain_concurrency: 'sequential', repair_attempts: 1 },
-  quality: { independent_plan_review: false, independent_verification: false },
+  quality: { mode: 'economy' },
   skills: { sources: ['github'], trusted_registries: [], update_mode: 'review' },
 }
 
@@ -894,6 +895,35 @@ describe('orchestration', () => {
     // Any other default would silently change what /mjloop:plan does in every
     // project that was provisioned before this key existed.
     expect(defaultConfig(VERIFY).orchestration.discovery.mode).toBe('off')
+  })
+
+  it.each([
+    [{ independent_plan_review: false, independent_verification: false }, 'economy'],
+    [{ independent_plan_review: true, independent_verification: false }, 'adaptive'],
+    [{ independent_plan_review: false, independent_verification: true }, 'adaptive'],
+    [{ independent_plan_review: true, independent_verification: true }, 'strict'],
+  ] as const)('normalizes legacy quality %j to %s', (quality, mode) => {
+    const parsed = ConfigSchema.parse({
+      version: 1,
+      tracks: { edit: { required: ['editor'], max_cycles: 1 } },
+      orchestration: { quality },
+    })
+    expect(parsed.orchestration.quality).toEqual({ mode })
+  })
+
+  it('rejects mode mixed with a legacy quality boolean', () => {
+    const quality = { mode: 'adaptive', independent_plan_review: true }
+    expect(
+      ConfigSchema.safeParse({
+        version: 1,
+        tracks: { edit: { required: ['editor'], max_cycles: 1 } },
+        orchestration: { quality },
+      }).success,
+    ).toBe(false)
+  })
+
+  it('exports exactly the supported quality modes', () => {
+    expect(QualityModeSchema.options).toEqual(['economy', 'adaptive', 'strict'])
   })
 
   it('rejects a question budget outside 1..20', () => {

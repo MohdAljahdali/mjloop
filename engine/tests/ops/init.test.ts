@@ -71,6 +71,8 @@ describe('initLoop', () => {
 
     const config = await loadConfig(project.dir)
     expect(config.tracks.edit?.required).toEqual(['editor', 'verifier'])
+    expect(config.orchestration.quality).toEqual({ mode: 'adaptive' })
+    expect(await fs.readFile(paths.config, 'utf8')).toContain('quality:\n    mode: adaptive')
   })
 
   it('appends the loop section to an existing CLAUDE.md exactly once', async () => {
