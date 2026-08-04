@@ -380,13 +380,25 @@ export async function decideDestructiveRequest(
   })
 }
 
+/**
+ * The suspension's own reason, with the instruction protected from the ceiling.
+ *
+ * `halt_reason` is the only channel this instruction has, and the operation it
+ * names is the unbounded part: `classifyDestructiveResult` writes the run's own
+ * goal into it, which is as long as somebody typed. So the fixed sentences are
+ * measured first and the operation is given what is left — truncating the
+ * instruction to fit a longer echo of the operation would drop precisely the
+ * words the operator needs.
+ */
 function revertReason(request: DestructiveRequest): string {
-  const reason =
-    `destructive operation rejected (${request.candidate.kind}): ${request.candidate.operation}. ` +
-    `Its edits are already in the worktree, so this run stays suspended until the executor reverts them and ` +
+  const head = `destructive operation rejected (${request.candidate.kind}): `
+  const tail =
+    '. Its edits are already in the worktree, so this run stays suspended until the executor reverts them and ' +
     'reports the reverted diff under a new worktree fingerprint. The engine does not revert files itself. ' +
     'Halt the run with a reason if there is no revert and no non-destructive alternative.'
-  return reason.length > REASON_MAX ? `${reason.slice(0, REASON_MAX)}…` : reason
+  const room = Math.max(REASON_MAX - head.length - tail.length, 0)
+  const { operation } = request.candidate
+  return `${head}${operation.length > room ? `${operation.slice(0, Math.max(room - 1, 0))}…` : operation}${tail}`
 }
 
 /**

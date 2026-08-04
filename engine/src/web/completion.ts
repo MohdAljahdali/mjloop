@@ -28,9 +28,18 @@ export interface Tracker {
   started: boolean
   /** The run id observed when it started, kept so a later run cannot end this job. */
   runId: string | null
+  /**
+   * What was on record the first time this job looked, and `null` until it has.
+   *
+   * A suspension can outlast anything — it is waiting on a person — so a job
+   * queued while `state.json` already sits `waiting_for_user` would otherwise
+   * adopt somebody else's run, and tear its own session down the moment the run
+   * it actually started appeared under a different id.
+   */
+  prior: { runId: string | null } | null
 }
 
-export const NEW_TRACKER: Tracker = { started: false, runId: null }
+export const NEW_TRACKER: Tracker = { started: false, runId: null, prior: null }
 
 /**
  * `paused` is deliberately absent: a paused run is one somebody intends to
@@ -68,14 +77,20 @@ export function observe(tracker: Tracker, summary: StateSummary): Observation {
   }
 
   if (!tracker.started) {
-    // A suspended run counts as started, because a run reaches one of those
-    // statuses only by having run: a poll that first sees the run already
-    // waiting on a person would otherwise never attach, and the job would still
-    // be `waiting` when that run finished — holding its session open forever.
-    if (summary.status !== 'running' && !SUSPENDED.has(summary.status)) return { tracker, verdict: 'waiting' }
+    const prior = tracker.prior ?? { runId: summary.run_id }
+    // A suspended run counts as started, but only once it is a *different* run
+    // from the one this job found on record: a run reaches one of those statuses
+    // only by having run, so a job that never attached would still be `waiting`
+    // when its own run finished, holding the session open forever — while a
+    // suspension already there when the job was queued belongs to somebody else,
+    // and adopting it would end this job the moment its own run appeared.
+    const suspended = SUSPENDED.has(summary.status)
+    if (summary.status !== 'running' && !(suspended && summary.run_id !== prior.runId)) {
+      return { tracker: { ...tracker, prior }, verdict: 'waiting' }
+    }
     return {
-      tracker: { started: true, runId: summary.run_id },
-      verdict: SUSPENDED.has(summary.status) ? 'suspended' : 'running',
+      tracker: { started: true, runId: summary.run_id, prior },
+      verdict: suspended ? 'suspended' : 'running',
     }
   }
 

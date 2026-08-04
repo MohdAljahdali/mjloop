@@ -312,6 +312,51 @@ describe('decideDestructiveRequest', () => {
     expect(held.halt_reason).toContain('new worktree fingerprint')
   })
 
+  it('states the revert requirement even when the operation is too long to fit beside it', async () => {
+    // `classifyDestructiveResult` writes the run's own goal into the operation,
+    // which is as long as somebody typed. `halt_reason` is the only channel the
+    // instruction has, so the operation is what gets cut, never the instruction.
+    const verbose: DestructiveCandidate = {
+      kind: 'feature_delete',
+      targets: ['src/billing'],
+      operation: `delete 3 files under src/billing while working on: ${'the very long goal '.repeat(30)}`,
+      rollback: null,
+    }
+    const state = await new StateStore(project.dir).get()
+    await guardDestructiveOperation(project.dir, state, verbose, clock, { applied: true })
+
+    const held = await decideDestructiveRequest(
+      project.dir,
+      {
+        run: state.run_id as string,
+        fingerprint: operationFingerprint(state.run_id as string, verbose),
+        decision: 'reject',
+        note: null,
+        decided_by: 'operator',
+      },
+      clock,
+    )
+
+    expect(held.halt_reason).toContain('new worktree fingerprint')
+    expect(held.halt_reason).toContain('The engine does not revert files itself.')
+    expect((held.halt_reason ?? '').length).toBeLessThanOrEqual(400)
+  })
+
+  it('refuses the same decision replayed after the run has moved on', async () => {
+    const { run, fingerprint } = await askForDecision()
+    const input = { run, fingerprint, decision: 'approve' as const, note: null, decided_by: 'operator' }
+    await decideDestructiveRequest(project.dir, input, clock)
+
+    await expect(decideDestructiveRequest(project.dir, input, clock)).rejects.toBeInstanceOf(
+      QualityDecisionRefusedError,
+    )
+
+    const state = await new StateStore(project.dir).get()
+    expect(state.status).toBe('running')
+    // The request and the one decision on it, and no second decision.
+    expect((await readDestructiveRequests(project.dir, state)).requests).toHaveLength(2)
+  })
+
   it('reads a record written before `applied` existed as the worse case', async () => {
     // Over-suspending costs an operator one more step. The other default would
     // resume a run whose destructive action had already happened, which is the

@@ -12,7 +12,7 @@ describe('observe', () => {
   it('starts tracking once a run is running', () => {
     const result = observe(NEW_TRACKER, running())
     expect(result.verdict).toBe('running')
-    expect(result.tracker).toEqual({ started: true, runId: '2026-07-28-001' })
+    expect(result.tracker).toMatchObject({ started: true, runId: '2026-07-28-001' })
   })
 
   it.each(['done', 'halted', 'failed', 'idle'] as const)('completes on %s', (status) => {
@@ -47,9 +47,18 @@ describe('observe', () => {
     expect(observe(started, summary({ status, run_id: '2026-07-28-001' })).verdict).toBe('suspended')
   })
 
-  it.each(['waiting_for_user', 'budget_exhausted'] as const)('attaches to a run first seen %s', (status) => {
-    const result = observe(NEW_TRACKER, summary({ status, run_id: '2026-07-28-001' }))
-    expect(result).toEqual({ tracker: { started: true, runId: '2026-07-28-001' }, verdict: 'suspended' })
+  it('does not attach to a run that was already suspended when the job started', () => {
+    // A suspension outlasts anything — it is waiting on a person — so a job
+    // queued while one is on record would adopt somebody else's run, and tear
+    // its own session down the moment its own run appeared under a new id.
+    const first = observe(NEW_TRACKER, summary({ status: 'waiting_for_user', run_id: '2026-07-28-001' }))
+    expect(first.verdict).toBe('waiting')
+    expect(first.tracker.started).toBe(false)
+
+    // Its own run, suspended before any poll saw it running, still attaches.
+    const own = observe(first.tracker, summary({ status: 'budget_exhausted', run_id: '2026-07-28-002' }))
+    expect(own.verdict).toBe('suspended')
+    expect(own.tracker).toMatchObject({ started: true, runId: '2026-07-28-002' })
   })
 })
 
