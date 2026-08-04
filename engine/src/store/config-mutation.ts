@@ -10,6 +10,7 @@ import {
   DiscoveryCompletionSchema,
   FeatureDiscoveryModeSchema,
   LEGACY_CONFIG_KEYS,
+  QualityModeSchema,
   SkillSourceSchema,
   SkillUpdateModeSchema,
   SpecialistModeSchema,
@@ -99,12 +100,9 @@ export const ConfigChangeSchema = z.discriminatedUnion('kind', [
     kind: z.literal('orchestration.execution.repair_attempts'),
     value: z.number().int().min(0).max(5),
   }),
-  // The one section whose leaves share a type, so one kind with a `key` costs
-  // nothing in strictness — the same shape `gate` and `limit` already use.
   z.strictObject({
-    kind: z.literal('orchestration.quality'),
-    key: z.enum(['independent_plan_review', 'independent_verification']),
-    value: z.boolean(),
+    kind: z.literal('orchestration.quality.mode'),
+    value: QualityModeSchema,
   }),
   z.strictObject({
     kind: z.literal('orchestration.skills.sources'),
@@ -248,8 +246,10 @@ function applyChange(document: YAML.Document, change: ConfigChange): void {
     case 'orchestration.execution.repair_attempts':
       document.setIn(['orchestration', 'execution', 'repair_attempts'], change.value)
       return
-    case 'orchestration.quality':
-      document.setIn(['orchestration', 'quality', change.key], change.value)
+    case 'orchestration.quality.mode':
+      document.deleteIn(['orchestration', 'quality', 'independent_plan_review'])
+      document.deleteIn(['orchestration', 'quality', 'independent_verification'])
+      document.setIn(['orchestration', 'quality', 'mode'], change.value)
       return
     case 'orchestration.skills.sources':
       document.setIn(['orchestration', 'skills', 'sources'], change.value)

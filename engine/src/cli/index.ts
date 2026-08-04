@@ -213,12 +213,9 @@ function asList(raw: string): ParsedValue {
  * unknown-key message and `config get`'s output all read off it, so a key can
  * never be settable but unprintable, or offered but unsettable.
  *
- * `orchestration.quality.*` is the one place where two dotted keys collapse
- * into a single change kind carrying a `key`, because that is the shape
- * `config-mutation.ts` gives that section. The mapping is stated here rather
- * than derived from the dots for exactly that reason: the dotted key is what a
- * person types, and the change kind is what the wire schema discriminates on,
- * and they are not obliged to agree.
+ * A setting's dotted key and wire kind normally agree, including quality mode.
+ * This table remains explicit because the key is the human-facing CLI surface
+ * while the change is the closed mutation contract.
  */
 const SETTINGS: Record<string, ConfigSetting> = {
   'orchestration.profile.auto_accept': {
@@ -256,15 +253,10 @@ const SETTINGS: Record<string, ConfigSetting> = {
     parse: asInteger,
     change: (value) => ({ kind: 'orchestration.execution.repair_attempts', value }),
   },
-  'orchestration.quality.independent_plan_review': {
-    read: (orchestration) => orchestration.quality.independent_plan_review,
-    parse: asBoolean,
-    change: (value) => ({ kind: 'orchestration.quality', key: 'independent_plan_review', value }),
-  },
-  'orchestration.quality.independent_verification': {
-    read: (orchestration) => orchestration.quality.independent_verification,
-    parse: asBoolean,
-    change: (value) => ({ kind: 'orchestration.quality', key: 'independent_verification', value }),
+  'orchestration.quality.mode': {
+    read: (orchestration) => orchestration.quality.mode,
+    parse: asWord,
+    change: (value) => ({ kind: 'orchestration.quality.mode', value }),
   },
   'orchestration.skills.sources': {
     read: (orchestration) => orchestration.skills.sources,

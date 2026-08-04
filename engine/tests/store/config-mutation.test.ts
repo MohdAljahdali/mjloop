@@ -30,6 +30,16 @@ async function raw(): Promise<string> {
   return fs.readFile(file, 'utf8')
 }
 
+async function seedLegacyQuality(projectDir: string, independentPlanReview: boolean, independentVerification: boolean): Promise<void> {
+  const config = resolveLoopPaths(projectDir).config
+  const source = await fs.readFile(config, 'utf8')
+  const legacy = source.replace(
+    'quality:\n    mode: adaptive',
+    `quality:\n    independent_plan_review: ${independentPlanReview}\n    independent_verification: ${independentVerification}`,
+  )
+  await fs.writeFile(config, legacy, 'utf8')
+}
+
 describe('mutateConfig', () => {
   it('changes an allowlisted value without losing comments or inert legacy keys', async () => {
     const source = (await raw())
@@ -200,14 +210,9 @@ const ORCHESTRATION_CHANGES: { change: ConfigChange; at: string[]; expected: unk
     expected: 0,
   },
   {
-    change: { kind: 'orchestration.quality', key: 'independent_plan_review', value: true },
-    at: ['orchestration', 'quality', 'independent_plan_review'],
-    expected: true,
-  },
-  {
-    change: { kind: 'orchestration.quality', key: 'independent_verification', value: true },
-    at: ['orchestration', 'quality', 'independent_verification'],
-    expected: true,
+    change: { kind: 'orchestration.quality.mode', value: 'strict' },
+    at: ['orchestration', 'quality', 'mode'],
+    expected: 'strict',
   },
   {
     change: { kind: 'orchestration.skills.sources', value: ['web'] },
@@ -278,6 +283,21 @@ describe('mutateConfig on the orchestration block', () => {
     expect(readIn(written, ['orchestration', 'discovery', 'question_budget'])).toBeUndefined()
   })
 
+  it('replaces both legacy quality booleans with one mode in the same CAS write', async () => {
+    await seedLegacyQuality(project.dir, true, false)
+    const source = await raw()
+
+    await mutateConfig(project.dir, {
+      revision: configRevision(source),
+      changes: [{ kind: 'orchestration.quality.mode', value: 'strict' }],
+    })
+
+    const written = await raw()
+    expect(written).toContain('mode: strict')
+    expect(written).not.toContain('independent_plan_review')
+    expect(written).not.toContain('independent_verification')
+  })
+
   it('refuses a whole-document contradiction the wire schema cannot see', async () => {
     // `completion: auto-plan` and `mode: off` are each individually legal
     // values, so only the post-apply re-parse of the whole document catches
@@ -337,7 +357,7 @@ describe('ConfigPatchSchema', () => {
       { kind: 'orchestration.skills.sources', value: ['pastebin'] },
       { kind: 'orchestration.skills.trusted_registries', value: ['http://skills.example.com'] },
       { kind: 'orchestration.discovery.mode', value: false },
-      { kind: 'orchestration.quality', key: 'independent_plan_review', value: 'yes' },
+      { kind: 'orchestration.quality.mode', value: 'fast' },
     ]) {
       expect(
         ConfigPatchSchema.safeParse({ revision: 'a'.repeat(64), changes: [change] }).success,

@@ -5,7 +5,12 @@ import { describe, expect, it } from 'vitest'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { buildServer } from '../../src/mcp/server.js'
-import { DiscoveryCompletionSchema, FeatureDiscoveryModeSchema, OrchestrationSchema } from '../../src/schemas/config.js'
+import {
+  DiscoveryCompletionSchema,
+  FeatureDiscoveryModeSchema,
+  OrchestrationSchema,
+  QualityModeSchema,
+} from '../../src/schemas/config.js'
 
 /**
  * The plugin's slash commands, asserted against the engine and against each
@@ -27,6 +32,7 @@ const REPO = fileURLToPath(new URL('../../../', import.meta.url))
 const COMMANDS_DIR = path.join(REPO, 'commands')
 const SKILL_NAME = 'mjloop-feature-discovery'
 const PLAN_COMMAND = path.join(COMMANDS_DIR, 'plan.md')
+const CONFIG_COMMAND = path.join(COMMANDS_DIR, 'config.md')
 
 /**
  * The plan command's two policy branches, by heading.
@@ -41,6 +47,7 @@ const DISCOVERY_SECTION = '## Before the plan track: the discovery branch'
 const COMPLETION_SECTION = '## After the brief: the completion branch'
 
 const planCommand = await fs.readFile(PLAN_COMMAND, 'utf8')
+const configCommand = await fs.readFile(CONFIG_COMMAND, 'utf8')
 
 async function registeredTools(): Promise<Set<string>> {
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
@@ -176,5 +183,15 @@ describe('the run command', () => {
     const parsed = frontmatter(runCommand)
     expect(parsed.description ?? '').not.toBe('')
     expect(parsed['argument-hint'] ?? '').not.toBe('')
+  })
+})
+
+describe('the config command', () => {
+  it('documents the quality mode and exactly the values its schema admits', () => {
+    const qualityRow = configCommand.split('\n').find((line) => line.startsWith('| `orchestration.quality.')) ?? ''
+    expect(qualityRow).toContain('`orchestration.quality.mode`')
+    expect([...qualityRow.matchAll(/`([a-z-]+)`/g)].map((match) => match[1])).toEqual(QualityModeSchema.options)
+    expect(configCommand).not.toContain('orchestration.quality.independent_plan_review')
+    expect(configCommand).not.toContain('orchestration.quality.independent_verification')
   })
 })

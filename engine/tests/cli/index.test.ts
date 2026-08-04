@@ -664,8 +664,7 @@ describe('runCli config get', () => {
       'orchestration.execution.after_plan_approval',
       'orchestration.execution.uncertain_concurrency',
       'orchestration.execution.repair_attempts',
-      'orchestration.quality.independent_plan_review',
-      'orchestration.quality.independent_verification',
+      'orchestration.quality.mode',
       'orchestration.skills.sources',
       'orchestration.skills.trusted_registries',
       'orchestration.skills.update_mode',
@@ -736,16 +735,37 @@ describe('runCli config set', () => {
     expect((await loadConfig(project.dir)).orchestration.skills.sources).toEqual([])
   })
 
-  it('sets the one key that carries a section key of its own', async () => {
+  it('sets the quality mode through the guarded mutation', async () => {
     await initLoop(project.dir, clock)
     const { exitCode } = await runCli(
-      ['config', 'set', 'orchestration.quality.independent_verification', 'true', '--dir', project.dir],
+      ['config', 'set', 'orchestration.quality.mode', 'strict', '--dir', project.dir],
       '',
     )
     expect(exitCode).toBe(0)
     const quality = (await loadConfig(project.dir)).orchestration.quality
-    expect(quality.independent_verification).toBe(true)
-    expect(quality.independent_plan_review).toBe(false)
+    expect(quality).toEqual({ mode: 'strict' })
+  })
+
+  it('refuses a quality mode outside the three values the schema admits', async () => {
+    await initLoop(project.dir, clock)
+    const { stdout, exitCode } = await runCli(
+      ['config', 'set', 'orchestration.quality.mode', 'fast', '--dir', project.dir],
+      '',
+    )
+    expect(exitCode).toBe(1)
+    expect(stdout).toContain('economy')
+    expect(stdout).toContain('adaptive')
+    expect(stdout).toContain('strict')
+  })
+
+  it.each([
+    'orchestration.quality.independent_plan_review',
+    'orchestration.quality.independent_verification',
+  ])('removes %s from the accepted key list', async (key) => {
+    await initLoop(project.dir, clock)
+    const { stdout, exitCode } = await runCli(['config', 'set', key, 'true', '--dir', project.dir], '')
+    expect(exitCode).toBe(1)
+    expect(stdout.split('The keys config set accepts:\n')[1]).not.toContain(key)
   })
 
   it('refuses an unknown key, names it, and writes nothing', async () => {

@@ -55,8 +55,7 @@ Each `config set` changes exactly one setting. The keys, and what each accepts:
 | `orchestration.execution.after_plan_approval` | `auto` / `manual` |
 | `orchestration.execution.uncertain_concurrency` | `sequential` / `ask` / `parallel` |
 | `orchestration.execution.repair_attempts` | whole number, 0–5 |
-| `orchestration.quality.independent_plan_review` | `true` / `false` |
-| `orchestration.quality.independent_verification` | `true` / `false` |
+| `orchestration.quality.mode` | `economy` / `adaptive` / `strict` |
 | `orchestration.skills.sources` | comma-separated subset of `github,registry,web` |
 | `orchestration.skills.trusted_registries` | comma-separated `https://` URLs |
 | `orchestration.skills.update_mode` | `auto` / `review` / `pinned` |
