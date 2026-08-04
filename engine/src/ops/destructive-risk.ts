@@ -89,6 +89,9 @@ const EPHEMERAL_DIRECTORIES = new Set([
   'node_modules', 'out', 'target', 'tmp', 'venv',
 ])
 
+/** What a removal deletes when the argv does not say — piped paths, and an `-exec` with no root. */
+const UNKNOWN_TARGET = '<paths this command is given at run time>'
+
 /** Whole-project targets: nothing under them is recoverable from the project itself. */
 const PROJECT_WIDE_TARGETS = new Set(['.', './', '..', '../', '/', '~', '~/', '*', './*', '/*'])
 
@@ -109,7 +112,16 @@ const DROP_STORE = /\bdrop\s+(?:database|schema)\s+(?:if\s+exists\s+)?([\w.$-]+)
 const TRUNCATE = /\btruncate\s+(?:table\s+)?([\w.$-]+)/gi
 const DELETE_FROM = /\bdelete\s+from\s+([\w.$-]+)([^;]*)/gi
 const TRIVIAL_WHERE = /^(?:1\s*=\s*1|true)\s*;?\s*$/i
-const PROJECT_WIDE_COMMAND = /\bgit\s+clean\s+-[a-z]*[fd][a-z]*\b|\bgit\s+reset\s+--hard\b/i
+// `git clean` and its flags are matched separately because the flag that makes
+// it destructive need not follow it: `git clean --force -d` and `git clean -x -f`
+// both wipe uncommitted work, and both leave a word between the two halves.
+const GIT_CLEAN = /\bgit\s+clean\b/i
+const GIT_CLEAN_FORCE = /(?:^|\s)(?:--force|--recurse[a-z-]*|-[a-z]*[fd][a-z]*)(?=\s|$)/i
+const GIT_RESET_HARD = /\bgit\s+reset\s+--hard\b/i
+/** `find` removing what it matched: `-delete`, or an `-exec` that runs `rm`. */
+const FIND_DELETE = /\bfind\b/i
+const FIND_REMOVAL = /(?:^|\s)-delete(?=\s|$)|(?:^|\s)-exec[a-z]*\s+rm\b/i
+const FIND_PATH = /\bfind\s+((?:[^\s-][^\s]*\s+)*)/i
 const IRREVERSIBLE_MIGRATION =
   /--accept-data-loss|--no-rollback|--irreversible|--force-reset|\bmigrate:fresh\b|\bdb:migrate:reset\b|\bdb:reset\b|\bmigrate\s+reset\b/i
 const PATCH_DELETE = /^\s*\*\*\*\s*Delete File:\s*(.+?)\s*$/gim
@@ -232,24 +244,42 @@ export async function guardDestructiveCommand(
   candidate: DestructiveCandidate,
   now: Clock = () => new Date(),
 ): Promise<DestructiveGuardOutcome> {
-  let state: State
-  try {
-    state = await new StateStore(projectDir, now).get()
-  } catch {
-    return { allowed: true, reason: '' }
-  }
+  // The hook is handed the session's working directory, which is not always the
+  // project root: a subagent working in a subdirectory would otherwise resolve a
+  // `.mjloop` that does not exist, and the guard would silently protect nothing.
+  const root = await loopProjectRoot(projectDir)
+  if (root === null) return { allowed: true, reason: '' }
 
   try {
-    return await guardDestructiveOperation(projectDir, state, candidate, now)
+    const state = await new StateStore(root, now).get()
+    return await guardDestructiveOperation(root, state, candidate, now)
   } catch (error) {
-    return {
-      allowed: false,
-      reason:
-        `${candidate.operation} could not be checked against this run's quality policy ` +
-        `(${error instanceof Error ? error.message : String(error)}). A protected operation is never allowed on a ` +
-        'record the engine cannot read.',
-    }
+    // A state file that exists and cannot be read is not the same as a project
+    // with no run. The first is the moment to be most careful — there may be a
+    // run in progress and no way to see it — so it is refused, exactly as an
+    // unreadable policy is. The absent case never reaches here: `root` is null.
+    return { allowed: false, reason: unreadable(candidate, error) }
   }
+}
+
+/** The nearest directory at or above `from` that holds a `.mjloop/state.json`, or `null`. */
+async function loopProjectRoot(from: string): Promise<string | null> {
+  let directory = path.resolve(from)
+  for (;;) {
+    const exists = await fs.stat(resolveLoopPaths(directory).state).then(() => true, () => false)
+    if (exists) return directory
+    const parent = path.dirname(directory)
+    if (parent === directory) return null
+    directory = parent
+  }
+}
+
+function unreadable(candidate: DestructiveCandidate, error: unknown): string {
+  return bounded(
+    `${candidate.operation} could not be checked against this run's state and quality policy ` +
+      `(${error instanceof Error ? error.message : String(error)}). A protected operation is never allowed on a ` +
+      'record the engine cannot read.',
+  )
 }
 
 /**
@@ -357,7 +387,7 @@ async function readRequests(file: string): Promise<DestructiveRequests> {
 function classifyCommand(command: string): DestructiveCandidate | null {
   const text = command.replace(/['"`]/g, ' ')
 
-  if (PROJECT_WIDE_COMMAND.test(text)) {
+  if (GIT_RESET_HARD.test(text) || segments(text).some((segment) => GIT_CLEAN.test(segment) && GIT_CLEAN_FORCE.test(segment))) {
     return candidate('project_wide', ['the working tree'], command, 'none — the discarded work is not in any commit')
   }
   const stores = matches(DROP_STORE, text)
@@ -374,7 +404,36 @@ function classifyCommand(command: string): DestructiveCandidate | null {
 
   if (IRREVERSIBLE_MIGRATION.test(text)) return candidate('irreversible_migration', ['the project database'], command, null)
 
-  return recursiveRemoval(text, command)
+  return recursiveRemoval(text, command) ?? findRemoval(text, command)
+}
+
+/** Every stage of a pipeline, and every command in a list, considered on its own. */
+function segments(text: string): string[] {
+  return text.split(/[;&|\n]+/)
+}
+
+/**
+ * `find` deleting what it matched.
+ *
+ * A separate rule from `rm`, because this shape names no `rm` at all:
+ * `find src/billing -name '*.ts' -delete` removes a feature's files one by one
+ * and the word `rm` never appears. The target is the path `find` was pointed
+ * at, which is the closest thing to an operand this form has.
+ */
+function findRemoval(text: string, command: string): DestructiveCandidate | null {
+  for (const segment of segments(text)) {
+    if (!FIND_DELETE.test(segment) || !FIND_REMOVAL.test(segment)) continue
+    const roots = (FIND_PATH.exec(segment)?.[1] ?? '').trim().split(/\s+/).filter((root) => root.length > 0)
+    const kept = roots.filter((root) => !isEphemeral(root))
+    if (roots.length > 0 && kept.length === 0) continue
+    return candidate(
+      'feature_delete',
+      kept.length > 0 ? kept : [UNKNOWN_TARGET],
+      command,
+      'the files are recoverable from git only if they were committed',
+    )
+  }
+  return null
 }
 
 /** The tables a `DELETE FROM` would empty: one bounded by a real `WHERE` is ordinary work. */
@@ -390,7 +449,7 @@ function unboundedDeletes(text: string): string[] {
 
 /** A recursive `rm`, read from the declared argv shape rather than by running it. */
 function recursiveRemoval(text: string, command: string): DestructiveCandidate | null {
-  for (const segment of text.split(/[;&|\n]+/)) {
+  for (const segment of segments(text)) {
     const tokens = segment.trim().split(/\s+/).filter((token) => token.length > 0)
     const start = tokens.indexOf('rm')
     if (start === -1) continue
@@ -401,6 +460,13 @@ function recursiveRemoval(text: string, command: string): DestructiveCandidate |
     const operands = rest.filter((token) => !token.startsWith('-'))
     if (operands.some((operand) => PROJECT_WIDE_TARGETS.has(operand))) {
       return candidate('project_wide', operands, command, null)
+    }
+    // No operands means the paths arrive on stdin — `find … | xargs rm -rf`,
+    // which is how a feature directory is most often actually removed. What is
+    // deleted cannot be read from the argv, so it is unknown rather than
+    // nothing, and an unknown target is decided in the destructive direction.
+    if (operands.length === 0) {
+      return candidate('feature_delete', [UNKNOWN_TARGET], command, 'unknown until the piped command that names the paths has run')
     }
     const kept = operands.filter((operand) => !isEphemeral(operand))
     if (kept.length > 0) {
@@ -433,13 +499,24 @@ function classifyPatch(toolInput: object): DestructiveCandidate | null {
 function featureDirectory(files: string[]): string | null {
   const counts = new Map<string, number>()
   for (const file of files) {
-    const directory = path.posix.dirname(file.split(path.sep).join('/'))
-    if (directory === '.' || directory === '/' || isEphemeral(directory)) continue
-    counts.set(directory, (counts.get(directory) ?? 0) + 1)
+    const normalised = file.split(path.sep).join('/')
+    if (isEphemeral(normalised)) continue
+    // Every ancestor, not just the immediate one. A feature is not flat:
+    // `src/billing/{index,types}.ts` plus `src/billing/api/create.ts` plus
+    // `src/billing/ui/Panel.tsx` is one feature leaving, and counting exact
+    // dirnames sees three directories of one or two files and lets it through.
+    for (let directory = path.posix.dirname(normalised); ancestorWorthCounting(directory); directory = path.posix.dirname(directory)) {
+      counts.set(directory, (counts.get(directory) ?? 0) + 1)
+    }
   }
-  const worst = [...counts.entries()].sort(([left, leftCount], [right, rightCount]) =>
-    rightCount - leftCount || (left < right ? -1 : 1))[0]
-  return worst !== undefined && worst[1] >= FEATURE_DELETE_FILES ? worst[0] : null
+  // The deepest directory that reaches the threshold: `src/billing` names the
+  // feature that left, where its parent `src` names the project.
+  const reached = [...counts.entries()].filter(([, count]) => count >= FEATURE_DELETE_FILES)
+  return reached.sort(([left], [right]) => right.split('/').length - left.split('/').length || (left < right ? -1 : 1))[0]?.[0] ?? null
+}
+
+function ancestorWorthCounting(directory: string): boolean {
+  return directory !== '.' && directory !== '/' && directory !== '' && !isEphemeral(directory)
 }
 
 function isEphemeral(target: string): boolean {

@@ -9,6 +9,7 @@ import {
   classifyDestructiveResult,
   classifyDestructiveTool,
   destructiveRequestsFile,
+  guardDestructiveCommand,
   guardDestructiveOperation,
   operationFingerprint,
   readDestructiveRequests,
@@ -17,6 +18,7 @@ import {
 import { initLoop } from '../../src/ops/init.js'
 import { runStart } from '../../src/ops/run.js'
 import { loadConfig, writeConfig } from '../../src/store/config-store.js'
+import { resolveLoopPaths } from '../../src/store/paths.js'
 import { StateStore } from '../../src/store/state-store.js'
 import { makeTmpProject, type TmpProject } from '../helpers/tmp-project.js'
 
@@ -32,6 +34,13 @@ describe('classifyDestructiveTool', () => {
     ['TRUNCATE audit_log', 'table_truncate'],
     ['DELETE FROM guests', 'bulk_data_delete'],
     ['rm -rf src/billing', 'feature_delete'],
+    // The paths arrive on stdin, so the argv names no operand at all. An
+    // unknown target is decided in the destructive direction, not skipped.
+    ['find . -type d -name billing | xargs rm -rf', 'feature_delete'],
+    ['find src/billing -name *.ts -delete', 'feature_delete'],
+    ['find src/billing -name *.ts -exec rm {} +', 'feature_delete'],
+    ['git clean --force -d', 'project_wide'],
+    ['git clean -x -f', 'project_wide'],
   ] as const)('classifies %s as %s', (command, kind) => {
     expect(classifyDestructiveTool(bashInput(command))?.kind).toBe(kind)
   })
@@ -63,6 +72,18 @@ describe('classifyDestructiveResult', () => {
       summary: 'Removed the code that is no longer reachable.',
     })
     expect(candidate?.kind).toBe('feature_delete')
+    expect(candidate?.targets).toEqual(['src/billing'])
+  })
+
+  it('catches a feature whose files are spread over subdirectories', () => {
+    const candidate = classifyDestructiveResult({
+      goal: 'Drop the billing experiment',
+      deletedFiles: ['src/billing/index.ts', 'src/billing/types.ts', 'src/billing/api/create.ts', 'src/billing/ui/Panel.tsx'],
+      summary: 'Took out the code that is no longer reachable.',
+    })
+    expect(candidate?.kind).toBe('feature_delete')
+    // The deepest directory that reaches the threshold: `src/billing` names the
+    // feature that left, where `src` would name the project.
     expect(candidate?.targets).toEqual(['src/billing'])
   })
 
@@ -177,6 +198,33 @@ describe('guardDestructiveOperation', () => {
 
     expect(outcome.allowed).toBe(false)
     expect((await new StateStore(project.dir).get()).status).toBe('waiting_for_user')
+  })
+
+  it('guards a hook whose working directory is below the project root', async () => {
+    // The hook is handed the session's cwd. A subagent working in a
+    // subdirectory would otherwise resolve a `.mjloop` that does not exist.
+    const deep = path.join(project.dir, 'src', 'billing')
+    await fs.mkdir(deep, { recursive: true })
+
+    expect((await guardDestructiveCommand(deep, dropUsers, clock)).allowed).toBe(false)
+    expect((await new StateStore(project.dir).get()).status).toBe('waiting_for_user')
+  })
+
+  it('refuses the operation when a state file exists and cannot be read', async () => {
+    const { state } = resolveLoopPaths(project.dir)
+    await fs.writeFile(state, 'not json at all', 'utf8')
+    await fs.rm(`${state}.bak`, { force: true })
+
+    expect((await guardDestructiveCommand(project.dir, dropUsers, clock)).allowed).toBe(false)
+  })
+
+  it('allows the operation where there is no project to protect', async () => {
+    const bare = await makeTmpProject()
+    try {
+      expect((await guardDestructiveCommand(bare.dir, dropUsers, clock)).allowed).toBe(true)
+    } finally {
+      await bare.cleanup()
+    }
   })
 
   it('leaves the run alone while the rollout gate is closed', async () => {
