@@ -1,8 +1,9 @@
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { evaluateStateGuard, evaluateStopGuard, runCli, type CliDeps } from '../../src/cli/index.js'
+import { evaluateStateGuard, evaluateStopGuard, runCli, stateGuardCommandForTest, type CliDeps } from '../../src/cli/index.js'
 import { initLoop } from '../../src/ops/init.js'
 import { cycleAdvance, runStart } from '../../src/ops/run.js'
 import type { ProjectComponent, ProposedProfile } from '../../src/schemas/project-profile.js'
@@ -19,6 +20,7 @@ import {
 } from '../../src/store/project-profile-store.js'
 import { listAcceptances, readAcceptance } from '../../src/store/skill-acceptance-store.js'
 import { listPackages, writePackage } from '../../src/store/skill-library-store.js'
+import { StateStore } from '../../src/store/state-store.js'
 import { makeTmpProject, type TmpProject } from '../helpers/tmp-project.js'
 
 /**
@@ -83,6 +85,12 @@ function githubImportFetch(): typeof globalThis.fetch {
     throw new Error(`unexpected url in test: ${url}`)
   })
 }
+
+// The rollout gate this milestone's runtime behaviour hangs off. `false` is
+// production until Task 17, so every test in this file sees the guard exactly
+// as a user does today, and the destructive-decision tests open it themselves.
+vi.mock('../../src/ops/quality-capability.js', () => ({ qualityRuntimeEnabled: vi.fn(() => false) }))
+import { qualityRuntimeEnabled } from '../../src/ops/quality-capability.js'
 
 const NOW = new Date('2026-07-26T10:36:00.000Z')
 const clock = () => NOW
@@ -474,6 +482,51 @@ describe('runCli state-guard', () => {
     const stdin = JSON.stringify({ tool_name: 'Write', tool_input: { file_path: '/repo/src/a.ts' } })
     const { stdout } = await runCli(['state-guard'], stdin)
     expect(stdout).toBe('')
+  })
+})
+
+describe('runCli state-guard destructive operations', () => {
+  const bashInput = (command: string): unknown => ({ tool_name: 'Bash', tool_input: { command } })
+
+  beforeEach(async () => {
+    vi.mocked(qualityRuntimeEnabled).mockReturnValue(true)
+    await initLoop(project.dir, clock)
+    const config = await loadConfig(project.dir)
+    config.orchestration.quality.mode = 'economy'
+    await writeConfig(project.dir, config)
+    await runStart(project.dir, { track: 'edit', goal: 'Rename' }, clock)
+  })
+  afterEach(() => {
+    vi.mocked(qualityRuntimeEnabled).mockReturnValue(false)
+  })
+
+  it('moves an unattended run to waiting before the destructive shell command', async () => {
+    const result = await stateGuardCommandForTest(project.dir, bashInput('DROP TABLE users'))
+    expect(result.stdout).toContain('permissionDecision')
+    expect((await new StateStore(project.dir).get()).status).toBe('waiting_for_user')
+  })
+
+  it('leaves the same command alone while the rollout gate is closed', async () => {
+    vi.mocked(qualityRuntimeEnabled).mockReturnValue(false)
+    const result = await stateGuardCommandForTest(project.dir, bashInput('DROP TABLE users'))
+    expect(result.stdout).toBe('')
+    expect((await new StateStore(project.dir).get()).status).toBe('running')
+  })
+
+  it('is reached by the tools a destructive operation actually arrives through', async () => {
+    // The classifier below is only ever asked about a call the plugin's own
+    // matcher let through. Left at `Write|Edit`, every rule in this describe
+    // would be correct and unreachable: a `DROP TABLE` arrives as `Bash`.
+    const file = fileURLToPath(new URL('../../../hooks/hooks.json', import.meta.url))
+    const { hooks } = JSON.parse(await fs.readFile(file, 'utf8')) as { hooks: { PreToolUse: { matcher: string }[] } }
+    const matcher = new RegExp(`^(?:${hooks.PreToolUse[0]?.matcher ?? ''})$`)
+    expect(['Write', 'Edit', 'Bash'].every((tool) => matcher.test(tool))).toBe(true)
+  })
+
+  it('leaves an ordinary command alone', async () => {
+    const result = await stateGuardCommandForTest(project.dir, bashInput('rm src/unused.test.ts'))
+    expect(result.stdout).toBe('')
+    expect((await new StateStore(project.dir).get()).status).toBe('running')
   })
 })
 

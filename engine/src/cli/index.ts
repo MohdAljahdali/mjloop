@@ -5,6 +5,7 @@ import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import * as z from 'zod'
+import { classifyDestructiveTool, guardDestructiveCommand } from '../ops/destructive-risk.js'
 import { renderSummaryLine, stateSummary, type StateSummary } from '../ops/summary.js'
 import { discoverCandidates, SkillSourceDisabledError } from '../ops/skill-discovery.js'
 import { computePackageDigest, inspectCandidate } from '../ops/skill-import.js'
@@ -1779,14 +1780,37 @@ async function stateGuardCommand(stdin: string): Promise<CliResult> {
   } catch {
     return { stdout: '', exitCode: 0 }
   }
-  const verdict = evaluateStateGuard(input)
-  if (!verdict.deny) return { stdout: '', exitCode: 0 }
+  return stateGuardCommandForTest(readCwd(stdin), input)
+}
 
+/**
+ * The PreToolUse decision, with the project directory injected rather than read
+ * back out of the hook payload — the one seam a test can drive against a
+ * throwaway project.
+ *
+ * Two rules, in the order their costs justify. The protected-path rule is a
+ * string comparison and reads nothing; the destructive rule reads this run's
+ * pinned policy, so it is only reached for a call the first rule allowed and a
+ * classifier already recognised. A project with no run, or a run whose policy
+ * does not enforce, reaches neither record.
+ */
+export async function stateGuardCommandForTest(projectDir: string, input: unknown): Promise<CliResult> {
+  const verdict = evaluateStateGuard(input)
+  if (verdict.deny) return denial(verdict.reason)
+
+  const candidate = classifyDestructiveTool(input)
+  if (candidate === null) return { stdout: '', exitCode: 0 }
+
+  const outcome = await guardDestructiveCommand(projectDir, candidate)
+  return outcome.allowed ? { stdout: '', exitCode: 0 } : denial(outcome.reason)
+}
+
+function denial(reason: string): CliResult {
   const payload = {
     hookSpecificOutput: {
       hookEventName: 'PreToolUse',
       permissionDecision: 'deny',
-      permissionDecisionReason: verdict.reason,
+      permissionDecisionReason: reason,
     },
   }
   return { stdout: `${JSON.stringify(payload)}\n`, exitCode: 0 }

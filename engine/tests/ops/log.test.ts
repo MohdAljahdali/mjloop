@@ -19,6 +19,7 @@ import {
   UnselectedSkillError,
   runLog,
 } from '../../src/ops/log.js'
+import { DestructiveApprovalRequiredError } from '../../src/ops/destructive-risk.js'
 import { initLoop } from '../../src/ops/init.js'
 import { rosterSet } from '../../src/ops/roster.js'
 import { NoActiveRunError, UnknownTrackError, cycleAdvance, cycleDirPath, runDirPath, runStart } from '../../src/ops/run.js'
@@ -1636,5 +1637,24 @@ describe('quality evidence recorded from an answered dispatch', () => {
     }, clock)).resolves.toMatchObject({ path: expect.stringContaining('verifier--independent.json') })
 
     expect((await readLedger(quality.dir, await state())).dimensions.security.status).toBe('pass')
+  })
+
+  it('suspends before a result that deleted a feature can close its cycle', async () => {
+    vi.mocked(qualityRuntimeEnabled).mockReturnValue(true)
+
+    await expect(runLog(quality.dir, {
+      agent: 'editor',
+      result: {
+        status: 'pass',
+        summary: 'Took out the code that is no longer reachable.',
+        evidence: [{ kind: 'file', ref: 'src/billing/index.ts', excerpt: 'removed' }],
+        findings: [],
+        files_touched: ['src/billing/index.ts', 'src/billing/invoice.ts', 'src/billing/tax.ts'],
+        next_hint: null,
+      },
+    }, clock)).rejects.toBeInstanceOf(DestructiveApprovalRequiredError)
+
+    expect((await state()).status).toBe('waiting_for_user')
+    expect(await fs.readdir(cycleDirPath(quality.dir, await state())).catch(() => [])).toEqual([])
   })
 })

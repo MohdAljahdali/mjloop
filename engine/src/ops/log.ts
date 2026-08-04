@@ -11,6 +11,11 @@ import { loadConfig } from '../store/config-store.js'
 import { headSha, worktreeDigest } from '../store/git.js'
 import { readLedger, readPolicy } from '../store/quality-store.js'
 import { StateStore, type Clock } from '../store/state-store.js'
+import {
+  DestructiveApprovalRequiredError,
+  classifyDestructiveResult,
+  guardDestructiveOperation,
+} from './destructive-risk.js'
 import { errorSignature } from './fingerprint.js'
 import { isRepairInstance } from './quality-budget.js'
 import { qualityRuntimeEnabled } from './quality-capability.js'
@@ -457,6 +462,15 @@ export async function runLog(
   // stop. With the rollout gate closed it reads nothing and writes nothing.
   await reserveRepairAttempt(projectDir, state, { agent: agent.data, instance: input.instance ?? null }, now)
 
+  /* 6d — the protected operation this result already performed. */
+
+  // Below the writes above and above the result file, which is the only place
+  // it can be: a feature deleted through edits has already happened on disk, so
+  // this cannot prevent it — what it prevents is the cycle recording it, passing
+  // on it and committing it before a person has decided. The result file is not
+  // written, so the deletions stay in the worktree with nothing endorsing them.
+  await refuseDestructiveResult(projectDir, state, parsed.value, now)
+
   /* 7 — the cap, and the spill it must not point at before writing. */
 
   const capped = await capAndSpill(projectDir, cycleDir, basename, parsed.value, ledger)
@@ -825,6 +839,31 @@ async function reserveRepairAttempt(
   const base = (await readPolicy(projectDir, state)).dispatches[0]
   if (base === undefined) return
   await reserveQualityDispatches(projectDir, state, [{ ...base, agent: dispatch.agent, instance: dispatch.instance }], now)
+}
+
+/**
+ * Suspend before a result that removed a feature can close its cycle.
+ *
+ * The deletions are read from the result's own `files_touched` against the
+ * worktree: a file an agent says it touched and that is no longer there is a
+ * file it deleted. With the rollout gate closed, or on a run that pinned no
+ * policy, not one of those paths is looked at.
+ */
+async function refuseDestructiveResult(projectDir: string, state: State, result: AgentResult, now: Clock): Promise<void> {
+  if (!qualityRuntimeEnabled() || state.quality_policy_version !== 1) return
+
+  const deletedFiles: string[] = []
+  for (const file of result.files_touched) {
+    const absolute = path.isAbsolute(file) ? file : path.join(projectDir, file)
+    const exists = await fs.stat(absolute).then(() => true, () => false)
+    if (!exists) deletedFiles.push(file)
+  }
+
+  const candidate = classifyDestructiveResult({ goal: state.goal ?? '', deletedFiles, summary: result.summary })
+  if (candidate === null) return
+
+  const outcome = await guardDestructiveOperation(projectDir, state, candidate, now)
+  if (!outcome.allowed) throw new DestructiveApprovalRequiredError(outcome.reason)
 }
 
 /** What a dispatch actually told the ledger: its verdict, the receipts it cited, and the files it touched. */
