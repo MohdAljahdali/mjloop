@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { ResultSchema, StageSchema, StatusSchema } from '../../src/schemas/state.js'
 import { ApprovalDecisionSchema, StoryStatusSchema } from '../../src/schemas/plan.js'
 import { FeatureBriefStatusSchema } from '../../src/schemas/feature.js'
-import { FeatureDiscoveryModeSchema, SkillUpdateModeSchema } from '../../src/schemas/config.js'
+import { FeatureDiscoveryModeSchema, QualityModeSchema, SkillUpdateModeSchema } from '../../src/schemas/config.js'
 import { SkillPackageSchema } from '../../src/schemas/skill-library.js'
 import { ProjectSkillAcceptanceSchema } from '../../src/schemas/skill-acceptance.js'
 import { ConcurrencyDecisionSchema } from '../../src/schemas/skill-selection.js'
@@ -299,6 +299,8 @@ describe('locales', () => {
     expect(family('features.status.')).toEqual([...FeatureBriefStatusSchema.options].sort())
     expect(family('features.discovery.')).toEqual([...FeatureDiscoveryModeSchema.options].sort())
     expect(family('skills.update.')).toEqual([...SkillUpdateModeSchema.options].sort())
+    expect(family('config.qualityValue.')).toEqual([...QualityModeSchema.options].sort())
+    expect(family('config.qualityHelp.')).toEqual([...QualityModeSchema.options].sort())
     expect(family('skills.state.')).toEqual([...ProjectSkillAcceptanceSchema.shape.status.options].sort())
     expect(family('skills.audit.')).toEqual([...SkillPackageSchema.shape.audit.shape.state.options].sort())
     expect(family('manifest.mode.')).toEqual([...ConcurrencyDecisionSchema.shape.mode.options].sort())

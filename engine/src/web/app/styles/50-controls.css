@@ -30,6 +30,14 @@
   background: var(--tint-warn);
 }
 
+/* Colour is the second cue here, never the only one: the tag's own text says
+   "Recommended", and so does the radio's accessible name. */
+.tag.recommended {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 50%, transparent);
+  background: var(--tint-accent);
+}
+
 .tag.ui {
   color: var(--accent);
   border-color: color-mix(in srgb, var(--accent) 50%, transparent);

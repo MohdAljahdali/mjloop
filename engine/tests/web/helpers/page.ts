@@ -43,6 +43,7 @@ export function emptySnapshot(patch: Partial<Snapshot> = {}): Snapshot {
       design_system: true,
       map: null,
       config_error: null,
+      quality: null,
     },
     plans: [],
     runs: [],

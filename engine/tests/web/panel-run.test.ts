@@ -136,6 +136,7 @@ const runningState = (patch: Partial<StateSummary> = {}): StateSummary => ({
   design_system: true,
   map: null,
   config_error: null,
+  quality: null,
   ...patch,
 })
 
