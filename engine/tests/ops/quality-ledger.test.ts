@@ -350,6 +350,30 @@ describe('engine-owned evidence transitions', () => {
     expect(next.dimensions.alignment.evidence_refs).toEqual(['cycle-01/reviewer.json', 'cycle-01/verify/lint.log'])
   })
 
+  it('rejects a shared cached canonical ref before another slot can mask a later failure', async () => {
+    await makeRepo()
+    await writeLedger(project.dir, state, pendingLedger())
+    const digest = await worktreeDigest(project.dir)
+    expect(digest).not.toBeNull()
+    const fingerprint = verifyFingerprint('npm shared', digest!)
+    await writeVerifyReceipt('shared.log', 'test', 0, 'npm shared', 1, null, fingerprint)
+    const nextState = { ...state, cycle: 2 }
+    await writeCurrentState(nextState)
+    await writeVerifyReceipt('cycle-01/verify/shared.log', 'test', 0, 'npm shared', 2, 1, fingerprint)
+    await writeVerifyReceipt('cycle-01/verify/shared.log', 'lint', 0, 'npm shared', 2, 1, fingerprint)
+    await writeVerifyReceipt('cycle-01/verify/shared.log', 'build', 0, 'npm shared', 2, 1, fingerprint)
+    await writeVerifyReceipt('lint-failed.log', 'lint', 1, 'npm shared', 2, null, fingerprint)
+    await writeAgentReceipt('reviewer.json', 'pass', [
+      { kind: 'command', ref: 'cycle-01/verify/shared.log', excerpt: 'cached pass' },
+    ], 2)
+
+    await expect(recordQualityEvidence(project.dir, nextState, {
+      dimension: 'alignment', verdict: 'pass', evidenceRefs: ['cycle-02/reviewer.json'], reason: 'shared cached receipt',
+      criteria: ['Acceptance A1'], changedFiles: ['src/work.ts'], worktree: digest,
+    }, clock)).rejects.toThrow(/ambiguous/i)
+    expect((await readLedger(project.dir, nextState)).dimensions.alignment.status).toBe('pending')
+  })
+
   it('rejects cached reuse when the current worktree cannot be digested', async () => {
     await writeLedger(project.dir, state, pendingLedger())
     await writeVerifyReceipt('test.log', 'test', 0)
@@ -407,8 +431,9 @@ async function writeAgentReceipt(
   file: string,
   status: 'pass' | 'fail' | 'blocked',
   evidence: Array<{ kind: 'command' | 'test' | 'file'; ref: string; excerpt: string }> = [],
+  cycle = state.cycle,
 ): Promise<void> {
-  const dir = cycleDirPath(project.dir, state)
+  const dir = cycleDirPath(project.dir, { ...state, cycle })
   await fs.mkdir(dir, { recursive: true })
   await fs.writeFile(path.join(dir, file), `${JSON.stringify({
     status, summary: `agent ${status}`, evidence, findings: [], files_touched: [], next_hint: null, skills_used: [],

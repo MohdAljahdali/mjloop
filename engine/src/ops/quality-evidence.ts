@@ -120,9 +120,15 @@ interface VerifyReceipt {
 
 async function verifyReceipt(projectDir: string, state: State, ref: string, worktree: string | null): Promise<VerifyReceipt> {
   const all = await allVerifyReceipts(projectDir, state, state.cycle)
-  const cited = all.filter((receipt) => receipt.ref === ref).at(-1)
-  if (cited === undefined) throw new QualityEvidenceReceiptError(`verify receipt "${ref}" does not exist`)
-  const latest = all.filter((receipt) => receipt.entry.slot === cited.entry.slot && receipt.entry.command === cited.entry.command).at(-1)
+  const matches = all.filter((receipt) => receipt.ref === ref)
+  if (matches.length === 0) throw new QualityEvidenceReceiptError(`verify receipt "${ref}" does not exist`)
+  const identities = new Set(matches.map(receiptIdentity))
+  if (identities.size > 1) {
+    throw new QualityEvidenceReceiptError(`verify receipt "${ref}" is ambiguous across verify slot/command identities`)
+  }
+  const identity = identities.values().next().value!
+  const cited = matches.filter((receipt) => receiptIdentity(receipt) === identity).at(-1)!
+  const latest = all.filter((receipt) => receiptIdentity(receipt) === identity).at(-1)
   if (latest === undefined || latest.cycle !== cited.cycle || latest.index !== cited.index) {
     throw new QualityEvidenceReceiptError(`verify receipt "${ref}" is superseded by a later invocation`)
   }
@@ -130,6 +136,10 @@ async function verifyReceipt(projectDir: string, state: State, ref: string, work
   assertCacheIntegrity(cited, state, worktree, ref)
   assertPriorFingerprint(cited, state, worktree, ref)
   return cited
+}
+
+function receiptIdentity(receipt: VerifyReceipt): string {
+  return `${receipt.entry.slot}\0${receipt.entry.command}`
 }
 
 async function latestCommandReceipt(

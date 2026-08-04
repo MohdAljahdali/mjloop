@@ -72,9 +72,8 @@ export async function readPolicy(projectDir: string, state: State): Promise<Qual
 
 /**
  * The ledger changes over a run, so writes retain the preceding valid revision
- * for recovery. It intentionally takes no lock itself: the quality transition
- * that composes this write with a StateStore update already holds the project
- * lock, and acquiring it again would deadlock that transition.
+ * for recovery. It intentionally takes no lock itself: callers must already
+ * provide serialization. Closed read-modify-write transitions use `updateLedger`.
  */
 export async function writeLedger(projectDir: string, state: State, ledger: QualityLedger): Promise<void> {
   const file = qualityFiles(projectDir, state).ledger

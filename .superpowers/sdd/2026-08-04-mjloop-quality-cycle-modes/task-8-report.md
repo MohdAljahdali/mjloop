@@ -133,3 +133,36 @@ Result: passed with no output.
 - A later lint/build row cannot mask or be masked by a test row sharing a command string: bare agent evidence is ambiguous, while an exact canonical receipt retains its slot identity.
 - A cache hit is evidence for the current cycle only when its protected verify row proves the original source and current fingerprint. A missing digest or fabricated canonical log cannot recreate that proof.
 - Advancing state writes no ledger side file. The future caller must read/recheck state under its own lock and pass its authoritative cycle to the pure closure predicate, retaining one ownership-fenced state publication and no nested lock.
+
+## Fix round 4/5 — cached cross-slot receipt identity
+
+### Finding fixed
+
+- Canonical verify references now collect every matching ledger row before selecting one. A reference shared by cached rows is rejected when those rows represent more than one distinct `(slot, command)` identity; only a single exact identity may proceed to latest-invocation supersession. This prevents a cached build row from silently standing in for lint after lint later failed.
+- Updated the `writeLedger` comment to describe caller-provided serialization and `updateLedger`, without referring to the removed enclosing StateStore transaction.
+
+### RED
+
+`cd engine && npx vitest run tests/ops/quality-ledger.test.ts -t "shared cached canonical ref"`
+
+Result: 1 intended failure. The promise resolved to an alignment `pass` instead of rejecting, proving the shared cached source reference selected the build identity and masked the later lint failure.
+
+### GREEN
+
+`cd engine && npx vitest run tests/ops/quality-ledger.test.ts -t "shared cached canonical ref"`
+
+Result: 1 passed, 28 skipped.
+
+`cd engine && npx vitest run tests/ops/quality-ledger.test.ts tests/store/quality-store.test.ts tests/store/state-store.test.ts tests/schemas/quality.test.ts tests/ops/quality-policy.test.ts`
+
+Result: 5 files / 84 tests passed, preserving all 83 prior focused tests.
+
+`cd engine && npx tsc -p tsconfig.json --noEmit && npx tsc -p tsconfig.tests.json --noEmit && git diff --check`
+
+Result: passed with no output.
+
+### Self-review
+
+- The resolver never chooses `.at(-1)` until matching rows have collapsed to exactly one `(slot, command)` identity; supersession then uses that same exact identity.
+- The regression uses authentic current-worktree fingerprints, one prior green source log, three current-cycle cache rows sharing that source, and a later fresh lint failure. Rejection leaves the alignment ledger entry pending.
+- Cached provenance, current fingerprint, physical log, prior-cycle freshness, and state-authoritative closure checks are unchanged. No Task 9/10 wiring or public API was changed.
