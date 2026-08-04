@@ -1,10 +1,16 @@
 import * as z from 'zod'
 import { StateSchema, type State } from '../schemas/state.js'
 import { readJsonValidated, writeJsonAtomic } from './atomic.js'
-import { withLock } from './lock.js'
+import { withLock, type LockOwnership } from './lock.js'
 import { resolveLoopPaths, type LoopPaths } from './paths.js'
 
 export type Clock = () => Date
+
+/** A same-lock publisher registered by a closed engine transition. */
+export interface StateTransaction {
+  readonly ownership: LockOwnership
+  beforeStatePublish(publish: (stagingDir: string) => Promise<void>): void
+}
 
 export class InvalidStateError extends Error {
   constructor(message: string) {
@@ -39,11 +45,16 @@ export class StateStore {
     return { state: value, recovered }
   }
 
-  async update(mutate: (draft: State) => void | Promise<void>): Promise<State> {
+  async update(mutate: (draft: State, transaction: StateTransaction) => void | Promise<void>): Promise<State> {
     return withLock(this.paths.lock, async (ownership) => {
       const { value, recovered } = await readJsonValidated(this.paths.state, StateSchema)
       const draft = structuredClone(value)
-      await mutate(draft)
+      const publishers: Array<(stagingDir: string) => Promise<void>> = []
+      const transaction: StateTransaction = {
+        ownership,
+        beforeStatePublish: (publish) => { publishers.push(publish) },
+      }
+      await mutate(draft, transaction)
       draft.updated_at = this.now().toISOString()
 
       const parsed = StateSchema.safeParse(draft)
@@ -52,6 +63,7 @@ export class StateStore {
       // When the read recovered from `.bak`, the file currently on disk is
       // the corrupt primary — backing it up would replace the good backup.
       await ownership.runIfOwned(async (stagingDir) => {
+        for (const publish of publishers) await publish(stagingDir)
         await writeJsonAtomic(this.paths.state, parsed.data, { backup: !recovered, stagingDir })
       })
       return parsed.data

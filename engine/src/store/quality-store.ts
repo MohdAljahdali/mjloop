@@ -13,6 +13,7 @@ import { runDirPath } from '../ops/run.js'
 import { StateCorruptedError, readJsonValidated, writeJsonAtomic } from './atomic.js'
 import { withLock } from './lock.js'
 import { resolveLoopPaths } from './paths.js'
+import type { StateTransaction } from './state-store.js'
 
 export const QUALITY_POLICY_FILE = 'quality-policy.json'
 export const QUALITY_LEDGER_FILE = 'quality-ledger.json'
@@ -108,6 +109,28 @@ export async function updateLedger(
     })
     return parsed
   })
+}
+
+/**
+ * Prepares a ledger publish on an already-held StateStore transaction. The
+ * state writer runs it before its own publication, so a ledger validation or
+ * staging failure leaves state untouched and no non-reentrant lock is reacquired.
+ */
+export async function updateLedgerUnderLock(
+  projectDir: string,
+  state: State,
+  transaction: StateTransaction,
+  mutate: (draft: QualityLedger) => void | Promise<void>,
+): Promise<QualityLedger> {
+  const file = qualityFiles(projectDir, state).ledger
+  const { value, recovered } = await readJsonValidated(file, QualityLedgerSchema)
+  const draft = structuredClone(value)
+  await mutate(draft)
+  const parsed = QualityLedgerSchema.parse(draft)
+  transaction.beforeStatePublish(async (stagingDir) => {
+    await writeJsonAtomic(file, parsed, { backup: !recovered, stagingDir })
+  })
+  return parsed
 }
 
 export async function readLedger(projectDir: string, state: State): Promise<QualityLedger> {

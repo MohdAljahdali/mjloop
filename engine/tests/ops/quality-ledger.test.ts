@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   assertQualityCloseable,
   advanceQualityLedgerCycle,
+  advanceQualityLedgerCycleUnderLock,
   invalidateQualityEvidence,
   recordQualityEvidence,
 } from '../../src/ops/quality-ledger.js'
@@ -15,6 +16,7 @@ import { initialState, type State } from '../../src/schemas/state.js'
 import { worktreeDigest } from '../../src/store/git.js'
 import { readLedger, writeLedger } from '../../src/store/quality-store.js'
 import { cycleDirPath } from '../../src/ops/run.js'
+import { StateStore } from '../../src/store/state-store.js'
 import { makeTmpProject, type TmpProject } from '../helpers/tmp-project.js'
 
 const run = promisify(execFile)
@@ -197,8 +199,8 @@ describe('engine-owned evidence transitions', () => {
 
   it('uses canonical evidence inputs so ordering cannot change a fingerprint', async () => {
     await writeLedger(project.dir, state, pendingLedger())
-    await writeVerifyReceipt('a.log', 'test', 0)
-    await writeVerifyReceipt('b.log', 'test', 0)
+    await writeVerifyReceipt('a.log', 'test', 0, 'npm test:a')
+    await writeVerifyReceipt('b.log', 'test', 0, 'npm test:b')
     const first = await recordQualityEvidence(project.dir, state, {
       ...evidence('correctness', 'pass', ['test']), criteria: ['B', 'A'], changedFiles: ['src/b.ts', 'src/a.ts'], evidenceRefs: ['cycle-01/verify/b.log', 'cycle-01/verify/a.log'],
     }, clock)
@@ -273,6 +275,67 @@ describe('engine-owned evidence transitions', () => {
     expect(next.dimensions.ui.status).toBe('pending')
     expect(next.dimensions.ui.reason).toMatch(/human/i)
   })
+
+  it('rejects a prior green verify log after the command has a later failure', async () => {
+    await writeLedger(project.dir, state, pendingLedger())
+    await writeVerifyReceipt('old.log', 'test', 0)
+    await writeVerifyReceipt('new.log', 'test', 1)
+    await expect(recordQualityEvidence(project.dir, state, {
+      dimension: 'correctness', verdict: 'pass', evidenceRefs: ['cycle-01/verify/old.log'], reason: 'stale green',
+      criteria: ['Acceptance A1'], changedFiles: ['src/work.ts'], worktree: null,
+    }, clock)).rejects.toThrow(/superseded/i)
+  })
+
+  it('keeps an explicitly re-recorded null-digest prior-cycle receipt stale', async () => {
+    await writeLedger(project.dir, state, pendingLedger())
+    await writeVerifyReceipt('test.log', 'test', 0)
+    const nextState = { ...state, cycle: 2 }
+    await writeCurrentState(nextState)
+    await advanceQualityLedgerCycle(project.dir, nextState, clock)
+    const next = await recordQualityEvidence(project.dir, nextState, {
+      dimension: 'correctness', verdict: 'pass', evidenceRefs: ['cycle-01/verify/test.log'], reason: 'old receipt',
+      criteria: ['Acceptance A1'], changedFiles: ['src/work.ts'], worktree: null,
+    }, clock)
+    expect(next.dimensions.correctness.recorded_cycle).toBe(1)
+    expect(() => assertQualityCloseable(policy(), next)).toThrow(/correctness.*stale/i)
+  })
+
+  it('normalizes a cached verify receipt without nesting its run-relative log', async () => {
+    await writeLedger(project.dir, state, pendingLedger())
+    await writeVerifyReceipt('test.log', 'test', 0)
+    const nextState = { ...state, cycle: 2 }
+    await writeCurrentState(nextState)
+    await advanceQualityLedgerCycle(project.dir, nextState, clock)
+    await writeVerifyReceipt('cycle-01/verify/test.log', 'test', 0, 'npm test', 2)
+    const next = await recordQualityEvidence(project.dir, nextState, {
+      dimension: 'correctness', verdict: 'pass', evidenceRefs: ['cycle-02/verify/cycle-01/verify/test.log'], reason: 'cached receipt',
+      criteria: ['Acceptance A1'], changedFiles: ['src/work.ts'], worktree: null,
+    }, clock)
+    expect(next.dimensions.correctness).toMatchObject({ recorded_cycle: 2, evidence_refs: ['cycle-01/verify/test.log'] })
+  })
+
+  it('composes the cycle ledger under a StateStore lock without a nested-lock timeout', async () => {
+    await writeLedger(project.dir, state, pendingLedger())
+    const store = new StateStore(project.dir, clock)
+    await store.update(async (draft, transaction) => {
+      draft.cycle = 2
+      await advanceQualityLedgerCycleUnderLock(project.dir, draft, transaction, clock)
+    })
+    expect((await store.get()).cycle).toBe(2)
+    expect((await readLedger(project.dir, { ...state, cycle: 2 })).cycle).toBe(2)
+  })
+
+  it('leaves both state and ledger unchanged when the under-lock advance rejects', async () => {
+    const ledger = pendingLedger()
+    ledger.cycle = 2
+    await writeLedger(project.dir, state, ledger)
+    const store = new StateStore(project.dir, clock)
+    await expect(store.update(async (draft, transaction) => {
+      await advanceQualityLedgerCycleUnderLock(project.dir, draft, transaction, clock)
+    })).rejects.toThrow(/cannot move/i)
+    expect((await store.get()).cycle).toBe(1)
+    expect((await readLedger(project.dir, state)).cycle).toBe(2)
+  })
 })
 
 async function writeCurrentState(value: State): Promise<void> {
@@ -281,16 +344,21 @@ async function writeCurrentState(value: State): Promise<void> {
   await fs.writeFile(file, `${JSON.stringify(value)}\n`, 'utf8')
 }
 
-async function writeVerifyReceipt(log: string, slot: 'test' | 'lint' | 'build', exitCode: number): Promise<void> {
-  const dir = path.join(cycleDirPath(project.dir, state), 'verify')
+async function writeVerifyReceipt(log: string, slot: 'test' | 'lint' | 'build', exitCode: number, command = 'npm test', cycle = state.cycle): Promise<void> {
+  const receiptState = { ...state, cycle }
+  const dir = path.join(cycleDirPath(project.dir, receiptState), 'verify')
   await fs.mkdir(dir, { recursive: true })
   const file = path.join(dir, 'index.json')
   const entries: unknown[] = await fs.readFile(file, 'utf8').then((raw) => JSON.parse(raw) as unknown[]).catch(() => [])
   entries.push({
-    slot, command: 'npm test', source: 'pinned', live_command: null, log, phase: 'complete', exit_code: exitCode,
+    slot, command, source: 'pinned', live_command: null, log, phase: 'complete', exit_code: exitCode,
     timed_out: false, fingerprint: 'a'.repeat(64), cached_from_cycle: null, duration_ms: 1, at: AT,
   })
   await fs.writeFile(file, `${JSON.stringify(entries)}\n`, 'utf8')
+  const canonicalLog = log.match(/^cycle-(\d{2})\/verify\/([A-Za-z0-9_.-]+)$/)
+  const logDir = canonicalLog === null ? dir : path.join(cycleDirPath(project.dir, { ...state, cycle: Number(canonicalLog[1]) }), 'verify')
+  await fs.mkdir(logDir, { recursive: true })
+  await fs.writeFile(path.join(logDir, canonicalLog?.[2] ?? log), 'receipt\n', 'utf8')
 }
 
 async function writeAgentReceipt(

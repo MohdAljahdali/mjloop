@@ -73,3 +73,33 @@ Result: passed with no output.
 - Receipt parsing only joins relative names to `cycleDirPath` for the current run; traversal strings, unknown logs, future-cycle refs, malformed agent JSON, and report-only kinds cannot become ledger proof.
 - A passing command/test receipt must be engine-complete with exit code zero; a passing agent must itself be a validated pass result. A failed receipt cannot be relabelled into a pass through either direct or agent references.
 - No runLog/cycleAdvance wiring was added. `advanceQualityLedgerCycle` is exported but inert until the future engine transition calls it.
+
+## Fix round 2/5 — supersession, receipt provenance, and under-lock composition
+
+### Findings fixed
+
+- Verify receipt resolution now enumerates the active run's cycle ledgers, normalizes a cached row's already-run-relative log, checks that the physical engine log exists, and enforces the latest invocation for the same slot/command. A cited green that an later invocation superseded is rejected.
+- Resolved receipts carry their actual invocation cycle. Ledger `recorded_cycle` now comes from that provenance rather than the caller's current state. An old null-digest receipt remains stale even if it is explicitly submitted after a cycle advance; cross-cycle non-null reuse additionally requires the verify fingerprint for the current worktree.
+- Added `StateTransaction.beforeStatePublish` and `updateLedgerUnderLock`. `advanceQualityLedgerCycleUnderLock` uses this existing-lock transaction route, queues its fenced ledger write before state publication, and never reacquires `.mjloop/.lock`. The old public wrapper remains for standalone use.
+
+### RED
+
+`cd engine && npx vitest run tests/ops/quality-ledger.test.ts -t "prior green|prior-cycle|cached verify|composes the cycle|unchanged when"`
+
+Result: 5 intended failures. A cited old pass was accepted after a newer failure, old receipt provenance was stamped as cycle 2, a cached run-relative log was rejected as a nested path, and both under-lock calls were absent.
+
+### GREEN
+
+`cd engine && npx vitest run tests/ops/quality-ledger.test.ts tests/store/quality-store.test.ts tests/schemas/quality.test.ts tests/ops/quality-policy.test.ts`
+
+Result: 4 files / 75 tests passed.
+
+`cd engine && npx tsc -p tsconfig.json --noEmit && npx tsc -p tsconfig.tests.json --noEmit && git diff --check`
+
+Result: passed with no output.
+
+### Self-review
+
+- A receipt is accepted only when it names an engine ledger row, its canonical log exists, and it is the most recent invocation of that slot/command. Cached rows retain the original canonical log but count as the current-cycle invocation that verified the cache fingerprint.
+- Old receipts cannot gain current-cycle freshness by being re-recorded. The resolver preserves the actual cycle, and the close predicate is still independently conservative for null worktree identity.
+- The transaction test proves the future cycle transition does not wait on its own non-reentrant lock; the rejection test proves an invalid ledger advance prevents both queued ledger publication and state publication. No Task 10 call site was added.

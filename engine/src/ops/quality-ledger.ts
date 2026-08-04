@@ -8,7 +8,8 @@ import type {
 import type { State } from '../schemas/state.js'
 import { worktreeDigest } from '../store/git.js'
 import { updateLedger } from '../store/quality-store.js'
-import type { Clock } from '../store/state-store.js'
+import { updateLedgerUnderLock } from '../store/quality-store.js'
+import type { Clock, StateTransaction } from '../store/state-store.js'
 import { resolveQualityEvidenceReceipts } from './quality-evidence.js'
 
 const DIMENSIONS: readonly QualityDimension[] = ['correctness', 'security', 'alignment', 'regression', 'ui']
@@ -78,7 +79,7 @@ export async function recordQualityEvidence(
       return
     }
 
-    const resolved = await resolveQualityEvidenceReceipts(projectDir, state, input.verdict, input.evidenceRefs)
+    const resolved = await resolveQualityEvidenceReceipts(projectDir, state, input.verdict, input.evidenceRefs, digest)
     const missingKinds = entry.required_evidence.filter((kind) => !resolved.receipts.some((receipt) => receipt.kind === kind))
     if (input.verdict === 'pass' && missingKinds.length > 0) {
       setPending(entry, {
@@ -94,7 +95,7 @@ export async function recordQualityEvidence(
     entry.reason = input.reason.trim()
     entry.inputs_fingerprint = fingerprint
     entry.worktree_digest = digest
-    entry.recorded_cycle = state.cycle
+    entry.recorded_cycle = resolved.recordedCycle
     entry.checked_at = stampedAt
     entry.invalidated_at = null
   })
@@ -158,21 +159,17 @@ export async function advanceQualityLedgerCycle(
   state: State,
   now: Clock = () => new Date(),
 ): Promise<QualityLedger> {
-  return updateLedger(projectDir, state, (ledger) => {
-    if (state.cycle < ledger.cycle) throw new Error(`quality ledger cannot move from cycle ${ledger.cycle} back to ${state.cycle}`)
-    if (state.cycle === ledger.cycle) return
-    ledger.cycle = state.cycle
-    const stampedAt = now().toISOString()
-    for (const dimension of DIMENSIONS) {
-      const entry = ledger.dimensions[dimension]
-      if (entry.applicability !== 'required' || entry.status !== 'pass' || entry.worktree_digest !== null || entry.recorded_cycle === state.cycle) continue
-      setPending(entry, {
-        reason: `Evidence is stale: no worktree digest binds ${dimension} across cycle ${state.cycle}.`,
-        fingerprint: evidenceFingerprint(state, dimension, [], [], [], null),
-        invalidatedAt: stampedAt,
-      })
-    }
-  })
+  return updateLedger(projectDir, state, (ledger) => advanceLedgerCycle(ledger, state, now))
+}
+
+/** StateStore transaction variant; it queues the fenced ledger publish rather than reacquiring its lock. */
+export async function advanceQualityLedgerCycleUnderLock(
+  projectDir: string,
+  state: State,
+  transaction: StateTransaction,
+  now: Clock = () => new Date(),
+): Promise<QualityLedger> {
+  return updateLedgerUnderLock(projectDir, state, transaction, (ledger) => advanceLedgerCycle(ledger, state, now))
 }
 
 /** Pure closure predicate: it trusts only the persisted policy and ledger. */
@@ -234,6 +231,22 @@ function setPending(
   entry.recorded_cycle = null
   entry.checked_at = null
   entry.invalidated_at = value.invalidatedAt
+}
+
+function advanceLedgerCycle(ledger: QualityLedger, state: State, now: Clock): void {
+  if (state.cycle < ledger.cycle) throw new Error(`quality ledger cannot move from cycle ${ledger.cycle} back to ${state.cycle}`)
+  if (state.cycle === ledger.cycle) return
+  ledger.cycle = state.cycle
+  const stampedAt = now().toISOString()
+  for (const dimension of DIMENSIONS) {
+    const entry = ledger.dimensions[dimension]
+    if (entry.applicability !== 'required' || entry.status !== 'pass' || entry.worktree_digest !== null || entry.recorded_cycle === state.cycle) continue
+    setPending(entry, {
+      reason: `Evidence is stale: no worktree digest binds ${dimension} across cycle ${state.cycle}.`,
+      fingerprint: evidenceFingerprint(state, dimension, [], [], [], null),
+      invalidatedAt: stampedAt,
+    })
+  }
 }
 
 function evidenceFingerprint(
