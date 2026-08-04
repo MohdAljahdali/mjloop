@@ -1053,7 +1053,22 @@ describe('read', () => {
     it('serves only the public fields, and the fingerprint a decision has to swap on', async () => {
       const runId = await startQualityRun()
       await amend('max_cycles', 9)
-      await requestDecision(runId)
+      // Absolute references, which reach these records in practice rather than
+      // in theory: `log.ts` copies `result.files_touched` verbatim into a
+      // request's targets and `AgentResultSchema` puts no relative-path
+      // constraint on it, while `recursiveRemoval` reads `rm -rf /abs/path`'s
+      // operands straight off the argv.
+      const insideRun = path.join(project.dir, '.mjloop', 'runs', runId, 'cycle-01', 'verify', 'test.log')
+      const insideProject = path.join(project.dir, 'src', 'billing')
+      await passCorrectness([insideRun, insideProject, '/etc/passwd'])
+      await requestDecision(runId, {
+        candidate: {
+          kind: 'feature_delete',
+          targets: [insideRun, insideProject, '/etc/passwd'],
+          operation: `rm -rf ${insideProject}`,
+          rollback: null,
+        },
+      })
 
       const view = await readQualityRun(project.dir, runId)
 
@@ -1066,9 +1081,17 @@ describe('read', () => {
       // refuses a decision that does not name the operation currently shown,
       // so a view without it is a screen whose Approve button cannot work.
       expect(view.pendingRequest?.fingerprint).toBe('b'.repeat(64))
-      expect(view.pendingRequest?.candidate.targets).toEqual(['users'])
-      // Nothing on this wire says where this project lives on disk.
-      expect(JSON.stringify(view)).not.toContain(project.dir)
+      // Run-relative, then project-relative, then the basename for a path
+      // outside the project entirely — the three things the guard actually
+      // does, on both lists of references it guards.
+      const redacted = ['cycle-01/verify/test.log', 'src/billing', 'passwd']
+      expect(view.ledger.dimensions.correctness.evidence_refs).toEqual(redacted)
+      expect(view.pendingRequest?.candidate.targets).toEqual(redacted)
+      // …and the operation stays byte-exact, because it is the literal command
+      // being approved rather than a reference to one. It is the *only* place
+      // a path survives: one occurrence on the whole wire, and it is this one.
+      expect(view.pendingRequest?.candidate.operation).toBe(`rm -rf ${insideProject}`)
+      expect(JSON.stringify(view).split(project.dir)).toHaveLength(2)
     })
 
     it('reports no pending request once the operation has been answered', async () => {

@@ -1,7 +1,11 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { DESTRUCTIVE_REQUESTS_FILE, readDestructiveRequestsAt } from '../ops/destructive-risk.js'
+import {
+  DESTRUCTIVE_REQUESTS_FILE,
+  readDestructiveRequestsAt,
+  type DestructiveRequest,
+} from '../ops/destructive-risk.js'
 import { HISTORY_DEFAULT_LIMIT } from '../ops/history.js'
 import { preflightEstimate, type Preflight } from '../ops/preflight.js'
 import { readProjectSkills } from '../ops/project-skills.js'
@@ -961,8 +965,28 @@ export async function readQualityRun(projectDir: string, runId: string): Promise
     // The last word recorded about each operation is what `decideDestructiveRequest`
     // answers, so the pending one is found the same way it decides: the newest
     // record, never an earlier proposal somebody has already dealt with.
-    pendingRequest: requests.requests.filter((request) => request.status === 'pending').at(-1) ?? null,
+    pendingRequest: publicRequest(requests.requests.filter((request) => request.status === 'pending').at(-1), reference),
   }
+}
+
+/**
+ * One pending request, with its target list redacted and its operation intact.
+ *
+ * The two fields are not the same kind of thing. `targets` is a list of
+ * *references* — and an absolute one reaches it today rather than in theory:
+ * `log.ts` builds `deletedFiles` from `result.files_touched` verbatim and
+ * `AgentResultSchema` puts no relative-path constraint on it, while
+ * `recursiveRemoval` reads `rm -rf /abs/path`'s operands straight off the
+ * argv. `operation` is the literal command being approved, so it stays
+ * byte-exact: an operator approving an abridged operation would be approving
+ * something other than what runs.
+ */
+function publicRequest(
+  request: DestructiveRequest | undefined,
+  reference: (value: string) => string,
+): DestructiveRequest | null {
+  if (request === undefined) return null
+  return { ...request, candidate: { ...request.candidate, targets: request.candidate.targets.map(reference) } }
 }
 
 /**
@@ -974,10 +998,11 @@ export async function readQualityRun(projectDir: string, runId: string): Promise
  * the basename survives, because where a machine keeps its files is not a fact
  * a browser needs and is one an operator's screenshot should not carry.
  *
- * Deliberately not applied to a destructive request's `targets` or `operation`:
- * those are the proposal's own words, they are what the operator is deciding
- * about, and an abridged operation is a decision made against something other
- * than what will happen.
+ * Deliberately not applied to a destructive request's `operation`, and only to
+ * that one field: it is the literal command being approved, so an abridged one
+ * would be a decision made against something other than what will happen. The
+ * `targets` beside it are references like any other and go through here — see
+ * `publicRequest`.
  */
 function publicReference(reference: string, projectDir: string, runDir: string): string {
   if (!path.isAbsolute(reference)) return reference
