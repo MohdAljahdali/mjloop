@@ -1,6 +1,5 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { initLoop } from '../../src/ops/init.js'
 import { preflightEstimate } from '../../src/ops/preflight.js'
@@ -261,28 +260,19 @@ describe('preflightEstimate', () => {
     expect(preflight.comparable?.minutes).toEqual({ median: 21.5, min: 21.5, max: 21.5 })
   })
 
-  it('names no price and no model', async () => {
-    const source = await fs.readFile(fileURLToPath(new URL('../../src/ops/preflight.ts', import.meta.url)), 'utf8')
+  it('previews all modes, selects the configured one, and does not create a run pin', async () => {
+    const preflight = await preflightEstimate(project.dir, { track: 'build' })
 
-    // Comments count. The reason this file names no currency figure is that the
-    // engine cannot see what an agent runs on — it is frontmatter in a
-    // directory the engine has never read — so any number here would be a guess
-    // wearing an estimate's clothes, and wrong within a quarter as rates move.
-    // A future reader adding one should have to argue with that sentence.
-    for (const pattern of [
-      /[$£€¥₿]/,
-      /\busd\b/i,
-      /\bprice\b/i,
-      /\bcost\b/i,
-      /\bclaude\b/i,
-      /\bopus\b/i,
-      /\bsonnet\b/i,
-      /\bhaiku\b/i,
-      /\bgpt\b/i,
-      /\bmodel\b/i,
-      /\btokens?\b/i,
-    ]) {
-      expect(source, String(pattern)).not.toMatch(pattern)
+    expect(Object.keys(preflight.quality.comparisons).sort()).toEqual(['adaptive', 'economy', 'strict'])
+    expect(preflight.quality.selected).toEqual(preflight.quality.comparisons.adaptive)
+    expect(preflight.quality.comparisons.economy.policy.mode).toBe('economy')
+    expect(preflight.quality.comparisons.strict.policy.mode).toBe('strict')
+    for (const preview of Object.values(preflight.quality.comparisons)) {
+      expect(preview.forecast.inputTokens.kind).toMatch(/^(measured|estimated|unavailable)$/)
+      expect(preview.forecast.outputTokens.kind).toMatch(/^(measured|estimated|unavailable)$/)
+      expect(preview.forecast.cost).toEqual({ kind: 'unavailable', currency: null, value: null })
+      expect(preview.forecast.elapsed).toEqual({ kind: 'unavailable', valueMs: null })
     }
+    expect((await fs.readdir(path.join(project.dir, '.mjloop', 'runs')))).toEqual([])
   })
 })

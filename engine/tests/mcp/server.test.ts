@@ -10,7 +10,9 @@ import type { SkillPackage } from '../../src/schemas/skill-library.js'
 import { loadConfig, writeConfig } from '../../src/store/config-store.js'
 import { readFeatureRevision } from '../../src/store/feature-store.js'
 import { acceptProfile } from '../../src/store/project-profile-store.js'
+import { readPolicy } from '../../src/store/quality-store.js'
 import { writePackage } from '../../src/store/skill-library-store.js'
+import { StateStore } from '../../src/store/state-store.js'
 import { makeTmpProject, type TmpProject } from '../helpers/tmp-project.js'
 
 let project: TmpProject
@@ -269,6 +271,22 @@ describe('MCP surface', () => {
     expect(verify?.description).toMatch(/queued/)
     expect(verify?.description).toMatch(/nothing ran/)
     expect(verify?.description).toMatch(/lock/)
+  })
+
+  it('declares supervision on run start and defaults it to supervised', async () => {
+    const { tools } = await client.listTools()
+    const start = tools.find((tool) => tool.name === 'mjloop_run_start')
+    expect(Object.keys(properties(start?.inputSchema))).toContain('supervision')
+    expect(start?.inputSchema.required ?? []).not.toContain('supervision')
+
+    await client.callTool({ name: 'mjloop_init', arguments: { project_dir: project.dir } })
+    const result = await client.callTool({
+      name: 'mjloop_run_start',
+      arguments: { project_dir: project.dir, track: 'edit', goal: 'Rename submit label' },
+    })
+    expect(isError(result)).toBe(false)
+    const state = await new StateStore(project.dir).get()
+    expect((await readPolicy(project.dir, state)).supervision).toBe('supervised')
   })
 })
 
@@ -1486,7 +1504,9 @@ describe('feature briefs', () => {
 
     const state = JSON.parse(textOf(started))
     const dir = path.join(project.dir, '.mjloop', 'runs', `${state.run_id}--adhoc--edit`)
-    expect((await fs.readdir(dir)).sort()).toEqual(['skill-selection.json', 'verify-pinned.json'])
+    expect((await fs.readdir(dir)).sort()).toEqual([
+      'quality-ledger.json', 'quality-policy.json', 'skill-selection.json', 'verify-pinned.json',
+    ])
     const manifest = JSON.parse(await fs.readFile(path.join(dir, 'skill-selection.json'), 'utf8'))
     expect(manifest.sourceBrief).toEqual({ id, revision: 1 })
   })

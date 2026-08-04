@@ -104,6 +104,7 @@ export function buildServer(): McpServer {
         project_dir: projectDirArg,
         track: IdSchema.describe('Track name as defined in .mjloop/config.yaml'),
         goal: z.string().min(1).describe('What this run must achieve'),
+        supervision: z.enum(['supervised', 'unattended']).optional().default('supervised'),
         plan: IdSchema.nullish().describe('Plan id, e.g. P001'),
         story: IdSchema.nullish().describe('Story id, e.g. P001-S02'),
         feature: FeatureIdSchema.nullish().describe(
@@ -112,12 +113,13 @@ export function buildServer(): McpServer {
         ),
       },
     },
-    async ({ project_dir, track, goal, plan, story, feature }) =>
+    async ({ project_dir, track, goal, supervision, plan, story, feature }) =>
       guard(async () =>
         ok(
           await runStart(resolveProjectDir(project_dir), {
             track,
             goal,
+            supervision,
             plan: plan ?? null,
             story: story ?? null,
             // Validated by `FeatureIdSchema` on the way in rather than left to
@@ -796,7 +798,7 @@ export function buildServer(): McpServer {
     {
       title: 'Read a report over past runs',
       description:
-        'Three projections of one bounded read, each cheaper folded into this tool than declared beside it — see this file\'s header for what a fourth declaration costs on every turn. telemetry: what every specialist this project drafted actually returned, so a mode or an available list can be pruned on evidence — a report, never a rule. preflight: the shape of a run on a track before it starts — roster, dispatches per cycle, ceiling, and what comparable past runs took. skills: this machine\'s skill library (source, revision, license, audit) beside this project\'s acceptances of it (digest, components, agents, policy, status) — a read of what mjloop-cli skills already decided, never a way to decide it. None is folded into routine output; ask for it.',
+        'Three projections of one bounded read, each cheaper folded into this tool than declared beside it — see this file\'s header for what a fourth declaration costs on every turn. telemetry: what every specialist this project drafted actually returned, so a mode or an available list can be pruned on evidence — a report, never a rule. preflight: the shape of a run before it starts — roster, dispatch ceiling, comparable past runs, and selected plus all-mode quality-policy forecasts; it writes no run pin. skills: this machine\'s skill library (source, revision, license, audit) beside this project\'s acceptances of it (digest, components, agents, policy, status) — a read of what mjloop-cli skills already decided, never a way to decide it. None is folded into routine output; ask for it.',
       inputSchema: {
         project_dir: projectDirArg,
         report: z.enum(['telemetry', 'preflight', 'skills']),

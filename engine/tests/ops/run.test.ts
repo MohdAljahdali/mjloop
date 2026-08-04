@@ -956,7 +956,9 @@ describe('the run skill manifest', () => {
     expect(await manifestExists(state)).toBe(false)
     // Not merely "no manifest": the directory holds exactly what it held
     // before this story existed, and nothing else.
-    expect((await fs.readdir(runDirPath(project.dir, state))).sort()).toEqual(['verify-pinned.json'])
+    expect((await fs.readdir(runDirPath(project.dir, state))).sort()).toEqual([
+      'quality-ledger.json', 'quality-policy.json', 'verify-pinned.json',
+    ])
   })
 
   it('pins nothing when the named feature does not exist', async () => {

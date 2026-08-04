@@ -10,9 +10,10 @@ import {
   type SkillManifest,
   type SkillSelection,
 } from '../schemas/skill-selection.js'
+import type { Supervision } from '../schemas/quality.js'
 import type { Finding, Result, Severity, State } from '../schemas/state.js'
 import { LedgerSchema, PinnedVerifySchema, type LedgerEntry } from '../schemas/verify.js'
-import { loadConfig } from '../store/config-store.js'
+import { loadConfig, loadConfigRecord } from '../store/config-store.js'
 import { readFeatureBrief } from '../store/feature-store.js'
 import { resolveLoopPaths } from '../store/paths.js'
 import { readStory } from '../store/plan-store.js'
@@ -22,6 +23,12 @@ import { StateStore, type Clock } from '../store/state-store.js'
 import { cycleFingerprint, distinctFindings, errorFingerprint } from './fingerprint.js'
 import { readAcceptedProjectSkills } from './skill-library.js'
 import { analyseConcurrency, selectSkills } from './skill-selection.js'
+import {
+  QualityPolicyIntegrityError,
+  buildProjectQualityPolicy,
+  createInitialQualityLedger,
+} from './quality-policy.js'
+import { writeLedger, writePolicyOnce } from '../store/quality-store.js'
 
 export class UnknownTrackError extends Error {
   constructor(track: string, known: string[]) {
@@ -64,6 +71,7 @@ function cycleDirName(cycle: number): string {
 export interface RunStartInput {
   track: string
   goal: string
+  supervision?: Supervision
   story?: string | null
   plan?: string | null
   /**
@@ -76,7 +84,7 @@ export interface RunStartInput {
 }
 
 export async function runStart(projectDir: string, input: RunStartInput, now: Clock = () => new Date()): Promise<State> {
-  const config = await loadConfig(projectDir)
+  const { config, qualitySource } = await loadConfigRecord(projectDir)
   if (findTrack(config, input.track) === undefined) {
     throw new UnknownTrackError(input.track, Object.keys(config.tracks))
   }
@@ -95,6 +103,17 @@ export async function runStart(projectDir: string, input: RunStartInput, now: Cl
   // of the orphan. `resolveSkillManifest` reads and validates; it writes
   // nothing, so a throw here leaves exactly the nothing an unknown story does.
   const manifest = await resolveSkillManifest(projectDir, config, input.feature, now)
+  const track = findTrack(config, input.track)
+  if (track === undefined) throw new UnknownTrackError(input.track, Object.keys(config.tracks))
+  const qualityPolicy = await buildProjectQualityPolicy(projectDir, {
+    config,
+    qualitySource,
+    track,
+    goal: input.goal,
+    story: input.story,
+    feature: input.feature,
+    supervision: input.supervision ?? 'supervised',
+  }, now)
 
   const state = await new StateStore(projectDir, now).update(async (draft) => {
     // Computed inside the locked update so two overlapping runStart calls
@@ -136,10 +155,27 @@ export async function runStart(projectDir: string, input: RunStartInput, now: Cl
     // A new run has proven nothing. Carrying a previous run's reproduction
     // would open this run's gate for a defect nobody demonstrated here.
     draft.reproduction = null
+    // Marker-first by design: after this state lands, both protected records
+    // are mandatory. A crash or write failure can therefore never downgrade
+    // the run to live config; integrity classification halts it instead.
+    draft.quality_policy_version = 1
     draft.halt_reason = null
   })
 
   await fs.mkdir(runDirPath(projectDir, state), { recursive: true })
+  try {
+    await writePolicyOnce(projectDir, state, qualityPolicy)
+    await writeLedger(projectDir, state, createInitialQualityLedger(qualityPolicy, now))
+  } catch (error) {
+    const integrity = new QualityPolicyIntegrityError(`new run could not write both records: ${errorMessage(error)}`)
+    await new StateStore(projectDir, now).update((draft) => {
+      if (draft.run_id !== state.run_id) return
+      draft.status = 'halted'
+      draft.current.stage = 'halted'
+      draft.halt_reason = integrity.message
+    })
+    throw integrity
+  }
   await pinVerifyBlock(projectDir, state, config, now)
   await writeSkillManifest(projectDir, state, manifest)
   return state
@@ -961,6 +997,10 @@ function oneLine(text: string): string {
 
 function truncate(text: string, max: number): string {
   return text.length <= max ? text : `${text.slice(0, max - 1)}…`
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
 }
 
 export async function halt(

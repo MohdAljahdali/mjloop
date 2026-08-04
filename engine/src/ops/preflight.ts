@@ -1,20 +1,19 @@
 import { dispatchWaves, findTrack, forbiddenSpecialists, forcedSpecialists } from '../schemas/config.js'
+import type { QualityMode } from '../schemas/config.js'
+import type { Supervision } from '../schemas/quality.js'
 import { loadConfig } from '../store/config-store.js'
 import { readRunHistory, type RunRecord } from './history.js'
+import { previewQualityPolicies, type QualityPolicyPreview } from './quality-policy.js'
 import { UnknownTrackError } from './run.js'
 
 /**
  * The shape of a run before it starts, in the units the engine can actually
  * observe: agents per cycle, the cycle cap, and what comparable runs did.
  *
- * **It names no currency figure, and that is the design, not an omission.**
- * The engine cannot see what an agent runs on: that is frontmatter under the
- * plugin's `agents/` directory, which the engine has never read and cannot
- * reliably locate from `projectDir`, and a project-local agent may shadow a
- * plugin one without the engine knowing. A figure built on that would be a
- * guess wearing an estimate's clothes, and it would be wrong within a quarter
- * as published rates move. `tests/ops/preflight.test.ts` asserts at the source
- * level that this file names none.
+ * Quality forecasts label unavailable host facts instead of turning them into
+ * invented prices or durations. The engine can estimate its own bounded input
+ * packet; model output, currency and elapsed time stay unavailable until a
+ * host adapter actually supplies them.
  *
  * A second projection over `readRunHistory`, alongside `readTelemetry`. It
  * walks nothing itself.
@@ -67,6 +66,10 @@ export interface Preflight {
   ceiling: { cycles: number; dispatches: number }
   /** `null` when the project has no comparable run: *no basis* is an answer, and an invented one is not. */
   comparable: Comparable | null
+  quality: {
+    selected: QualityPolicyPreview
+    comparisons: Record<QualityMode, QualityPolicyPreview>
+  }
 }
 
 export interface PreflightInput {
@@ -78,6 +81,10 @@ export interface PreflightInput {
    * produces a range wide enough to be useless.
    */
   story?: string | null
+  /** Optional preview context. A report caller that omits it gets a bounded track-level preview. */
+  goal?: string
+  feature?: string | null
+  supervision?: Supervision
 }
 
 export async function preflightEstimate(projectDir: string, input: PreflightInput): Promise<Preflight> {
@@ -98,6 +105,7 @@ export async function preflightEstimate(projectDir: string, input: PreflightInpu
   for (const agent of closing) perCycle.delete(agent)
 
   const dispatchesPerCycle = perCycle.size
+  const quality = await previewQualityPolicies(projectDir, input)
 
   return {
     track: input.track,
@@ -124,6 +132,10 @@ export async function preflightEstimate(projectDir: string, input: PreflightInpu
       dispatches: track.max_cycles * dispatchesPerCycle + closing.size,
     },
     comparable: await readComparable(projectDir, input),
+    quality: {
+      selected: quality[config.orchestration.quality.mode],
+      comparisons: quality,
+    },
   }
 }
 

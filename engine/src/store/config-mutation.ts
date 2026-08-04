@@ -20,6 +20,8 @@ import {
 import { writeTextAtomic } from './atomic.js'
 import { withLock } from './lock.js'
 import { resolveLoopPaths } from './paths.js'
+import { StateStore } from './state-store.js'
+import { ensureRunQualityPolicy } from '../ops/quality-policy.js'
 
 const VerifySlotSchema = z.enum(['test', 'lint', 'build'])
 
@@ -147,6 +149,37 @@ export async function mutateConfig(projectDir: string, patch: ConfigPatch): Prom
   const parsedPatch = ConfigPatchSchema.parse(patch)
   const paths = resolveLoopPaths(projectDir)
 
+  // A run opened before quality pins existed must snapshot the old setting
+  // before this guarded write moves it. Existing pinned runs are only
+  // validated here; ensureRunQualityPolicy never rewrites their policy.
+  if (parsedPatch.changes.some((change) => change.kind === 'orchestration.quality.mode')) {
+    try {
+      const state = await new StateStore(projectDir).get()
+      const active = ['running', 'paused', 'waiting_for_user', 'budget_exhausted'].includes(state.status)
+      if (state.run_id !== null && state.track !== null && active) {
+        await ensureRunQualityPolicy(projectDir)
+      }
+    } catch (error) {
+      try {
+        await fs.access(paths.state)
+      } catch {
+        // Store-only tests and configuration preparation legitimately have no
+        // state file yet. A project with a state file must not hide a corrupt
+        // or incomplete policy behind a successful mode change.
+        return mutateConfigWithoutBootstrap(projectDir, parsedPatch, paths)
+      }
+      throw error
+    }
+  }
+
+  return mutateConfigWithoutBootstrap(projectDir, parsedPatch, paths)
+}
+
+async function mutateConfigWithoutBootstrap(
+  projectDir: string,
+  parsedPatch: ConfigPatch,
+  paths: ReturnType<typeof resolveLoopPaths>,
+): Promise<{ revision: string }> {
   return withLock(paths.lock, async () => {
     let raw: string
     try {
@@ -247,8 +280,12 @@ function applyChange(document: YAML.Document, change: ConfigChange): void {
       document.setIn(['orchestration', 'execution', 'repair_attempts'], change.value)
       return
     case 'orchestration.quality.mode':
-      document.deleteIn(['orchestration', 'quality', 'independent_plan_review'])
-      document.deleteIn(['orchestration', 'quality', 'independent_verification'])
+      if (document.hasIn(['orchestration', 'quality', 'independent_plan_review'])) {
+        document.deleteIn(['orchestration', 'quality', 'independent_plan_review'])
+      }
+      if (document.hasIn(['orchestration', 'quality', 'independent_verification'])) {
+        document.deleteIn(['orchestration', 'quality', 'independent_verification'])
+      }
       document.setIn(['orchestration', 'quality', 'mode'], change.value)
       return
     case 'orchestration.skills.sources':
