@@ -9,7 +9,7 @@ import * as z from 'zod'
  */
 export const IdSchema = z.string().regex(/^[A-Za-z0-9_-]+$/, 'only letters, digits, "-" and "_" are allowed')
 
-export const StatusSchema = z.enum(['idle', 'running', 'paused', 'halted', 'done', 'failed'])
+export const StatusSchema = z.enum(['idle', 'running', 'paused', 'waiting_for_user', 'budget_exhausted', 'halted', 'done', 'failed'])
 export const StageSchema = z.enum(['idle', 'compose', 'execute', 'judge', 'halted', 'done'])
 export const SeveritySchema = z.enum(['high', 'medium', 'low'])
 export const ResultSchema = z.enum(['pass', 'fail', 'blocked'])
@@ -79,6 +79,11 @@ export const StateSchema = z.strictObject({
    * exists to prevent.
    */
   started_at: z.iso.datetime().nullable().default(null),
+  /**
+   * Marks a run that has an immutable quality policy pin. It defaults to null
+   * so state files written before quality policies existed remain readable.
+   */
+  quality_policy_version: z.literal(1).nullable().default(null),
   current: z.strictObject({
     plan: IdSchema.nullable(),
     story: IdSchema.nullable(),
@@ -135,6 +140,7 @@ export function initialState(now: Date): State {
     // `.nullable().default(null)` field is required — the same reason
     // `last_fingerprint`, `cycle_errors` and `reproduction` are written here.
     started_at: null,
+    quality_policy_version: null,
     current: { plan: null, story: null, stage: 'idle' },
     findings: [],
     no_progress_count: 0,
