@@ -60,6 +60,9 @@ export function emptySnapshot(patch: Partial<Snapshot> = {}): Snapshot {
       runs: '',
       cycle: 'idle',
       memory: '',
+      // `-` is what an idle project reports: no run is open, so there are no
+      // quality documents to stamp.
+      quality: '-',
       profile: '-',
       features: '',
       skills: '',

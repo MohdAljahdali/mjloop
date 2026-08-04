@@ -13,6 +13,7 @@ import { WEB_CODES } from '../../src/web/codes.js'
 import { approveFeatureBrief, createFeatureBrief, updateFeatureDraft } from '../../src/store/feature-store.js'
 import { loadConfig, writeConfig } from '../../src/store/config-store.js'
 import { acceptProfile } from '../../src/store/project-profile-store.js'
+import { StateStore } from '../../src/store/state-store.js'
 import { acceptSkill } from '../../src/store/skill-acceptance-store.js'
 import { writePackage } from '../../src/store/skill-library-store.js'
 import { makeTmpProject, type TmpProject } from '../helpers/tmp-project.js'
@@ -580,6 +581,8 @@ describe('handleApi', () => {
       '/api/transcripts/..%2F..%2Fconfig.yaml',
       '/api/roster/../../etc/valid',
       '/api/roster/..%2F..%2Fconfig.yaml/valid',
+      '/api/runs/../../etc/quality',
+      '/api/runs/..%2F..%2Fconfig.yaml/quality',
       // An un-normalised path, which a browser would never send but a raw
       // socket can: it is still ours to refuse rather than to resolve.
       '/api/../app.js',
@@ -629,6 +632,60 @@ describe('handleApi', () => {
     const second = JSON.stringify((await call('/api/plans/P001'))?.body)
     expect(first).toBe(second)
     expect(etag(first)).toBe(etag(second))
+  })
+})
+
+describe('/api/runs/:id/quality', () => {
+  async function startQualityRun(): Promise<string> {
+    const config = await loadConfig(project.dir)
+    config.orchestration.quality.mode = 'adaptive'
+    await writeConfig(project.dir, config)
+    await runStart(project.dir, { track: 'edit', goal: 'Rename the submit label' }, clock)
+    const state = await new StateStore(project.dir).get()
+    return runDirName(state)
+  }
+
+  it('serves the run quality view, unchanged between calls and with no path on it', async () => {
+    const runId = await startQualityRun()
+
+    const first = await call(`/api/runs/${runId}/quality`)
+    expect(first?.status).toBe(200)
+    expect(first?.body).toMatchObject({ policy: { mode: 'adaptive' }, amendments: [], pendingRequest: null })
+
+    // Conditional-GET affordable for the same reason every other document here
+    // is: the body does not flap, so the poll costs one 304.
+    const second = await call(`/api/runs/${runId}/quality`)
+    const body = JSON.stringify(first?.body)
+    expect(etag(body)).toBe(etag(JSON.stringify(second?.body)))
+    expect(body).not.toContain(project.dir)
+  })
+
+  it('is a 404 for a run with no pin and a 500 for a record it cannot read', async () => {
+    const runId = await startQualityRun()
+    expect((await call('/api/runs/nope/quality'))?.status).toBe(404)
+
+    await fs.writeFile(
+      path.join(project.dir, '.mjloop', 'runs', runId, 'quality-policy.json'),
+      'not json at all\n',
+      'utf8',
+    )
+    // The diagnosis goes to the server's own stderr by design; this test is
+    // about the wire, so the terminal stays clean.
+    const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
+    const failure = await call(`/api/runs/${runId}/quality`)
+    stderr.mockRestore()
+    expect(failure?.status).toBe(500)
+    expect(failure?.body).toEqual({ error: { code: 'error.unreadable' } })
+  })
+
+  it('reads and never writes', async () => {
+    const runId = await startQualityRun()
+    for (const method of ['POST', 'PUT', 'DELETE', 'PATCH']) {
+      expect((await call(`/api/runs/${runId}/quality`, method))?.status).toBe(405)
+    }
+    // No sub-path: a route that took anything beyond the run id would be the
+    // first half of one that decided something.
+    expect((await call(`/api/runs/${runId}/quality/approve`))?.status).toBe(404)
   })
 })
 

@@ -1,3 +1,4 @@
+import crypto from 'node:crypto'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -27,6 +28,20 @@ beforeEach(async () => {
 afterEach(async () => {
   await project.cleanup()
 })
+
+/** Every file under `.mjloop/`, hashed — the shape `tests/web/read.test.ts` uses for the same property. */
+async function hashTree(dir: string): Promise<Map<string, string>> {
+  const out = new Map<string, string>()
+  const walk = async (at: string): Promise<void> => {
+    for (const entry of await fs.readdir(at, { withFileTypes: true })) {
+      const full = path.join(at, entry.name)
+      if (entry.isDirectory()) await walk(full)
+      else out.set(full, crypto.createHash('sha256').update(await fs.readFile(full)).digest('hex'))
+    }
+  }
+  await walk(path.join(dir, '.mjloop'))
+  return out
+}
 
 function cycleDir(run: string, cycle: number): string {
   return path.join(project.dir, '.mjloop', 'runs', run, `cycle-${String(cycle).padStart(2, '0')}`)
@@ -261,6 +276,7 @@ describe('preflightEstimate', () => {
   })
 
   it('previews all modes, selects the configured one, and does not create a run pin', async () => {
+    const before = await hashTree(project.dir)
     const preflight = await preflightEstimate(project.dir, { track: 'build' })
 
     expect(Object.keys(preflight.quality.comparisons).sort()).toEqual(['adaptive', 'economy', 'strict'])
@@ -274,5 +290,9 @@ describe('preflightEstimate', () => {
       expect(preview.forecast.elapsed).toEqual({ kind: 'unavailable', valueMs: null })
     }
     expect((await fs.readdir(path.join(project.dir, '.mjloop', 'runs')))).toEqual([])
+    // Not only "no run": a preview that pinned a policy, opened a ledger,
+    // recorded an amendment or composed a roster would leave one of these
+    // files behind, and comparing three modes is a question, not an action.
+    expect(await hashTree(project.dir)).toEqual(before)
   })
 })

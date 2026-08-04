@@ -1,15 +1,18 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { DESTRUCTIVE_REQUESTS_FILE, readDestructiveRequestsAt } from '../ops/destructive-risk.js'
 import { HISTORY_DEFAULT_LIMIT } from '../ops/history.js'
 import { preflightEstimate, type Preflight } from '../ops/preflight.js'
 import { readProjectSkills } from '../ops/project-skills.js'
+import { effectiveBudget } from '../ops/quality-budget.js'
 import { rosterValidity, type RosterValidity } from '../ops/roster.js'
 import { UnknownTrackError } from '../ops/run.js'
 import { readTelemetry, type Telemetry } from '../ops/telemetry.js'
 import { readVerifyLedger } from '../ops/verify.js'
 import { AgentResultSchema, RosterSchema } from '../schemas/contract.js'
 import type { FeatureBrief, FeatureBriefStatus } from '../schemas/feature.js'
+import { QualityLedgerSchema, QualityPolicySchema, type QualityLedger } from '../schemas/quality.js'
 import { FindingSchema, type State } from '../schemas/state.js'
 import { ManifestSchema, PlanFrontmatterSchema, StoryFrontmatterSchema } from '../schemas/plan.js'
 import { SkillManifestSchema, type SkillManifest } from '../schemas/skill-selection.js'
@@ -25,6 +28,12 @@ import {
 import { parseFrontmatter } from '../store/frontmatter.js'
 import { listMemories, readMemory } from '../store/memory-store.js'
 import { resolveLoopPaths } from '../store/paths.js'
+import {
+  QUALITY_AMENDMENTS_FILE,
+  QUALITY_LEDGER_FILE,
+  QUALITY_POLICY_FILE,
+  readAmendmentsAt,
+} from '../store/quality-store.js'
 import { findPlanDir, listStories, type Story } from '../store/plan-store.js'
 import { readAcceptedProfile, readProposedProfile } from '../store/project-profile-store.js'
 import { listAgents, projectAgentsDir, type AgentDoc } from '../store/agent-store.js'
@@ -36,7 +45,7 @@ import type { ProjectSkillOnDisk, UnreadableProjectSkill } from '../schemas/proj
 import { StateStore } from '../store/state-store.js'
 import type { Config } from '../schemas/config.js'
 import type { ProjectComponent } from '../schemas/project-profile.js'
-import type { AgentView, AgentsView } from './protocol.js'
+import type { AgentView, AgentsView, QualityRunView } from './protocol.js'
 
 /**
  * Everything the read API serves.
@@ -868,6 +877,119 @@ export async function readPreflightEstimate(projectDir: string, track: string): 
   }
 }
 
+/* ── one run's quality records ───────────────────────────────────────────── */
+
+/**
+ * How many amendments one response carries.
+ *
+ * The journal only grows — one line per ceiling an operator raised — and this
+ * document is re-fetched whenever `revisions.quality` moves. The newest are
+ * kept: they are the ones the ceilings on screen actually rest on, and
+ * `effectiveBudget` is derived from *every* line on disk regardless of how many
+ * fit on the wire.
+ */
+export const QUALITY_AMENDMENTS_MAX = 25
+
+/**
+ * How many evidence references one ledger dimension carries.
+ *
+ * `QualityLedgerEntrySchema` allows a hundred per dimension and there are five
+ * dimensions, so the record itself is bounded — this is the tighter bound the
+ * wire is willing to pay for on every poll. The newest are kept, for the same
+ * reason `CYCLE_VERIFY_MAX` keeps the newest ledger rows.
+ */
+export const QUALITY_EVIDENCE_MAX = 20
+
+/**
+ * The quality records of one run, as an operator may see them.
+ *
+ * Three fixed filenames inside one run directory, plus the decision record
+ * beside them. Nothing here writes, and nothing here is reachable from an
+ * agent: the two doors that *change* any of this — `quality.budget` and
+ * `quality.decision` — live in `web/writes.ts`, and this reader is what tells
+ * the screen those doors are pressed from what it is deciding about.
+ *
+ * A run that pinned no policy is a 404, and a record that exists and does not
+ * parse raises instead — the same asymmetry `readProfileView` states for an
+ * accepted component map, and for the same reason: answering "this run has no
+ * quality policy" for a policy sitting on disk would describe a run that has
+ * ceilings as one that has none.
+ */
+export async function readQualityRun(projectDir: string, runId: string): Promise<QualityRunView> {
+  const dir = path.join(resolveLoopPaths(projectDir).runs, runId)
+  const policy = await readQualityRecord(path.join(dir, QUALITY_POLICY_FILE), QualityPolicySchema, 'quality')
+  const [ledger, amendments, requests] = await Promise.all([
+    readQualityRecord(path.join(dir, QUALITY_LEDGER_FILE), QualityLedgerSchema, 'quality'),
+    readAmendmentsAt(path.join(dir, QUALITY_AMENDMENTS_FILE)),
+    readDestructiveRequestsAt(path.join(dir, DESTRUCTIVE_REQUESTS_FILE)),
+  ])
+  const reference = (value: string): string => publicReference(value, projectDir, dir)
+
+  return {
+    policy: {
+      ...policy,
+      risk: {
+        ...policy.risk,
+        signals: policy.risk.signals.map((signal) => ({ ...signal, evidence: signal.evidence.map(reference) })),
+      },
+      dispatches: policy.dispatches.map(({ agent, instance, dimensions, reason }) => ({
+        agent,
+        instance,
+        dimensions,
+        reason,
+      })),
+    },
+    ledger: {
+      ...ledger,
+      dimensions: Object.fromEntries(
+        Object.entries(ledger.dimensions).map(([dimension, entry]) => [
+          dimension,
+          { ...entry, evidence_refs: entry.evidence_refs.slice(-QUALITY_EVIDENCE_MAX).map(reference) },
+        ]),
+      ) as QualityLedger['dimensions'],
+    },
+    amendments: amendments.slice(-QUALITY_AMENDMENTS_MAX).map(({ run, field, from, to, reason, decided_at, decided_by }) => ({
+      run,
+      field,
+      from,
+      to,
+      reason,
+      decided_at,
+      decided_by,
+    })),
+    effectiveBudget: effectiveBudget(policy, amendments),
+    // The last word recorded about each operation is what `decideDestructiveRequest`
+    // answers, so the pending one is found the same way it decides: the newest
+    // record, never an earlier proposal somebody has already dealt with.
+    pendingRequest: requests.requests.filter((request) => request.status === 'pending').at(-1) ?? null,
+  }
+}
+
+/**
+ * A reference with no absolute path in it.
+ *
+ * Engine-written references are already run-relative (`cycle-01/verify/test.log`),
+ * so this fires for records a person or an agent wrote by hand. Inside the run
+ * or inside the project it is re-expressed relative to them; anywhere else only
+ * the basename survives, because where a machine keeps its files is not a fact
+ * a browser needs and is one an operator's screenshot should not carry.
+ *
+ * Deliberately not applied to a destructive request's `targets` or `operation`:
+ * those are the proposal's own words, they are what the operator is deciding
+ * about, and an abridged operation is a decision made against something other
+ * than what will happen.
+ */
+function publicReference(reference: string, projectDir: string, runDir: string): string {
+  if (!path.isAbsolute(reference)) return reference
+  for (const root of [runDir, projectDir]) {
+    const inside = path.relative(root, reference)
+    if (inside.length > 0 && !inside.startsWith('..') && !path.isAbsolute(inside)) {
+      return inside.split(path.sep).join('/')
+    }
+  }
+  return path.basename(reference)
+}
+
 /* ── roster validity ─────────────────────────────────────────────────────── */
 
 /**
@@ -897,6 +1019,31 @@ export async function readRosterValidity(
 }
 
 /* ── helpers ──────────────────────────────────────────────────────────────── */
+
+/**
+ * One quality record, or the two different failures reading one has.
+ *
+ * `readJson` below answers `null` for both, which is right where absence is
+ * ordinary — a run that pinned no skill manifest. It is wrong here: a policy
+ * that will not parse is a run whose ceilings nobody can see, and reporting
+ * that as "no policy" is how a suspended run reads as an unconstrained one.
+ */
+async function readQualityRecord<T>(
+  file: string,
+  schema: { safeParse: (input: unknown) => { success: boolean; data?: T } },
+  what: string,
+): Promise<T> {
+  let raw: string
+  try {
+    raw = await fs.readFile(file, 'utf8')
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') throw new NotFoundError(what)
+    throw error
+  }
+  const parsed = schema.safeParse(JSON.parse(raw) as unknown)
+  if (parsed.data === undefined || !parsed.success) throw new Error(`${file} is not a readable quality record`)
+  return parsed.data
+}
 
 async function readJson<T>(file: string, schema: { safeParse: (input: unknown) => { success: boolean; data?: T } }): Promise<T | null> {
   try {

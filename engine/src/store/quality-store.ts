@@ -133,7 +133,19 @@ export async function appendAmendment(projectDir: string, state: State, amendmen
 }
 
 export async function readAmendments(projectDir: string, state: State): Promise<QualityAmendment[]> {
-  return (await readAmendmentFile(qualityFiles(projectDir, state).amendments)).amendments
+  return readAmendmentsAt(qualityFiles(projectDir, state).amendments)
+}
+
+/**
+ * The same journal, read by path.
+ *
+ * Exported for the web read surface, which answers about a run *directory*
+ * rather than about the active state. It keeps the torn-line rule in one place:
+ * a reader that skipped a corrupt line rather than raising would show a shorter
+ * history than the one the ceilings were actually derived from.
+ */
+export async function readAmendmentsAt(file: string): Promise<QualityAmendment[]> {
+  return (await readAmendmentFile(file)).amendments
 }
 
 async function readAmendmentFile(file: string): Promise<{ raw: string; amendments: QualityAmendment[] }> {

@@ -17,6 +17,7 @@ import {
   readPlanDetail,
   readPreflightEstimate,
   readProfileView,
+  readQualityRun,
   readRosterValidity,
   readRunDetail,
   readRuns,
@@ -174,6 +175,13 @@ async function route(projectDir: string, segments: readonly string[], query: URL
       // that took anything beyond the run id would be the first half of one
       // that let the browser select a skill for it.
       if (segments.length === 3 && second === 'skills') return ok(await readSkillManifest(projectDir, first))
+      // This run's pinned quality policy, its ledger, its ceilings and the one
+      // operation it may be waiting on — read-only, and with no parameter a
+      // later story should add. The two doors that decide any of it are
+      // `quality.budget` and `quality.decision` in `web/writes.ts`; a route
+      // that took a fingerprint here would be the read half of one that
+      // answered with it.
+      if (segments.length === 3 && second === 'quality') return ok(await readQualityRun(projectDir, first))
       if (segments.length === 3) {
         const cycle = Number(second)
         if (!Number.isInteger(cycle) || cycle < 1 || cycle > 999) return fail(400, 'error.badRequest')

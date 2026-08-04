@@ -2,6 +2,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { packagesDir } from '../store/library-paths.js'
 import { resolveLoopPaths } from '../store/paths.js'
+import { QUALITY_AMENDMENTS_FILE, QUALITY_LEDGER_FILE, QUALITY_POLICY_FILE } from '../store/quality-store.js'
 
 /**
  * Cheap fingerprints of what is on disk, so the page can ask "has this changed"
@@ -49,6 +50,20 @@ export interface Revisions {
    */
   cycle: string
   memory: string
+  /**
+   * The active run's three quality documents — the pin, the ledger, and the
+   * amendment journal — and nothing else in the run directory.
+   *
+   * Three named files rather than a walk, on purpose. The run directory is
+   * where every cycle writes its roster, its results and its verify logs, so a
+   * listing-based fingerprint here would move once a second and re-fetch a
+   * policy that is pinned for the life of the run. `revisions.cycle` is the key
+   * that watches the busy half; this one moves when — and only when — a ledger
+   * transition or an operator's amendment lands.
+   *
+   * `-` when no run is open, which is also what an idle project sees.
+   */
+  quality: string
   /**
    * `.mjloop/profile/` — the accepted component map, and the proposal beside it.
    *
@@ -214,12 +229,33 @@ async function stampLibrary(projectDir: string): Promise<string> {
   }
 }
 
+/** The active run's quality documents, by name. Never a walk — see `Revisions.quality`. */
+const QUALITY_DOCUMENTS = [QUALITY_POLICY_FILE, QUALITY_LEDGER_FILE, QUALITY_AMENDMENTS_FILE] as const
+
+async function stampQuality(runsDir: string, runDir: string | null): Promise<string> {
+  if (runDir === null) return '-'
+  const parts: string[] = []
+  for (const document of QUALITY_DOCUMENTS) parts.push(await stamp(path.join(runsDir, runDir, document)))
+  return parts.join(':')
+}
+
 /**
  * @param tick The poller's tick counter, folded into `cycle`. See above.
  * @param running Whether a run is open. A finished run's cycle directory is
  *   inert, so outside a run `cycle` settles and the conditional GETs stop.
+ * @param runDir The active run's directory name, or null when there is none.
+ *   Passed in rather than read again here: `buildSnapshot` has already read the
+ *   state this is derived from, and a second read would be a second answer to
+ *   "which run is open" on every tick. Not gated on `running` — a run suspended
+ *   for a budget or a decision is exactly the one whose quality records are
+ *   about to change.
  */
-export async function readRevisions(projectDir: string, tick: number, running: boolean): Promise<Revisions> {
+export async function readRevisions(
+  projectDir: string,
+  tick: number,
+  running: boolean,
+  runDir: string | null,
+): Promise<Revisions> {
   const paths = resolveLoopPaths(projectDir)
 
   const planDirs = await entries(paths.plans)
@@ -241,11 +277,12 @@ export async function readRevisions(projectDir: string, tick: number, running: b
     plans[key] = plans[key] === undefined ? stamped : `${plans[key]}|${stamped}`
   }
 
-  const [state, config, memory, runs, profile, features, acceptances, library, projectSkills, agents] = await Promise.all([
+  const [state, config, memory, runs, quality, profile, features, acceptances, library, projectSkills, agents] = await Promise.all([
     stamp(paths.state),
     stamp(paths.config),
     stampListing(paths.memory),
     stampListing(paths.runs),
+    stampQuality(paths.runs, runDir),
     // `proposed.json` by name for the reason `PLAN_DOCUMENTS` names its three:
     // init overwrites the proposal in place, and a fingerprint built from the
     // directory's mtime alone would sit there showing the previous scan. The
@@ -275,6 +312,7 @@ export async function readRevisions(projectDir: string, tick: number, running: b
     runs,
     cycle: running ? String(tick) : 'idle',
     memory,
+    quality,
     profile,
     features,
     skills: `${acceptances}|${library}|${projectSkills}`,

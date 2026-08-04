@@ -72,7 +72,7 @@ const DestructiveRequestSchema = z.strictObject({
   note: z.string().max(2000).nullable().default(null),
 })
 
-const DestructiveRequestsSchema = z.strictObject({
+export const DestructiveRequestsSchema = z.strictObject({
   version: z.literal(1),
   requests: z.array(DestructiveRequestSchema).max(1000),
 })
@@ -223,7 +223,7 @@ export function destructiveRequestsFile(projectDir: string, state: State): strin
 }
 
 export async function readDestructiveRequests(projectDir: string, state: State): Promise<DestructiveRequests> {
-  return readRequests(destructiveRequestsFile(projectDir, state))
+  return readDestructiveRequestsAt(destructiveRequestsFile(projectDir, state))
 }
 
 /**
@@ -327,7 +327,7 @@ async function requestDestructiveDecision(
 ): Promise<string> {
   const file = destructiveRequestsFile(projectDir, state)
   await withLock(resolveLoopPaths(projectDir).lock, async (ownership) => {
-    const current = await readRequests(file)
+    const current = await readDestructiveRequestsAt(file)
     if (latestFor(current, fingerprint)?.status === 'pending') return
     const next: DestructiveRequests = {
       version: 1,
@@ -367,7 +367,7 @@ async function consumeApproval(projectDir: string, state: State, fingerprint: st
   const file = destructiveRequestsFile(projectDir, state)
   let spent = false
   await withLock(resolveLoopPaths(projectDir).lock, async (ownership) => {
-    const current = await readRequests(file)
+    const current = await readDestructiveRequestsAt(file)
     const approved = latestFor(current, fingerprint)
     if (approved === undefined || approved.status !== 'approved') return
     const next: DestructiveRequests = {
@@ -394,7 +394,15 @@ async function enforcementActive(projectDir: string, state: State): Promise<bool
   return (await readPolicy(projectDir, state)).enforcement === 'active'
 }
 
-async function readRequests(file: string): Promise<DestructiveRequests> {
+/**
+ * One run's decision record, read by path.
+ *
+ * Exported alongside the state-based reader above because the web read surface
+ * answers about a run *directory* rather than about the active state, and a
+ * second parse of this file there would be a second place the fail-closed rule
+ * below could be relaxed without anybody noticing.
+ */
+export async function readDestructiveRequestsAt(file: string): Promise<DestructiveRequests> {
   let raw: string
   try {
     raw = await fs.readFile(file, 'utf8')

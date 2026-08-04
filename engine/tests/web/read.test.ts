@@ -9,13 +9,27 @@ import { gateSet, planCreate, storyAdd } from '../../src/ops/plan.js'
 import { rosterSet } from '../../src/ops/roster.js'
 import { runLog } from '../../src/ops/log.js'
 import { runDirName, runStart } from '../../src/ops/run.js'
+import { DestructiveRequestsSchema } from '../../src/ops/destructive-risk.js'
+import type { QualityBudgetField } from '../../src/ops/quality-control.js'
+import type { QualityMode } from '../../src/schemas/config.js'
 import { LedgerEntrySchema, type LedgerEntry } from '../../src/schemas/verify.js'
 import type { ProjectComponent } from '../../src/schemas/project-profile.js'
 import type { SkillPackage } from '../../src/schemas/skill-library.js'
+import { loadConfig, writeConfig } from '../../src/store/config-store.js'
+import {
+  appendAmendment,
+  readLedger,
+  readPolicy,
+  writeLedger as writeQualityLedger,
+} from '../../src/store/quality-store.js'
+import { StateStore } from '../../src/store/state-store.js'
 import {
   CYCLE_HANDOFF_MAX,
   CYCLE_VERIFY_MAX,
   NotFoundError,
+  QUALITY_AMENDMENTS_MAX,
+  QUALITY_EVIDENCE_MAX,
+  readQualityRun,
   readConfigView,
   readCycleDetail,
   readFeatureDetail,
@@ -214,6 +228,10 @@ describe('read', () => {
       readStoryRuns(project.dir, 'P001-S01'),
       readCycleDetail(project.dir, runId, 1),
       readSkillManifest(project.dir, runId),
+      // The quality records are the ones an operator acts on, so a reader that
+      // repaired or re-pinned one on the way past would be changing the thing
+      // the next decision swaps against.
+      readQualityRun(project.dir, runId),
       readMemories(project.dir),
       readMemoryEntry(project.dir, 'M001'),
       readTranscript(project.dir, '20260728T090000-1'),
@@ -535,7 +553,9 @@ describe('read', () => {
       profile: { auto_accept: false },
       discovery: { mode: 'off', question_budget: 8, completion: 'review' },
       execution: { after_plan_approval: 'manual', uncertain_concurrency: 'sequential', repair_attempts: 1 },
-      quality: { independent_plan_review: false, independent_verification: false },
+      // One field, and the two booleans it replaced are gone: a mode is what a
+      // run pins, and `ConfigSchema` defaults it for a project that names none.
+      quality: { mode: 'adaptive' },
       skills: { sources: ['github'], trusted_registries: [], update_mode: 'review' },
     })
   })
@@ -944,6 +964,150 @@ describe('read', () => {
       // file has already aged out of retention, and a project that has never
       // run anything at all are the same case from here.
       await expect(readTranscript(project.dir, '20260728T090000-1')).rejects.toBeInstanceOf(NotFoundError)
+    })
+  })
+
+  /**
+   * The quality read surface: the pin, the ledger, the ceilings an operator
+   * actually works against, and the one operation a run may be waiting on.
+   *
+   * Every write door for these records is elsewhere — `quality.budget` and
+   * `quality.decision` in `web/writes.ts` — so this reader's whole job is to
+   * report them without becoming a way to change them, and without putting
+   * anything on the wire a browser has no business holding.
+   */
+  describe('readQualityRun', () => {
+    async function startQualityRun(mode: QualityMode = 'adaptive'): Promise<string> {
+      await initLoop(project.dir, clock)
+      const config = await loadConfig(project.dir)
+      config.orchestration.quality.mode = mode
+      await writeConfig(project.dir, config)
+      await runStart(project.dir, { track: 'edit', goal: 'Rename the submit label' }, clock)
+      return runDirName(await new StateStore(project.dir).get())
+    }
+
+    /** One operator amendment, through the store the `quality.budget` door writes with. */
+    async function amend(field: QualityBudgetField, to: number): Promise<void> {
+      const state = await new StateStore(project.dir).get()
+      const policy = await readPolicy(project.dir, state)
+      await appendAmendment(project.dir, state, {
+        version: 1,
+        run: state.run_id as string,
+        field,
+        from: policy.budget[field],
+        to,
+        reason: 'The operator raised the ceiling to finish the run.',
+        decided_at: NOW.toISOString(),
+        decided_by: 'Mohd',
+      })
+    }
+
+    /** A recorded correctness pass, written through the ledger schema rather than typed as a literal. */
+    async function passCorrectness(evidenceRefs: string[] = ['cycle-01/verify/test.log']): Promise<void> {
+      const state = await new StateStore(project.dir).get()
+      const ledger = await readLedger(project.dir, state)
+      ledger.dimensions.correctness = {
+        ...ledger.dimensions.correctness,
+        status: 'pass',
+        evidence_refs: evidenceRefs,
+        worktree_digest: 'a'.repeat(64),
+        recorded_cycle: 1,
+        checked_at: NOW.toISOString(),
+      }
+      await writeQualityLedger(project.dir, state, ledger)
+    }
+
+    /** The record `guardDestructiveOperation` writes when it suspends a run, as its own schema shapes it. */
+    async function requestDecision(runId: string, patch: Record<string, unknown> = {}): Promise<void> {
+      const file = path.join(project.dir, '.mjloop', 'runs', runId, 'destructive-requests.json')
+      const requests = DestructiveRequestsSchema.parse({
+        version: 1,
+        requests: [{
+          run: runId.slice(0, 14),
+          fingerprint: 'b'.repeat(64),
+          candidate: { kind: 'table_drop', targets: ['users'], operation: 'psql -c DROP TABLE users', rollback: null },
+          status: 'pending',
+          applied: false,
+          requested_at: NOW.toISOString(),
+          decided_at: null,
+          decided_by: null,
+          note: null,
+          ...patch,
+        }],
+      })
+      await fs.writeFile(file, `${JSON.stringify(requests, null, 2)}\n`, 'utf8')
+    }
+
+    it('returns the pinned policy, ledger, and effective amended budget', async () => {
+      const runId = await startQualityRun()
+      await amend('max_dispatches', 24)
+      await passCorrectness()
+
+      const view = await readQualityRun(project.dir, runId)
+
+      expect(view.policy.mode).toBe('adaptive')
+      expect(view.effectiveBudget.max_dispatches).toBe(24)
+      expect(view.ledger.dimensions.correctness.status).toBe('pass')
+    })
+
+    it('serves only the public fields, and the fingerprint a decision has to swap on', async () => {
+      const runId = await startQualityRun()
+      await amend('max_cycles', 9)
+      await requestDecision(runId)
+
+      const view = await readQualityRun(project.dir, runId)
+
+      // An amendment's `version` is a record-format fact, not an operator's.
+      expect(Object.keys(view.amendments[0] ?? {}).sort()).toEqual(
+        ['decided_at', 'decided_by', 'field', 'from', 'reason', 'run', 'to'],
+      )
+      expect(Object.keys(view.policy.dispatches[0] ?? {}).sort()).toEqual(['agent', 'dimensions', 'instance', 'reason'])
+      // The fingerprint is deliberately *not* redacted: `quality.decision`
+      // refuses a decision that does not name the operation currently shown,
+      // so a view without it is a screen whose Approve button cannot work.
+      expect(view.pendingRequest?.fingerprint).toBe('b'.repeat(64))
+      expect(view.pendingRequest?.candidate.targets).toEqual(['users'])
+      // Nothing on this wire says where this project lives on disk.
+      expect(JSON.stringify(view)).not.toContain(project.dir)
+    })
+
+    it('reports no pending request once the operation has been answered', async () => {
+      const runId = await startQualityRun()
+      await requestDecision(runId, { status: 'approved', decided_at: NOW.toISOString(), decided_by: 'Mohd' })
+
+      expect((await readQualityRun(project.dir, runId)).pendingRequest).toBe(null)
+    })
+
+    it('bounds the amendments and the evidence one response carries', async () => {
+      const runId = await startQualityRun()
+      for (let index = 0; index < QUALITY_AMENDMENTS_MAX + 5; index += 1) await amend('max_cycles', index + 4)
+      await passCorrectness(
+        Array.from({ length: QUALITY_EVIDENCE_MAX + 5 }, (_, index) => `cycle-01/verify/test-${index}.log`),
+      )
+
+      const view = await readQualityRun(project.dir, runId)
+
+      expect(view.amendments).toHaveLength(QUALITY_AMENDMENTS_MAX)
+      // The newest, which are the ones the current ceilings rest on.
+      expect(view.amendments.at(-1)?.to).toBe(QUALITY_AMENDMENTS_MAX + 8)
+      expect(view.ledger.dimensions.correctness.evidence_refs).toHaveLength(QUALITY_EVIDENCE_MAX)
+      // …and the ceiling still reflects every amendment on disk, not only the
+      // ones that fit on the wire.
+      expect(view.effectiveBudget.max_cycles).toBe(QUALITY_AMENDMENTS_MAX + 8)
+    })
+
+    it('answers 404 for a run that pinned no policy, and raises for one it cannot read', async () => {
+      const runId = await startQualityRun()
+      await expect(readQualityRun(project.dir, 'never-started')).rejects.toBeInstanceOf(NotFoundError)
+
+      // A record that exists and does not parse is the opposite fact from one
+      // that was never written, and must never read as "this run has no
+      // quality policy".
+      const file = path.join(project.dir, '.mjloop', 'runs', runId, 'quality-ledger.json')
+      await fs.writeFile(file, '{"version":1,"cycle":0}\n', 'utf8')
+      const failure = await readQualityRun(project.dir, runId).catch((error: unknown) => error)
+      expect(failure).toBeInstanceOf(Error)
+      expect(failure).not.toBeInstanceOf(NotFoundError)
     })
   })
 })

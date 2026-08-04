@@ -2,7 +2,14 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { initLoop } from '../../src/ops/init.js'
-import { TELEMETRY_FLAG_DRAFTS, TELEMETRY_MAX_ROWS, readTelemetry } from '../../src/ops/telemetry.js'
+import {
+  TELEMETRY_FLAG_DRAFTS,
+  TELEMETRY_MAX_ROWS,
+  qualityTelemetry,
+  readTelemetry,
+  type QualityTelemetryInput,
+} from '../../src/ops/telemetry.js'
+import type { QualityBudget } from '../../src/schemas/quality.js'
 import type { AgentResult } from '../../src/schemas/contract.js'
 import type { Finding } from '../../src/schemas/state.js'
 import { loadConfig, writeConfig } from '../../src/store/config-store.js'
@@ -321,5 +328,99 @@ describe('readTelemetry', () => {
       truncated: 0,
       flagged: [],
     })
+  })
+})
+
+/**
+ * The run-scoped projection beside the cross-run table.
+ *
+ * Its whole discipline is refusal: no invented price, no invented token count,
+ * and no elapsed number that did not come from a timestamp somebody persisted.
+ */
+describe('qualityTelemetry', () => {
+  const BUDGET: QualityBudget = {
+    max_cycles: 5,
+    max_dispatches: 12,
+    max_context_tokens_per_dispatch: 12_000,
+    max_repair_attempts: 1,
+    cost_estimate: null,
+  }
+
+  function runWithoutUsageOrPricing(): QualityTelemetryInput {
+    return {
+      mode: 'adaptive',
+      budget: BUDGET,
+      dispatches: { used: 3, max: 12 },
+      startedAt: '2026-07-28T09:00:00.000Z',
+      lastTransitionAt: '2026-07-28T09:30:00.000Z',
+    }
+  }
+
+  it('reports unavailable cost instead of inventing a price', () => {
+    expect(qualityTelemetry(runWithoutUsageOrPricing()).estimatedCost).toEqual({
+      kind: 'unavailable', currency: null, value: null,
+    })
+  })
+
+  it('estimates input tokens from the packet and never estimates output', () => {
+    const telemetry = qualityTelemetry({ ...runWithoutUsageOrPricing(), inputPacket: 'four' })
+
+    // Task 6's documented byte estimate, and nothing dressed up as more.
+    expect(telemetry.inputTokens).toEqual({ kind: 'estimated', value: 2 })
+    expect(telemetry.outputTokens).toEqual({ kind: 'unavailable', value: null })
+    expect(qualityTelemetry(runWithoutUsageOrPricing()).inputTokens).toEqual({ kind: 'unavailable', value: null })
+  })
+
+  it('prices a run only from a versioned price record with measured usage on both sides', () => {
+    const telemetry = qualityTelemetry({
+      ...runWithoutUsageOrPricing(),
+      budget: {
+        ...BUDGET,
+        cost_estimate: {
+          model_id: 'claude-opus-5',
+          input_tokens: 1_000,
+          output_tokens: 200,
+          currency: 'USD',
+          input_unit_price: 0.001,
+          output_unit_price: 0.002,
+          pricing_table_version: '2026-08-01',
+          total: 1.4,
+        },
+      },
+    })
+
+    expect(telemetry.estimatedCost).toEqual({ kind: 'measured', currency: 'USD', value: 1.4 })
+    expect(telemetry.inputTokens).toEqual({ kind: 'measured', value: 1_000 })
+    expect(telemetry.outputTokens).toEqual({ kind: 'measured', value: 200 })
+  })
+
+  it('separates the time a run worked from the time it waited on a person', () => {
+    const telemetry = qualityTelemetry({
+      ...runWithoutUsageOrPricing(),
+      waits: [{ requestedAt: '2026-07-28T09:10:00.000Z', decidedAt: '2026-07-28T09:20:00.000Z' }],
+    })
+
+    expect(telemetry.waitingElapsed).toEqual({ kind: 'measured', valueMs: 600_000 })
+    // Thirty minutes of state transitions, ten of them spent waiting.
+    expect(telemetry.activeElapsed).toEqual({ kind: 'measured', valueMs: 1_200_000 })
+  })
+
+  it('stops the active clock at an open decision rather than running one of its own', () => {
+    const telemetry = qualityTelemetry({
+      ...runWithoutUsageOrPricing(),
+      waits: [{ requestedAt: '2026-07-28T09:05:00.000Z', decidedAt: null }],
+    })
+
+    // The end of an open wait is a fact nobody has written down yet, so the
+    // total is unavailable rather than measured against the reader's clock.
+    expect(telemetry.waitingElapsed).toEqual({ kind: 'unavailable', valueMs: null })
+    expect(telemetry.activeElapsed).toEqual({ kind: 'measured', valueMs: 300_000 })
+  })
+
+  it('reports unavailable elapsed for a run with no persisted start', () => {
+    const telemetry = qualityTelemetry({ ...runWithoutUsageOrPricing(), startedAt: null })
+
+    expect(telemetry.activeElapsed).toEqual({ kind: 'unavailable', valueMs: null })
+    expect(telemetry).toMatchObject({ mode: 'adaptive', dispatches: { used: 3, max: 12 } })
   })
 })
