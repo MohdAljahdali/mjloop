@@ -566,19 +566,12 @@ export async function cycleAdvance(
     const track = findTrack(config, draft.track)
     if (track === undefined) throw new UnknownTrackError(draft.track, Object.keys(config.tracks))
 
-    // Before anything on the draft moves, and only for a result that would need
-    // another cycle: a pass closes the run and costs none. Suspending here
-    // rather than beside the cap check below is what keeps a resumed run
-    // repeatable — this cycle has not been recorded in `history`, so the same
-    // `cycleAdvance` call can simply be made again once the ceiling is raised.
-    if (input.result !== 'pass') {
-      const refusal = await nextCycleRefusal(projectDir, draft)
-      if (refusal !== null) {
-        suspendDraft(draft, refusal)
-        exhausted = refusal
-        return
-      }
-    }
+    // The state this update started from, kept so the budget suspension below
+    // can leave the run exactly where it found it rather than half-advanced.
+    // Cheap: `StateStore.update` already clones once, and the alternative is a
+    // suspended run whose resume would file a second history entry for a cycle
+    // it never closed.
+    const opening = structuredClone(draft)
 
     carried = distinctFindings(draft.findings)
     // Sorted because `runLog` appends each agent's signatures as that agent
@@ -649,6 +642,34 @@ export async function cycleAdvance(
       cause = 'stagnation'
       return
     }
+    // Here rather than above the two guards, and that position is the whole
+    // difference between two kinds of answer. Stagnation and the repeated-error
+    // guard report a loop that more cycles cannot help; a resumable "raise the
+    // ceiling and continue" is the opposite advice, so both keep the right to
+    // end the run first.
+    //
+    // It then *supersedes* the cycle cap below for a run that enforces a
+    // quality budget, deliberately: the pinned `max_cycles` starts as this
+    // track's own cap, and the whole point of pinning it is that the run is
+    // measured against the number it started with plus whatever an operator
+    // explicitly amended — not against a live config value that may have moved,
+    // and not terminally when an amendment could legitimately continue the run.
+    // The `cycle-cap` halt below therefore ends every run that enforces no
+    // budget, which today is every run.
+    const refusal = await nextCycleRefusal(projectDir, draft)
+    if (refusal !== null) {
+      // Rolled back to where this update began, so the advance the suspension
+      // refused left nothing behind — no history entry, no stagnation strike —
+      // and the same `cycleAdvance` call can simply be made again once the
+      // ceiling is raised. The failing cycle's evidence invalidation ran before
+      // the lock and stays: it describes the work that cycle did, not the
+      // advance this refused.
+      Object.assign(draft, opening)
+      suspendDraft(draft, refusal)
+      exhausted = refusal
+      return
+    }
+
     if (draft.cycle >= track.max_cycles) {
       draft.status = 'halted'
       draft.current.stage = 'halted'

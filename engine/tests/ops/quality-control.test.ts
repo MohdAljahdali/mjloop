@@ -66,6 +66,14 @@ async function seedUsed(dir: string, count: number): Promise<void> {
   )
 }
 
+/** Turn the pin into the shadow policy a run that never named a quality mode gets. */
+async function seedShadowPolicy(dir: string): Promise<void> {
+  const state = await new StateStore(dir).get()
+  const file = policyFile(dir, state)
+  const policy = JSON.parse(await fs.readFile(file, 'utf8')) as Record<string, unknown>
+  await fs.writeFile(file, `${JSON.stringify({ ...policy, source: 'legacy', enforcement: 'shadow' }, null, 2)}\n`, 'utf8')
+}
+
 async function cycleFiles(dir: string): Promise<string[]> {
   const state = await new StateStore(dir).get()
   return fs.readdir(cycleDirPath(dir, state)).catch(() => [])
@@ -131,13 +139,32 @@ describe('quality budget suspension', () => {
     },
   )
 
+  // The three seams, each seeded at a ceiling the enforcing tests above prove
+  // suspends: the roster's context packet, a targeted repair, and the next
+  // cycle. Neither lever below may move the run.
+  const ZERO_HEADROOM = { max_cycles: 1, max_context_tokens_per_dispatch: 1, max_repair_attempts: 0 }
+
+  async function runEverySeam(dir: string): Promise<void> {
+    await expect(rosterSet(dir, nextRoster())).resolves.toMatchObject({ path: expect.stringContaining('roster.json') })
+    await expect(runLog(dir, { agent: 'verifier', instance: 'repair-1', result: PASS }, clock)).resolves.toBeTruthy()
+    await expect(cycleAdvance(dir, { agents: ['editor'], result: 'fail' }, clock)).resolves.toBeTruthy()
+    const state = await new StateStore(dir).get()
+    expect(state.status).toBe('running')
+    expect(state.cycle).toBe(2)
+  }
+
   it('leaves every seam alone while the rollout gate is closed', async () => {
     vi.mocked(qualityRuntimeEnabled).mockReturnValue(false)
-    await seedBudget(project.dir, { max_cycles: 1, max_dispatches: 1, max_repair_attempts: 0 })
+    await seedBudget(project.dir, ZERO_HEADROOM)
 
-    await expect(rosterSet(project.dir, nextRoster())).resolves.toMatchObject({ path: expect.stringContaining('roster.json') })
-    await expect(runLog(project.dir, { agent: 'verifier', instance: 'repair-1', result: PASS }, clock)).resolves.toBeTruthy()
-    expect((await new StateStore(project.dir).get()).status).toBe('running')
+    await runEverySeam(project.dir)
+  })
+
+  it('leaves a shadow policy alone even with the rollout gate open', async () => {
+    await seedShadowPolicy(project.dir)
+    await seedBudget(project.dir, ZERO_HEADROOM)
+
+    await runEverySeam(project.dir)
   })
 })
 
