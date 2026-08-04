@@ -73,6 +73,23 @@ describe('quality budgets', () => {
     expect(contextCeiling('strict', 10_000)).toBe(10_000)
   })
 
+  it.each([0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY])(
+    'rejects an invalid host-safe context ceiling of %s',
+    (hostSafeInput) => {
+      expect(() => contextCeiling('strict', hostSafeInput)).toThrow(RangeError)
+    },
+  )
+
+  it('rejects a dispatch plan that cannot satisfy the positive dispatch budget schema', () => {
+    expect(() => deriveQualityBudget({
+      mode: 'economy',
+      track: { max_cycles: 1, closing: [] },
+      repairAttempts: 0,
+      dispatches: [],
+      targetedRepairs: [],
+    })).toThrow(RangeError)
+  })
+
   it('uses the documented conservative fallback when no tokenizer exists', () => {
     const text = 'واجهة عربية'
     expect(measureTokens(text)).toEqual({ value: Math.ceil(Buffer.byteLength(text, 'utf8') / 2), kind: 'estimated' })
@@ -82,9 +99,23 @@ describe('quality budgets', () => {
     expect(measureTokens('any text', { count: () => 17 })).toEqual({ value: 17, kind: 'measured' })
   })
 
+  it.each([-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY])(
+    'rejects an invalid tokenizer count of %s',
+    (count) => {
+      expect(() => measureTokens('any text', { count: () => count })).toThrow(RangeError)
+    },
+  )
+
   it('never drops mandatory context to fit a ceiling', () => {
     expect(fitContextPacket(packet({ mandatory: ['x'.repeat(40)], ceiling: 10 })).status).toBe('budget_exhausted')
   })
+
+  it.each([0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY])(
+    'rejects an invalid context packet ceiling of %s',
+    (ceiling) => {
+      expect(() => fitContextPacket(packet({ ceiling }))).toThrow(RangeError)
+    },
+  )
 
   it('removes lowest-relevance optional evidence first while retaining stable ties', () => {
     const result = fitContextPacket(packet({
@@ -132,6 +163,32 @@ describe('quality budgets', () => {
     })
   })
 
+  it.each([-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY])(
+    'rejects an invalid repair-attempt count of %s before deriving a budget',
+    (repairAttempts) => {
+      expect(() => deriveQualityBudget({
+        mode: 'adaptive',
+        track: { max_cycles: 5, closing: [] },
+        repairAttempts,
+        dispatches: [],
+        targetedRepairs: [],
+      })).toThrow(RangeError)
+    },
+  )
+
+  it.each([0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY])(
+    'rejects an invalid track cycle count of %s before deriving a budget',
+    (max_cycles) => {
+      expect(() => deriveQualityBudget({
+        mode: 'adaptive',
+        track: { max_cycles, closing: [] },
+        repairAttempts: 0,
+        dispatches: [],
+        targetedRepairs: [],
+      })).toThrow(RangeError)
+    },
+  )
+
   it('returns a cost only when every measured and versioned pricing input is supplied', () => {
     const base: BudgetInput = {
       mode: 'economy' as const,
@@ -157,6 +214,59 @@ describe('quality budgets', () => {
       model_id: 'host/model', input_tokens: 100, output_tokens: 20, currency: 'USD',
       input_unit_price: 0.01, output_unit_price: 0.02, pricing_table_version: '2026-08', total: 1.4,
     })
+  })
+
+  it.each([
+    { inputTokens: { value: -1, kind: 'measured' as const } },
+    { inputTokens: { value: 1.5, kind: 'measured' as const } },
+    { inputTokens: { value: Number.NaN, kind: 'measured' as const } },
+    { outputTokens: { value: -1, kind: 'measured' as const } },
+    { outputTokens: { value: Number.POSITIVE_INFINITY, kind: 'measured' as const } },
+    { inputUnitPrice: -0.01 },
+    { inputUnitPrice: Number.NaN },
+    { outputUnitPrice: -0.01 },
+    { outputUnitPrice: Number.POSITIVE_INFINITY },
+  ])('returns null for invalid cost metadata %#', (invalid) => {
+    const budget = deriveQualityBudget({
+      mode: 'economy',
+      track: { max_cycles: 1, closing: [] },
+      repairAttempts: 0,
+      dispatches: [{ agent: 'verifier', instance: null, dimensions: ['correctness'], reason: 'Initial correctness.' }],
+      targetedRepairs: [],
+      cost: {
+        modelId: 'host/model',
+        inputTokens: { value: 100, kind: 'measured' },
+        outputTokens: { value: 20, kind: 'measured' },
+        currency: 'USD',
+        inputUnitPrice: 0.01,
+        outputUnitPrice: 0.02,
+        pricingTableVersion: '2026-08',
+        ...invalid,
+      },
+    })
+
+    expect(budget.cost_estimate).toBeNull()
+  })
+
+  it('preserves a valid zero measured usage cost', () => {
+    const budget = deriveQualityBudget({
+      mode: 'economy',
+      track: { max_cycles: 1, closing: [] },
+      repairAttempts: 0,
+      dispatches: [{ agent: 'verifier', instance: null, dimensions: ['correctness'], reason: 'Initial correctness.' }],
+      targetedRepairs: [],
+      cost: {
+        modelId: 'host/model',
+        inputTokens: { value: 0, kind: 'measured' },
+        outputTokens: { value: 0, kind: 'measured' },
+        currency: 'USD',
+        inputUnitPrice: 0.01,
+        outputUnitPrice: 0.02,
+        pricingTableVersion: '2026-08',
+      },
+    })
+
+    expect(budget.cost_estimate?.total).toBe(0)
   })
 
   it('applies ordered amendments without mutating the pinned policy budget', () => {

@@ -79,22 +79,31 @@ const CONTEXT_CEILINGS: Record<QualityMode, number> = {
 }
 
 export function measureTokens(text: string, tokenizer?: Tokenizer): TokenMeasurement {
-  if (tokenizer !== undefined) return { value: tokenizer.count(text), kind: 'measured' }
+  if (tokenizer !== undefined) {
+    const value = tokenizer.count(text)
+    assertNonNegativeInteger(value, 'tokenizer count')
+    return { value, kind: 'measured' }
+  }
   return { value: Math.ceil(Buffer.byteLength(text, 'utf8') / 2), kind: 'estimated' }
 }
 
 export function contextCeiling(mode: QualityMode, hostSafeInput?: number): number {
   const profile = CONTEXT_CEILINGS[mode]
+  if (hostSafeInput !== undefined) assertPositiveInteger(hostSafeInput, 'host-safe input ceiling')
   return hostSafeInput === undefined ? profile : Math.min(profile, hostSafeInput)
 }
 
 export function deriveQualityBudget(input: BudgetInput): QualityBudget {
+  assertPositiveInteger(input.track.max_cycles, 'track max cycles')
+  assertNonNegativeInteger(input.repairAttempts, 'repair attempts')
   const closingAgents = new Set(input.track.closing ?? [])
-  const targetedRepairs = input.targetedRepairs.slice(0, Math.max(0, input.repairAttempts))
+  const targetedRepairs = input.targetedRepairs.slice(0, input.repairAttempts)
+  const maxDispatches = input.dispatches.length + targetedRepairs.length + closingAgents.size
+  assertPositiveInteger(maxDispatches, 'maximum dispatches')
 
   return {
     max_cycles: input.track.max_cycles,
-    max_dispatches: input.dispatches.length + targetedRepairs.length + closingAgents.size,
+    max_dispatches: maxDispatches,
     max_context_tokens_per_dispatch: contextCeiling(input.mode, input.hostSafeInput),
     max_repair_attempts: input.repairAttempts,
     cost_estimate: costEstimate(input.cost),
@@ -102,6 +111,7 @@ export function deriveQualityBudget(input: BudgetInput): QualityBudget {
 }
 
 export function fitContextPacket(input: ContextPacketInput): ContextPacketResult {
+  assertPositiveInteger(input.ceiling, 'context packet ceiling')
   const mandatory = [...input.mandatory]
   const remaining = input.optional.map((digest, index) => ({ digest, index }))
   const dropped: ContextEvidenceDigest[] = []
@@ -173,12 +183,14 @@ function packetText(mandatory: readonly string[], optional: readonly ContextEvid
 function costEstimate(cost: CostInput | undefined): QualityBudget['cost_estimate'] {
   if (
     cost?.modelId === undefined || cost.modelId.length === 0 ||
-    cost.inputTokens?.kind !== 'measured' || cost.inputTokens.value === null ||
-    cost.outputTokens?.kind !== 'measured' || cost.outputTokens.value === null ||
+    !isMeasuredTokenCount(cost.inputTokens) || !isMeasuredTokenCount(cost.outputTokens) ||
     cost.currency === undefined || cost.currency.length !== 3 ||
-    cost.inputUnitPrice === undefined || cost.outputUnitPrice === undefined ||
+    !isFiniteNonNegative(cost.inputUnitPrice) || !isFiniteNonNegative(cost.outputUnitPrice) ||
     cost.pricingTableVersion === undefined || cost.pricingTableVersion.length === 0
   ) return null
+
+  const total = cost.inputTokens.value * cost.inputUnitPrice + cost.outputTokens.value * cost.outputUnitPrice
+  if (!isFiniteNonNegative(total)) return null
 
   return {
     model_id: cost.modelId,
@@ -188,7 +200,7 @@ function costEstimate(cost: CostInput | undefined): QualityBudget['cost_estimate
     input_unit_price: cost.inputUnitPrice,
     output_unit_price: cost.outputUnitPrice,
     pricing_table_version: cost.pricingTableVersion,
-    total: cost.inputTokens.value * cost.inputUnitPrice + cost.outputTokens.value * cost.outputUnitPrice,
+    total,
   }
 }
 
@@ -210,6 +222,28 @@ function compareMeasurement(a: TokenMeasurement, b: TokenMeasurement): number {
 
 function isUnavailable(measurement: TokenMeasurement): boolean {
   return measurement.kind === 'unavailable' || measurement.value === null
+}
+
+function isMeasuredTokenCount(measurement: TokenMeasurement | undefined): measurement is TokenMeasurement & { value: number } {
+  return measurement?.kind === 'measured' && isNonNegativeInteger(measurement.value)
+}
+
+function isFiniteNonNegative(value: number | undefined): value is number {
+  return value !== undefined && Number.isFinite(value) && value >= 0
+}
+
+function isNonNegativeInteger(value: number | null | undefined): value is number {
+  return value !== null && value !== undefined && Number.isFinite(value) && Number.isInteger(value) && value >= 0
+}
+
+function assertNonNegativeInteger(value: number, name: string): void {
+  if (!isNonNegativeInteger(value)) throw new RangeError(`${name} must be a finite nonnegative integer`)
+}
+
+function assertPositiveInteger(value: number, name: string): void {
+  if (!Number.isFinite(value) || !Number.isInteger(value) || value < 1) {
+    throw new RangeError(`${name} must be a finite positive integer`)
+  }
 }
 
 function compareProxy(a: QualityProxy | undefined, b: QualityProxy | undefined): number {
