@@ -15,6 +15,7 @@ import { runLog } from '../ops/log.js'
 import { memoryAdd, memoryGet, memorySearch } from '../ops/memory.js'
 import { gateSet, planCreate, storyAdd, storyGet, storyNext, storyUpdate } from '../ops/plan.js'
 import { preflightEstimate } from '../ops/preflight.js'
+import type { PlannedQualityDispatch } from '../ops/quality-roster.js'
 import { rosterSet } from '../ops/roster.js'
 import { cycleAdvance, halt, runStart } from '../ops/run.js'
 import { stateSummary } from '../ops/summary.js'
@@ -55,6 +56,28 @@ type ToolResult = { content: Array<{ type: 'text'; text: string }>; isError?: bo
 function ok(payload: unknown): ToolResult {
   const text = typeof payload === 'string' ? payload : JSON.stringify(payload, null, 2)
   return { content: [{ type: 'text', text }] }
+}
+
+/**
+ * `rosterSet`'s `quality_dispatches` carries a bounded context packet per
+ * dispatch — up to the mode's own ceiling (16k estimated tokens in strict)
+ * *per entry* — for a caller that does not exist yet (`qualityRuntimeEnabled`
+ * is closed; nothing consumes the packet text today). Shipping that text over
+ * the wire would inject it into the leader's own context on every roster
+ * call for no present benefit, which is exactly what the packet's own token
+ * ceiling exists to prevent one step further up. The tool reply carries only
+ * what a leader can act on now: which dispatch is planned and how large it
+ * would be, never the packet text itself.
+ */
+function summarizeQualityDispatches(dispatches: readonly PlannedQualityDispatch[]) {
+  return dispatches.map(({ agent, instance, dimensions, reason, inputFingerprint, context }) => ({
+    agent,
+    instance,
+    dimensions,
+    reason,
+    inputFingerprint,
+    tokens: context.tokens,
+  }))
 }
 
 /** Operational failures are tool errors the leader can read and react to. */
@@ -163,7 +186,8 @@ export function buildServer(): McpServer {
           if (cycle === undefined) {
             throw new Error("give a cycle number, or set closing=true to declare the run's closing pass")
           }
-          return ok(await rosterSet(dir, { cycle, selected, skipped }))
+          const result = await rosterSet(dir, { cycle, selected, skipped })
+          return ok({ ...result, quality_dispatches: summarizeQualityDispatches(result.quality_dispatches) })
         }
         // Refused rather than ignored. A closing pass belongs to no cycle, and a
         // caller that names one is answering a question this call does not ask —
@@ -173,7 +197,8 @@ export function buildServer(): McpServer {
         if (cycle !== undefined) {
           throw new Error('a closing roster belongs to no cycle — it records the pass that ended the run; drop the cycle argument')
         }
-        return ok(await rosterSet(dir, { closing: true, selected, skipped }))
+        const result = await rosterSet(dir, { closing: true, selected, skipped })
+        return ok({ ...result, quality_dispatches: summarizeQualityDispatches(result.quality_dispatches) })
       }),
   )
 

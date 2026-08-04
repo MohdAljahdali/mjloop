@@ -330,6 +330,34 @@ describe('tool behaviour', () => {
     expect(JSON.parse(textOf(advanced)).state.status).toBe('done')
   })
 
+  // Review finding 4: `quality_dispatches`' full context packet — up to the
+  // mode's own token ceiling per entry — must never cross the wire, since
+  // nothing on the leader's side consumes it yet.
+  it('summarizes quality_dispatches on the wire instead of shipping each context packet\'s full text', async () => {
+    await client.callTool({ name: 'mjloop_init', arguments: { project_dir: project.dir } })
+    await client.callTool({
+      name: 'mjloop_run_start',
+      arguments: { project_dir: project.dir, track: 'edit', goal: 'Rename submit label' },
+    })
+    const roster = await client.callTool({
+      name: 'mjloop_roster_set',
+      arguments: { project_dir: project.dir, cycle: 1, selected: ['editor', 'verifier'], skipped: {} },
+    })
+    const payload = JSON.parse(textOf(roster))
+    expect(payload.quality_dispatches.length).toBeGreaterThan(0)
+    for (const dispatch of payload.quality_dispatches) {
+      expect(dispatch).not.toHaveProperty('context')
+      expect(dispatch).toMatchObject({
+        agent: expect.any(String),
+        dimensions: expect.any(Array),
+        inputFingerprint: expect.stringMatching(/^[a-f0-9]{64}$/),
+        tokens: expect.objectContaining({ kind: expect.any(String) }),
+      })
+    }
+    // The whole point: no context packet text anywhere in the reply.
+    expect(textOf(roster)).not.toContain('Output contract:')
+  })
+
   it('declares the closing pass and records the agent that ran it', async () => {
     const { runId, closingAgents } = await passingBuildRun()
     expect(closingAgents).toEqual(['docs'])

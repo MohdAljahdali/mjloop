@@ -314,8 +314,25 @@ export async function buildProjectQualityPolicy(
   return buildQualityPolicy(await projectRiskInput(projectDir, input), now)
 }
 
-async function projectRiskInput(projectDir: string, input: ProjectPolicyInput): Promise<QualityPolicyInput> {
-  const [story, feature, profile, digest] = await Promise.all([
+/** The acceptance criteria, intended files and component kinds a story/feature pair imply — the risk-relevant half of {@link projectRiskInput}, without the tree digest or `priorFailures` a mid-run reader has no reason to recompute. */
+export interface QualityContextEvidence {
+  acceptance: string[]
+  intendedFiles: string[]
+  componentKinds: string[]
+}
+
+/**
+ * Resolves the same story/feature/profile evidence `buildProjectQualityPolicy`
+ * gathers to pin a policy — exported so a later reader (`ops/roster.ts`'s
+ * per-dispatch context packet) can put real acceptance criteria and a real
+ * component/file map in front of an agent, from the same source, rather than
+ * inventing a second reading of `readStory`/`readFeatureBrief`.
+ */
+export async function resolveQualityContextEvidence(
+  projectDir: string,
+  input: { story?: string | null | undefined; feature?: string | null | undefined; allowMissingStory?: boolean | undefined },
+): Promise<QualityContextEvidence> {
+  const [story, feature, profile] = await Promise.all([
     input.story === undefined || input.story === null
       ? null
       : input.allowMissingStory === true
@@ -323,7 +340,6 @@ async function projectRiskInput(projectDir: string, input: ProjectPolicyInput): 
         : readStory(projectDir, input.story),
     input.feature === undefined || input.feature === null ? null : readFeatureBrief(projectDir, input.feature),
     readAcceptedProfile(projectDir),
-    input.includeWorktreeDigest === true ? worktreeDigest(projectDir) : Promise.resolve(null),
   ])
   const componentById = new Map((profile?.components ?? []).map((component) => [component.id, component]))
   const affected = feature?.brief.affectedComponents
@@ -333,17 +349,32 @@ async function projectRiskInput(projectDir: string, input: ProjectPolicyInput): 
   if (story?.frontmatter.ui === true) componentKinds.push('ui')
 
   return {
-    ...input,
     acceptance: distinct([...(story?.frontmatter.acceptance ?? []), ...(feature?.brief.acceptance ?? [])]),
     intendedFiles: distinct([
       ...affected.map((component) => component.root),
       ...(story === null ? [] : [path.relative(projectDir, story.file)]),
     ]),
+    componentKinds: distinct(componentKinds),
+  }
+}
+
+async function projectRiskInput(projectDir: string, input: ProjectPolicyInput): Promise<QualityPolicyInput> {
+  const [evidence, digest] = await Promise.all([
+    resolveQualityContextEvidence(projectDir, {
+      story: input.story,
+      feature: input.feature,
+      allowMissingStory: input.allowMissingStory,
+    }),
+    input.includeWorktreeDigest === true ? worktreeDigest(projectDir) : Promise.resolve(null),
+  ])
+
+  return {
+    ...input,
+    ...evidence,
     // A digest is deliberately not decoded into invented paths. Carrying it as
     // a non-matching provenance token lets the deterministic input change when
     // the tree changes without claiming the engine knows which path caused it.
     changedFiles: digest === null ? [] : [`worktree-digest:${digest}`],
-    componentKinds: distinct(componentKinds),
     priorFailures: [],
   }
 }

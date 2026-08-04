@@ -5,10 +5,15 @@ import { QualityPolicySchema, type QualityDimension, type QualityDispatch, type 
 
 const DIMENSIONS: readonly QualityDimension[] = ['correctness', 'security', 'alignment', 'regression']
 
-/** The base (+ independent, past economy) dispatches `quality-policy.ts`'s own candidate builder produces for a mode/risk pair. */
-function policyDispatches(mode: QualityMode, risk: RiskLevel): QualityDispatch[] {
+/**
+ * The base (+ independent, past economy) dispatches `quality-policy.ts`'s own
+ * candidate builder produces for a mode/risk pair. `baseAgent` mirrors that
+ * builder's own `permitted.includes('verifier') ? 'verifier' : permitted[0]`
+ * — a track without `verifier` (`plan`, say) pins a different agent.
+ */
+function policyDispatches(mode: QualityMode, risk: RiskLevel, baseAgent = 'verifier'): QualityDispatch[] {
   const base: QualityDispatch = {
-    agent: 'verifier',
+    agent: baseAgent,
     instance: null,
     dimensions: [...DIMENSIONS],
     reason: 'Collect the deterministic evidence required by the pinned quality plan.',
@@ -16,14 +21,14 @@ function policyDispatches(mode: QualityMode, risk: RiskLevel): QualityDispatch[]
   if (mode === 'economy') return [base]
   if (mode === 'adaptive' && risk === 'low') return [base]
   return [base, {
-    agent: 'verifier',
+    agent: baseAgent,
     instance: 'independent',
     dimensions: [...DIMENSIONS],
     reason: 'Independently review the evidence required by the pinned quality plan.',
   }]
 }
 
-function policy(mode: QualityMode, risk: RiskLevel): QualityPolicy {
+function policy(mode: QualityMode, risk: RiskLevel, baseAgent = 'verifier'): QualityPolicy {
   return QualityPolicySchema.parse({
     version: 1,
     pinned_at: '2026-08-04T00:00:00.000Z',
@@ -49,7 +54,7 @@ function policy(mode: QualityMode, risk: RiskLevel): QualityPolicy {
       regression: { value: 'required', reason: 'Every change requires regression coverage.' },
       ui: { value: 'not_applicable', reason: 'No user-visible surface indicated.' },
     },
-    dispatches: policyDispatches(mode, risk),
+    dispatches: policyDispatches(mode, risk, baseAgent),
   })
 }
 
@@ -62,10 +67,13 @@ function input(overrides: { mode: QualityMode; risk?: RiskLevel }): QualityRoste
     config: defaultConfig({ test: 'npm test', lint: null, build: null }),
     policy: policy(overrides.mode, risk),
     goal: 'Ship the checkout redesign',
+    acceptance: ['Checkout responds under 200ms'],
+    intendedFiles: ['src/checkout/api.ts'],
+    componentKinds: ['api'],
   }
 }
 
-/** The `edit` track: it carries neither `security` nor a `critic`-family role, so strict mode has nowhere to route those dimensions but `verifier`. */
+/** The `edit` track: it carries neither `security` nor a `critic`-family role, so strict mode has nowhere to route those dimensions but the policy's own base agent (`editor`). */
 function editSecurityInput(): QualityRosterInput {
   return {
     trackName: 'edit',
@@ -73,6 +81,23 @@ function editSecurityInput(): QualityRosterInput {
     config: defaultConfig({ test: 'npm test', lint: null, build: null }),
     policy: policy('strict', 'high'),
     goal: 'Rename the submit label',
+    acceptance: ['The button reads "Submit"'],
+    intendedFiles: ['src/Button.tsx'],
+    componentKinds: [],
+  }
+}
+
+/** The `plan` track: no `verifier` at all, so the strict fallback for a specialist-less dimension must be the policy's own base agent (`planner`), not a hardcoded role the track doesn't define. */
+function planTrackInput(): QualityRosterInput {
+  return {
+    trackName: 'plan',
+    track: DEFAULT_TRACKS['plan']!,
+    config: defaultConfig({ test: 'npm test', lint: null, build: null }),
+    policy: policy('strict', 'high', 'planner'),
+    goal: 'Plan the checkout redesign',
+    acceptance: [],
+    intendedFiles: [],
+    componentKinds: [],
   }
 }
 
@@ -113,6 +138,26 @@ describe('planQualityDispatches', () => {
     const dispatches = planQualityDispatches(editSecurityInput())
     const editRoles = new Set([...DEFAULT_TRACKS['edit']!.required, ...DEFAULT_TRACKS['edit']!.available, 'verifier'])
     for (const dispatch of dispatches) expect(editRoles.has(dispatch.agent)).toBe(true)
+  })
+
+  it('falls back to the policy\'s own base agent, not a hardcoded "verifier", on a track that has no verifier role', () => {
+    // The `plan` track never permits `verifier` at all — a hardcoded fallback
+    // would plan a dispatch `rosterViolations` then refuses as `roster.unknown`,
+    // an unsatisfiable roster once the gate opens (Review finding 2).
+    const dispatches = planQualityDispatches(planTrackInput())
+    const planRoles = new Set([...DEFAULT_TRACKS['plan']!.required, ...DEFAULT_TRACKS['plan']!.available])
+    expect(planRoles.has('verifier')).toBe(false)
+    for (const dispatch of dispatches) expect(planRoles.has(dispatch.agent)).toBe(true)
+    expect(dispatches).toContainEqual(expect.objectContaining({ agent: 'planner', instance: 'security', dimensions: ['security'] }))
+  })
+
+  it('carries the acceptance criteria and the component/file map as optional context, ranked above risk evidence', () => {
+    const [dispatch] = planQualityDispatches(input({ mode: 'strict' }))
+    expect(dispatch!.context.text).toContain('Acceptance: Checkout responds under 200ms')
+    expect(dispatch!.context.text).toContain('File: src/checkout/api.ts')
+    expect(dispatch!.context.text).toContain('Component: api')
+    const text = dispatch!.context.text
+    expect(text.indexOf('Acceptance:')).toBeLessThan(text.indexOf('Evidence ('))
   })
 
   it('orders dispatches by the track\'s own waves, then agent, then instance', () => {

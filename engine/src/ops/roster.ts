@@ -23,9 +23,9 @@ import { StateStore } from '../store/state-store.js'
 // reaching a *type* under `src/web/`, and this reaches nothing else there.
 import type { WebCode } from '../web/codes.js'
 import { qualityRuntimeEnabled } from './quality-capability.js'
-import { planQualityDispatches, qualityRosterViolations, type PlannedQualityDispatch, type QualityRosterInput } from './quality-roster.js'
+import { ensureRunQualityPolicy, resolveQualityContextEvidence } from './quality-policy.js'
+import { planQualityDispatches, qualityRosterViolations, type PlannedQualityDispatch } from './quality-roster.js'
 import { NoActiveRunError, UnknownTrackError, cycleDirPath, runDirPath } from './run.js'
-import { readPolicy } from '../store/quality-store.js'
 
 /** Every code `rosterViolations` and `cycleRosterSet`'s cycle check can produce. */
 export type RosterViolationCode = Extract<WebCode, `roster.${string}`>
@@ -321,15 +321,24 @@ async function cycleRosterSet(
   // Planned regardless of whether enforcement is live: `qualityRuntimeEnabled`
   // stays closed until Task 17, so today this is counterfactual data only —
   // what the pinned mode *would* dispatch — never a change to which roster is
-  // accepted. `readPolicy` never fails here: `runStart` pins a policy before a
-  // run can reach `running`, and a policy is never rewritten after that.
-  const policy = await readPolicy(projectDir, state)
+  // accepted. `ensureRunQualityPolicy`, not a bare `readPolicy`: a run that
+  // reached `running` before this feature — or one that never touched config
+  // through the guarded write `ensureRunQualityPolicy`'s only other caller
+  // sits behind — has no `quality-policy.json` on disk yet, and a bare read
+  // would turn that legitimate absence into `StateCorruptedError` on every
+  // roster call the run makes. `ensureRunQualityPolicy` recovers exactly that
+  // case (`classifyPolicyIntegrity`'s `legacy-bootstrap`), pinning a shadow
+  // policy from the run's live config — the correct answer for a run that
+  // never opted in, not a corruption.
+  const policy = await ensureRunQualityPolicy(projectDir)
+  const evidence = await resolveQualityContextEvidence(projectDir, { story: state.current.story, allowMissingStory: true })
   const qualityDispatches = planQualityDispatches({
     trackName: state.track,
     track,
     config,
     policy,
     goal: state.goal ?? '',
+    ...evidence,
   })
 
   const violations: (string | RosterViolation)[] = []

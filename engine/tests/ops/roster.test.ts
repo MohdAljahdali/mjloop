@@ -4,9 +4,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { RosterViolationError, RunNotClosedError, rosterSet, rosterValidity, rosterViolations } from '../../src/ops/roster.js'
 import { initLoop } from '../../src/ops/init.js'
 import { runLog } from '../../src/ops/log.js'
+import { gateSet, planCreate, storyAdd } from '../../src/ops/plan.js'
 import { cycleAdvance, cycleDirPath, runDirPath, runStart, UnknownTrackError } from '../../src/ops/run.js'
 import { findTrack, type Track } from '../../src/schemas/config.js'
 import { RosterSchema } from '../../src/schemas/contract.js'
+import { initialState, type State } from '../../src/schemas/state.js'
+import { writeJsonAtomic } from '../../src/store/atomic.js'
 import { StateStore } from '../../src/store/state-store.js'
 import { configRevision, mutateConfig } from '../../src/store/config-mutation.js'
 import { loadConfig, writeConfig } from '../../src/store/config-store.js'
@@ -622,6 +625,84 @@ describe('quality_dispatches — the counterfactual plan rosterSet returns along
 
     const result = await rosterSet(project.dir, { closing: true, selected: ['docs'], skipped: {} })
     expect(result.quality_dispatches).toEqual([])
+  })
+
+  it('carries real acceptance criteria, not a placeholder, when a story is current', async () => {
+    // Review finding 3: the context packet must include the story's own
+    // acceptance criteria, gathered fresh (`resolveQualityContextEvidence`)
+    // rather than left out because the pinned policy does not carry them.
+    await planCreate(project.dir, { slug: 'submit-rename', title: 'Rename the submit label' }, clock)
+    await gateSet(project.dir, { plan: 'P001', decision: 'approved', by: 'mohd' }, clock)
+    const story = await storyAdd(project.dir, {
+      plan: 'P001',
+      title: 'Rename submit label',
+      acceptance: ['The button reads "Submit"'],
+    }, clock)
+    await runStart(project.dir, { track: 'edit', goal: 'Rename submit label', story: story.id }, clock)
+
+    const result = await rosterSet(project.dir, {
+      cycle: 1,
+      selected: ['editor', 'verifier'],
+      skipped: { scout: 'known files', critic: 'single-file change' },
+    })
+    const text = result.quality_dispatches[0]!.context.text
+    expect(text).toContain('Acceptance: The button reads "Submit"')
+  })
+})
+
+describe('a run pinned before quality policies existed', () => {
+  it('recovers a legacy-bootstrapped policy rather than failing every roster with a corruption error', async () => {
+    // Review finding 1: a run that reached `running` before this feature (or
+    // through any path that never touches `ensureRunQualityPolicy`'s other
+    // caller, the guarded config write) has no `quality-policy.json` on disk.
+    // A bare `readPolicy` would turn that legitimate absence into
+    // `StateCorruptedError` on every subsequent `rosterSet` call.
+    const state: State = {
+      ...initialState(NOW),
+      run_id: '2026-07-26-002',
+      track: 'build',
+      status: 'running',
+      cycle: 1,
+      goal: 'Speed up the checkout API',
+      started_at: NOW.toISOString(),
+      quality_policy_version: null,
+      current: { plan: null, story: null, stage: 'compose' },
+    }
+    await writeJsonAtomic(path.join(project.dir, '.mjloop', 'state.json'), state)
+    await fs.mkdir(runDirPath(project.dir, state), { recursive: true })
+
+    const result = await rosterSet(project.dir, {
+      cycle: 1,
+      selected: ['builder', 'verifier'],
+      skipped: {
+        scout: 'goal names the endpoint',
+        critic: 'single-file change',
+        'ui-designer': 'no UI surface touched',
+        'ui-critic': 'no UI surface touched',
+        security: 'no auth or input path touched',
+        perf: 'not a hot path',
+      },
+    })
+    expect(result.path).toContain('roster.json')
+    expect(result.quality_dispatches.length).toBeGreaterThan(0)
+
+    // The recovered policy is legacy-sourced and therefore shadow — even with
+    // the gate mocked open, it enforces nothing for this run.
+    vi.mocked(qualityRuntimeEnabled).mockReturnValue(true)
+    await expect(
+      rosterSet(project.dir, {
+        cycle: 1,
+        selected: ['builder', 'verifier'],
+        skipped: {
+          scout: 'goal names the endpoint',
+          critic: 'single-file change',
+          'ui-designer': 'no UI surface touched',
+          'ui-critic': 'no UI surface touched',
+          security: 'no auth or input path touched',
+          perf: 'not a hot path',
+        },
+      }),
+    ).resolves.toMatchObject({ path: expect.stringContaining('roster.json') })
   })
 })
 

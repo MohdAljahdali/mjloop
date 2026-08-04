@@ -20,6 +20,11 @@ export interface QualityRosterInput {
   config: Config
   policy: QualityPolicy
   goal: string
+  /** The story/feature acceptance criteria in force right now — the same evidence `resolveQualityContextEvidence` (`ops/quality-policy.ts`) gathers to pin a policy, re-resolved fresh rather than carried inside the (never-rewritten) policy. */
+  acceptance: readonly string[]
+  /** The component/file map: paths a dispatch's work is expected to touch. */
+  intendedFiles: readonly string[]
+  componentKinds: readonly string[]
 }
 
 /** One planned dispatch: the policy's own shape, plus the context it would carry and a fingerprint of both. */
@@ -64,8 +69,17 @@ export function planQualityDispatches(input: QualityRosterInput): PlannedQuality
   if (input.policy.mode === 'strict') {
     const permitted = permittedAgents(input.config, input.track)
     const forbidden = new Set(forbiddenSpecialists(input.config))
+    // The policy's own base dispatch already resolved to an agent the track
+    // actually has (`quality-policy.ts`'s own `permitted.includes('verifier')
+    // ? 'verifier' : permitted[0]`) — a track with no `verifier` at all (the
+    // `plan` track, say) still needs a *some* fallback agent for a dimension
+    // with no specialist, and hardcoding `'verifier'` here would plan a
+    // dispatch `rosterViolations` then refuses as `roster.unknown`, an
+    // unsatisfiable roster once the gate opens.
+    const fallbackAgent = input.policy.dispatches[0]?.agent
+    if (fallbackAgent === undefined) throw new Error('a quality policy needs at least one dispatch to plan a strict roster from')
     for (const dimension of requiredDimensions(input.policy)) {
-      dispatches.push(specialistDispatch(dimension, permitted, forbidden))
+      dispatches.push(specialistDispatch(dimension, permitted, forbidden, fallbackAgent))
     }
   }
 
@@ -103,7 +117,12 @@ function requiredDimensions(policy: QualityPolicy): QualityDimension[] {
     .filter((dimension) => policy.initial_quality_plan[dimension].value === 'required')
 }
 
-function specialistDispatch(dimension: QualityDimension, permitted: Set<string>, forbidden: Set<string>): QualityDispatch {
+function specialistDispatch(
+  dimension: QualityDimension,
+  permitted: Set<string>,
+  forbidden: Set<string>,
+  fallbackAgent: string,
+): QualityDispatch {
   const specialist = SPECIALIST_ROLES[dimension].find((role) => permitted.has(role) && !forbidden.has(role))
   if (specialist !== undefined) {
     return {
@@ -114,10 +133,10 @@ function specialistDispatch(dimension: QualityDimension, permitted: Set<string>,
     }
   }
   return {
-    agent: 'verifier',
+    agent: fallbackAgent,
     instance: dimension,
     dimensions: [dimension],
-    reason: `The track has no permitted ${dimension} specialist — verifier covers it under a "${dimension}" instance instead of a new role.`,
+    reason: `The track has no permitted ${dimension} specialist — ${fallbackAgent} covers it under a "${dimension}" instance instead of a new role.`,
   }
 }
 
@@ -131,13 +150,17 @@ function waveIndex(track: Track, agents: readonly string[]): Map<string, number>
 
 /**
  * The bounded packet one dispatch would actually carry: goal, role, the
- * dispatch's own reason and the fixed output contract as mandatory text, the
- * policy's own risk evidence and per-dimension applicability reasons as
- * optional text `fitContextPacket` may drop under the mode's ceiling.
+ * dispatch's own reason and the fixed output contract as mandatory text; the
+ * acceptance criteria in force, the component/file map, the policy's own
+ * per-dimension applicability reasons, and its risk-signal evidence — the
+ * closest thing to a "last decisive failure" this plan carries — as optional
+ * text `fitContextPacket` may drop under the mode's ceiling, ranked in that
+ * order (acceptance first, risk evidence last).
  *
- * Deliberately built from `policy` and `goal` alone — never the conversation
- * transcript and never raw tool output, which do not appear anywhere in this
- * function's inputs to begin with.
+ * Deliberately built from `policy`, `goal` and the resolved evidence on
+ * `input` alone — never the conversation transcript and never raw tool
+ * output, which do not appear anywhere in this function's inputs to begin
+ * with.
  */
 function buildContext(input: QualityRosterInput, dispatch: QualityDispatch, ceiling: number): ContextPacketResult {
   const mandatory = [
@@ -148,6 +171,9 @@ function buildContext(input: QualityRosterInput, dispatch: QualityDispatch, ceil
   ]
 
   const optional: ContextEvidenceDigest[] = [
+    ...ranked(input.acceptance, (text) => `Acceptance: ${text}`, 400),
+    ...ranked(input.intendedFiles, (text) => `File: ${text}`, 300),
+    ...ranked(input.componentKinds, (text) => `Component: ${text}`, 250),
     ...dispatch.dimensions.map((dimension, index) => ({
       text: `Criteria (${dimension}): ${input.policy.initial_quality_plan[dimension].reason}`,
       relevance: 100 - index,
@@ -160,6 +186,11 @@ function buildContext(input: QualityRosterInput, dispatch: QualityDispatch, ceil
   ]
 
   return fitContextPacket({ mandatory, optional, ceiling })
+}
+
+/** One optional-context tier: every entry outranks the next tier down, in the order it was given. */
+function ranked(values: readonly string[], format: (value: string) => string, base: number): ContextEvidenceDigest[] {
+  return values.map((value, index) => ({ text: format(value), relevance: base - index }))
 }
 
 const RISK_RELEVANCE: Record<'low' | 'medium' | 'high', number> = { high: 60, medium: 40, low: 20 }
