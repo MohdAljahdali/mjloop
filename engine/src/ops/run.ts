@@ -84,38 +84,36 @@ export interface RunStartInput {
 }
 
 export async function runStart(projectDir: string, input: RunStartInput, now: Clock = () => new Date()): Promise<State> {
-  const { config, qualitySource } = await loadConfigRecord(projectDir)
-  if (findTrack(config, input.track) === undefined) {
-    throw new UnknownTrackError(input.track, Object.keys(config.tracks))
-  }
-
   // A run named after a story that does not exist would produce a run
   // directory traceable to nothing. readStory throws StoryNotFoundError.
   if (input.story !== undefined && input.story !== null) await readStory(projectDir, input.story)
 
-  // Resolved here, beside `readStory` and for the same reason, rather than
-  // beside the write it feeds below: both of the ways this can throw — a
-  // malformed feature id, and a profile that moved out from under the brief —
-  // are facts about the caller's input, and a caller told its run failed must
-  // be able to fix the input and call again. After the update below there is
-  // no "again": `state.json` already says `running` under a fresh `run_id`
-  // nothing will ever close, and the retry allocates the next id over the top
-  // of the orphan. `resolveSkillManifest` reads and validates; it writes
-  // nothing, so a throw here leaves exactly the nothing an unknown story does.
-  const manifest = await resolveSkillManifest(projectDir, config, input.feature, now)
-  const track = findTrack(config, input.track)
-  if (track === undefined) throw new UnknownTrackError(input.track, Object.keys(config.tracks))
-  const qualityPolicy = await buildProjectQualityPolicy(projectDir, {
-    config,
-    qualitySource,
-    track,
-    goal: input.goal,
-    story: input.story,
-    feature: input.feature,
-    supervision: input.supervision ?? 'supervised',
-  }, now)
-
+  const initialization: { value: { config: Config; manifest: SkillManifest | null } | null } = { value: null }
+  let integrityError: QualityPolicyIntegrityError | null = null
   const state = await new StateStore(projectDir, now).update(async (draft) => {
+    // This is the authoritative run-boundary snapshot. It is read under the
+    // same project lock that publishes the marker, so a config mutation either
+    // completes before this read and is pinned, or waits until the complete
+    // policy and ledger are visible. There is no third, stale interleaving.
+    const { config, qualitySource } = await loadConfigRecord(projectDir)
+    const track = findTrack(config, input.track)
+    if (track === undefined) throw new UnknownTrackError(input.track, Object.keys(config.tracks))
+
+    // Both resolutions are read-only and happen before the draft is changed.
+    // A malformed feature/profile or invalid policy input therefore aborts the
+    // StateStore transaction without publishing a half-started run.
+    const manifest = await resolveSkillManifest(projectDir, config, input.feature, now)
+    const qualityPolicy = await buildProjectQualityPolicy(projectDir, {
+      config,
+      qualitySource,
+      track,
+      goal: input.goal,
+      story: input.story,
+      feature: input.feature,
+      supervision: input.supervision ?? 'supervised',
+    }, now)
+    initialization.value = { config, manifest }
+
     // Computed inside the locked update so two overlapping runStart calls
     // cannot observe the same sequence number. The previous run's id (still
     // on the draft at this point) covers the window where that run's
@@ -160,24 +158,28 @@ export async function runStart(projectDir: string, input: RunStartInput, now: Cl
     // the run to live config; integrity classification halts it instead.
     draft.quality_policy_version = 1
     draft.halt_reason = null
-  })
 
-  await fs.mkdir(runDirPath(projectDir, state), { recursive: true })
-  try {
-    await writePolicyOnce(projectDir, state, qualityPolicy)
-    await writeLedger(projectDir, state, createInitialQualityLedger(qualityPolicy, now))
-  } catch (error) {
-    const integrity = new QualityPolicyIntegrityError(`new run could not write both records: ${errorMessage(error)}`)
-    await new StateStore(projectDir, now).update((draft) => {
-      if (draft.run_id !== state.run_id) return
+    // Required run records are initialized before StateStore publishes the
+    // marker. A guarded observer uses this same lock and therefore cannot see
+    // marker=1 until both schema-valid files exist. mkdir belongs to the same
+    // integrity boundary: failure must publish a halted marker, never running.
+    try {
+      await fs.mkdir(runDirPath(projectDir, draft), { recursive: true })
+      await writePolicyOnce(projectDir, draft, qualityPolicy)
+      await writeLedger(projectDir, draft, createInitialQualityLedger(qualityPolicy, now))
+    } catch (error) {
+      integrityError = new QualityPolicyIntegrityError(`new run could not write both records: ${errorMessage(error)}`)
       draft.status = 'halted'
       draft.current.stage = 'halted'
-      draft.halt_reason = integrity.message
-    })
-    throw integrity
-  }
-  await pinVerifyBlock(projectDir, state, config, now)
-  await writeSkillManifest(projectDir, state, manifest)
+      draft.halt_reason = integrityError.message
+    }
+  })
+
+  if (integrityError !== null) throw integrityError
+  const initialized = initialization.value
+  if (initialized === null) throw new Error('run initialization completed without an authoritative config snapshot')
+  await pinVerifyBlock(projectDir, state, initialized.config, now)
+  await writeSkillManifest(projectDir, state, initialized.manifest)
   return state
 }
 

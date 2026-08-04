@@ -59,6 +59,30 @@ describe('runStart', () => {
     expect((await fs.stat(runDirPath(project.dir, state))).isDirectory()).toBe(true)
   })
 
+  it('persists a halted marker when the run directory cannot be created', async () => {
+    const realMkdir = fs.mkdir.bind(fs)
+    const spy = vi.spyOn(fs, 'mkdir').mockImplementation(async (target: any, options: any) => {
+      if (String(target).endsWith('2026-07-26-001--adhoc--edit')) {
+        const error = Object.assign(new Error('run directory denied'), { code: 'EACCES' })
+        throw error
+      }
+      return realMkdir(target, options)
+    })
+
+    try {
+      await expect(runStart(project.dir, { track: 'edit', goal: 'Rename submit label' }, clock)).rejects.toThrow(
+        /integrity/i,
+      )
+      expect(await new StateStore(project.dir).get()).toMatchObject({
+        status: 'halted',
+        quality_policy_version: 1,
+        halt_reason: expect.stringMatching(/run directory denied/),
+      })
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
   it('names the run directory after the story when there is one', async () => {
     await planCreate(project.dir, { slug: 'user-auth', title: 'User authentication' }, clock)
     // The project is initialised, so gates.plan_approval is "human" and stories
