@@ -267,6 +267,18 @@ describe('evaluateStateGuard', () => {
     expect(verdict.reason).toContain('skill-selection.json')
   })
 
+  it.each(['quality-policy.json', 'quality-ledger.json', 'quality-amendments.jsonl'])(
+    'denies a hand edit to a run directory\'s %s',
+    (name) => {
+      const verdict = evaluateStateGuard({
+        tool_name: 'Edit',
+        tool_input: { file_path: `/repo/.mjloop/runs/2026-08-04-001--adhoc--build/${name}` },
+      })
+      expect(verdict.deny).toBe(true)
+      expect(verdict.reason).toContain(name)
+    },
+  )
+
   it('allows a verify log, which the engine writes and a reader may open', () => {
     // Only the pin is protected. The logs and the ledger beside it are the
     // engine's output, not its instructions.

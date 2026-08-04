@@ -120,7 +120,15 @@ export function resolveLoopPaths(projectDir: string): LoopPaths {
  * pin, which is why `state.started_at` makes a missing pin an error rather than
  * a fallback to the live config.
  */
-export const PROTECTED_BASENAMES = ['state.json', 'manifest.json', 'verify-pinned.json', 'skill-selection.json'] as const
+export const PROTECTED_BASENAMES = [
+  'state.json',
+  'manifest.json',
+  'verify-pinned.json',
+  'skill-selection.json',
+  'quality-policy.json',
+  'quality-ledger.json',
+  'quality-amendments.jsonl',
+] as const
 
 /**
  * Directories under `.mjloop/` only the engine may write into, named here for
