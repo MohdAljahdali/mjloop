@@ -25,11 +25,11 @@ function policyFixture(overrides: Record<string, unknown> = {}) {
       cost_estimate: null,
     },
     initial_quality_plan: {
-      correctness: 'required',
-      security: 'required',
-      alignment: 'required',
-      regression: 'required',
-      ui: 'not_applicable',
+      correctness: { value: 'required', reason: 'The feature changes executable behavior.' },
+      security: { value: 'required', reason: 'The feature crosses a service boundary.' },
+      alignment: { value: 'required', reason: 'The acceptance criteria are pinned.' },
+      regression: { value: 'required', reason: 'The existing verification suite applies.' },
+      ui: { value: 'not_applicable', reason: 'The intended files are backend-only.' },
     },
     dispatches: [{ agent: 'verifier', instance: null, dimensions: ['correctness'], reason: 'check the acceptance criteria' }],
     ...overrides,
@@ -87,6 +87,17 @@ describe('QualityPolicySchema', () => {
   it('requires each dispatch to name at least one quality dimension', () => {
     expect(QualityPolicySchema.safeParse(policyFixture({ dispatches: [{ agent: 'verifier', instance: null, dimensions: [], reason: 'check' }] })).success).toBe(false)
   })
+
+  it('preserves a deterministic applicability reason for each pinned dimension', () => {
+    const parsed = QualityPolicySchema.parse(policyFixture())
+    expect(parsed.initial_quality_plan).toEqual({
+      correctness: { value: 'required', reason: 'The feature changes executable behavior.' },
+      security: { value: 'required', reason: 'The feature crosses a service boundary.' },
+      alignment: { value: 'required', reason: 'The acceptance criteria are pinned.' },
+      regression: { value: 'required', reason: 'The existing verification suite applies.' },
+      ui: { value: 'not_applicable', reason: 'The intended files are backend-only.' },
+    })
+  })
 })
 
 describe('QualityLedgerSchema', () => {
@@ -97,6 +108,17 @@ describe('QualityLedgerSchema', () => {
 
   it('rejects unknown ledger dimensions', () => {
     expect(QualityLedgerSchema.safeParse(ledgerFixture({ dimensions: { ...ledgerFixture().dimensions, performance: {} } })).success).toBe(false)
+  })
+
+  it.each([
+    ['required', 'not_applicable'],
+    ['not_applicable', 'pass'],
+  ] as const)('rejects a %s dimension with verdict %s', (applicability, status) => {
+    const dimensions = ledgerFixture().dimensions
+    expect(QualityLedgerSchema.safeParse({
+      ...ledgerFixture(),
+      dimensions: { ...dimensions, ui: { ...dimensions.ui, applicability, status } },
+    }).success).toBe(false)
   })
 })
 

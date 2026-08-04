@@ -66,12 +66,17 @@ export const QualityDispatchSchema = z.strictObject({
   reason: ProseSchema,
 })
 
+export const QualityApplicabilityRecordSchema = z.strictObject({
+  value: QualityApplicabilitySchema,
+  reason: ProseSchema,
+})
+
 const InitialQualityPlanSchema = z.strictObject({
-  correctness: QualityApplicabilitySchema,
-  security: QualityApplicabilitySchema,
-  alignment: QualityApplicabilitySchema,
-  regression: QualityApplicabilitySchema,
-  ui: QualityApplicabilitySchema,
+  correctness: QualityApplicabilityRecordSchema,
+  security: QualityApplicabilityRecordSchema,
+  alignment: QualityApplicabilityRecordSchema,
+  regression: QualityApplicabilityRecordSchema,
+  ui: QualityApplicabilityRecordSchema,
 })
 
 export const QualityPolicySchema = z
@@ -93,16 +98,25 @@ export const QualityPolicySchema = z
     }
   })
 
-export const QualityLedgerEntrySchema = z.strictObject({
-  applicability: QualityApplicabilitySchema,
-  status: QualityVerdictSchema,
-  required_evidence: z.array(EvidenceSchema.shape.kind).max(3),
-  evidence_refs: z.array(ReferenceSchema).max(100),
-  reason: ProseSchema,
-  inputs_fingerprint: SHA256_SCHEMA,
-  checked_at: z.iso.datetime().nullable(),
-  invalidated_at: z.iso.datetime().nullable(),
-})
+export const QualityLedgerEntrySchema = z
+  .strictObject({
+    applicability: QualityApplicabilitySchema,
+    status: QualityVerdictSchema,
+    required_evidence: z.array(EvidenceSchema.shape.kind).max(3),
+    evidence_refs: z.array(ReferenceSchema).max(100),
+    reason: ProseSchema,
+    inputs_fingerprint: SHA256_SCHEMA,
+    checked_at: z.iso.datetime().nullable(),
+    invalidated_at: z.iso.datetime().nullable(),
+  })
+  .superRefine((entry, ctx) => {
+    if (entry.applicability === 'required' && entry.status === 'not_applicable') {
+      ctx.addIssue({ code: 'custom', path: ['status'], message: 'a required dimension cannot be not_applicable' })
+    }
+    if (entry.applicability === 'not_applicable' && entry.status !== 'not_applicable') {
+      ctx.addIssue({ code: 'custom', path: ['status'], message: 'a non-applicable dimension must be not_applicable' })
+    }
+  })
 
 export const QualityLedgerSchema = z.strictObject({
   version: z.literal(1),
