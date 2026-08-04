@@ -9,6 +9,7 @@ import {
   QUALITY_LEDGER_FILE,
   QUALITY_POLICY_FILE,
   QualityPolicyExistsError,
+  QualityLedgerStateDriftError,
   appendAmendment,
   qualityFiles,
   readAmendments,
@@ -69,11 +70,14 @@ function ledger(): QualityLedger {
     evidence_refs: [],
     reason: 'required by the pinned quality plan',
     inputs_fingerprint: 'a'.repeat(64),
+    worktree_digest: null,
+    recorded_cycle: null,
     checked_at: null,
     invalidated_at: null,
   }
   return {
     version: 1,
+    cycle: 1,
     dimensions: {
       correctness: { ...pending },
       security: { ...pending },
@@ -97,7 +101,10 @@ function amendment(to: number): QualityAmendment {
   }
 }
 
-beforeEach(async () => { project = await makeTmpProject() })
+beforeEach(async () => {
+  project = await makeTmpProject()
+  await writeCurrentState(state)
+})
 afterEach(async () => { await project.cleanup() })
 
 describe('qualityFiles', () => {
@@ -144,7 +151,19 @@ describe('quality ledger', () => {
       },
     })
   })
+
+  it('rejects a supplied state after the active run advances under the lock', async () => {
+    await writeLedger(project.dir, state, ledger())
+    await writeCurrentState({ ...state, cycle: 2 })
+    await expect(updateLedger(project.dir, state, () => undefined)).rejects.toBeInstanceOf(QualityLedgerStateDriftError)
+  })
 })
+
+async function writeCurrentState(value: State): Promise<void> {
+  const file = path.join(project.dir, '.mjloop', 'state.json')
+  await fs.mkdir(path.dirname(file), { recursive: true })
+  await fs.writeFile(file, `${JSON.stringify(value)}\n`, 'utf8')
+}
 
 describe('quality amendments', () => {
   it('appends validated amendments in their write order', async () => {

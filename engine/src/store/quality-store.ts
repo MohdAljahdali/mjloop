@@ -8,7 +8,7 @@ import {
   type QualityLedger,
   type QualityPolicy,
 } from '../schemas/quality.js'
-import type { State } from '../schemas/state.js'
+import { StateSchema, type State } from '../schemas/state.js'
 import { runDirPath } from '../ops/run.js'
 import { StateCorruptedError, readJsonValidated, writeJsonAtomic } from './atomic.js'
 import { withLock } from './lock.js'
@@ -39,6 +39,17 @@ export class QualityPolicyExistsError extends Error {
   constructor(file: string) {
     super(`${file} already exists — a run quality policy is never rewritten`)
     this.name = 'QualityPolicyExistsError'
+  }
+}
+
+/** The state naming a ledger changed before the guarded transition could land. */
+export class QualityLedgerStateDriftError extends Error {
+  constructor(supplied: State, current: State) {
+    super(
+      `quality ledger state drift: supplied run=${String(supplied.run_id)} cycle=${supplied.cycle} status=${supplied.status}; ` +
+      `current run=${String(current.run_id)} cycle=${current.cycle} status=${current.status}`,
+    )
+    this.name = 'QualityLedgerStateDriftError'
   }
 }
 
@@ -81,9 +92,13 @@ export async function updateLedger(
   state: State,
   mutate: (draft: QualityLedger) => void | Promise<void>,
 ): Promise<QualityLedger> {
-  const file = qualityFiles(projectDir, state).ledger
   const paths = resolveLoopPaths(projectDir)
   return withLock(paths.lock, async (ownership) => {
+    const { value: current } = await readJsonValidated(paths.state, StateSchema)
+    if (current.run_id !== state.run_id || current.cycle !== state.cycle || current.status !== state.status) {
+      throw new QualityLedgerStateDriftError(state, current)
+    }
+    const file = qualityFiles(projectDir, current).ledger
     const { value, recovered } = await readJsonValidated(file, QualityLedgerSchema)
     const draft = structuredClone(value)
     await mutate(draft)

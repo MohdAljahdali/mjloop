@@ -47,12 +47,15 @@ function ledgerFixture(overrides: Record<string, unknown> = {}) {
     evidence_refs: [],
     reason: 'required by the pinned quality plan',
     inputs_fingerprint: 'a'.repeat(64),
+    worktree_digest: null,
+    recorded_cycle: null,
     checked_at: null,
     invalidated_at: null,
   }
 
   return {
     version: 1,
+    cycle: 1,
     dimensions: {
       correctness: entry,
       security: entry,

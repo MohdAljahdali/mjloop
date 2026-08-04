@@ -1,7 +1,6 @@
 import { createHash } from 'node:crypto'
 import type {
   QualityDimension,
-  QualityEvidenceKind,
   QualityLedger,
   QualityPolicy,
   QualityVerdict,
@@ -10,6 +9,7 @@ import type { State } from '../schemas/state.js'
 import { worktreeDigest } from '../store/git.js'
 import { updateLedger } from '../store/quality-store.js'
 import type { Clock } from '../store/state-store.js'
+import { resolveQualityEvidenceReceipts } from './quality-evidence.js'
 
 const DIMENSIONS: readonly QualityDimension[] = ['correctness', 'security', 'alignment', 'regression', 'ui']
 const UI_SURFACE_PATH = /\.(vue|tsx|jsx|css|scss|dart|svelte|html|swift|kt)$/i
@@ -18,7 +18,6 @@ const SECURITY_SURFACE_PATH = /(^|\/)(auth|permissions?|polic(?:y|ies)|api|route
 export interface QualityEvidenceInput {
   dimension: QualityDimension
   verdict: Exclude<QualityVerdict, 'not_applicable'>
-  evidenceKinds: QualityEvidenceKind[]
   evidenceRefs: string[]
   reason: string
   criteria: string[]
@@ -79,9 +78,8 @@ export async function recordQualityEvidence(
       return
     }
 
-    if (cannotOverrideEngineFailure(entry, input)) return
-
-    const missingKinds = entry.required_evidence.filter((kind) => !input.evidenceKinds.includes(kind))
+    const resolved = await resolveQualityEvidenceReceipts(projectDir, state, input.verdict, input.evidenceRefs)
+    const missingKinds = entry.required_evidence.filter((kind) => !resolved.receipts.some((receipt) => receipt.kind === kind))
     if (input.verdict === 'pass' && missingKinds.length > 0) {
       setPending(entry, {
         reason: `Missing required evidence for ${input.dimension}: ${missingKinds.join(', ')}.`,
@@ -92,9 +90,11 @@ export async function recordQualityEvidence(
     }
 
     entry.status = input.verdict
-    entry.evidence_refs = sorted(input.evidenceRefs)
+    entry.evidence_refs = sorted(resolved.receipts.map((receipt) => receipt.ref))
     entry.reason = input.reason.trim()
     entry.inputs_fingerprint = fingerprint
+    entry.worktree_digest = digest
+    entry.recorded_cycle = state.cycle
     entry.checked_at = stampedAt
     entry.invalidated_at = null
   })
@@ -121,7 +121,7 @@ export async function invalidateQualityEvidence(
     if (hasUiFile && ledger.dimensions.ui.applicability === 'not_applicable') {
       const ui = ledger.dimensions.ui
       ui.applicability = 'required'
-      ui.required_evidence = ['human']
+      ui.required_evidence = ['agent']
       ui.reason = `User-visible files require UI evidence: ${files.filter((file) => UI_SURFACE_PATH.test(file)).join(', ')}.`
     }
 
@@ -131,6 +131,7 @@ export async function invalidateQualityEvidence(
         || (change.commandsChanged === true && entry.required_evidence.some(isExecutableEvidence))
         || (files.length > 0 && ((dimension === 'correctness' || dimension === 'regression')
           || (dimension === 'security' && hasSecurityFile)
+          || dimension === 'alignment'
           || (dimension === 'ui' && hasUiFile)))
       if (!affected || entry.applicability !== 'required') continue
 
@@ -142,6 +143,32 @@ export async function invalidateQualityEvidence(
       setPending(entry, {
         reason: `Evidence invalidated for ${dimension}: ${causes.join('; ')}.`,
         fingerprint: evidenceFingerprint(state, dimension, [], files, [], digest),
+        invalidatedAt: stampedAt,
+      })
+    }
+  })
+}
+
+/**
+ * The cycle-advance seam for Task 10. It makes null-digest evidence explicitly
+ * cycle scoped before any later close check can inspect the ledger.
+ */
+export async function advanceQualityLedgerCycle(
+  projectDir: string,
+  state: State,
+  now: Clock = () => new Date(),
+): Promise<QualityLedger> {
+  return updateLedger(projectDir, state, (ledger) => {
+    if (state.cycle < ledger.cycle) throw new Error(`quality ledger cannot move from cycle ${ledger.cycle} back to ${state.cycle}`)
+    if (state.cycle === ledger.cycle) return
+    ledger.cycle = state.cycle
+    const stampedAt = now().toISOString()
+    for (const dimension of DIMENSIONS) {
+      const entry = ledger.dimensions[dimension]
+      if (entry.applicability !== 'required' || entry.status !== 'pass' || entry.worktree_digest !== null || entry.recorded_cycle === state.cycle) continue
+      setPending(entry, {
+        reason: `Evidence is stale: no worktree digest binds ${dimension} across cycle ${state.cycle}.`,
+        fingerprint: evidenceFingerprint(state, dimension, [], [], [], null),
         invalidatedAt: stampedAt,
       })
     }
@@ -169,6 +196,10 @@ export function closingViolations(policy: QualityPolicy, ledger: QualityLedger):
       violations.push(`${dimension}: evidence is stale`)
       continue
     }
+    if (entry.worktree_digest === null && entry.recorded_cycle !== ledger.cycle) {
+      violations.push(`${dimension}: null-worktree evidence is stale for ledger cycle ${ledger.cycle}`)
+      continue
+    }
     if (entry.required_evidence.length === 0 || entry.evidence_refs.length === 0) {
       violations.push(`${dimension}: required evidence is missing`)
     }
@@ -187,20 +218,7 @@ function rejectNonEvidenceVerdict(input: QualityEvidenceInput): void {
   }
 }
 
-function cannotOverrideEngineFailure(
-  entry: QualityLedger['dimensions'][QualityDimension],
-  input: QualityEvidenceInput,
-): boolean {
-  const needsExecutableEvidence = entry.required_evidence.some(isExecutableEvidence)
-  const suppliesExecutableEvidence = input.evidenceKinds.some(isExecutableEvidence)
-  if (entry.status === 'fail' && input.verdict === 'pass' && needsExecutableEvidence && !suppliesExecutableEvidence) {
-    entry.reason = `A ${input.evidenceKinds.join('/')} verdict cannot override failed command or test evidence.`
-    return true
-  }
-  return false
-}
-
-function isExecutableEvidence(kind: QualityEvidenceKind): boolean {
+function isExecutableEvidence(kind: 'command' | 'test' | 'agent' | 'human'): boolean {
   return kind === 'command' || kind === 'test'
 }
 
@@ -212,6 +230,8 @@ function setPending(
   entry.evidence_refs = []
   entry.reason = value.reason
   entry.inputs_fingerprint = value.fingerprint
+  entry.worktree_digest = null
+  entry.recorded_cycle = null
   entry.checked_at = null
   entry.invalidated_at = value.invalidatedAt
 }

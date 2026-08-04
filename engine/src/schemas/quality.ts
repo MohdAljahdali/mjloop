@@ -117,6 +117,10 @@ export const QualityLedgerEntrySchema = z
     evidence_refs: z.array(ReferenceSchema).max(100),
     reason: ProseSchema,
     inputs_fingerprint: SHA256_SCHEMA,
+    /** The engine-sampled tree identity; null is cycle-scoped and never reusable. */
+    worktree_digest: SHA256_SCHEMA.nullable(),
+    /** Cycle that recorded the evidence, not an agent supplied claim. */
+    recorded_cycle: z.number().int().positive().nullable(),
     checked_at: z.iso.datetime().nullable(),
     invalidated_at: z.iso.datetime().nullable(),
   })
@@ -131,6 +135,8 @@ export const QualityLedgerEntrySchema = z
 
 export const QualityLedgerSchema = z.strictObject({
   version: z.literal(1),
+  /** Advanced only by the engine's cycle transition seam. */
+  cycle: z.number().int().positive(),
   dimensions: z.strictObject({
     correctness: QualityLedgerEntrySchema,
     security: QualityLedgerEntrySchema,

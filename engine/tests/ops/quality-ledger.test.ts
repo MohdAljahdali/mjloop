@@ -6,6 +6,7 @@ import { promisify } from 'node:util'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   assertQualityCloseable,
+  advanceQualityLedgerCycle,
   invalidateQualityEvidence,
   recordQualityEvidence,
 } from '../../src/ops/quality-ledger.js'
@@ -13,6 +14,7 @@ import type { QualityLedger, QualityPolicy } from '../../src/schemas/quality.js'
 import { initialState, type State } from '../../src/schemas/state.js'
 import { worktreeDigest } from '../../src/store/git.js'
 import { readLedger, writeLedger } from '../../src/store/quality-store.js'
+import { cycleDirPath } from '../../src/ops/run.js'
 import { makeTmpProject, type TmpProject } from '../helpers/tmp-project.js'
 
 const run = promisify(execFile)
@@ -59,6 +61,8 @@ function passingLedger(): QualityLedger {
     evidence_refs: ['cycle-01/verify.json'],
     reason: 'The required check passed.',
     inputs_fingerprint: 'a'.repeat(64),
+    worktree_digest: null,
+    recorded_cycle: 1,
     checked_at: AT,
     invalidated_at: null,
   }
@@ -69,8 +73,9 @@ function passingLedger(): QualityLedger {
       security: { ...entry, required_evidence: ['command'] },
       alignment: { ...entry, required_evidence: ['agent'] },
       regression: { ...entry },
-      ui: { ...entry, applicability: 'not_applicable', status: 'not_applicable', required_evidence: [], evidence_refs: [], checked_at: null },
+      ui: { ...entry, applicability: 'not_applicable', status: 'not_applicable', required_evidence: [], evidence_refs: [], checked_at: null, recorded_cycle: null },
     },
+    cycle: 1,
   }
 }
 
@@ -83,7 +88,10 @@ async function makeRepo(): Promise<void> {
   await run('git', ['-c', 'user.email=test@example.com', '-c', 'user.name=test', '-c', 'commit.gpgsign=false', 'commit', '-q', '-m', 'first'], { cwd: project.dir })
 }
 
-beforeEach(async () => { project = await makeTmpProject() })
+beforeEach(async () => {
+  project = await makeTmpProject()
+  await writeCurrentState(state)
+})
 afterEach(async () => { await project.cleanup() })
 
 describe('closing evidence', () => {
@@ -110,6 +118,12 @@ describe('closing evidence', () => {
     missing.dimensions.alignment.evidence_refs = []
     expect(() => assertQualityCloseable(policy(), missing)).toThrow('alignment')
   })
+
+  it('refuses null-worktree evidence recorded in an older ledger cycle', () => {
+    const ledger = passingLedger()
+    ledger.cycle = 2
+    expect(() => assertQualityCloseable(policy(), ledger)).toThrow('correctness')
+  })
 })
 
 describe('engine-owned evidence transitions', () => {
@@ -119,12 +133,14 @@ describe('engine-owned evidence transitions', () => {
     expect(next.dimensions.security.status).toBe('pass')
     expect(next.dimensions.ui).toMatchObject({ applicability: 'required', status: 'pending', evidence_refs: [] })
     expect(next.dimensions.ui.invalidated_at).toBe(AT)
+    expect(next.dimensions.alignment.status).toBe('pending')
   })
 
   it('records a blocked tool as blocked instead of allowing a pass', async () => {
     await writeLedger(project.dir, state, pendingLedger())
-    const next = await recordQualityEvidence(project.dir, state, evidence('security', 'blocked', ['command']), clock)
-    expect(next.dimensions.security).toMatchObject({ status: 'blocked', evidence_refs: ['cycle-01/security-tool.log'], checked_at: AT })
+    await writeAgentReceipt('security.json', 'blocked')
+    const next = await recordQualityEvidence(project.dir, state, evidence('security', 'blocked', ['agent'], null, ['cycle-01/security.json']), clock)
+    expect(next.dimensions.security).toMatchObject({ status: 'blocked', evidence_refs: ['cycle-01/security.json'], checked_at: AT })
     expect(() => assertQualityCloseable(policy(), withRequiredUi(next))).toThrow('security')
   })
 
@@ -149,6 +165,7 @@ describe('engine-owned evidence transitions', () => {
   it('rejects evidence captured for a stale worktree digest', async () => {
     await makeRepo()
     await writeLedger(project.dir, state, pendingLedger())
+    await writeVerifyReceipt('correctness-tool.log', 'test', 0)
     const before = await worktreeDigest(project.dir)
     await fs.writeFile(path.join(project.dir, 'src', 'work.ts'), 'export const work = 2\n', 'utf8')
 
@@ -159,32 +176,134 @@ describe('engine-owned evidence transitions', () => {
 
   it('does not let an agent pass override failed command evidence', async () => {
     await writeLedger(project.dir, state, pendingLedger())
+    await writeVerifyReceipt('security-tool.log', 'lint', 1)
     await recordQualityEvidence(project.dir, state, evidence('security', 'fail', ['command']), clock)
+    await writeAgentReceipt('security.json', 'pass', [{ kind: 'command', ref: 'npm test', excerpt: 'claimed pass' }])
 
-    const next = await recordQualityEvidence(project.dir, state, evidence('security', 'pass', ['agent']), clock)
-    expect(next.dimensions.security.status).toBe('fail')
-    expect(next.dimensions.security.reason).toMatch(/command/i)
+    await expect(recordQualityEvidence(project.dir, state, evidence('security', 'pass', ['agent'], null, ['cycle-01/security.json']), clock)).rejects.toThrow(/contradicts/i)
+    expect((await readLedger(project.dir, state)).dimensions.security.status).toBe('fail')
   })
 
   it('does not reuse a null-worktree fingerprint across cycles', async () => {
     await writeLedger(project.dir, state, pendingLedger())
+    await writeVerifyReceipt('correctness-tool.log', 'test', 0)
     const first = await recordQualityEvidence(project.dir, state, evidence('correctness', 'pass', ['test']), clock)
     const nextState = { ...state, cycle: 2 }
-    const second = await recordQualityEvidence(project.dir, nextState, evidence('correctness', 'pass', ['test']), clock)
+    await writeCurrentState(nextState)
+    const second = await advanceQualityLedgerCycle(project.dir, nextState, clock)
     expect(first.dimensions.correctness.inputs_fingerprint).not.toBe(second.dimensions.correctness.inputs_fingerprint)
+    expect(second.dimensions.correctness.status).toBe('pending')
   })
 
   it('uses canonical evidence inputs so ordering cannot change a fingerprint', async () => {
     await writeLedger(project.dir, state, pendingLedger())
+    await writeVerifyReceipt('a.log', 'test', 0)
+    await writeVerifyReceipt('b.log', 'test', 0)
     const first = await recordQualityEvidence(project.dir, state, {
-      ...evidence('correctness', 'pass', ['test']), criteria: ['B', 'A'], changedFiles: ['src/b.ts', 'src/a.ts'], evidenceRefs: ['cycle-01/b', 'cycle-01/a'],
+      ...evidence('correctness', 'pass', ['test']), criteria: ['B', 'A'], changedFiles: ['src/b.ts', 'src/a.ts'], evidenceRefs: ['cycle-01/verify/b.log', 'cycle-01/verify/a.log'],
     }, clock)
     const second = await recordQualityEvidence(project.dir, state, {
-      ...evidence('correctness', 'pass', ['test']), criteria: ['A', 'B'], changedFiles: ['src/a.ts', 'src/b.ts'], evidenceRefs: ['cycle-01/a', 'cycle-01/b'],
+      ...evidence('correctness', 'pass', ['test']), criteria: ['A', 'B'], changedFiles: ['src/a.ts', 'src/b.ts'], evidenceRefs: ['cycle-01/verify/a.log', 'cycle-01/verify/b.log'],
     }, clock)
     expect(second.dimensions.correctness.inputs_fingerprint).toBe(first.dimensions.correctness.inputs_fingerprint)
   })
+
+  it('rejects a bogus verify reference instead of accepting a caller-claimed test kind', async () => {
+    await writeLedger(project.dir, state, pendingLedger())
+    await expect(recordQualityEvidence(project.dir, state, {
+      dimension: 'correctness', verdict: 'pass', evidenceRefs: ['cycle-01/verify/forged.log'], reason: 'forged',
+      criteria: ['Acceptance A1'], changedFiles: ['src/work.ts'], worktree: null,
+    }, clock)).rejects.toThrow(/verify receipt/i)
+  })
+
+  it('accepts only a completed engine verify receipt for a passing test', async () => {
+    await writeLedger(project.dir, state, pendingLedger())
+    await writeVerifyReceipt('test.log', 'test', 0)
+    const next = await recordQualityEvidence(project.dir, state, {
+      dimension: 'correctness', verdict: 'pass', evidenceRefs: ['cycle-01/verify/test.log'], reason: 'tests passed',
+      criteria: ['Acceptance A1'], changedFiles: ['src/work.ts'], worktree: null,
+    }, clock)
+    expect(next.dimensions.correctness.status).toBe('pass')
+  })
+
+  it('maps a validated agent result to agent provenance plus its engine test receipt', async () => {
+    await writeLedger(project.dir, state, pendingLedger())
+    await writeVerifyReceipt('test.log', 'test', 0)
+    await writeAgentReceipt('verifier.json', 'pass', [
+      { kind: 'test', ref: 'npm test', excerpt: 'passed' },
+      { kind: 'file', ref: 'src/work.ts', excerpt: 'trace only' },
+    ])
+    const next = await recordQualityEvidence(project.dir, state, {
+      dimension: 'correctness', verdict: 'pass', evidenceRefs: ['cycle-01/verifier.json'], reason: 'verified',
+      criteria: ['Acceptance A1'], changedFiles: ['src/work.ts'], worktree: null,
+    }, clock)
+    expect(next.dimensions.correctness.evidence_refs).toEqual(['cycle-01/verifier.json', 'cycle-01/verify/test.log'])
+  })
+
+  it('rejects an agent command claim whose engine receipt is a test', async () => {
+    await writeLedger(project.dir, state, pendingLedger())
+    await writeVerifyReceipt('test.log', 'test', 0)
+    await writeAgentReceipt('verifier.json', 'pass', [{ kind: 'command', ref: 'npm test', excerpt: 'wrong kind' }])
+    await expect(recordQualityEvidence(project.dir, state, {
+      dimension: 'correctness', verdict: 'pass', evidenceRefs: ['cycle-01/verifier.json'], reason: 'forged kind',
+      criteria: ['Acceptance A1'], changedFiles: ['src/work.ts'], worktree: null,
+    }, clock)).rejects.toThrow(/wrong kind/i)
+  })
+
+  it('closes unattended UI evidence through a validated agent receipt, not a human claim', async () => {
+    await writeLedger(project.dir, state, pendingLedger())
+    await invalidateQualityEvidence(project.dir, state, { files: ['src/Button.vue'], criteriaChanged: false }, clock)
+    await writeAgentReceipt('ui-review.json', 'pass')
+    const next = await recordQualityEvidence(project.dir, state, {
+      dimension: 'ui', verdict: 'pass', evidenceRefs: ['cycle-01/ui-review.json'], reason: 'UI review passed',
+      criteria: ['Acceptance A1'], changedFiles: ['src/Button.vue'], worktree: null,
+    }, clock)
+    expect(next.dimensions.ui).toMatchObject({ status: 'pass', required_evidence: ['agent'], evidence_refs: ['cycle-01/ui-review.json'] })
+  })
+
+  it('does not let a validated agent receipt satisfy an operator-only human requirement', async () => {
+    const ledger = pendingLedger()
+    ledger.dimensions.ui = { ...ledger.dimensions.ui, applicability: 'required', status: 'pending', required_evidence: ['human'], reason: 'operator decision required' }
+    await writeLedger(project.dir, state, ledger)
+    await writeAgentReceipt('ui-review.json', 'pass')
+    const next = await recordQualityEvidence(project.dir, state, {
+      dimension: 'ui', verdict: 'pass', evidenceRefs: ['cycle-01/ui-review.json'], reason: 'agent review',
+      criteria: ['Acceptance A1'], changedFiles: ['src/Button.vue'], worktree: null,
+    }, clock)
+    expect(next.dimensions.ui.status).toBe('pending')
+    expect(next.dimensions.ui.reason).toMatch(/human/i)
+  })
 })
+
+async function writeCurrentState(value: State): Promise<void> {
+  const file = path.join(project.dir, '.mjloop', 'state.json')
+  await fs.mkdir(path.dirname(file), { recursive: true })
+  await fs.writeFile(file, `${JSON.stringify(value)}\n`, 'utf8')
+}
+
+async function writeVerifyReceipt(log: string, slot: 'test' | 'lint' | 'build', exitCode: number): Promise<void> {
+  const dir = path.join(cycleDirPath(project.dir, state), 'verify')
+  await fs.mkdir(dir, { recursive: true })
+  const file = path.join(dir, 'index.json')
+  const entries: unknown[] = await fs.readFile(file, 'utf8').then((raw) => JSON.parse(raw) as unknown[]).catch(() => [])
+  entries.push({
+    slot, command: 'npm test', source: 'pinned', live_command: null, log, phase: 'complete', exit_code: exitCode,
+    timed_out: false, fingerprint: 'a'.repeat(64), cached_from_cycle: null, duration_ms: 1, at: AT,
+  })
+  await fs.writeFile(file, `${JSON.stringify(entries)}\n`, 'utf8')
+}
+
+async function writeAgentReceipt(
+  file: string,
+  status: 'pass' | 'fail' | 'blocked',
+  evidence: Array<{ kind: 'command' | 'test' | 'file'; ref: string; excerpt: string }> = [],
+): Promise<void> {
+  const dir = cycleDirPath(project.dir, state)
+  await fs.mkdir(dir, { recursive: true })
+  await fs.writeFile(path.join(dir, file), `${JSON.stringify({
+    status, summary: `agent ${status}`, evidence, findings: [], files_touched: [], next_hint: null, skills_used: [],
+  })}\n`, 'utf8')
+}
 
 function pendingLedger(): QualityLedger {
   const ledger = passingLedger()
@@ -199,7 +318,7 @@ function pendingLedger(): QualityLedger {
 }
 
 function withRequiredUi(ledger: QualityLedger): QualityLedger {
-  return { ...ledger, dimensions: { ...ledger.dimensions, ui: { ...ledger.dimensions.ui, applicability: 'required', status: 'pass', required_evidence: ['human'], evidence_refs: ['cycle-01/ui.png'], checked_at: AT } } }
+  return { ...ledger, dimensions: { ...ledger.dimensions, ui: { ...ledger.dimensions.ui, applicability: 'required', status: 'pass', required_evidence: ['agent'], evidence_refs: ['cycle-01/ui.json'], checked_at: AT, recorded_cycle: 1 } } }
 }
 
 function evidence(
@@ -207,12 +326,13 @@ function evidence(
   verdict: 'pass' | 'fail' | 'blocked',
   evidenceKinds: ('command' | 'test' | 'agent' | 'human')[],
   worktree: string | null = null,
+  evidenceRefs: string[] = [`cycle-01/verify/${dimension}-tool.log`],
 ) {
   return {
     dimension,
     verdict,
     evidenceKinds,
-    evidenceRefs: [`cycle-01/${dimension}-tool.log`],
+    evidenceRefs,
     reason: `${dimension} check ${verdict}.`,
     criteria: ['Acceptance A1'],
     changedFiles: ['src/work.ts'],

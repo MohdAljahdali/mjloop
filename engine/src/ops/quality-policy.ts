@@ -81,7 +81,7 @@ const REQUIRED_EVIDENCE: Record<QualityDimension, Array<'command' | 'test' | 'ag
   security: ['command'],
   alignment: ['agent'],
   regression: ['test'],
-  ui: ['human'],
+  ui: ['agent'],
 }
 
 export class QualityPolicyIntegrityError extends Error {
@@ -282,11 +282,13 @@ export function createInitialQualityLedger(policy: QualityPolicy, now: Clock): Q
         dimension,
         applicability,
       })),
+      worktree_digest: null,
+      recorded_cycle: null,
       checked_at: null,
       invalidated_at: null,
     }]
   }))
-  return QualityLedgerSchema.parse({ version: 1, dimensions })
+  return QualityLedgerSchema.parse({ version: 1, cycle: 1, dimensions })
 }
 
 /** The complete marker/policy/ledger truth table, kept pure for mutation tests. */
