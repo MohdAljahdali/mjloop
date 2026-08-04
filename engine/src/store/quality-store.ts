@@ -70,6 +70,31 @@ export async function writeLedger(projectDir: string, state: State, ledger: Qual
   await writeJsonAtomic(file, QualityLedgerSchema.parse(ledger))
 }
 
+/**
+ * The closed quality operations use this read-modify-write seam instead of
+ * composing an unlocked read and `writeLedger`. It shares the state lock, but
+ * remains separate from StateStore because a ledger transition does not alter
+ * resumable state in this task.
+ */
+export async function updateLedger(
+  projectDir: string,
+  state: State,
+  mutate: (draft: QualityLedger) => void | Promise<void>,
+): Promise<QualityLedger> {
+  const file = qualityFiles(projectDir, state).ledger
+  const paths = resolveLoopPaths(projectDir)
+  return withLock(paths.lock, async (ownership) => {
+    const { value, recovered } = await readJsonValidated(file, QualityLedgerSchema)
+    const draft = structuredClone(value)
+    await mutate(draft)
+    const parsed = QualityLedgerSchema.parse(draft)
+    await ownership.runIfOwned(async (stagingDir) => {
+      await writeJsonAtomic(file, parsed, { backup: !recovered, stagingDir })
+    })
+    return parsed
+  })
+}
+
 export async function readLedger(projectDir: string, state: State): Promise<QualityLedger> {
   const { value } = await readJsonValidated(qualityFiles(projectDir, state).ledger, QualityLedgerSchema)
   return value

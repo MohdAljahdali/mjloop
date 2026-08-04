@@ -14,6 +14,7 @@ import {
   readAmendments,
   readLedger,
   readPolicy,
+  updateLedger,
   writeLedger,
   writePolicyOnce,
 } from '../../src/store/quality-store.js'
@@ -126,6 +127,22 @@ describe('quality ledger', () => {
     await fs.writeFile(qualityFiles(project.dir, state).ledger, '{ this is not json', 'utf8')
 
     expect(await readLedger(project.dir, state)).toEqual(first)
+  })
+
+  it('serializes ledger read-modify-write transitions under the project lock', async () => {
+    await writeLedger(project.dir, state, ledger())
+
+    await Promise.all([
+      updateLedger(project.dir, state, (draft) => { draft.dimensions.correctness.status = 'pass'; draft.dimensions.correctness.checked_at = AT }),
+      updateLedger(project.dir, state, (draft) => { draft.dimensions.security.status = 'blocked'; draft.dimensions.security.checked_at = AT }),
+    ])
+
+    expect(await readLedger(project.dir, state)).toMatchObject({
+      dimensions: {
+        correctness: { status: 'pass', checked_at: AT },
+        security: { status: 'blocked', checked_at: AT },
+      },
+    })
   })
 })
 

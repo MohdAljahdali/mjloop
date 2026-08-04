@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   DestructiveRequestSchema,
   QualityAmendmentSchema,
+  QualityEvidenceKindSchema,
   QualityLedgerSchema,
   QualityPolicySchema,
 } from '../../src/schemas/quality.js'
@@ -119,6 +120,19 @@ describe('QualityPolicySchema', () => {
 })
 
 describe('QualityLedgerSchema', () => {
+  it('uses the closed quality evidence vocabulary for both agent and human reviews', () => {
+    expect(QualityEvidenceKindSchema.safeParse('agent').success).toBe(true)
+    expect(QualityEvidenceKindSchema.safeParse('human').success).toBe(true)
+    expect(QualityEvidenceKindSchema.safeParse('file').success).toBe(false)
+    expect(QualityLedgerSchema.safeParse(ledgerFixture({
+      dimensions: {
+        ...ledgerFixture().dimensions,
+        alignment: { ...ledgerFixture().dimensions.alignment, required_evidence: ['agent'] },
+        ui: { ...ledgerFixture().dimensions.ui, required_evidence: ['human'] },
+      },
+    })).success).toBe(true)
+  })
+
   it('requires exactly the five quality dimensions', () => {
     const { ui: _ui, ...withoutUi } = ledgerFixture().dimensions
     expect(QualityLedgerSchema.safeParse(ledgerFixture({ dimensions: withoutUi })).success).toBe(false)

@@ -76,12 +76,12 @@ type RecordIntegrity = 'missing' | 'valid' | 'invalid'
 
 const DIMENSIONS: readonly QualityDimension[] = ['correctness', 'security', 'alignment', 'regression', 'ui']
 
-const REQUIRED_EVIDENCE: Record<QualityDimension, Array<'command' | 'file' | 'test'>> = {
+const REQUIRED_EVIDENCE: Record<QualityDimension, Array<'command' | 'test' | 'agent' | 'human'>> = {
   correctness: ['test'],
   security: ['command'],
-  alignment: ['file'],
+  alignment: ['agent'],
   regression: ['test'],
-  ui: ['file'],
+  ui: ['human'],
 }
 
 export class QualityPolicyIntegrityError extends Error {

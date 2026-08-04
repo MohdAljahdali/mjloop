@@ -1,6 +1,5 @@
 import * as z from 'zod'
 import { QualityModeSchema } from './config.js'
-import { EvidenceSchema } from './contract.js'
 import { IdSchema } from './state.js'
 
 const SHA256_SCHEMA = z.string().regex(/^[a-f0-9]{64}$/, 'must be a lowercase SHA-256 hex digest')
@@ -15,6 +14,8 @@ function distinctStrings(values: string[], ctx: z.RefinementCtx, field: string):
 
 export const QualityDimensionSchema = z.enum(['correctness', 'security', 'alignment', 'regression', 'ui'])
 export const QualityVerdictSchema = z.enum(['pending', 'pass', 'fail', 'blocked', 'not_applicable'])
+/** Evidence vocabulary owned by the quality ledger, including downstream reviews. */
+export const QualityEvidenceKindSchema = z.enum(['command', 'test', 'agent', 'human'])
 export const SupervisionSchema = z.enum(['supervised', 'unattended'])
 export const QualityEnforcementSchema = z.enum(['shadow', 'active'])
 export const MeasurementKindSchema = z.enum(['measured', 'estimated', 'unavailable'])
@@ -112,7 +113,7 @@ export const QualityLedgerEntrySchema = z
   .strictObject({
     applicability: QualityApplicabilitySchema,
     status: QualityVerdictSchema,
-    required_evidence: z.array(EvidenceSchema.shape.kind).max(3),
+    required_evidence: z.array(QualityEvidenceKindSchema).max(4),
     evidence_refs: z.array(ReferenceSchema).max(100),
     reason: ProseSchema,
     inputs_fingerprint: SHA256_SCHEMA,
@@ -190,6 +191,7 @@ export const DestructiveRequestSchema = z
 
 export type QualityDimension = z.infer<typeof QualityDimensionSchema>
 export type QualityVerdict = z.infer<typeof QualityVerdictSchema>
+export type QualityEvidenceKind = z.infer<typeof QualityEvidenceKindSchema>
 export type Supervision = z.infer<typeof SupervisionSchema>
 export type QualityEnforcement = z.infer<typeof QualityEnforcementSchema>
 export type MeasurementKind = z.infer<typeof MeasurementKindSchema>
