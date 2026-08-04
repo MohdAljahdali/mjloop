@@ -103,3 +103,33 @@ Result: passed with no output.
 - A receipt is accepted only when it names an engine ledger row, its canonical log exists, and it is the most recent invocation of that slot/command. Cached rows retain the original canonical log but count as the current-cycle invocation that verified the cache fingerprint.
 - Old receipts cannot gain current-cycle freshness by being re-recorded. The resolver preserves the actual cycle, and the close predicate is still independently conservative for null worktree identity.
 - The transaction test proves the future cycle transition does not wait on its own non-reentrant lock; the rejection test proves an invalid ledger advance prevents both queued ledger publication and state publication. No Task 10 call site was added.
+
+## Fix round 3/5 — exact verify identity and state-authoritative closure
+
+### Findings fixed
+
+- Agent command evidence now selects by exact verify slot when the stored AgentResult uses a canonical verify reference. A bare command string that appears in more than one slot is rejected as ambiguous; supersession remains exact `(slot, command)`.
+- Cached rows now require authentic provenance: a positive, older `cached_from_cycle`, a canonical log whose cycle equals that source, a current non-null worktree digest, and a current-row verify fingerprint that matches it. Older canonical logs without `cached_from_cycle` are rejected. Fresh and cached rows normalize to one non-nested run-relative reference.
+- Removed the multi-file StateTransaction protocol, `updateLedgerUnderLock`, and both advancing ledger APIs. `StateStore` is restored to its original single-file ownership-fenced publication. Closure now requires an authoritative `currentCycle` argument and compares it directly to each null-digest entry's actual receipt cycle; it never trusts `ledger.cycle` as a state substitute.
+
+### RED
+
+`cd engine && npx vitest run tests/ops/quality-ledger.test.ts -t "cached|state advances|same command|ambiguous"`
+
+Result: the pre-fix cached test failed because the synthetic cached row had no authentic provenance, demonstrating the old cache fixture and nested-ref handling could not prove a current receipt. The prior round's red suite also showed the missing state-authoritative close argument and side-file cycle APIs were the wrong composition boundary; this round removes those APIs rather than adding a second publisher.
+
+### GREEN
+
+`cd engine && npx vitest run tests/ops/quality-ledger.test.ts tests/store/quality-store.test.ts tests/store/state-store.test.ts tests/schemas/quality.test.ts tests/ops/quality-policy.test.ts`
+
+Result: 5 files / 83 tests passed.
+
+`cd engine && npx tsc -p tsconfig.json --noEmit && npx tsc -p tsconfig.tests.json --noEmit && git diff --check`
+
+Result: passed with no output.
+
+### Self-review
+
+- A later lint/build row cannot mask or be masked by a test row sharing a command string: bare agent evidence is ambiguous, while an exact canonical receipt retains its slot identity.
+- A cache hit is evidence for the current cycle only when its protected verify row proves the original source and current fingerprint. A missing digest or fabricated canonical log cannot recreate that proof.
+- Advancing state writes no ledger side file. The future caller must read/recheck state under its own lock and pass its authoritative cycle to the pure closure predicate, retaining one ownership-fenced state publication and no nested lock.

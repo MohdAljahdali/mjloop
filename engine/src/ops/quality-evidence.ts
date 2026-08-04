@@ -97,7 +97,10 @@ async function agentReceipt(
       traceabilityRefs.push(evidence.ref)
       continue
     }
-    const receipt = await latestCommandReceipt(projectDir, state, evidence.ref, evidence.kind, cycle, worktree)
+    const directRef = normaliseVerifyRef(evidence.ref)
+    const receipt = directRef === null
+      ? await latestCommandReceipt(projectDir, state, evidence.ref, evidence.kind, cycle, worktree)
+      : await verifyReceipt(projectDir, { ...state, cycle }, directRef, worktree)
     const receiptKind = receipt.entry.slot === 'test' ? 'test' : 'command'
     if (evidence.kind !== receiptKind) {
       throw new QualityEvidenceReceiptError(`agent receipt "${ref}" has wrong kind ${evidence.kind}; its engine receipt is ${receiptKind}`)
@@ -124,6 +127,7 @@ async function verifyReceipt(projectDir: string, state: State, ref: string, work
     throw new QualityEvidenceReceiptError(`verify receipt "${ref}" is superseded by a later invocation`)
   }
   await assertLogExists(projectDir, state, ref)
+  assertCacheIntegrity(cited, state, worktree, ref)
   assertPriorFingerprint(cited, state, worktree, ref)
   return cited
 }
@@ -137,11 +141,15 @@ async function latestCommandReceipt(
   worktree: string | null,
 ): Promise<VerifyReceipt> {
   const receipts = await allVerifyReceipts(projectDir, state, maxCycle)
-  const receipt = receipts.filter((candidate) => candidate.entry.command === command).at(-1)
-  if (receipt === undefined) throw new QualityEvidenceReceiptError(`agent evidence cites ${kind} "${command}" without an engine verify receipt`)
+  const matches = receipts.filter((candidate) => candidate.entry.command === command)
+  if (matches.length === 0) throw new QualityEvidenceReceiptError(`agent evidence cites ${kind} "${command}" without an engine verify receipt`)
+  const slots = new Set(matches.map((candidate) => candidate.entry.slot))
+  if (slots.size > 1) throw new QualityEvidenceReceiptError(`agent evidence command "${command}" is ambiguous across verify slots`)
+  const receipt = matches.at(-1)!
   const receiptKind = receipt.entry.slot === 'test' ? 'test' : 'command'
   if (kind !== receiptKind) throw new QualityEvidenceReceiptError(`agent evidence has wrong kind ${kind}; its engine receipt is ${receiptKind}`)
   await assertLogExists(projectDir, state, receipt.ref)
+  assertCacheIntegrity(receipt, state, worktree, receipt.ref)
   assertPriorFingerprint(receipt, state, worktree, receipt.ref)
   return receipt
 }
@@ -163,6 +171,27 @@ function assertPriorFingerprint(receipt: VerifyReceipt, state: State, worktree: 
   if (receipt.entry.fingerprint !== verifyFingerprint(receipt.entry.command, worktree)) {
     throw new QualityEvidenceReceiptError(`prior-cycle verify receipt "${ref}" cannot prove the current worktree fingerprint`)
   }
+}
+
+function assertCacheIntegrity(receipt: VerifyReceipt, state: State, worktree: string | null, ref: string): void {
+  const cachedFrom = receipt.entry.cached_from_cycle
+  const source = normaliseVerifyRef(receipt.entry.log)
+  if (cachedFrom === null) {
+    if (source !== null && receipt.cycle !== sourceCycle(source)) {
+      throw new QualityEvidenceReceiptError(`verify receipt "${ref}" points at an older canonical log without cache provenance`)
+    }
+    return
+  }
+  if (cachedFrom >= receipt.cycle) throw new QualityEvidenceReceiptError(`cached verify receipt "${ref}" has invalid source cycle`)
+  if (source === null || sourceCycle(source) !== cachedFrom) throw new QualityEvidenceReceiptError(`cached verify receipt "${ref}" does not match cached_from_cycle`)
+  if (worktree === null) throw new QualityEvidenceReceiptError(`cached verify receipt "${ref}" requires a current worktree digest`)
+  if (receipt.entry.fingerprint !== verifyFingerprint(receipt.entry.command, worktree)) {
+    throw new QualityEvidenceReceiptError(`cached verify receipt "${ref}" cannot prove the current worktree fingerprint`)
+  }
+}
+
+function sourceCycle(ref: string): number {
+  return Number(/^cycle-(\d{2})\//.exec(ref)![1])
 }
 
 async function assertLogExists(projectDir: string, state: State, ref: string): Promise<void> {
