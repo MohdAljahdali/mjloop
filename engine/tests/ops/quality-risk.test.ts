@@ -22,6 +22,28 @@ describe('analyzeQualityRisk', () => {
     expect(analyzeQualityRisk(input).applicability.ui.value).toBe(expected)
   })
 
+  it.each(['Deleting the feature.', 'Dropping the table.'])('recognizes destructive wording in %s', (acceptance) => {
+    const result = analyzeQualityRisk({ ...backendScenario(), acceptance: [acceptance] })
+
+    expect(result.level).toBe('high')
+    expect(result.signals.map((signal) => signal.code)).toContain('data.destructive')
+  })
+
+  it.each(['src/ui/project.svelte', 'public/project.html', 'ios/ProjectView.swift', 'android/ProjectScreen.kt'])(
+    'requires UI quality for a user-visible %s file with neutral text',
+    (file) => {
+      const result = analyzeQualityRisk({
+        ...backendScenario(),
+        goal: 'Update project behavior.',
+        acceptance: ['The requested behavior works.'],
+        intendedFiles: [file],
+      })
+
+      expect(result.applicability.ui.value).toBe('required')
+      expect(result.signals.map((signal) => signal.code)).toContain('ui.surface')
+    },
+  )
+
   it('raises database deletion and authorization changes to high risk', () => {
     const result = analyzeQualityRisk(databaseDropAndAuthScenario())
 
@@ -70,6 +92,29 @@ describe('analyzeQualityRisk', () => {
     }
 
     expect(analyzeQualityRisk(reordered)).toEqual(analyzeQualityRisk(input))
+  })
+
+  it('uses fixed string normalization and ordering for locale-sensitive input', () => {
+    const lower = String.prototype.toLocaleLowerCase
+    const compare = String.prototype.localeCompare
+    String.prototype.toLocaleLowerCase = () => { throw new Error('host locale was consulted') }
+    String.prototype.localeCompare = () => { throw new Error('host locale was consulted') }
+
+    try {
+      const result = analyzeQualityRisk({
+        ...backendScenario(),
+        changedFiles: ['src/Auth.ts', 'src/auth.ts'],
+        priorFailures: ['I FAILED', 'i failed'],
+      })
+
+      expect(result.signals.map((signal) => signal.code)).toEqual([
+        'regression.repeated_failure',
+        'security.authorization',
+      ])
+    } finally {
+      String.prototype.toLocaleLowerCase = lower
+      String.prototype.localeCompare = compare
+    }
   })
 
   it('always requires the four universal quality dimensions with reasons', () => {

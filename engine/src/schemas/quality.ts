@@ -19,6 +19,16 @@ export const SupervisionSchema = z.enum(['supervised', 'unattended'])
 export const QualityEnforcementSchema = z.enum(['shadow', 'active'])
 export const MeasurementKindSchema = z.enum(['measured', 'estimated', 'unavailable'])
 export const RiskLevelSchema = z.enum(['low', 'medium', 'high'])
+export const QualityRiskCodeSchema = z.enum([
+  'alignment.ambiguous',
+  'api.boundary',
+  'build.configuration',
+  'data.destructive',
+  'data.schema',
+  'regression.repeated_failure',
+  'security.authorization',
+  'ui.surface',
+])
 export const QualityApplicabilitySchema = z.enum(['required', 'not_applicable'])
 export const QualityConfigSourceSchema = z.enum(['explicit', 'legacy'])
 export const QualityBudgetFieldSchema = z.enum([
@@ -49,7 +59,7 @@ export const QualityBudgetSchema = z.strictObject({
 })
 
 export const QualityRiskSignalSchema = z.strictObject({
-  code: IdSchema,
+  code: QualityRiskCodeSchema,
   level: RiskLevelSchema,
   evidence: z.array(ReferenceSchema).max(100),
 })
@@ -184,6 +194,7 @@ export type Supervision = z.infer<typeof SupervisionSchema>
 export type QualityEnforcement = z.infer<typeof QualityEnforcementSchema>
 export type MeasurementKind = z.infer<typeof MeasurementKindSchema>
 export type RiskLevel = z.infer<typeof RiskLevelSchema>
+export type QualityRiskCode = z.infer<typeof QualityRiskCodeSchema>
 export type QualityBudget = z.infer<typeof QualityBudgetSchema>
 export type QualityDispatch = z.infer<typeof QualityDispatchSchema>
 export type QualityPolicy = z.infer<typeof QualityPolicySchema>

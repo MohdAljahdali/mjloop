@@ -5,6 +5,8 @@ import {
   QualityLedgerSchema,
   QualityPolicySchema,
 } from '../../src/schemas/quality.js'
+import { analyzeQualityRisk } from '../../src/ops/quality-risk.js'
+import { databaseDropAndAuthScenario } from '../fixtures/quality/scenarios.js'
 
 const AT = '2026-08-04T10:36:00.000Z'
 
@@ -97,6 +99,22 @@ describe('QualityPolicySchema', () => {
       regression: { value: 'required', reason: 'The existing verification suite applies.' },
       ui: { value: 'not_applicable', reason: 'The intended files are backend-only.' },
     })
+  })
+
+  it('accepts a policy produced by the risk analyzer', () => {
+    const analysis = analyzeQualityRisk(databaseDropAndAuthScenario())
+    const result = QualityPolicySchema.safeParse(policyFixture({
+      risk: { level: analysis.level, signals: analysis.signals },
+      initial_quality_plan: analysis.applicability,
+    }))
+
+    expect(result.success).toBe(true)
+  })
+
+  it('rejects a risk code outside the closed analyzer vocabulary', () => {
+    expect(QualityPolicySchema.safeParse(policyFixture({
+      risk: { level: 'medium', signals: [{ code: 'unknown.signal', level: 'medium', evidence: ['src/unknown.ts'] }] },
+    })).success).toBe(false)
   })
 })
 

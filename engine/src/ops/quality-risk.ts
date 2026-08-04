@@ -1,4 +1,4 @@
-import type { QualityDimension, RiskLevel } from '../schemas/quality.js'
+import type { QualityDimension, QualityRiskCode, RiskLevel } from '../schemas/quality.js'
 
 export interface QualityRiskInput {
   track: string
@@ -17,21 +17,23 @@ export interface QualityAnalysis {
 }
 
 interface SignalRule {
-  code: string
+  code: QualityRiskCode
   level: RiskLevel
   path: RegExp
 }
 
+const UI_SURFACE_PATH = /\.(vue|tsx|jsx|css|scss|dart|svelte|html|swift|kt)$/i
+
 const SIGNALS: readonly SignalRule[] = [
   { code: 'security.authorization', level: 'high', path: /(^|\/)(auth|permissions?|polic(?:y|ies))(\/|\.|$)/i },
   { code: 'data.schema', level: 'medium', path: /(^|\/)(migrations?|schema|database)(\/|\.|$)/i },
-  { code: 'ui.surface', level: 'medium', path: /\.(vue|tsx|jsx|css|scss|dart)$/i },
+  { code: 'ui.surface', level: 'medium', path: UI_SURFACE_PATH },
   { code: 'build.configuration', level: 'medium', path: /(^|\/)(package\.json|tsconfig.*\.json|vite\.config\.)/i },
 ]
 
 const RANK: Record<RiskLevel, number> = { low: 0, medium: 1, high: 2 }
 const API_BOUNDARY_PATH = /(^|\/)(api|routes?|controllers?)(\/|\.|$)/i
-const DESTRUCTIVE_WORDING = /\b(delete|deletion|remove|removal|drop|truncate|purge)\b/i
+const DESTRUCTIVE_WORDING = /\b(?:delet\w*|remov\w*|drop\w*|truncat\w*|purg\w*)\b/i
 const AMBIGUOUS_ACCEPTANCE = /\b(as appropriate|as needed|tbd|todo|etc\.?)\b/i
 const USER_VISIBLE_WORDING = /\b(ui|user interface|screen|page|view|dashboard|form|button|layout|rtl|right[- ]to[- ]left|display|visible)\b/i
 const USER_VISIBLE_COMPONENT = /(^|[\s_-])(ui|view|page|screen|widget|form|modal|dialog|layout|card|rtl)([\s_-]|$)/i
@@ -66,7 +68,7 @@ export function analyzeQualityRisk(input: QualityRiskInput): QualityAnalysis {
 
   const orderedSignals = [...signals.values()]
     .map((signal) => ({ ...signal, evidence: distinct(signal.evidence, normalizeText) }))
-    .sort((left, right) => left.code.localeCompare(right.code))
+    .sort((left, right) => compareCodeUnits(left.code, right.code))
   const highestRank = Math.max(RANK.low, ...orderedSignals.map((signal) => RANK[signal.level]))
   const level: RiskLevel = highestRank === RANK.high ? 'high' : highestRank === RANK.medium ? 'medium' : 'low'
 
@@ -105,15 +107,15 @@ function repeatedValues(values: string[]): string[] {
   for (const raw of values) {
     const value = normalizeText(raw)
     if (value.length === 0) continue
-    const key = value.toLocaleLowerCase()
+    const key = value.toLowerCase()
     const prior = seen.get(key)
     if (prior === undefined) seen.set(key, { value, count: 1 })
     else {
       prior.count += 1
-      if (value.localeCompare(prior.value) < 0) prior.value = value
+      if (compareCodeUnits(value, prior.value) < 0) prior.value = value
     }
   }
-  return [...seen.values()].filter((entry) => entry.count > 1).map((entry) => entry.value).sort((a, b) => a.localeCompare(b))
+  return [...seen.values()].filter((entry) => entry.count > 1).map((entry) => entry.value).sort(compareCodeUnits)
 }
 
 function distinct(values: string[], normalize: (value: string) => string): string[] {
@@ -121,11 +123,15 @@ function distinct(values: string[], normalize: (value: string) => string): strin
   for (const raw of values) {
     const value = normalize(raw)
     if (value.length === 0) continue
-    const key = value.toLocaleLowerCase()
+    const key = value.toLowerCase()
     const prior = byKey.get(key)
-    if (prior === undefined || value.localeCompare(prior) < 0) byKey.set(key, value)
+    if (prior === undefined || compareCodeUnits(value, prior) < 0) byKey.set(key, value)
   }
-  return [...byKey.values()].sort((left, right) => left.localeCompare(right))
+  return [...byKey.values()].sort(compareCodeUnits)
+}
+
+function compareCodeUnits(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0
 }
 
 function normalizePath(value: string): string {
