@@ -2,8 +2,8 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import * as z from 'zod'
 import { findTrack, forbiddenSpecialists, permittedAgents, type Track } from '../schemas/config.js'
-import { AgentNameSchema, capEvidence, parseAgentResult, type AgentResult } from '../schemas/contract.js'
-import type { QualityDimension, QualityLedger } from '../schemas/quality.js'
+import { AgentNameSchema, AgentResultSchema, capEvidence, parseAgentResult, type AgentResult } from '../schemas/contract.js'
+import type { QualityPolicy } from '../schemas/quality.js'
 import { SkillManifestSchema, type SkillManifest } from '../schemas/skill-selection.js'
 import type { State } from '../schemas/state.js'
 import type { LedgerEntry } from '../schemas/verify.js'
@@ -13,8 +13,7 @@ import { readLedger, readPolicy } from '../store/quality-store.js'
 import { StateStore, type Clock } from '../store/state-store.js'
 import { errorSignature } from './fingerprint.js'
 import { qualityRuntimeEnabled } from './quality-capability.js'
-import { QualityEvidenceReceiptError, resolveQualityEvidenceReceipts } from './quality-evidence.js'
-import { recordQualityEvidence } from './quality-ledger.js'
+import { recordQualityEvidenceBatch, type QualityEvidenceInput } from './quality-ledger.js'
 import { resolveQualityContextEvidence } from './quality-policy.js'
 import { planQualityDispatches, type PlannedQualityDispatch } from './quality-roster.js'
 import { NoActiveRunError, SKILL_MANIFEST_FILE, UnknownTrackError, cycleDirPath, runDirPath } from './run.js'
@@ -215,26 +214,31 @@ export class ContradictedEvidenceError extends Error {
 }
 
 /**
- * A dispatch that has already been answered this cycle, answered again with
- * nothing the ledger did not already hold.
+ * A planned dispatch this cycle has already answered, answered again with the
+ * same result.
  *
  * The two halves of the refusal are separate facts and both are required. The
  * *input* half is the pinned plan's own `inputFingerprint`: this is the same
- * planned dispatch, not merely the same agent name. The *information* half is
- * the ledger transition itself — every dimension this dispatch is assigned came
- * out of it holding exactly the status, receipts and inputs fingerprint it went
- * in with. A repeat that produced a newer receipt, a different verdict, or
- * evidence for a dimension that had none changes one of those and is not
- * refused; a repeat that changed none of them cost a dispatch and moved no
- * dimension, which is the budget leak `max_dispatches` alone cannot see.
+ * planned dispatch, not merely the same agent name — which matters because
+ * strict mode gives the base dispatch and each specialist overlapping
+ * dimensions by construction, so nothing about a *dimension's* state can
+ * identify who answered for it. The *information* half is this dispatch's own
+ * previous result file: the same verdict, over the same cited receipts, over
+ * the same files. Change any of those and the repeat is carrying something, so
+ * it is not refused; change none and it cost a dispatch and could not have
+ * moved a dimension, which is the budget leak `max_dispatches` alone cannot
+ * see.
+ *
+ * Raised from `runLog`'s refusal block, before anything is written, so it is
+ * recoverable the way every other refusal there is.
  */
 export class DuplicateQualityDispatchError extends Error {
   constructor(agent: string, instance: string | null, fingerprint: string) {
     super(
       `"${instance === null ? agent : `${agent}--${instance}`}" repeats a quality dispatch this cycle already ` +
-        `answered (input fingerprint ${fingerprint.slice(0, 12)}…) and added nothing the quality ledger did not ` +
-        'already hold. Re-running the same dispatch against the same evidence cannot move a dimension: run the ' +
-        'command whose receipt is missing, or dispatch the agent the pending dimension is waiting on.',
+        `answered (input fingerprint ${fingerprint.slice(0, 12)}…) with the same verdict over the same evidence ` +
+        'and the same files. Re-running a dispatch against evidence that has not moved cannot move a dimension: ' +
+        'run the command whose receipt is missing, or dispatch the agent the pending dimension is waiting on.',
     )
     this.name = 'DuplicateQualityDispatchError'
   }
@@ -428,6 +432,17 @@ export async function runLog(
   const ledger = await readVerifyLedger(cycleDir)
 
   refuseContradicted(projectDir, cycleDir, agent.data, parsed.value, ledger, gate?.proven_by)
+
+  /* 6b — the repeated quality dispatch, refused where every other refusal is. */
+
+  // Here rather than beside the recording at step 13, and the position is the
+  // whole difference between a refusal and a trap. Step 13 runs after the
+  // result file is written and after findings and error signatures have been
+  // merged into state; a refusal thrown there leaves all of that behind and
+  // the retry reproduces it. Refused from inside the block below, nothing has
+  // happened yet — the same property every other refusal in this function has.
+  await refuseRepeatedDispatch(projectDir, state, { agent: agent.data, instance: input.instance ?? null }, parsed.value, cycleDir)
+
   // Nothing above this line has written anything, which is the property
   // `tests/ops/log.test.ts` asserts for every refusal in this function: a
   // rejected result leaves no file, no finding and no state change behind.
@@ -537,24 +552,25 @@ export async function runLog(
  *
  * It records nothing an agent asserted. The verdict comes from the result
  * `runLog` already validated and refused counter-evidence for; the receipts
- * come from the engine's own verify ledger and from the stored result file,
- * both re-resolved by `resolveQualityEvidenceReceipts`, which is the single
- * path that decides what a receipt *is*. So a pass carrying only `file`
- * evidence resolves to traceability and no receipt kind at all, and a
- * dimension declaring `command` or `test` stays pending under it — the agent
- * cannot promote its own claim by making it.
+ * come from the engine's own verify ledger, joined to the commands this
+ * dispatch's own result cited, and from the stored result file — all of it
+ * re-resolved by `resolveQualityEvidenceReceipts`, which is the single path
+ * that decides what a receipt *is*. So a pass carrying only `file` evidence
+ * resolves to traceability and no receipt kind at all, and a dimension
+ * declaring `command` or `test` stays pending under it however many green
+ * receipts the cycle happens to hold — the agent cannot promote its own claim
+ * by making it, and cannot inherit a receipt it never asked for.
  *
  * Which dimensions it may touch is the pinned plan's decision, not the
  * agent's: `{agent, instance}` is matched against `planQualityDispatches`, and
  * an agent the plan did not schedule records nothing at all.
  *
- * **Counterfactual until Task 17.** With `qualityRuntimeEnabled` closed — or on
- * a shadow policy, which is every run that never opted in — the ledger is
- * still written, because the whole point of the shadow phase is to observe
- * what the closure rule *would* have said, but nothing here may change what
- * `runLog` returns or refuses. Only the duplicate refusal is a behaviour
- * change, and it is gated on both the release capability and the run's own
- * pinned intent, exactly as `cycleRosterSet` gates `roster.quality`.
+ * **Counterfactual until Task 17.** The ledger is written on every run,
+ * including a shadow one, because the whole point of the shadow phase is to
+ * observe what the closure rule *would* have said — but nothing here may
+ * change what `runLog` returns or refuses. It cannot: every failure is dropped
+ * to stderr, and the one refusal this milestone adds lives in `runLog`'s own
+ * refusal block, before anything is written.
  */
 export async function recordDispatchResult(
   projectDir: string,
@@ -566,24 +582,14 @@ export async function recordDispatchResult(
   try {
     await foldDispatchIntoLedger(projectDir, state, dispatch, result, now)
   } catch (error) {
-    if (error instanceof DuplicateQualityDispatchError) throw error
-    // Every other failure is reported and dropped, for the reason the run map
-    // above gives: the result is already on disk, the ledger is a projection of
-    // records that are still there, and a telemetry write that could not land
-    // must not cost an agent its logged findings. It cannot loosen anything
-    // either — a dimension that was not recorded stays pending, and pending is
-    // what `assertRunCanPass` refuses to close on.
+    // Reported and dropped, for the reason the run map above gives: the result
+    // is already on disk, the ledger is a projection of records that are still
+    // there, and a telemetry write that could not land must not cost an agent
+    // its logged findings. It cannot loosen anything either — a dimension that
+    // was not recorded stays pending, and pending is what `assertRunCanPass`
+    // refuses to close on.
     process.stderr.write(`mjloop: the quality ledger was not updated for "${dispatch.agent}": ${String(error)}\n`)
   }
-}
-
-/** The comparable part of one ledger entry: what a repeat dispatch would have to change to be worth its budget. */
-interface DimensionState {
-  status: string
-  evidence: string
-  fingerprint: string
-  worktree: string | null
-  cycle: number | null
 }
 
 async function foldDispatchIntoLedger(
@@ -593,22 +599,94 @@ async function foldDispatchIntoLedger(
   result: AgentResult,
   now: Clock,
 ): Promise<void> {
-  if (state.run_id === null || state.track === null) return
+  const plan = await scheduledDispatch(projectDir, state, dispatch)
+  if (plan === null) return
 
-  // The marker rather than `ensureRunQualityPolicy`, which is what
-  // `cycleRosterSet` calls. The difference is what each one owes: a roster must
-  // *return* a dispatch plan, so it bootstraps a legacy run's policy to have
-  // one; a logged result only records against a plan that already exists, and a
-  // run pinned before this feature has none — no dispatch is scheduled, so
-  // there is nothing to record. Reading rather than bootstrapping also keeps
-  // this seam free of the state lock and of the integrity halt that comes with
-  // it, which is what lets a closed rollout gate leave `runLog` byte-for-byte
-  // where it was.
-  if (state.quality_policy_version !== 1) return
+  const ledger = await readLedger(projectDir, state)
+  const receipts = await citedReceipts(cycleDirPath(projectDir, state), state.cycle, result)
+  const selfRef = `cycle-${String(state.cycle).padStart(2, '0')}/${basenameOf(dispatch)}.json`
+
+  const submitted: Omit<QualityEvidenceInput, 'worktree'>[] = []
+  for (const dimension of plan.dispatch.dimensions) {
+    // The analyzer owns applicability, and `recordQualityEvidenceBatch` refuses
+    // a dimension the pinned plan marked not applicable — a refusal that aborts
+    // the whole batch. Filtering here keeps that from being the only outcome of
+    // an ordinary dispatch.
+    const entry = ledger.dimensions[dimension]
+    if (entry.applicability !== 'required') continue
+    // The dispatch's own result is cited only where the pinned plan asks for
+    // `agent` evidence. A dimension that asks for `command` or `test` gets the
+    // engine's receipts and nothing else: routing the agent result through a
+    // dimension it cannot satisfy adds no receipt kind, and `agentReceipt`
+    // refuses the whole dimension when the agent labelled its own citation with
+    // the wrong kind — throwing away a green engine receipt over the agent's
+    // bookkeeping.
+    const refs = receipts
+      .filter((receipt) => entry.required_evidence.includes(receipt.kind))
+      .map((receipt) => receipt.ref)
+    if (entry.required_evidence.includes('agent')) refs.unshift(selfRef)
+    // An empty list proves nothing, and submitting one calls `setPending` —
+    // which would let a dispatch that produced no receipt at all knock out a
+    // pass another dispatch earned this cycle. It is submitted in exactly two
+    // cases: onto a dimension that is already pending, where the recorded
+    // "references are missing" reason is the diagnostic the shadow phase exists
+    // to collect; and under a `fail` or `blocked` verdict, where withdrawing a
+    // pass is the answer.
+    if (refs.length === 0 && entry.status !== 'pending' && result.status === 'pass') continue
+    submitted.push({
+      dimension,
+      verdict: result.status,
+      evidenceRefs: refs,
+      reason: `${basenameOf(dispatch)} returned ${result.status} for ${dimension} under the pinned quality plan.`,
+      criteria: plan.acceptance,
+      changedFiles: result.files_touched,
+    })
+  }
+  // Sampled after the list is built, so a dispatch with nothing to submit
+  // spawns no git at all.
+  if (submitted.length === 0) return
+  const digest = await worktreeDigest(projectDir)
+  const inputs = submitted.map((input) => ({ ...input, worktree: digest }))
+
+  // One transition for the whole dispatch: one digest sample, one lock, and
+  // every dimension of one answer stamped against the same tree. A receipt the
+  // engine will not stand behind concerns only the dimension that cited it and
+  // comes back in `rejected`, leaving that dimension exactly as it was —
+  // pending stays pending, and pending does not close.
+  //
+  // The rejections are not announced. An agent citing a command it ran itself
+  // rather than through `mjloop_verify_run` is ordinary, the answer is "that is
+  // not a receipt", and saying so once per dimension per dispatch would put
+  // four lines of noise behind every agent result on a project that opted in to
+  // nothing. Where the rejection is instead a *missing* kind, the writer records
+  // the reason into the dimension itself, which is where a reader looks.
+  await recordQualityEvidenceBatch(projectDir, state, inputs, now)
+}
+
+/**
+ * The pinned plan's entry for this `{agent, instance}`, or `null` when the run
+ * has no plan or the plan never scheduled it.
+ *
+ * The marker rather than `ensureRunQualityPolicy`, which is what
+ * `cycleRosterSet` calls. The difference is what each one owes: a roster must
+ * *return* a dispatch plan, so it bootstraps a legacy run's policy to have one;
+ * a logged result only records against a plan that already exists, and a run
+ * pinned before this feature has none — no dispatch is scheduled, so there is
+ * nothing to record. Reading rather than bootstrapping also keeps this seam
+ * free of the state lock and of the integrity halt that comes with it, which is
+ * what lets a closed rollout gate leave `runLog` byte-for-byte where it was.
+ */
+async function scheduledDispatch(
+  projectDir: string,
+  state: State,
+  dispatch: { agent: string; instance: string | null },
+): Promise<{ policy: QualityPolicy; dispatch: PlannedQualityDispatch; acceptance: string[] } | null> {
+  if (state.run_id === null || state.track === null || state.quality_policy_version !== 1) return null
+
   const policy = await readPolicy(projectDir, state)
   const config = await loadConfig(projectDir)
   const track = findTrack(config, state.track)
-  if (track === undefined) return
+  if (track === undefined) return null
 
   const evidence = await resolveQualityContextEvidence(projectDir, { story: state.current.story, allowMissingStory: true })
   const planned = planQualityDispatches({
@@ -622,167 +700,106 @@ async function foldDispatchIntoLedger(
   const scheduled = planned.find(
     (candidate) => candidate.agent === dispatch.agent && (candidate.instance ?? null) === dispatch.instance,
   )
-  if (scheduled === undefined) return
-
-  const before = await readLedger(projectDir, state)
-  const receipts = await completedVerifyReceipts(cycleDirPath(projectDir, state), state.cycle)
-  const digest = await worktreeDigest(projectDir)
-  const selfRef = `cycle-${String(state.cycle).padStart(2, '0')}/${basenameOf(dispatch)}.json`
-
-  let after: QualityLedger = before
-  for (const dimension of scheduled.dimensions) {
-    const entry = before.dimensions[dimension]
-    // The analyzer owns applicability, and `recordQualityEvidence` refuses a
-    // dimension the pinned plan marked not applicable. Skipping it here keeps
-    // that refusal from being the only outcome of an ordinary dispatch.
-    if (entry.applicability !== 'required') continue
-
-    const refs = [selfRef, ...citableReceipts(receipts, entry.required_evidence, result.status)]
-    if (!(await wouldChange(projectDir, state, entry, result.status, refs, digest))) continue
-
-    try {
-      after = await recordQualityEvidence(projectDir, state, {
-        dimension,
-        verdict: result.status,
-        evidenceRefs: refs,
-        reason: `${basenameOf(dispatch)} returned ${result.status} for ${dimension} under the pinned quality plan.`,
-        criteria: evidence.acceptance,
-        changedFiles: result.files_touched,
-        worktree: digest,
-      }, now)
-    } catch (error) {
-      // A receipt the engine will not stand behind — arbitrary, stale,
-      // superseded, wrong-slot, wrong-cycle. `resolveQualityEvidenceReceipts`
-      // is the one place that decides this and it decides by throwing, so the
-      // dimension keeps whatever engine-validated state it already had. That is
-      // the safe direction: an unrecorded dimension stays pending and pending
-      // does not close.
-      //
-      // Silent, unlike the outer handler, because this is the *designed*
-      // outcome rather than a fault: an agent citing a command it ran itself
-      // rather than through `mjloop_verify_run` is ordinary, the answer is
-      // "that is not a receipt", and the answer is already legible in the
-      // dimension the ledger left pending. Announcing it once per dimension
-      // per dispatch would put four lines of noise behind every agent result
-      // on a project that has not opted in to anything.
-      if (!(error instanceof QualityEvidenceReceiptError)) {
-        process.stderr.write(`mjloop: ${dimension} evidence was not recorded for "${dispatch.agent}": ${String(error)}\n`)
-      }
-    }
-  }
-
-  if (qualityRuntimeEnabled() && policy.enforcement === 'active' && addedNothing(scheduled, before, after, state.cycle)) {
-    throw new DuplicateQualityDispatchError(dispatch.agent, dispatch.instance, scheduled.inputFingerprint)
-  }
+  return scheduled === undefined ? null : { policy, dispatch: scheduled, acceptance: evidence.acceptance }
 }
 
 /**
- * Would recording this dimension move it at all?
+ * The engine receipts this dispatch's own result cites, and no others.
  *
- * Not a second, laxer admission rule: it runs the **same**
- * `resolveQualityEvidenceReceipts` `recordQualityEvidence` runs, asks it the
- * same question, and answers `false` only where the recording's outcome is
- * provably the state the dimension is already in — a `pass` whose receipts
- * cannot supply a kind the pinned plan declared, landing on a dimension that
- * is already pending with no receipts. Nothing is admitted here that would not
- * be admitted there, and every `true` still goes through
- * `recordQualityEvidence`, which resolves the receipts again and remains the
- * only writer.
+ * **Attribution is the whole point.** A verify receipt records that the engine
+ * ran a command; it does not record who asked for it. Citing every completed
+ * receipt of a declared kind would close `correctness` on somebody else's green
+ * `npm test`, and close `security` — which declares `command` — on a green
+ * `npm run lint` that has nothing to do with security, for a dispatch that
+ * returned `pass` carrying only `file` evidence. The dispatch's own evidence
+ * list is the only attribution available, so that is what is joined on: the
+ * agent names a command, and the engine supplies the receipt for it. The agent
+ * never supplies the kind — `slot` does.
  *
- * It exists because that writer samples the git worktree on every call — the
- * right thing for a record it is about to stamp, and pure cost for a
- * transition that would write the same bytes back. A base dispatch covers four
- * dimensions, so a cycle whose agents cite commands they ran themselves would
- * otherwise pay four full-tree digests per logged result to record nothing.
+ * **The latest invocation per identity, and only this cycle's.** A cycle that
+ * ran one slot twice under different labels leaves an earlier receipt that
+ * `resolveQualityEvidenceReceipts` rejects as "superseded by a later
+ * invocation", and a prior cycle's receipt can fail the current-tree
+ * fingerprint. Either would be one poisoned ref in a list resolved as a whole,
+ * throwing away a dimension over an entry the dispatch never needed. Selecting
+ * the survivor up front means nothing citable can be rejected for being stale.
+ *
+ * Outcome must match the verdict for the same reason: a receipt contradicting
+ * the verdict is refused downstream, and refusing it is *correct* when the
+ * dispatch cited it directly — which it still does, through the agent receipt.
+ * `blocked` cites none at all: a verify receipt can prove a command's outcome
+ * and never that a tool was unavailable.
  */
-async function wouldChange(
+async function citedReceipts(
+  cycleDir: string,
+  cycle: number,
+  result: AgentResult,
+): Promise<CompletedVerifyReceipt[]> {
+  if (result.status === 'blocked') return []
+  const named = new Set(result.evidence.filter((entry) => entry.kind !== 'file').map((entry) => entry.ref))
+  const latest = new Map<string, CompletedVerifyReceipt>()
+  for (const receipt of await completedVerifyReceipts(cycleDir, cycle)) {
+    if (!named.has(receipt.command) && !named.has(receipt.ref)) continue
+    if (receipt.passed !== (result.status === 'pass')) continue
+    latest.set(`${receipt.slot}\0${receipt.command}`, receipt)
+  }
+  return [...latest.values()]
+}
+
+/**
+ * Refuse a planned dispatch this cycle has already answered with the same
+ * result.
+ *
+ * Keyed on **this dispatch's own** prior answer — the `cycle-NN/<basename>.json`
+ * its previous run left behind — and never on the ledger's state, which several
+ * dispatches share. In strict mode the plan gives the base dispatch and each
+ * specialist an overlapping dimension by construction, so a rule that read "some
+ * dimension I was assigned is already recorded and I moved nothing" would refuse
+ * a specialist's first-ever run because the base dispatch got there first.
+ *
+ * "No new information" is decided on what could move a dimension: the verdict,
+ * the receipts the result cites, and the files it touched. An excerpt that reads
+ * differently over the same receipts is the same evidence, and findings are the
+ * cycle's business rather than the ledger's.
+ *
+ * Gated on the release capability and the run's own pinned intent together,
+ * exactly as `cycleRosterSet` gates `roster.quality`. With the gate closed this
+ * reads nothing at all.
+ */
+async function refuseRepeatedDispatch(
   projectDir: string,
   state: State,
-  entry: QualityLedger['dimensions'][QualityDimension],
-  verdict: 'pass' | 'fail' | 'blocked',
-  refs: string[],
-  worktree: string | null,
-): Promise<boolean> {
+  dispatch: { agent: string; instance: string | null },
+  result: AgentResult,
+  cycleDir: string,
+): Promise<void> {
+  if (!qualityRuntimeEnabled()) return
+
+  const plan = await scheduledDispatch(projectDir, state, dispatch)
+  if (plan === null || plan.policy.enforcement !== 'active') return
+
+  const raw = await fs.readFile(path.join(cycleDir, `${basenameOf(dispatch)}.json`), 'utf8').catch(() => null)
+  if (raw === null) return
+  let previous: AgentResult
   try {
-    const resolved = await resolveQualityEvidenceReceipts(projectDir, state, verdict, refs, worktree)
-    // A `fail` or `blocked` the engine's receipts support always lands: it is
-    // the verdict that stops a close, and it must reach the ledger even where
-    // a `pass` on the same receipts would not.
-    if (verdict !== 'pass') return true
-    if (entry.status !== 'pending' || entry.evidence_refs.length > 0) return true
-    return entry.required_evidence.every((kind) => resolved.receipts.some((receipt) => receipt.kind === kind))
-  } catch (error) {
-    // A rejected receipt leaves the dimension exactly where it is, which is
-    // where it already is. Anything else is not this function's to decide, so
-    // it defers to the writer's own handling.
-    return !(error instanceof QualityEvidenceReceiptError)
+    const parsed = AgentResultSchema.safeParse(JSON.parse(raw) as unknown)
+    if (!parsed.success) return
+    previous = parsed.data
+  } catch {
+    return
   }
+
+  if (answerIdentity(previous) !== answerIdentity(result)) return
+  throw new DuplicateQualityDispatchError(dispatch.agent, dispatch.instance, plan.dispatch.inputFingerprint)
 }
 
-/**
- * The receipts a dimension may cite for this verdict.
- *
- * Filtered by the dimension's *declared* evidence kinds, so a dimension the
- * policy says needs a `command` is not handed a `test` receipt to satisfy it,
- * and by outcome, because a receipt that contradicts the verdict is rejected
- * downstream anyway — citing it would throw away the whole dimension over an
- * entry the dispatch never claimed. `blocked` cites none: a verify receipt can
- * prove a command's outcome and never that a tool was unavailable.
- */
-function citableReceipts(
-  receipts: readonly CompletedVerifyReceipt[],
-  required: readonly ('command' | 'test' | 'agent' | 'human')[],
-  verdict: 'pass' | 'fail' | 'blocked',
-): string[] {
-  if (verdict === 'blocked') return []
-  return receipts
-    .filter((receipt) => required.includes(receipt.kind) && receipt.passed === (verdict === 'pass'))
-    .map((receipt) => receipt.ref)
-}
-
-/**
- * Did this dispatch move any dimension it was assigned?
- *
- * Compared on what a dimension *means* — its verdict, its receipts, the
- * fingerprint of the inputs they were resolved from, the tree they were
- * sampled against and the cycle that recorded them — and never on `checked_at`
- * or `invalidated_at`, which carry the wall clock and would make every repeat
- * look like new information on a real run while looking identical under a
- * test's fixed clock.
- *
- * The `recorded_cycle` requirement is what keeps the *first* dispatch of a
- * cycle out of this: a dimension nothing has recorded yet went in pending and
- * came out pending, which is unchanged but is not a repeat of anything.
- */
-function addedNothing(
-  dispatch: PlannedQualityDispatch,
-  before: QualityLedger,
-  after: QualityLedger,
-  cycle: number,
-): boolean {
-  const assigned = dispatch.dimensions.filter((dimension) => before.dimensions[dimension].applicability === 'required')
-  if (assigned.length === 0) return false
-  if (!assigned.some((dimension) => before.dimensions[dimension].recorded_cycle === cycle)) return false
-  return assigned.every((dimension) => sameDimension(dimensionState(before, dimension), dimensionState(after, dimension)))
-}
-
-function dimensionState(ledger: QualityLedger, dimension: QualityDimension): DimensionState {
-  const entry = ledger.dimensions[dimension]
-  return {
-    status: entry.status,
-    evidence: entry.evidence_refs.join('\0'),
-    fingerprint: entry.inputs_fingerprint,
-    worktree: entry.worktree_digest,
-    cycle: entry.recorded_cycle,
-  }
-}
-
-function sameDimension(left: DimensionState, right: DimensionState): boolean {
-  return left.status === right.status
-    && left.evidence === right.evidence
-    && left.fingerprint === right.fingerprint
-    && left.worktree === right.worktree
-    && left.cycle === right.cycle
+/** What a dispatch actually told the ledger: its verdict, the receipts it cited, and the files it touched. */
+function answerIdentity(result: AgentResult): string {
+  return JSON.stringify({
+    status: result.status,
+    evidence: result.evidence.map((entry) => [entry.kind, entry.ref]).sort(),
+    files: [...result.files_touched].sort(),
+  })
 }
 
 /** The one spelling `runLog`'s own writer uses, so a receipt ref and its file cannot drift apart. */

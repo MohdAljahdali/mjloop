@@ -1422,8 +1422,8 @@ describe('completedVerifyReceipts', () => {
   it('names a bare log under the cycle it was written in, and splits kind by slot', async () => {
     await writeLedger([entry(), entry({ slot: 'lint', command: 'npm run lint', log: 'lint.log', exit_code: 1 })])
     expect(await completedVerifyReceipts(cycleDir, 2)).toEqual([
-      { ref: 'cycle-02/verify/test.log', kind: 'test', passed: true },
-      { ref: 'cycle-02/verify/lint.log', kind: 'command', passed: false },
+      { ref: 'cycle-02/verify/test.log', kind: 'test', slot: 'test', command: 'npm test', passed: true },
+      { ref: 'cycle-02/verify/lint.log', kind: 'command', slot: 'lint', command: 'npm run lint', passed: false },
     ])
   })
 
@@ -1438,14 +1438,14 @@ describe('completedVerifyReceipts', () => {
   it('reports a command killed at the ceiling as completed and not passing', async () => {
     await writeLedger([entry({ exit_code: null, timed_out: true })])
     expect(await completedVerifyReceipts(cycleDir, 2)).toEqual([
-      { ref: 'cycle-02/verify/test.log', kind: 'test', passed: false },
+      { ref: 'cycle-02/verify/test.log', kind: 'test', slot: 'test', command: 'npm test', passed: false },
     ])
   })
 
   it('cites a cache hit under the cycle whose log it actually points at', async () => {
     await writeLedger([entry({ log: 'cycle-01/verify/test.log', cached_from_cycle: 1 })])
     expect(await completedVerifyReceipts(cycleDir, 2)).toEqual([
-      { ref: 'cycle-01/verify/test.log', kind: 'test', passed: true },
+      { ref: 'cycle-01/verify/test.log', kind: 'test', slot: 'test', command: 'npm test', passed: true },
     ])
   })
 

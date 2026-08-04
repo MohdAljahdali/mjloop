@@ -1342,6 +1342,23 @@ describe('quality evidence recorded from an answered dispatch', () => {
     )
   }
 
+  /** One more completed entry in this cycle's verify ledger, with its log on disk. */
+  async function appendVerifyReceipt(
+    slot: 'test' | 'lint' | 'build',
+    command: string,
+    log: string,
+    exitCode: number,
+  ): Promise<void> {
+    const current = await state()
+    const verifyDir = path.join(cycleDirPath(quality.dir, current), 'verify')
+    await fs.mkdir(verifyDir, { recursive: true })
+    await fs.writeFile(path.join(verifyDir, log), 'receipt\n', 'utf8')
+    const file = path.join(verifyDir, 'index.json')
+    const entries: unknown[] = await fs.readFile(file, 'utf8').then((raw) => JSON.parse(raw) as unknown[]).catch(() => [])
+    entries.push(ledgerEntry({ slot, command, log, exit_code: exitCode }))
+    await fs.writeFile(file, `${JSON.stringify(entries, null, 2)}\n`, 'utf8')
+  }
+
   function passingVerifier(command: string): { agent: string; result: unknown } {
     return {
       agent: 'verifier',
@@ -1354,6 +1371,22 @@ describe('quality evidence recorded from an answered dispatch', () => {
         next_hint: null,
       },
     }
+  }
+
+  /** One planned dispatch, answered with a pass that cites the engine's own `test` receipt. */
+  async function logCitingDispatch(instance: string, command = 'npm test'): Promise<unknown> {
+    return runLog(quality.dir, {
+      agent: 'verifier',
+      instance,
+      result: {
+        status: 'pass',
+        summary: 'The suite is green.',
+        evidence: [{ kind: 'test', ref: command, excerpt: 'tests 40, pass 40, fail 0' }],
+        findings: [],
+        files_touched: ['src/Button.tsx'],
+        next_hint: null,
+      },
+    }, clock)
   }
 
   /** One planned dispatch, answered with a pass carrying no command claim of its own. */
@@ -1387,7 +1420,7 @@ describe('quality evidence recorded from an answered dispatch', () => {
 
   it('records a dimension the pinned plan assigned this dispatch, from the engine\'s own receipts', async () => {
     await seedGreenVerifyLedger()
-    await logDispatch(quality.dir, 'verifier', 'independent')
+    await logCitingDispatch('independent')
 
     const ledger = await readLedger(quality.dir, await state())
     expect(ledger.dimensions.correctness).toMatchObject({ status: 'pass', recorded_cycle: 1 })
@@ -1396,14 +1429,72 @@ describe('quality evidence recorded from an answered dispatch', () => {
   })
 
   it('leaves a command dimension pending when a pass carries only file evidence', async () => {
-    // The green ledger holds a `test` receipt only, and `security` declares
-    // `command`. A pass may not promote the agent's own file evidence into the
-    // kind the pinned plan asked for.
+    // The cycle holds a green `lint` receipt — a `command` receipt, exactly the
+    // kind `security` declares — that this dispatch never asked for and never
+    // cited. A verify receipt records that the engine ran something, not who
+    // asked, so the dispatch's own citation list is the only attribution there
+    // is: a pass carrying nothing but `file` evidence inherits neither the lint
+    // receipt nor the test one.
     await seedGreenVerifyLedger()
+    await appendVerifyReceipt('lint', 'npm run lint', 'lint.log', 0)
     await logDispatch(quality.dir, 'verifier', 'independent')
 
     const ledger = await readLedger(quality.dir, await state())
     expect(ledger.dimensions.security).toMatchObject({ status: 'pending', evidence_refs: [] })
+    expect(ledger.dimensions.correctness).toMatchObject({ status: 'pending', evidence_refs: [] })
+    expect(ledger.dimensions.regression).toMatchObject({ status: 'pending', evidence_refs: [] })
+  })
+
+  it('credits only the receipt the dispatch cited, never every receipt of the declared kind', async () => {
+    // Both are `command` receipts and both are green; `security` declares
+    // `command`. The dispatch cites the lint run, so that is the only ref the
+    // ledger records — the build run belongs to whoever asked for it.
+    await appendVerifyReceipt('lint', 'npm run lint', 'lint.log', 0)
+    await appendVerifyReceipt('build', 'npm run build', 'build.log', 0)
+    await runLog(quality.dir, {
+      agent: 'verifier',
+      instance: 'security',
+      result: {
+        status: 'pass',
+        summary: 'No new untrusted input path.',
+        evidence: [{ kind: 'command', ref: 'npm run lint', excerpt: '0 problems' }],
+        findings: [],
+        files_touched: ['src/Button.tsx'],
+        next_hint: null,
+      },
+    }, clock)
+
+    const ledger = await readLedger(quality.dir, await state())
+    expect(ledger.dimensions.security).toMatchObject({ status: 'pass' })
+    expect(ledger.dimensions.security.evidence_refs).toEqual(['cycle-01/verify/lint.log'])
+  })
+
+  it('cites the surviving invocation when a slot ran twice in one cycle', async () => {
+    // The earlier of two runs of one slot is "superseded by a later
+    // invocation", and a list resolved as a whole would be thrown away over it.
+    // Selecting the survivor up front means nothing citable can be rejected for
+    // being stale.
+    await seedGreenVerifyLedger()
+    await appendVerifyReceipt('test', 'npm test', 'test--rerun.log', 0)
+
+    await logCitingDispatch('independent')
+
+    const ledger = await readLedger(quality.dir, await state())
+    expect(ledger.dimensions.correctness).toMatchObject({ status: 'pass' })
+    expect(ledger.dimensions.correctness.evidence_refs).toEqual(['cycle-01/verify/test--rerun.log'])
+  })
+
+  it('records why a dimension is pending rather than leaving the plan\'s opening reason standing', async () => {
+    // The diagnostic the shadow phase exists to collect: `security` declares
+    // `command`, the cycle produced no command receipt, and the ledger must say
+    // so rather than still reading like a dimension nobody has looked at.
+    await seedGreenVerifyLedger()
+    await logCitingDispatch('independent')
+
+    const ledger = await readLedger(quality.dir, await state())
+    expect(ledger.dimensions.security.status).toBe('pending')
+    expect(ledger.dimensions.security.reason).toMatch(/references are missing/i)
+    expect(ledger.dimensions.security.invalidated_at).toBe(NOW.toISOString())
   })
 
   it('never turns a queued or running verify entry into evidence', async () => {
@@ -1457,10 +1548,93 @@ describe('quality evidence recorded from an answered dispatch', () => {
 
   it('records the same repeat as telemetry, and refuses nothing, while the gate stays closed', async () => {
     await seedGreenVerifyLedger()
-    await logDispatch(quality.dir, 'verifier', 'independent')
-    await expect(logDispatch(quality.dir, 'verifier', 'independent')).resolves.toMatchObject({
+    await logCitingDispatch('independent')
+    await expect(logCitingDispatch('independent')).resolves.toMatchObject({
       path: expect.stringContaining('verifier--independent.json'),
     })
     expect((await readLedger(quality.dir, await state())).dimensions.correctness.status).toBe('pass')
+  })
+
+  it('does not mistake a strict specialist for a repeat of the base dispatch', async () => {
+    // Strict mode gives the base dispatch and every specialist overlapping
+    // dimensions by construction. A rule keyed on "a dimension I was assigned is
+    // already recorded and I moved nothing" would refuse this specialist's
+    // first-ever run because the base dispatch got there first.
+    vi.mocked(qualityRuntimeEnabled).mockReturnValue(true)
+    await seedGreenVerifyLedger()
+    await logCitingDispatch('independent')
+
+    // The specialist cites a command the engine never ran, so nothing it says
+    // resolves and it moves no dimension — while `correctness`, the dimension
+    // it was assigned, is already recorded for this cycle by the base dispatch
+    // above.
+    await expect(runLog(quality.dir, {
+      agent: 'verifier',
+      instance: 'correctness',
+      result: {
+        status: 'pass',
+        summary: 'Read the diff and re-ran the check by hand.',
+        evidence: [{ kind: 'command', ref: 'npm run typecheck', excerpt: 'no errors' }],
+        findings: [],
+        files_touched: ['src/Button.tsx'],
+        next_hint: null,
+      },
+    }, clock)).resolves.toMatchObject({ path: expect.stringContaining('verifier--correctness.json') })
+    // And it did not withdraw the pass it could not add to.
+    expect((await readLedger(quality.dir, await state())).dimensions.correctness.status).toBe('pass')
+  })
+
+  it('leaves nothing behind when it refuses a repeat', async () => {
+    // Every other refusal in `runLog` writes no file and touches no state, and
+    // this one is raised from the same block. Refused after step 12 instead, the
+    // repeat's findings would already be merged into state — and the retry would
+    // merge them again and be refused again, with no way out.
+    vi.mocked(qualityRuntimeEnabled).mockReturnValue(true)
+    await seedGreenVerifyLedger()
+    const answer = {
+      agent: 'verifier',
+      instance: 'independent',
+      result: {
+        status: 'pass',
+        summary: 'The suite is green.',
+        evidence: [{ kind: 'test', ref: 'npm test', excerpt: 'tests 40, pass 40, fail 0' }],
+        findings: [{ severity: 'medium', file: 'src/Button.tsx', line: 14, claim: 'the label could be clearer' }],
+        files_touched: ['src/Button.tsx'],
+        next_hint: null,
+      },
+    }
+    await runLog(quality.dir, answer, clock)
+    const ledgerBefore = await readLedger(quality.dir, await state())
+    const findingsBefore = (await state()).findings
+
+    await expect(runLog(quality.dir, answer, clock)).rejects.toBeInstanceOf(DuplicateQualityDispatchError)
+
+    expect((await state()).findings).toEqual(findingsBefore)
+    expect(await readLedger(quality.dir, await state())).toEqual(ledgerBefore)
+  })
+
+  it('accepts a second answer from the same dispatch when it carries something new', async () => {
+    vi.mocked(qualityRuntimeEnabled).mockReturnValue(true)
+    await seedGreenVerifyLedger()
+    await logCitingDispatch('independent')
+    await appendVerifyReceipt('lint', 'npm run lint', 'lint.log', 0)
+
+    await expect(runLog(quality.dir, {
+      agent: 'verifier',
+      instance: 'independent',
+      result: {
+        status: 'pass',
+        summary: 'Lint is green too.',
+        evidence: [
+          { kind: 'test', ref: 'npm test', excerpt: 'tests 40, pass 40, fail 0' },
+          { kind: 'command', ref: 'npm run lint', excerpt: '0 problems' },
+        ],
+        findings: [],
+        files_touched: ['src/Button.tsx'],
+        next_hint: null,
+      },
+    }, clock)).resolves.toMatchObject({ path: expect.stringContaining('verifier--independent.json') })
+
+    expect((await readLedger(quality.dir, await state())).dimensions.security.status).toBe('pass')
   })
 })

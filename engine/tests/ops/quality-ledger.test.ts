@@ -8,6 +8,7 @@ import {
   assertQualityCloseable,
   invalidateQualityEvidence,
   recordQualityEvidence,
+  recordQualityEvidenceBatch,
 } from '../../src/ops/quality-ledger.js'
 import type { QualityLedger, QualityPolicy } from '../../src/schemas/quality.js'
 import { initialState, type State } from '../../src/schemas/state.js'
@@ -123,6 +124,50 @@ describe('closing evidence', () => {
     const ledger = passingLedger()
     ledger.cycle = 2
     expect(() => assertQualityCloseable(policy(), ledger, 2)).toThrow('correctness')
+  })
+})
+
+describe('one transition per dispatch', () => {
+  it('stamps every dimension of one answer against the same tree sample', async () => {
+    await makeRepo()
+    await writeLedger(project.dir, state, pendingLedger())
+    await writeVerifyReceipt('correctness-tool.log', 'test', 0)
+    await writeVerifyReceipt('security-tool.log', 'lint', 0, 'npm run lint')
+    const digest = await worktreeDigest(project.dir)
+
+    const { ledger, rejected } = await recordQualityEvidenceBatch(project.dir, state, [
+      { ...evidence('correctness', 'pass', ['test'], digest) },
+      { ...evidence('security', 'pass', ['command'], digest) },
+    ], clock)
+
+    expect(rejected).toEqual([])
+    expect(ledger.dimensions.correctness).toMatchObject({ status: 'pass', worktree_digest: digest })
+    expect(ledger.dimensions.security).toMatchObject({ status: 'pass', worktree_digest: digest })
+  })
+
+  it('rejects only the dimension whose receipt it will not stand behind', async () => {
+    await writeLedger(project.dir, state, pendingLedger())
+    await writeVerifyReceipt('correctness-tool.log', 'test', 0)
+
+    const { ledger, rejected } = await recordQualityEvidenceBatch(project.dir, state, [
+      { ...evidence('correctness', 'pass', ['test']) },
+      { ...evidence('security', 'pass', ['command']), evidenceRefs: ['cycle-01/verify/never-ran.log'] },
+    ], clock)
+
+    expect(rejected.map((entry) => entry.dimension)).toEqual(['security'])
+    expect(ledger.dimensions.correctness.status).toBe('pass')
+    expect(ledger.dimensions.security).toMatchObject({ status: 'pending', evidence_refs: [] })
+  })
+
+  it('refuses the whole batch for a dimension the pinned plan marked not applicable', async () => {
+    await writeLedger(project.dir, state, pendingLedger())
+    await writeVerifyReceipt('correctness-tool.log', 'test', 0)
+
+    await expect(recordQualityEvidenceBatch(project.dir, state, [
+      { ...evidence('correctness', 'pass', ['test']) },
+      { ...evidence('correctness', 'pass', ['test']), dimension: 'ui' as never },
+    ], clock)).rejects.toThrow(/not applicable/i)
+    expect((await readLedger(project.dir, state)).dimensions.correctness.status).toBe('pending')
   })
 })
 

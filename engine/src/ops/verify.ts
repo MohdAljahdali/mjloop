@@ -416,6 +416,10 @@ export interface CompletedVerifyReceipt {
   ref: string
   /** The evidence vocabulary's own split: the `test` slot is `test`, `lint` and `build` are `command`. */
   kind: 'command' | 'test'
+  /** With `command`, the identity `quality-evidence.ts` supersedes a receipt by. */
+  slot: VerifySlot
+  /** What was executed — how an agent's own evidence entry names the run it is citing. */
+  command: string
   /** Whether the engine saw it exit 0 without being killed at the ceiling. */
   passed: boolean
 }
@@ -447,6 +451,8 @@ export async function completedVerifyReceipts(cycleDir: string, cycle: number): 
     receipts.push({
       ref,
       kind: entry.slot === 'test' ? 'test' : 'command',
+      slot: entry.slot,
+      command: entry.command,
       passed: entry.exit_code === 0 && !entry.timed_out,
     })
   }
