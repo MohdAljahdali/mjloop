@@ -106,11 +106,16 @@ setting, and `unattended` supervision is the user's explicit request for this on
 
 Four rules follow from the pin, and all four are the engine's:
 
-- **Dispatch exactly the `{agent, instance}` set the policy declares.** Each entry names a
-  role the track already grants — or `verifier` under a dimension-named instance — and
-  every dispatch is charged against the run's ceiling by that exact pair. There is no
-  quality agent to invent: a dimension that needs a specialist is routed to the specialist
-  the track already has, under the reason the policy recorded.
+- **Dispatch exactly the `{agent, instance}` set the policy declares.** The pin names one
+  agent — the track's own `verifier`, or its first agent on a track that has none — and
+  gives it the whole required set to collect: one entry with no instance, and past
+  `economy` a second `independent` instance of that same agent to review what the first
+  produced. Every dispatch is charged against the run's ceiling by that exact pair. In
+  `strict` mode the roster adds one further dispatch per required dimension on top, routed
+  to a specialist the track already grants — `security`, `critic`, `ui-critic` — or to that
+  same fallback agent under a dimension-named instance where the dimension has no
+  specialist. Either way there is no quality agent to invent, and none of this is yours to
+  compose: read what the roster call returns.
 - **Reuse the evidence already logged.** A dimension the ledger closed on evidence the
   change did not touch is closed; re-dispatching for it spends a reservation to learn what
   the run already knows. Invalidation is the engine's job and it is selective — a UI change

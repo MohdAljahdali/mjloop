@@ -156,9 +156,16 @@ describe('the quality mode protocol never claims', () => {
     const files = (await fs.readdir(path.join(REPO, 'agents'))).filter((file) => file.endsWith('.md'))
     const agents = new Set(files.map((file) => path.basename(file, '.md')))
     expect([...agents].filter((agent) => agent.startsWith('quality'))).toEqual([])
+    // Asserted in the direction that can actually fail. The line above already
+    // guarantees no shipped agent is named `quality…`, so requiring such a
+    // token to be *absent* from `agents/` is a tautology and would let the
+    // violation this test is named for through: a doc that says "dispatch the
+    // `quality-reviewer` agent" would pass. Requiring it to be *present* is the
+    // real guard — every token of that shape now has to name a file, and while
+    // no agent may start with `quality`, none can.
     for (const [name, source] of ALL) {
       for (const invented of [...source.matchAll(/`(quality-[a-z-]+|[a-z-]+-quality)`/g)]) {
-        expect(agents.has(invented[1] ?? ''), `${name} names "${invented[1]}" as an agent`).toBe(false)
+        expect(agents.has(invented[1] ?? ''), `${name} names "${invented[1]}" as an agent`).toBe(true)
       }
     }
   })

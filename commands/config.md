@@ -73,7 +73,9 @@ for. The three values are closed and there is no fourth:
   the work, plus a specialist for every applicable dimension.
 
 The mode changes how the evidence is reached, never what counts as done: all three close
-the same five dimensions, and none of them may declare success on thinner evidence.
+the same required dimensions, and none of them may declare success on thinner evidence.
+Which dimensions those are is decided by the change itself — `ui` is `not_applicable` on a
+run with no user-visible surface, and it is the same answer in all three modes.
 
 Two consequences are worth stating before anybody changes it:
 
