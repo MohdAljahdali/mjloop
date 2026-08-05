@@ -2224,20 +2224,20 @@ var require_resolve = __commonJS({
       return false;
     }
     function countKeys(schema) {
-      let count = 0;
+      let count2 = 0;
       for (const key in schema) {
         if (key === "$ref")
           return Infinity;
-        count++;
+        count2++;
         if (SIMPLE_INLINED.has(key))
           continue;
         if (typeof schema[key] == "object") {
-          (0, util_1.eachItem)(schema[key], (sch) => count += countKeys(sch));
+          (0, util_1.eachItem)(schema[key], (sch) => count2 += countKeys(sch));
         }
-        if (count === Infinity)
+        if (count2 === Infinity)
           return Infinity;
       }
-      return count;
+      return count2;
     }
     function getFullPath(resolver, id = "", normalize) {
       if (normalize !== false)
@@ -3233,8 +3233,8 @@ var require_utils = __commonJS({
       }
       return ind;
     }
-    function removeDotSegments(path23) {
-      let input = path23;
+    function removeDotSegments(path28) {
+      let input = path28;
       const output = [];
       let nextSlash = -1;
       let len = 0;
@@ -3486,8 +3486,8 @@ var require_schemes = __commonJS({
         wsComponent.secure = void 0;
       }
       if (wsComponent.resourceName) {
-        const [path23, query] = wsComponent.resourceName.split("?");
-        wsComponent.path = path23 && path23 !== "/" ? path23 : void 0;
+        const [path28, query] = wsComponent.resourceName.split("?");
+        wsComponent.path = path28 && path28 !== "/" ? path28 : void 0;
         wsComponent.query = query;
         wsComponent.resourceName = void 0;
       }
@@ -5415,8 +5415,8 @@ var require_contains = __commonJS({
         cxt.result(valid, () => cxt.reset());
         function validateItemsWithCount() {
           const schValid = gen.name("_valid");
-          const count = gen.let("count", 0);
-          validateItems(schValid, () => gen.if(schValid, () => checkLimits(count)));
+          const count2 = gen.let("count", 0);
+          validateItems(schValid, () => gen.if(schValid, () => checkLimits(count2)));
         }
         function validateItems(_valid, block) {
           gen.forRange("i", 0, len, (i) => {
@@ -5429,16 +5429,16 @@ var require_contains = __commonJS({
             block();
           });
         }
-        function checkLimits(count) {
-          gen.code((0, codegen_1._)`${count}++`);
+        function checkLimits(count2) {
+          gen.code((0, codegen_1._)`${count2}++`);
           if (max === void 0) {
-            gen.if((0, codegen_1._)`${count} >= ${min}`, () => gen.assign(valid, true).break());
+            gen.if((0, codegen_1._)`${count2} >= ${min}`, () => gen.assign(valid, true).break());
           } else {
-            gen.if((0, codegen_1._)`${count} > ${max}`, () => gen.assign(valid, false).break());
+            gen.if((0, codegen_1._)`${count2} > ${max}`, () => gen.assign(valid, false).break());
             if (min === 1)
               gen.assign(valid, true);
             else
-              gen.if((0, codegen_1._)`${count} >= ${min}`, () => gen.assign(valid, true));
+              gen.if((0, codegen_1._)`${count2} >= ${min}`, () => gen.assign(valid, true));
           }
         }
       }
@@ -6886,12 +6886,12 @@ var require_dist = __commonJS({
         throw new Error(`Unknown format "${name}"`);
       return f;
     };
-    function addFormats(ajv, list, fs23, exportName) {
+    function addFormats(ajv, list, fs28, exportName) {
       var _a3;
       var _b;
       (_a3 = (_b = ajv.opts.code).formats) !== null && _a3 !== void 0 ? _a3 : _b.formats = (0, codegen_1._)`require("ajv-formats/dist/formats").${exportName}`;
       for (const f of list)
-        ajv.addFormat(f, fs23[f]);
+        ajv.addFormat(f, fs28[f]);
     }
     module.exports = exports = formatsPlugin;
     Object.defineProperty(exports, "__esModule", { value: true });
@@ -6976,17 +6976,17 @@ var require_visit = __commonJS({
     visit.BREAK = BREAK;
     visit.SKIP = SKIP;
     visit.REMOVE = REMOVE;
-    function visit_(key, node, visitor, path23) {
-      const ctrl = callVisitor(key, node, visitor, path23);
+    function visit_(key, node, visitor, path28) {
+      const ctrl = callVisitor(key, node, visitor, path28);
       if (identity.isNode(ctrl) || identity.isPair(ctrl)) {
-        replaceNode(key, path23, ctrl);
-        return visit_(key, ctrl, visitor, path23);
+        replaceNode(key, path28, ctrl);
+        return visit_(key, ctrl, visitor, path28);
       }
       if (typeof ctrl !== "symbol") {
         if (identity.isCollection(node)) {
-          path23 = Object.freeze(path23.concat(node));
+          path28 = Object.freeze(path28.concat(node));
           for (let i = 0; i < node.items.length; ++i) {
-            const ci = visit_(i, node.items[i], visitor, path23);
+            const ci = visit_(i, node.items[i], visitor, path28);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -6997,13 +6997,13 @@ var require_visit = __commonJS({
             }
           }
         } else if (identity.isPair(node)) {
-          path23 = Object.freeze(path23.concat(node));
-          const ck = visit_("key", node.key, visitor, path23);
+          path28 = Object.freeze(path28.concat(node));
+          const ck = visit_("key", node.key, visitor, path28);
           if (ck === BREAK)
             return BREAK;
           else if (ck === REMOVE)
             node.key = null;
-          const cv = visit_("value", node.value, visitor, path23);
+          const cv = visit_("value", node.value, visitor, path28);
           if (cv === BREAK)
             return BREAK;
           else if (cv === REMOVE)
@@ -7024,17 +7024,17 @@ var require_visit = __commonJS({
     visitAsync.BREAK = BREAK;
     visitAsync.SKIP = SKIP;
     visitAsync.REMOVE = REMOVE;
-    async function visitAsync_(key, node, visitor, path23) {
-      const ctrl = await callVisitor(key, node, visitor, path23);
+    async function visitAsync_(key, node, visitor, path28) {
+      const ctrl = await callVisitor(key, node, visitor, path28);
       if (identity.isNode(ctrl) || identity.isPair(ctrl)) {
-        replaceNode(key, path23, ctrl);
-        return visitAsync_(key, ctrl, visitor, path23);
+        replaceNode(key, path28, ctrl);
+        return visitAsync_(key, ctrl, visitor, path28);
       }
       if (typeof ctrl !== "symbol") {
         if (identity.isCollection(node)) {
-          path23 = Object.freeze(path23.concat(node));
+          path28 = Object.freeze(path28.concat(node));
           for (let i = 0; i < node.items.length; ++i) {
-            const ci = await visitAsync_(i, node.items[i], visitor, path23);
+            const ci = await visitAsync_(i, node.items[i], visitor, path28);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -7045,13 +7045,13 @@ var require_visit = __commonJS({
             }
           }
         } else if (identity.isPair(node)) {
-          path23 = Object.freeze(path23.concat(node));
-          const ck = await visitAsync_("key", node.key, visitor, path23);
+          path28 = Object.freeze(path28.concat(node));
+          const ck = await visitAsync_("key", node.key, visitor, path28);
           if (ck === BREAK)
             return BREAK;
           else if (ck === REMOVE)
             node.key = null;
-          const cv = await visitAsync_("value", node.value, visitor, path23);
+          const cv = await visitAsync_("value", node.value, visitor, path28);
           if (cv === BREAK)
             return BREAK;
           else if (cv === REMOVE)
@@ -7078,23 +7078,23 @@ var require_visit = __commonJS({
       }
       return visitor;
     }
-    function callVisitor(key, node, visitor, path23) {
+    function callVisitor(key, node, visitor, path28) {
       if (typeof visitor === "function")
-        return visitor(key, node, path23);
+        return visitor(key, node, path28);
       if (identity.isMap(node))
-        return visitor.Map?.(key, node, path23);
+        return visitor.Map?.(key, node, path28);
       if (identity.isSeq(node))
-        return visitor.Seq?.(key, node, path23);
+        return visitor.Seq?.(key, node, path28);
       if (identity.isPair(node))
-        return visitor.Pair?.(key, node, path23);
+        return visitor.Pair?.(key, node, path28);
       if (identity.isScalar(node))
-        return visitor.Scalar?.(key, node, path23);
+        return visitor.Scalar?.(key, node, path28);
       if (identity.isAlias(node))
-        return visitor.Alias?.(key, node, path23);
+        return visitor.Alias?.(key, node, path28);
       return void 0;
     }
-    function replaceNode(key, path23, node) {
-      const parent = path23[path23.length - 1];
+    function replaceNode(key, path28, node) {
+      const parent = path28[path28.length - 1];
       if (identity.isCollection(parent)) {
         parent.items[key] = node;
       } else if (identity.isPair(parent)) {
@@ -7467,8 +7467,8 @@ var require_Node = __commonJS({
         };
         const res = toJS.toJS(this, "", ctx);
         if (typeof onAnchor === "function")
-          for (const { count, res: res2 } of ctx.anchors.values())
-            onAnchor(res2, count);
+          for (const { count: count2, res: res2 } of ctx.anchors.values())
+            onAnchor(res2, count2);
         return typeof reviver === "function" ? applyReviver.applyReviver(reviver, { "": res }, "", res) : res;
       }
     };
@@ -7574,13 +7574,13 @@ var require_Alias = __commonJS({
         const anchor = anchors2 && source && anchors2.get(source);
         return anchor ? anchor.count * anchor.aliasCount : 0;
       } else if (identity.isCollection(node)) {
-        let count = 0;
+        let count2 = 0;
         for (const item of node.items) {
           const c = getAliasCount(doc, item, anchors2);
-          if (c > count)
-            count = c;
+          if (c > count2)
+            count2 = c;
         }
-        return count;
+        return count2;
       } else if (identity.isPair(node)) {
         const kc = getAliasCount(doc, node.key, anchors2);
         const vc = getAliasCount(doc, node.value, anchors2);
@@ -7704,10 +7704,10 @@ var require_Collection = __commonJS({
     var createNode = require_createNode();
     var identity = require_identity();
     var Node = require_Node();
-    function collectionFromPath(schema, path23, value) {
+    function collectionFromPath(schema, path28, value) {
       let v = value;
-      for (let i = path23.length - 1; i >= 0; --i) {
-        const k = path23[i];
+      for (let i = path28.length - 1; i >= 0; --i) {
+        const k = path28[i];
         if (typeof k === "number" && Number.isInteger(k) && k >= 0) {
           const a = [];
           a[k] = v;
@@ -7726,7 +7726,7 @@ var require_Collection = __commonJS({
         sourceObjects: /* @__PURE__ */ new Map()
       });
     }
-    var isEmptyPath = (path23) => path23 == null || typeof path23 === "object" && !!path23[Symbol.iterator]().next().done;
+    var isEmptyPath = (path28) => path28 == null || typeof path28 === "object" && !!path28[Symbol.iterator]().next().done;
     var Collection = class extends Node.NodeBase {
       constructor(type, schema) {
         super(type);
@@ -7756,11 +7756,11 @@ var require_Collection = __commonJS({
        * be a Pair instance or a `{ key, value }` object, which may not have a key
        * that already exists in the map.
        */
-      addIn(path23, value) {
-        if (isEmptyPath(path23))
+      addIn(path28, value) {
+        if (isEmptyPath(path28))
           this.add(value);
         else {
-          const [key, ...rest] = path23;
+          const [key, ...rest] = path28;
           const node = this.get(key, true);
           if (identity.isCollection(node))
             node.addIn(rest, value);
@@ -7774,8 +7774,8 @@ var require_Collection = __commonJS({
        * Removes a value from the collection.
        * @returns `true` if the item was found and removed.
        */
-      deleteIn(path23) {
-        const [key, ...rest] = path23;
+      deleteIn(path28) {
+        const [key, ...rest] = path28;
         if (rest.length === 0)
           return this.delete(key);
         const node = this.get(key, true);
@@ -7789,8 +7789,8 @@ var require_Collection = __commonJS({
        * scalar values from their surrounding node; to disable set `keepScalar` to
        * `true` (collections are always returned intact).
        */
-      getIn(path23, keepScalar) {
-        const [key, ...rest] = path23;
+      getIn(path28, keepScalar) {
+        const [key, ...rest] = path28;
         const node = this.get(key, true);
         if (rest.length === 0)
           return !keepScalar && identity.isScalar(node) ? node.value : node;
@@ -7808,8 +7808,8 @@ var require_Collection = __commonJS({
       /**
        * Checks if the collection includes a value with the key `key`.
        */
-      hasIn(path23) {
-        const [key, ...rest] = path23;
+      hasIn(path28) {
+        const [key, ...rest] = path28;
         if (rest.length === 0)
           return this.has(key);
         const node = this.get(key, true);
@@ -7819,8 +7819,8 @@ var require_Collection = __commonJS({
        * Sets a value in this collection. For `!!set`, `value` needs to be a
        * boolean to add/remove the item from the set.
        */
-      setIn(path23, value) {
-        const [key, ...rest] = path23;
+      setIn(path28, value) {
+        const [key, ...rest] = path28;
         if (rest.length === 0) {
           this.set(key, value);
         } else {
@@ -10335,9 +10335,9 @@ var require_Document = __commonJS({
           this.contents.add(value);
       }
       /** Adds a value to the document. */
-      addIn(path23, value) {
+      addIn(path28, value) {
         if (assertCollection(this.contents))
-          this.contents.addIn(path23, value);
+          this.contents.addIn(path28, value);
       }
       /**
        * Create a new `Alias` node, ensuring that the target `node` has the required anchor.
@@ -10412,14 +10412,14 @@ var require_Document = __commonJS({
        * Removes a value from the document.
        * @returns `true` if the item was found and removed.
        */
-      deleteIn(path23) {
-        if (Collection.isEmptyPath(path23)) {
+      deleteIn(path28) {
+        if (Collection.isEmptyPath(path28)) {
           if (this.contents == null)
             return false;
           this.contents = null;
           return true;
         }
-        return assertCollection(this.contents) ? this.contents.deleteIn(path23) : false;
+        return assertCollection(this.contents) ? this.contents.deleteIn(path28) : false;
       }
       /**
        * Returns item at `key`, or `undefined` if not found. By default unwraps
@@ -10434,10 +10434,10 @@ var require_Document = __commonJS({
        * scalar values from their surrounding node; to disable set `keepScalar` to
        * `true` (collections are always returned intact).
        */
-      getIn(path23, keepScalar) {
-        if (Collection.isEmptyPath(path23))
+      getIn(path28, keepScalar) {
+        if (Collection.isEmptyPath(path28))
           return !keepScalar && identity.isScalar(this.contents) ? this.contents.value : this.contents;
-        return identity.isCollection(this.contents) ? this.contents.getIn(path23, keepScalar) : void 0;
+        return identity.isCollection(this.contents) ? this.contents.getIn(path28, keepScalar) : void 0;
       }
       /**
        * Checks if the document includes a value with the key `key`.
@@ -10448,10 +10448,10 @@ var require_Document = __commonJS({
       /**
        * Checks if the document includes a value at `path`.
        */
-      hasIn(path23) {
-        if (Collection.isEmptyPath(path23))
+      hasIn(path28) {
+        if (Collection.isEmptyPath(path28))
           return this.contents !== void 0;
-        return identity.isCollection(this.contents) ? this.contents.hasIn(path23) : false;
+        return identity.isCollection(this.contents) ? this.contents.hasIn(path28) : false;
       }
       /**
        * Sets a value in this document. For `!!set`, `value` needs to be a
@@ -10468,13 +10468,13 @@ var require_Document = __commonJS({
        * Sets a value in this document. For `!!set`, `value` needs to be a
        * boolean to add/remove the item from the set.
        */
-      setIn(path23, value) {
-        if (Collection.isEmptyPath(path23)) {
+      setIn(path28, value) {
+        if (Collection.isEmptyPath(path28)) {
           this.contents = value;
         } else if (this.contents == null) {
-          this.contents = Collection.collectionFromPath(this.schema, Array.from(path23), value);
+          this.contents = Collection.collectionFromPath(this.schema, Array.from(path28), value);
         } else if (assertCollection(this.contents)) {
-          this.contents.setIn(path23, value);
+          this.contents.setIn(path28, value);
         }
       }
       /**
@@ -10533,8 +10533,8 @@ var require_Document = __commonJS({
         };
         const res = toJS.toJS(this.contents, jsonArg ?? "", ctx);
         if (typeof onAnchor === "function")
-          for (const { count, res: res2 } of ctx.anchors.values())
-            onAnchor(res2, count);
+          for (const { count: count2, res: res2 } of ctx.anchors.values())
+            onAnchor(res2, count2);
         return typeof reviver === "function" ? applyReviver.applyReviver(reviver, { "": res }, "", res) : res;
       }
       /**
@@ -10611,12 +10611,12 @@ var require_errors2 = __commonJS({
         lineStr = prev + lineStr;
       }
       if (/[^ ]/.test(lineStr)) {
-        let count = 1;
+        let count2 = 1;
         const end = error2.linePos[1];
         if (end?.line === line && end.col > col) {
-          count = Math.max(1, Math.min(end.col - col, 80 - ci));
+          count2 = Math.max(1, Math.min(end.col - col, 80 - ci));
         }
-        const pointer = " ".repeat(ci) + "^".repeat(count);
+        const pointer = " ".repeat(ci) + "^".repeat(count2);
         error2.message += `:
 
 ${lineStr}
@@ -12434,9 +12434,9 @@ var require_cst_visit = __commonJS({
     visit.BREAK = BREAK;
     visit.SKIP = SKIP;
     visit.REMOVE = REMOVE;
-    visit.itemAtPath = (cst, path23) => {
+    visit.itemAtPath = (cst, path28) => {
       let item = cst;
-      for (const [field, index] of path23) {
+      for (const [field, index] of path28) {
         const tok = item?.[field];
         if (tok && "items" in tok) {
           item = tok.items[index];
@@ -12445,23 +12445,23 @@ var require_cst_visit = __commonJS({
       }
       return item;
     };
-    visit.parentCollection = (cst, path23) => {
-      const parent = visit.itemAtPath(cst, path23.slice(0, -1));
-      const field = path23[path23.length - 1][0];
+    visit.parentCollection = (cst, path28) => {
+      const parent = visit.itemAtPath(cst, path28.slice(0, -1));
+      const field = path28[path28.length - 1][0];
       const coll = parent?.[field];
       if (coll && "items" in coll)
         return coll;
       throw new Error("Parent collection not found");
     };
-    function _visit(path23, item, visitor) {
-      let ctrl = visitor(item, path23);
+    function _visit(path28, item, visitor) {
+      let ctrl = visitor(item, path28);
       if (typeof ctrl === "symbol")
         return ctrl;
       for (const field of ["key", "value"]) {
         const token = item[field];
         if (token && "items" in token) {
           for (let i = 0; i < token.items.length; ++i) {
-            const ci = _visit(Object.freeze(path23.concat([[field, i]])), token.items[i], visitor);
+            const ci = _visit(Object.freeze(path28.concat([[field, i]])), token.items[i], visitor);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -12472,10 +12472,10 @@ var require_cst_visit = __commonJS({
             }
           }
           if (typeof ctrl === "function" && field === "key")
-            ctrl = ctrl(item, path23);
+            ctrl = ctrl(item, path28);
         }
       }
-      return typeof ctrl === "function" ? ctrl(item, path23) : ctrl;
+      return typeof ctrl === "function" ? ctrl(item, path28) : ctrl;
     }
     exports.visit = visit;
   }
@@ -13777,14 +13777,14 @@ var require_parser = __commonJS({
             case "scalar":
             case "single-quoted-scalar":
             case "double-quoted-scalar": {
-              const fs23 = this.flowScalar(this.type);
+              const fs28 = this.flowScalar(this.type);
               if (atNextItem || it.value) {
-                map.items.push({ start, key: fs23, sep: [] });
+                map.items.push({ start, key: fs28, sep: [] });
                 this.onKeyLine = true;
               } else if (it.sep) {
-                this.stack.push(fs23);
+                this.stack.push(fs28);
               } else {
-                Object.assign(it, { key: fs23, sep: [] });
+                Object.assign(it, { key: fs28, sep: [] });
                 this.onKeyLine = true;
               }
               return;
@@ -13912,13 +13912,13 @@ var require_parser = __commonJS({
             case "scalar":
             case "single-quoted-scalar":
             case "double-quoted-scalar": {
-              const fs23 = this.flowScalar(this.type);
+              const fs28 = this.flowScalar(this.type);
               if (!it || it.value)
-                fc.items.push({ start: [], key: fs23, sep: [] });
+                fc.items.push({ start: [], key: fs28, sep: [] });
               else if (it.sep)
-                this.stack.push(fs23);
+                this.stack.push(fs28);
               else
-                Object.assign(it, { key: fs23, sep: [] });
+                Object.assign(it, { key: fs28, sep: [] });
               return;
             }
             case "flow-map-end":
@@ -14585,8 +14585,8 @@ function getErrorMap() {
 
 // node_modules/zod/v3/helpers/parseUtil.js
 var makeIssue = (params) => {
-  const { data, path: path23, errorMaps, issueData } = params;
-  const fullPath = [...path23, ...issueData.path || []];
+  const { data, path: path28, errorMaps, issueData } = params;
+  const fullPath = [...path28, ...issueData.path || []];
   const fullIssue = {
     ...issueData,
     path: fullPath
@@ -14598,15 +14598,15 @@ var makeIssue = (params) => {
       message: issueData.message
     };
   }
-  let errorMessage = "";
+  let errorMessage2 = "";
   const maps = errorMaps.filter((m) => !!m).slice().reverse();
   for (const map of maps) {
-    errorMessage = map(fullIssue, { data, defaultError: errorMessage }).message;
+    errorMessage2 = map(fullIssue, { data, defaultError: errorMessage2 }).message;
   }
   return {
     ...issueData,
     path: fullPath,
-    message: errorMessage
+    message: errorMessage2
   };
 };
 function addIssueToContext(ctx, issueData) {
@@ -14701,11 +14701,11 @@ var errorUtil;
 
 // node_modules/zod/v3/types.js
 var ParseInputLazyPath = class {
-  constructor(parent, value, path23, key) {
+  constructor(parent, value, path28, key) {
     this._cachedPath = [];
     this.parent = parent;
     this.data = value;
-    this._path = path23;
+    this._path = path28;
     this._key = key;
   }
   get path() {
@@ -18344,10 +18344,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj, path23) {
-  if (!path23)
+function getElementAtPath(obj, path28) {
+  if (!path28)
     return obj;
-  return path23.reduce((acc, key) => acc?.[key], obj);
+  return path28.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -18756,11 +18756,11 @@ function explicitlyAborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path23, issues) {
+function prefixIssues(path28, issues) {
   return issues.map((iss) => {
     var _a3;
     (_a3 = iss).path ?? (_a3.path = []);
-    iss.path.unshift(path23);
+    iss.path.unshift(path28);
     return iss;
   });
 }
@@ -18907,16 +18907,16 @@ function flattenError(error2, mapper = (issue2) => issue2.message) {
 }
 function formatError(error2, mapper = (issue2) => issue2.message) {
   const fieldErrors = { _errors: [] };
-  const processError = (error3, path23 = []) => {
+  const processError = (error3, path28 = []) => {
     for (const issue2 of error3.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path23, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path28, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path23, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path28, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path23, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path28, ...issue2.path]);
       } else {
-        const fullpath = [...path23, ...issue2.path];
+        const fullpath = [...path28, ...issue2.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue2));
         } else {
@@ -18943,8 +18943,8 @@ function formatError(error2, mapper = (issue2) => issue2.message) {
 }
 function toDotPath(_path) {
   const segs = [];
-  const path23 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
-  for (const seg of path23) {
+  const path28 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
+  for (const seg of path28) {
     if (typeof seg === "number")
       segs.push(`[${seg}]`);
     else if (typeof seg === "symbol")
@@ -25344,19 +25344,19 @@ var getRefs = (options) => {
 };
 
 // node_modules/zod-to-json-schema/dist/esm/errorMessages.js
-function addErrorMessage(res, key, errorMessage, refs) {
+function addErrorMessage(res, key, errorMessage2, refs) {
   if (!refs?.errorMessages)
     return;
-  if (errorMessage) {
+  if (errorMessage2) {
     res.errorMessage = {
       ...res.errorMessage,
-      [key]: errorMessage
+      [key]: errorMessage2
     };
   }
 }
-function setResponseValueAndErrors(res, key, value, errorMessage, refs) {
+function setResponseValueAndErrors(res, key, value, errorMessage2, refs) {
   res[key] = value;
-  addErrorMessage(res, key, errorMessage, refs);
+  addErrorMessage(res, key, errorMessage2, refs);
 }
 
 // node_modules/zod-to-json-schema/dist/esm/getRelativePath.js
@@ -26667,8 +26667,8 @@ var Protocol = class {
                   if (queuedMessage.type === "response") {
                     resolver(message);
                   } else {
-                    const errorMessage = message;
-                    const error2 = new McpError(errorMessage.error.code, errorMessage.error.message, errorMessage.error.data);
+                    const errorMessage2 = message;
+                    const error2 = new McpError(errorMessage2.error.code, errorMessage2.error.message, errorMessage2.error.data);
                     resolver(error2);
                   }
                 } else {
@@ -27968,23 +27968,23 @@ var Server = class extends Protocol {
       const wrappedHandler = async (request, extra) => {
         const validatedRequest = safeParse2(CallToolRequestSchema, request);
         if (!validatedRequest.success) {
-          const errorMessage = validatedRequest.error instanceof Error ? validatedRequest.error.message : String(validatedRequest.error);
-          throw new McpError(ErrorCode.InvalidParams, `Invalid tools/call request: ${errorMessage}`);
+          const errorMessage2 = validatedRequest.error instanceof Error ? validatedRequest.error.message : String(validatedRequest.error);
+          throw new McpError(ErrorCode.InvalidParams, `Invalid tools/call request: ${errorMessage2}`);
         }
         const { params } = validatedRequest.data;
         const result = await Promise.resolve(handler(request, extra));
         if (params.task) {
           const taskValidationResult = safeParse2(CreateTaskResultSchema, result);
           if (!taskValidationResult.success) {
-            const errorMessage = taskValidationResult.error instanceof Error ? taskValidationResult.error.message : String(taskValidationResult.error);
-            throw new McpError(ErrorCode.InvalidParams, `Invalid task creation result: ${errorMessage}`);
+            const errorMessage2 = taskValidationResult.error instanceof Error ? taskValidationResult.error.message : String(taskValidationResult.error);
+            throw new McpError(ErrorCode.InvalidParams, `Invalid task creation result: ${errorMessage2}`);
           }
           return taskValidationResult.data;
         }
         const validationResult = safeParse2(CallToolResultSchema, result);
         if (!validationResult.success) {
-          const errorMessage = validationResult.error instanceof Error ? validationResult.error.message : String(validationResult.error);
-          throw new McpError(ErrorCode.InvalidParams, `Invalid tools/call result: ${errorMessage}`);
+          const errorMessage2 = validationResult.error instanceof Error ? validationResult.error.message : String(validationResult.error);
+          throw new McpError(ErrorCode.InvalidParams, `Invalid tools/call result: ${errorMessage2}`);
         }
         return validationResult.data;
       };
@@ -28478,12 +28478,12 @@ var McpServer = class {
    * @param errorMessage - The error message.
    * @returns The tool error result.
    */
-  createToolError(errorMessage) {
+  createToolError(errorMessage2) {
     return {
       content: [
         {
           type: "text",
-          text: errorMessage
+          text: errorMessage2
         }
       ],
       isError: true
@@ -28501,8 +28501,8 @@ var McpServer = class {
     const parseResult = await safeParseAsync2(schemaToParse, args);
     if (!parseResult.success) {
       const error2 = "error" in parseResult ? parseResult.error : "Unknown error";
-      const errorMessage = getParseErrorMessage(error2);
-      throw new McpError(ErrorCode.InvalidParams, `Input validation error: Invalid arguments for tool ${toolName}: ${errorMessage}`);
+      const errorMessage2 = getParseErrorMessage(error2);
+      throw new McpError(ErrorCode.InvalidParams, `Input validation error: Invalid arguments for tool ${toolName}: ${errorMessage2}`);
     }
     return parseResult.data;
   }
@@ -28526,8 +28526,8 @@ var McpServer = class {
     const parseResult = await safeParseAsync2(outputObj, result.structuredContent);
     if (!parseResult.success) {
       const error2 = "error" in parseResult ? parseResult.error : "Unknown error";
-      const errorMessage = getParseErrorMessage(error2);
-      throw new McpError(ErrorCode.InvalidParams, `Output validation error: Invalid structured content for tool ${toolName}: ${errorMessage}`);
+      const errorMessage2 = getParseErrorMessage(error2);
+      throw new McpError(ErrorCode.InvalidParams, `Output validation error: Invalid structured content for tool ${toolName}: ${errorMessage2}`);
     }
   }
   /**
@@ -28739,8 +28739,8 @@ var McpServer = class {
         const parseResult = await safeParseAsync2(argsObj, request.params.arguments);
         if (!parseResult.success) {
           const error2 = "error" in parseResult ? parseResult.error : "Unknown error";
-          const errorMessage = getParseErrorMessage(error2);
-          throw new McpError(ErrorCode.InvalidParams, `Invalid arguments for prompt ${request.params.name}: ${errorMessage}`);
+          const errorMessage2 = getParseErrorMessage(error2);
+          throw new McpError(ErrorCode.InvalidParams, `Invalid arguments for prompt ${request.params.name}: ${errorMessage2}`);
         }
         const args = parseResult.data;
         const cb = prompt.callback;
@@ -29237,7 +29237,7 @@ var StdioServerTransport = class {
 
 // src/schemas/state.ts
 var IdSchema = string2().regex(/^[A-Za-z0-9_-]+$/, 'only letters, digits, "-" and "_" are allowed');
-var StatusSchema = _enum(["idle", "running", "paused", "halted", "done", "failed"]);
+var StatusSchema = _enum(["idle", "running", "paused", "waiting_for_user", "budget_exhausted", "halted", "done", "failed"]);
 var StageSchema = _enum(["idle", "compose", "execute", "judge", "halted", "done"]);
 var SeveritySchema = _enum(["high", "medium", "low"]);
 var ResultSchema2 = _enum(["pass", "fail", "blocked"]);
@@ -29297,6 +29297,11 @@ var StateSchema = strictObject({
    * exists to prevent.
    */
   started_at: iso_exports2.datetime().nullable().default(null),
+  /**
+   * Marks a run that has an immutable quality policy pin. It defaults to null
+   * so state files written before quality policies existed remain readable.
+   */
+  quality_policy_version: literal(1).nullable().default(null),
   current: strictObject({
     plan: IdSchema.nullable(),
     story: IdSchema.nullable(),
@@ -29342,6 +29347,7 @@ function initialState(now) {
     // `.nullable().default(null)` field is required — the same reason
     // `last_fingerprint`, `cycle_errors` and `reproduction` are written here.
     started_at: null,
+    quality_policy_version: null,
     current: { plan: null, story: null, stage: "idle" },
     findings: [],
     no_progress_count: 0,
@@ -29609,15 +29615,15 @@ function findOrderCycle(order) {
   const GRAY = 1;
   const BLACK = 2;
   const color = /* @__PURE__ */ new Map();
-  const path23 = [];
+  const path28 = [];
   function visit(node) {
     color.set(node, GRAY);
-    path23.push(node);
+    path28.push(node);
     for (const next of successors.get(node) ?? []) {
       const state = color.get(next) ?? WHITE;
       if (state === GRAY) {
-        const start = path23.indexOf(next);
-        return [...path23.slice(start), next];
+        const start = path28.indexOf(next);
+        return [...path28.slice(start), next];
       }
       if (state === WHITE) {
         const found = visit(next);
@@ -29625,7 +29631,7 @@ function findOrderCycle(order) {
       }
     }
     color.set(node, BLACK);
-    path23.pop();
+    path28.pop();
     return null;
   }
   for (const node of nodes) {
@@ -29668,6 +29674,17 @@ var UncertainConcurrencySchema = _enum(["sequential", "ask", "parallel"]);
 var AfterPlanApprovalSchema = _enum(["auto", "manual"]);
 var SkillSourceSchema = _enum(["github", "registry", "web", "skills-sh"]);
 var SkillUpdateModeSchema = _enum(["auto", "review", "pinned"]);
+var QualityModeSchema = _enum(["economy", "adaptive", "strict"]);
+var ExplicitQualitySchema = strictObject({ mode: QualityModeSchema });
+var LegacyQualitySchema = strictObject({
+  independent_plan_review: boolean2().default(false),
+  independent_verification: boolean2().default(false)
+});
+var QualityConfigSchema = union([ExplicitQualitySchema, LegacyQualitySchema]).transform((quality) => {
+  if ("mode" in quality) return quality;
+  const count2 = Number(quality.independent_plan_review) + Number(quality.independent_verification);
+  return { mode: count2 === 0 ? "economy" : count2 === 2 ? "strict" : "adaptive" };
+}).prefault({});
 var OrchestrationSchema = strictObject({
   profile: strictObject({
     /**
@@ -29710,10 +29727,7 @@ var OrchestrationSchema = strictObject({
      */
     repair_attempts: number2().int().min(0).max(5).default(1)
   }).prefault({}),
-  quality: strictObject({
-    independent_plan_review: boolean2().default(false),
-    independent_verification: boolean2().default(false)
-  }).prefault({}),
+  quality: QualityConfigSchema,
   skills: strictObject({
     /**
      * An empty list is meaningful and permitted: it is how a project says no
@@ -29981,7 +29995,12 @@ var DEFAULT_TRACKS = {
   }
 };
 function defaultConfig(verify) {
-  return ConfigSchema.parse({ version: 1, verify, tracks: DEFAULT_TRACKS });
+  return ConfigSchema.parse({
+    version: 1,
+    verify,
+    tracks: DEFAULT_TRACKS,
+    orchestration: { quality: { mode: "adaptive" } }
+  });
 }
 
 // src/schemas/feature.ts
@@ -30284,19 +30303,31 @@ var StateCorruptedError = class extends Error {
   }
 };
 async function writeJsonAtomic(file, data, options = {}) {
-  const { backup = true } = options;
+  const { backup = true, stagingDir } = options;
   await fs.mkdir(path.dirname(file), { recursive: true });
+  const stage = stagingDir ?? path.dirname(file);
+  const nonce = `${process.pid}.${randomUUID()}`;
+  const temp = path.join(stage, `${path.basename(file)}.${nonce}.tmp`);
+  const backupTemp = path.join(stage, `${path.basename(file)}.${nonce}.bak.tmp`);
+  let hasBackup = false;
   if (backup) {
     try {
-      await fs.copyFile(file, `${file}.bak`);
+      await fs.copyFile(file, backupTemp);
+      hasBackup = true;
     } catch (error2) {
       if (error2.code !== "ENOENT") throw error2;
     }
   }
-  const temp = `${file}.${process.pid}.${randomUUID()}.tmp`;
-  await fs.writeFile(temp, `${JSON.stringify(data, null, 2)}
+  try {
+    await fs.writeFile(temp, `${JSON.stringify(data, null, 2)}
 `, "utf8");
-  await fs.rename(temp, file);
+    if (hasBackup) await fs.rename(backupTemp, `${file}.bak`);
+    await fs.rename(temp, file);
+  } catch (error2) {
+    await fs.rm(temp, { force: true }).catch(() => void 0);
+    await fs.rm(backupTemp, { force: true }).catch(() => void 0);
+    throw error2;
+  }
 }
 async function readJsonValidated(file, schema) {
   try {
@@ -30425,7 +30456,24 @@ var ConfigMissingError = class extends Error {
     this.name = "ConfigMissingError";
   }
 };
-async function loadConfig(projectDir) {
+function hasOwn(record2, key) {
+  return Object.prototype.hasOwnProperty.call(record2, key);
+}
+function qualityConfigSource(document) {
+  if (typeof document !== "object" || document === null || Array.isArray(document)) return "default-existing";
+  if (!hasOwn(document, "orchestration")) return "default-existing";
+  const orchestration = document.orchestration;
+  if (typeof orchestration !== "object" || orchestration === null || Array.isArray(orchestration)) {
+    return "default-existing";
+  }
+  if (!hasOwn(orchestration, "quality")) return "default-existing";
+  const quality = orchestration.quality;
+  if (typeof quality !== "object" || quality === null || Array.isArray(quality)) return "default-existing";
+  if (hasOwn(quality, "mode")) return "explicit";
+  if (hasOwn(quality, "independent_plan_review") || hasOwn(quality, "independent_verification")) return "legacy";
+  return "default-existing";
+}
+async function loadConfigRecord(projectDir) {
   const file = resolveLoopPaths(projectDir).config;
   let raw;
   try {
@@ -30441,6 +30489,7 @@ async function loadConfig(projectDir) {
     throw new Error(`${file} is not valid YAML:
 ${error2.message}`);
   }
+  const qualitySource = qualityConfigSource(document);
   const stripped = typeof document === "object" && document !== null && !Array.isArray(document) ? Object.fromEntries(
     Object.entries(document).filter(
       ([key]) => !LEGACY_CONFIG_KEYS.includes(key)
@@ -30449,7 +30498,10 @@ ${error2.message}`);
   const parsed = ConfigSchema.safeParse(stripped);
   if (!parsed.success) throw new Error(`${file} is invalid:
 ${prettifyError(parsed.error)}`);
-  return parsed.data;
+  return { config: parsed.data, qualitySource };
+}
+async function loadConfig(projectDir) {
+  return (await loadConfigRecord(projectDir)).config;
 }
 async function writeConfig(projectDir, config2) {
   const file = resolveLoopPaths(projectDir).config;
@@ -30547,6 +30599,12 @@ var LockTimeoutError = class extends Error {
     this.name = "LockTimeoutError";
   }
 };
+var LockOwnershipLostError = class extends Error {
+  constructor(lockDir) {
+    super(`lost ownership of ${lockDir} before guarded publish`);
+    this.name = "LockOwnershipLostError";
+  }
+};
 async function withLock(lockDir, fn, options = {}) {
   const { timeoutMs = 5e3, staleMs = 3e4, pollMs = 25, onWait } = options;
   const deadline = Date.now() + timeoutMs;
@@ -30574,7 +30632,7 @@ async function withLock(lockDir, fn, options = {}) {
     }
   }
   try {
-    return await fn();
+    return await fn(createOwnership(lockDir, ownedSnapshot, { timeoutMs, staleMs, pollMs }));
   } finally {
     const current = await statSnapshot(lockDir);
     if (current !== null && isSameInstance(current, ownedSnapshot)) {
@@ -30582,15 +30640,64 @@ async function withLock(lockDir, fn, options = {}) {
     }
   }
 }
+function createOwnership(lockDir, ownedSnapshot, options) {
+  const assertOwned = async () => {
+    const current = await statSnapshot(lockDir);
+    if (current === null || !isSameInstance(current, ownedSnapshot)) throw new LockOwnershipLostError(lockDir);
+  };
+  return {
+    assertOwned,
+    async runIfOwned(publish) {
+      const markerDir = `${lockDir}.reclaiming`;
+      const markerSnapshot = await acquireMarker(
+        markerDir,
+        options.pollMs,
+        options.staleMs,
+        Date.now() + options.timeoutMs
+      );
+      try {
+        await assertOwned();
+        try {
+          return await publish(lockDir);
+        } catch (error2) {
+          await assertOwned();
+          throw error2;
+        }
+      } finally {
+        await removeIfSameInstance(markerDir, markerSnapshot);
+      }
+    }
+  };
+}
+async function acquireMarker(markerDir, pollMs, staleMs, deadline) {
+  while (true) {
+    try {
+      await fs3.mkdir(markerDir);
+      const snapshot = await statSnapshot(markerDir);
+      if (snapshot !== null) return snapshot;
+    } catch (error2) {
+      if (error2.code !== "EEXIST") throw error2;
+      if (Date.now() >= deadline) {
+        throw new LockTimeoutError(`could not acquire ${markerDir} within the lock timeout`);
+      }
+      const marker = await statSnapshot(markerDir);
+      if (marker !== null && marker.ageMs >= staleMs) await removeIfSameInstance(markerDir, marker);
+      else await new Promise((resolve) => setTimeout(resolve, pollMs));
+    }
+  }
+}
 async function reclaimIfSameInstance(lockDir, observed, pollMs, staleMs) {
   const reclaimMarker = `${lockDir}.reclaiming`;
+  let markerSnapshot = null;
   try {
     await fs3.mkdir(reclaimMarker);
+    markerSnapshot = await statSnapshot(reclaimMarker);
+    if (markerSnapshot === null) return;
   } catch (error2) {
     if (error2.code === "EEXIST") {
       const marker = await statSnapshot(reclaimMarker);
       if (marker !== null && marker.ageMs >= staleMs) {
-        await fs3.rm(reclaimMarker, { recursive: true, force: true });
+        await removeIfSameInstance(reclaimMarker, marker);
       } else {
         await new Promise((resolve) => setTimeout(resolve, pollMs));
       }
@@ -30603,7 +30710,13 @@ async function reclaimIfSameInstance(lockDir, observed, pollMs, staleMs) {
     if (current === null || !isSameInstance(current, observed)) return;
     await fs3.rm(lockDir, { recursive: true, force: true });
   } finally {
-    await fs3.rm(reclaimMarker, { recursive: true, force: true });
+    await removeIfSameInstance(reclaimMarker, markerSnapshot);
+  }
+}
+async function removeIfSameInstance(path28, ownedSnapshot) {
+  const current = await statSnapshot(path28);
+  if (current !== null && isSameInstance(current, ownedSnapshot)) {
+    await fs3.rm(path28, { recursive: true, force: true });
   }
 }
 function isSameInstance(a, b) {
@@ -31410,8 +31523,8 @@ No plans yet.
 }
 
 // src/ops/log.ts
-import fs15 from "node:fs/promises";
-import path16 from "node:path";
+import fs20 from "node:fs/promises";
+import path21 from "node:path";
 
 // src/schemas/skill-selection.ts
 var AcceptedProjectSkillSchema = strictObject({
@@ -31589,98 +31702,182 @@ async function capture(args, cwd, signal) {
   return ok2 ? Buffer.concat(chunks).toString("utf8") : null;
 }
 
-// src/store/state-store.ts
-var InvalidStateError = class extends Error {
-  constructor(message) {
-    super(message);
-    this.name = "InvalidStateError";
-  }
-};
-var StateStore = class {
-  constructor(projectDir, now = () => /* @__PURE__ */ new Date()) {
-    this.now = now;
-    this.paths = resolveLoopPaths(projectDir);
-  }
-  paths;
-  async get() {
-    return (await this.read()).state;
-  }
-  /**
-   * The state plus whether it came from `.bak`. Most callers want `get`; a
-   * caller that acts on the state rather than reporting it needs to know the
-   * primary was unreadable, because a recovered value is by definition the
-   * *previous* write — stale by exactly one update.
-   */
-  async read() {
-    const { value, recovered } = await readJsonValidated(this.paths.state, StateSchema);
-    return { state: value, recovered };
-  }
-  async update(mutate) {
-    return withLock(this.paths.lock, async () => {
-      const { value, recovered } = await readJsonValidated(this.paths.state, StateSchema);
-      const draft = structuredClone(value);
-      await mutate(draft);
-      draft.updated_at = this.now().toISOString();
-      const parsed = StateSchema.safeParse(draft);
-      if (!parsed.success) throw new InvalidStateError(prettifyError(parsed.error));
-      await writeJsonAtomic(this.paths.state, parsed.data, { backup: !recovered });
-      return parsed.data;
-    });
-  }
-};
+// src/store/quality-store.ts
+import fs19 from "node:fs/promises";
+import path20 from "node:path";
 
-// src/ops/fingerprint.ts
-import { createHash as createHash2 } from "node:crypto";
-import path9 from "node:path";
-function cycleFingerprint(findings, result) {
-  const sorted = findings.map(identify).sort(compareIdentities);
-  const distinct = sorted.filter((identity, index) => {
-    const previous = sorted[index - 1];
-    return previous === void 0 || compareIdentities(identity, previous) !== 0;
-  });
-  const payload = JSON.stringify({ result, findings: distinct });
-  return createHash2("sha256").update(payload).digest("hex");
+// src/schemas/quality.ts
+var SHA256_SCHEMA = string2().regex(/^[a-f0-9]{64}$/, "must be a lowercase SHA-256 hex digest");
+var RunIdSchema = string2().regex(/^\d{4}-\d{2}-\d{2}-\d{3}$/, "a run id looks like 2026-08-04-001");
+var ProseSchema = string2().trim().min(1).max(4e3);
+var ReferenceSchema = string2().trim().min(1).max(1e3);
+var DecisionBySchema = string2().trim().min(1).max(200);
+function distinctStrings(values, ctx, field) {
+  if (new Set(values).size !== values.length) ctx.addIssue({ code: "custom", path: [field], message: `${field} must not contain duplicates` });
 }
-function identify(finding) {
-  return [finding.severity, normaliseFile(finding.file), finding.claim];
-}
-function distinctFindings(findings) {
-  const sorted = findings.map((finding) => ({ identity: identifyWork(finding), finding })).sort((a, b) => compareWork(a.identity, b.identity));
-  return sorted.filter((entry, index) => {
-    const previous = sorted[index - 1];
-    return previous === void 0 || compareWork(entry.identity, previous.identity) !== 0;
-  }).map((entry) => entry.finding);
-}
-function identifyWork(finding) {
-  return [finding.severity, normaliseFile(finding.file), finding.claim, finding.line];
-}
-function compareWork(a, b) {
-  return a[0].localeCompare(b[0]) || a[1].localeCompare(b[1]) || a[2].localeCompare(b[2]) || a[3] - b[3];
-}
-function normaliseFile(file) {
-  return path9.posix.normalize(file.replaceAll("\\", "/"));
-}
-function compareIdentities(a, b) {
-  return a[0].localeCompare(b[0]) || a[1].localeCompare(b[1]) || a[2].localeCompare(b[2]);
-}
-function errorSignature(evidence, result) {
-  if (result !== "fail") return [];
-  const signatures = evidence.filter((entry) => entry.kind === "command" || entry.kind === "test").map((entry) => `${entry.ref} :: ${headline(entry.excerpt)}`);
-  return [...new Set(signatures)].sort();
-}
-function errorFingerprint(signatures) {
-  return createHash2("sha256").update(JSON.stringify([...signatures].sort())).digest("hex");
-}
-function headline(excerpt) {
-  return (excerpt.split("\n")[0] ?? "").trim().replace(/\d+/g, "N");
-}
-function verifyFingerprint(command, worktree) {
-  return createHash2("sha256").update(JSON.stringify([command, worktree])).digest("hex");
-}
+var QualityDimensionSchema = _enum(["correctness", "security", "alignment", "regression", "ui"]);
+var QualityVerdictSchema = _enum(["pending", "pass", "fail", "blocked", "not_applicable"]);
+var QualityEvidenceKindSchema = _enum(["command", "test", "agent", "human"]);
+var SupervisionSchema = _enum(["supervised", "unattended"]);
+var QualityEnforcementSchema = _enum(["shadow", "active"]);
+var MeasurementKindSchema = _enum(["measured", "estimated", "unavailable"]);
+var RiskLevelSchema = _enum(["low", "medium", "high"]);
+var QualityRiskCodeSchema = _enum([
+  "alignment.ambiguous",
+  "api.boundary",
+  "build.configuration",
+  "data.destructive",
+  "data.schema",
+  "regression.repeated_failure",
+  "security.authorization",
+  "ui.surface"
+]);
+var QualityApplicabilitySchema = _enum(["required", "not_applicable"]);
+var QualityConfigSourceSchema = _enum(["explicit", "legacy"]);
+var QualityBudgetFieldSchema = _enum([
+  "max_cycles",
+  "max_dispatches",
+  "max_context_tokens_per_dispatch",
+  "max_repair_attempts"
+]);
+var CostEstimateSchema = strictObject({
+  model_id: string2().trim().min(1).max(200),
+  input_tokens: number2().int().nonnegative(),
+  output_tokens: number2().int().nonnegative(),
+  currency: string2().trim().length(3),
+  input_unit_price: number2().nonnegative(),
+  output_unit_price: number2().nonnegative(),
+  pricing_table_version: string2().trim().min(1).max(200),
+  total: number2().nonnegative()
+});
+var QualityBudgetSchema = strictObject({
+  max_cycles: number2().int().positive(),
+  max_dispatches: number2().int().positive(),
+  max_context_tokens_per_dispatch: number2().int().positive(),
+  max_repair_attempts: number2().int().nonnegative(),
+  cost_estimate: CostEstimateSchema.nullable()
+});
+var QualityRiskSignalSchema = strictObject({
+  code: QualityRiskCodeSchema,
+  level: RiskLevelSchema,
+  evidence: array(ReferenceSchema).max(100)
+});
+var QualityRiskSchema = strictObject({
+  level: RiskLevelSchema,
+  signals: array(QualityRiskSignalSchema).max(100)
+});
+var QualityDispatchSchema = strictObject({
+  agent: IdSchema,
+  instance: IdSchema.nullable(),
+  dimensions: array(QualityDimensionSchema).min(1).max(5),
+  reason: ProseSchema
+});
+var QualityApplicabilityRecordSchema = strictObject({
+  value: QualityApplicabilitySchema,
+  reason: ProseSchema
+});
+var InitialQualityPlanSchema = strictObject({
+  correctness: QualityApplicabilityRecordSchema,
+  security: QualityApplicabilityRecordSchema,
+  alignment: QualityApplicabilityRecordSchema,
+  regression: QualityApplicabilityRecordSchema,
+  ui: QualityApplicabilityRecordSchema
+});
+var QualityPolicySchema = strictObject({
+  version: literal(1),
+  pinned_at: iso_exports2.datetime(),
+  mode: QualityModeSchema,
+  supervision: SupervisionSchema,
+  enforcement: QualityEnforcementSchema,
+  source: QualityConfigSourceSchema,
+  risk: QualityRiskSchema,
+  budget: QualityBudgetSchema,
+  initial_quality_plan: InitialQualityPlanSchema,
+  dispatches: array(QualityDispatchSchema).max(100)
+}).superRefine((policy, ctx) => {
+  if (policy.enforcement === "active" && policy.source !== "explicit") {
+    ctx.addIssue({ code: "custom", path: ["enforcement"], message: "active enforcement requires an explicit quality mode" });
+  }
+});
+var QualityLedgerEntrySchema = strictObject({
+  applicability: QualityApplicabilitySchema,
+  status: QualityVerdictSchema,
+  required_evidence: array(QualityEvidenceKindSchema).max(4),
+  evidence_refs: array(ReferenceSchema).max(100),
+  reason: ProseSchema,
+  inputs_fingerprint: SHA256_SCHEMA,
+  /** The engine-sampled tree identity; null is cycle-scoped and never reusable. */
+  worktree_digest: SHA256_SCHEMA.nullable(),
+  /** Cycle that recorded the evidence, not an agent supplied claim. */
+  recorded_cycle: number2().int().positive().nullable(),
+  checked_at: iso_exports2.datetime().nullable(),
+  invalidated_at: iso_exports2.datetime().nullable()
+}).superRefine((entry, ctx) => {
+  if (entry.applicability === "required" && entry.status === "not_applicable") {
+    ctx.addIssue({ code: "custom", path: ["status"], message: "a required dimension cannot be not_applicable" });
+  }
+  if (entry.applicability === "not_applicable" && entry.status !== "not_applicable") {
+    ctx.addIssue({ code: "custom", path: ["status"], message: "a non-applicable dimension must be not_applicable" });
+  }
+});
+var QualityLedgerSchema = strictObject({
+  version: literal(1),
+  /** Advanced only by the engine's cycle transition seam. */
+  cycle: number2().int().positive(),
+  dimensions: strictObject({
+    correctness: QualityLedgerEntrySchema,
+    security: QualityLedgerEntrySchema,
+    alignment: QualityLedgerEntrySchema,
+    regression: QualityLedgerEntrySchema,
+    ui: QualityLedgerEntrySchema
+  })
+});
+var QualityAmendmentSchema = strictObject({
+  version: literal(1),
+  run: RunIdSchema,
+  field: QualityBudgetFieldSchema,
+  from: number2().int().nonnegative(),
+  to: number2().int().nonnegative(),
+  reason: ProseSchema,
+  decided_at: iso_exports2.datetime(),
+  decided_by: DecisionBySchema
+}).superRefine((amendment, ctx) => {
+  if (amendment.to <= amendment.from) {
+    ctx.addIssue({ code: "custom", path: ["to"], message: "an amendment must increase its budget field" });
+  }
+});
+var DestructiveDecisionSchema = strictObject({
+  decision: _enum(["approve", "reject"]),
+  decided_at: iso_exports2.datetime(),
+  decided_by: DecisionBySchema,
+  note: ProseSchema.nullable(),
+  used_at: iso_exports2.datetime().nullable()
+});
+var DestructiveRequestSchema = strictObject({
+  version: literal(1),
+  run: RunIdSchema,
+  operation_fingerprint: SHA256_SCHEMA,
+  kind: _enum(["feature_delete", "table_drop", "table_truncate", "bulk_data_delete", "irreversible_migration", "project_wide"]),
+  targets: array(ReferenceSchema).min(1).max(100),
+  operation: ProseSchema,
+  reason: ProseSchema,
+  approval_impact: ProseSchema,
+  rejection_impact: ProseSchema,
+  rollback: ProseSchema.nullable(),
+  completed_work: array(ReferenceSchema).max(100),
+  evidence_refs: array(ReferenceSchema).max(100),
+  requested_at: iso_exports2.datetime(),
+  capability_hash: SHA256_SCHEMA,
+  decision: DestructiveDecisionSchema.nullable()
+}).superRefine((request, ctx) => {
+  distinctStrings(request.targets, ctx, "targets");
+  distinctStrings(request.completed_work, ctx, "completed_work");
+  distinctStrings(request.evidence_refs, ctx, "evidence_refs");
+});
 
 // src/ops/run.ts
-import fs13 from "node:fs/promises";
-import path14 from "node:path";
+import fs18 from "node:fs/promises";
+import path19 from "node:path";
 
 // src/schemas/skill-library.ts
 var DigestSchema = string2().regex(/^[a-f0-9]{64}$/, "a digest is 64 lower-case hex characters");
@@ -31784,7 +31981,7 @@ var ProjectSkillAcceptanceSchema = strictObject({
 // src/store/feature-store.ts
 import crypto from "node:crypto";
 import fs9 from "node:fs/promises";
-import path10 from "node:path";
+import path9 from "node:path";
 var InvalidFeatureRecordError = class extends Error {
   constructor(file, detail) {
     super(`${file} is not a valid feature brief:
@@ -31866,7 +32063,7 @@ function featureDirName(featureId, title) {
   return `${FeatureIdSchema.parse(featureId)}-${slug.length === 0 ? "feature" : slug}`;
 }
 function featureRevisionFile(featureDir, revision) {
-  return path10.join(featureDir, `rev-${String(RevisionSchema2.parse(revision)).padStart(3, "0")}.json`);
+  return path9.join(featureDir, `rev-${String(RevisionSchema2.parse(revision)).padStart(3, "0")}.json`);
 }
 async function listFeatureDirs(featuresDir) {
   let entries;
@@ -31890,7 +32087,7 @@ async function locateFeatureDir(projectDir, featureId) {
   const featuresDir = resolveLoopPaths(projectDir).features;
   const id = FeatureIdSchema.parse(featureId);
   const match = (await listFeatureDirs(featuresDir)).find((entry) => entry.startsWith(`${id}-`));
-  return match === void 0 ? null : path10.join(featuresDir, match);
+  return match === void 0 ? null : path9.join(featuresDir, match);
 }
 async function findFeatureDir(projectDir, featureId) {
   const dir = await locateFeatureDir(projectDir, featureId);
@@ -31912,7 +32109,7 @@ async function listRevisionsIn(featureDir) {
     if (match?.[1] === void 0) continue;
     const revision = Number(match[1]);
     if (!RevisionSchema2.safeParse(revision).success) continue;
-    if (path10.basename(featureRevisionFile(featureDir, revision)) !== entry.name) continue;
+    if (path9.basename(featureRevisionFile(featureDir, revision)) !== entry.name) continue;
     revisions.push(revision);
   }
   return revisions.sort((a, b) => a - b);
@@ -31995,7 +32192,7 @@ async function createFeatureBrief(projectDir, input, now = () => /* @__PURE__ */
     const existing = await listFeatureIds(projectDir);
     const next = existing.length === 0 ? 1 : Math.max(...existing.map((id2) => Number(id2.slice(1)))) + 1;
     const id = `F${String(next).padStart(3, "0")}`;
-    const brief = validate(path10.join(resolveLoopPaths(projectDir).features, id), {
+    const brief = validate(path9.join(resolveLoopPaths(projectDir).features, id), {
       schema: 1,
       id,
       revision: 1,
@@ -32011,7 +32208,7 @@ async function createFeatureBrief(projectDir, input, now = () => /* @__PURE__ */
       createdAt: now().toISOString()
     });
     await assertKnownComponents(projectDir, brief.affectedComponents);
-    const file = featureRevisionFile(path10.join(resolveLoopPaths(projectDir).features, featureDirName(id, brief.title)), 1);
+    const file = featureRevisionFile(path9.join(resolveLoopPaths(projectDir).features, featureDirName(id, brief.title)), 1);
     await writeNewRevision(file, brief);
     return { brief, status: brief.status, file, digest: briefDigest(brief) };
   });
@@ -32156,6 +32353,97 @@ async function exists3(file) {
 }
 function quoted(ids) {
   return ids.map((id) => `"${id}"`).join(", ");
+}
+
+// src/store/state-store.ts
+var InvalidStateError = class extends Error {
+  constructor(message) {
+    super(message);
+    this.name = "InvalidStateError";
+  }
+};
+var StateStore = class {
+  constructor(projectDir, now = () => /* @__PURE__ */ new Date()) {
+    this.now = now;
+    this.paths = resolveLoopPaths(projectDir);
+  }
+  paths;
+  async get() {
+    return (await this.read()).state;
+  }
+  /**
+   * The state plus whether it came from `.bak`. Most callers want `get`; a
+   * caller that acts on the state rather than reporting it needs to know the
+   * primary was unreadable, because a recovered value is by definition the
+   * *previous* write — stale by exactly one update.
+   */
+  async read() {
+    const { value, recovered } = await readJsonValidated(this.paths.state, StateSchema);
+    return { state: value, recovered };
+  }
+  async update(mutate) {
+    return withLock(this.paths.lock, async (ownership) => {
+      const { value, recovered } = await readJsonValidated(this.paths.state, StateSchema);
+      const draft = structuredClone(value);
+      await mutate(draft);
+      draft.updated_at = this.now().toISOString();
+      const parsed = StateSchema.safeParse(draft);
+      if (!parsed.success) throw new InvalidStateError(prettifyError(parsed.error));
+      await ownership.runIfOwned(async (stagingDir) => {
+        await writeJsonAtomic(this.paths.state, parsed.data, { backup: !recovered, stagingDir });
+      });
+      return parsed.data;
+    });
+  }
+};
+
+// src/ops/fingerprint.ts
+import { createHash as createHash2 } from "node:crypto";
+import path10 from "node:path";
+function cycleFingerprint(findings, result) {
+  const sorted2 = findings.map(identify).sort(compareIdentities);
+  const distinct3 = sorted2.filter((identity, index) => {
+    const previous = sorted2[index - 1];
+    return previous === void 0 || compareIdentities(identity, previous) !== 0;
+  });
+  const payload = JSON.stringify({ result, findings: distinct3 });
+  return createHash2("sha256").update(payload).digest("hex");
+}
+function identify(finding) {
+  return [finding.severity, normaliseFile(finding.file), finding.claim];
+}
+function distinctFindings(findings) {
+  const sorted2 = findings.map((finding) => ({ identity: identifyWork(finding), finding })).sort((a, b) => compareWork(a.identity, b.identity));
+  return sorted2.filter((entry, index) => {
+    const previous = sorted2[index - 1];
+    return previous === void 0 || compareWork(entry.identity, previous.identity) !== 0;
+  }).map((entry) => entry.finding);
+}
+function identifyWork(finding) {
+  return [finding.severity, normaliseFile(finding.file), finding.claim, finding.line];
+}
+function compareWork(a, b) {
+  return a[0].localeCompare(b[0]) || a[1].localeCompare(b[1]) || a[2].localeCompare(b[2]) || a[3] - b[3];
+}
+function normaliseFile(file) {
+  return path10.posix.normalize(file.replaceAll("\\", "/"));
+}
+function compareIdentities(a, b) {
+  return a[0].localeCompare(b[0]) || a[1].localeCompare(b[1]) || a[2].localeCompare(b[2]);
+}
+function errorSignature(evidence, result) {
+  if (result !== "fail") return [];
+  const signatures = evidence.filter((entry) => entry.kind === "command" || entry.kind === "test").map((entry) => `${entry.ref} :: ${headline(entry.excerpt)}`);
+  return [...new Set(signatures)].sort();
+}
+function errorFingerprint(signatures) {
+  return createHash2("sha256").update(JSON.stringify([...signatures].sort())).digest("hex");
+}
+function headline(excerpt) {
+  return (excerpt.split("\n")[0] ?? "").trim().replace(/\d+/g, "N");
+}
+function verifyFingerprint(command, worktree) {
+  return createHash2("sha256").update(JSON.stringify([command, worktree])).digest("hex");
 }
 
 // src/store/skill-acceptance-store.ts
@@ -32521,480 +32809,951 @@ function quoted2(ids) {
   return ids.map((id) => `"${id}"`).join(", ");
 }
 
-// src/ops/run.ts
-var UnknownTrackError = class extends Error {
-  constructor(track, known) {
-    super(`unknown track "${track}" \u2014 config defines: ${known.join(", ")}`);
-    this.name = "UnknownTrackError";
-  }
+// src/ops/quality-policy.ts
+import crypto2 from "node:crypto";
+import fs13 from "node:fs/promises";
+import path14 from "node:path";
+
+// src/ops/quality-budget.ts
+var CONTEXT_CEILINGS = {
+  economy: 8e3,
+  adaptive: 12e3,
+  strict: 16e3
 };
-var NoActiveRunError = class extends Error {
-  constructor() {
-    super("no active run \u2014 call mjloop_run_start first");
-    this.name = "NoActiveRunError";
+var REPAIR_INSTANCE = /^repair-\d+$/;
+function isRepairInstance(instance) {
+  return instance !== null && REPAIR_INSTANCE.test(instance);
+}
+function measureTokens(text, tokenizer) {
+  if (tokenizer !== void 0) {
+    const value = tokenizer.count(text);
+    assertNonNegativeInteger(value, "tokenizer count");
+    return { value, kind: "measured" };
   }
-};
-function runDirName(state) {
-  if (state.run_id === null || state.track === null) throw new NoActiveRunError();
-  return `${state.run_id}--${state.current.story ?? "adhoc"}--${state.track}`;
+  return { value: Math.ceil(Buffer.byteLength(text, "utf8") / 2), kind: "estimated" };
 }
-function runDirPath(projectDir, state) {
-  return path14.join(resolveLoopPaths(projectDir).runs, runDirName(state));
+function contextCeiling(mode, hostSafeInput) {
+  const profile = CONTEXT_CEILINGS[mode];
+  if (hostSafeInput !== void 0) assertPositiveInteger(hostSafeInput, "host-safe input ceiling");
+  return hostSafeInput === void 0 ? profile : Math.min(profile, hostSafeInput);
 }
-function cycleDirPath(projectDir, state, cycle = state.cycle) {
-  return path14.join(runDirPath(projectDir, state), cycleDirName(cycle));
-}
-function cycleDirName(cycle) {
-  return `cycle-${String(cycle).padStart(2, "0")}`;
-}
-async function runStart(projectDir, input, now = () => /* @__PURE__ */ new Date()) {
-  const config2 = await loadConfig(projectDir);
-  if (findTrack(config2, input.track) === void 0) {
-    throw new UnknownTrackError(input.track, Object.keys(config2.tracks));
-  }
-  if (input.story !== void 0 && input.story !== null) await readStory(projectDir, input.story);
-  const manifest = await resolveSkillManifest(projectDir, config2, input.feature, now);
-  const state = await new StateStore(projectDir, now).update(async (draft) => {
-    draft.run_id = await nextRunId(projectDir, now(), draft.run_id);
-    draft.track = input.track;
-    draft.status = "running";
-    draft.cycle = 1;
-    draft.goal = input.goal;
-    draft.started_at = now().toISOString();
-    draft.current = {
-      plan: input.plan ?? null,
-      story: input.story ?? null,
-      stage: "compose"
-    };
-    draft.findings = [];
-    draft.history = [];
-    draft.no_progress_count = 0;
-    draft.last_fingerprint = null;
-    draft.cycle_errors = [];
-    draft.last_error_fingerprint = null;
-    draft.reproduction = null;
-    draft.halt_reason = null;
-  });
-  await fs13.mkdir(runDirPath(projectDir, state), { recursive: true });
-  await pinVerifyBlock(projectDir, state, config2, now);
-  await writeSkillManifest(projectDir, state, manifest);
-  return state;
-}
-var VERIFY_PIN_FILE = "verify-pinned.json";
-async function pinVerifyBlock(projectDir, state, config2, now) {
-  const pin = PinnedVerifySchema.parse({
-    version: 1,
-    pinned_at: now().toISOString(),
-    verify: config2.verify
-  });
-  try {
-    await fs13.writeFile(path14.join(runDirPath(projectDir, state), VERIFY_PIN_FILE), `${JSON.stringify(pin, null, 2)}
-`, {
-      encoding: "utf8",
-      flag: "wx"
-    });
-  } catch (error2) {
-    if (error2.code !== "EEXIST") throw error2;
-  }
-}
-function skillSelectionAgents(config2) {
-  const names = Object.values(config2.tracks).flatMap((track) => [
-    ...track.required,
-    ...track.available ?? [],
-    ...track.closing ?? []
-  ]);
-  return names.length === 0 ? [...SKILL_ACCEPTANCE_AGENTS] : [...new Set(names)];
-}
-var SKILL_MANIFEST_FILE = "skill-selection.json";
-async function resolveSkillManifest(projectDir, config2, feature, now) {
-  if (feature === void 0 || feature === null) return null;
-  const record2 = await readFeatureBrief(projectDir, feature);
-  if (record2 === null || record2.brief.status !== "approved") return null;
-  const profile = await readAcceptedProfile(projectDir);
-  if (profile === null) return null;
-  const { skills: acceptedSkills } = await readAcceptedProjectSkills(projectDir);
-  const selections = skillSelectionAgents(config2).flatMap(
-    (agent) => selectSkills({ brief: record2.brief, profile, acceptedSkills, agent })
-  ).sort(compareSelections);
-  return SkillManifestSchema.parse({
-    schema: 1,
-    generatedAt: now().toISOString(),
-    sourceBrief: { id: record2.brief.id, revision: record2.brief.revision },
-    profileRevision: profile.revision,
-    selections,
-    guidance: renderGuidance(selections, acceptedSkills),
-    concurrency: analyseConcurrency(record2.brief, profile, config2.orchestration)
-  });
-}
-function renderGuidance(selections, acceptedSkills) {
-  const selected = new Set(selections.flatMap((selection) => selection.skillIds));
-  const guidance = {};
-  for (const skill of acceptedSkills) {
-    if (selected.has(skill.skillId)) guidance[skill.skillId] = skill.guidance;
-  }
-  return guidance;
-}
-async function writeSkillManifest(projectDir, state, manifest) {
-  if (manifest === null) return;
-  try {
-    await fs13.writeFile(
-      path14.join(runDirPath(projectDir, state), SKILL_MANIFEST_FILE),
-      `${JSON.stringify(manifest, null, 2)}
-`,
-      { encoding: "utf8", flag: "wx" }
-    );
-  } catch (error2) {
-    if (error2.code !== "EEXIST") throw error2;
-  }
-}
-function compareSelections(a, b) {
-  if (a.component !== b.component) return a.component < b.component ? -1 : 1;
-  return a.agent < b.agent ? -1 : a.agent > b.agent ? 1 : 0;
-}
-async function cycleAdvance(projectDir, input, now = () => /* @__PURE__ */ new Date()) {
-  const store = new StateStore(projectDir, now);
-  const config2 = await loadConfig(projectDir);
-  let carried = [];
-  let closedCycle = 0;
-  let fingerprint = null;
-  let errors = [];
-  let closing = [];
-  let maxCycles = 0;
-  let cause = "manual";
-  const after = await store.update((draft) => {
-    if (draft.status !== "running" || draft.track === null) throw new NoActiveRunError();
-    const track = findTrack(config2, draft.track);
-    if (track === void 0) throw new UnknownTrackError(draft.track, Object.keys(config2.tracks));
-    carried = distinctFindings(draft.findings);
-    errors = [...draft.cycle_errors].sort();
-    closedCycle = draft.cycle;
-    maxCycles = track.max_cycles;
-    const ref = path14.join(".mjloop", "runs", runDirName(draft));
-    draft.history.push({
-      cycle: draft.cycle,
-      agents: input.agents,
-      result: input.result,
-      ref,
-      at: now().toISOString()
-    });
-    if (input.result === "pass") {
-      draft.status = "done";
-      draft.current.stage = "done";
-      closing = [...track.closing];
-      return;
-    }
-    if (errors.length > 0) {
-      const currentErrors = errorFingerprint(errors);
-      const repeated = currentErrors === draft.last_error_fingerprint;
-      draft.last_error_fingerprint = currentErrors;
-      if (repeated) {
-        draft.status = "halted";
-        draft.current.stage = "halted";
-        draft.halt_reason = `the same verification failure recurred: ${refOf(errors[0] ?? "")}`;
-        cause = "repeated-error";
-        return;
-      }
-    }
-    fingerprint = cycleFingerprint(carried, input.result);
-    draft.no_progress_count = fingerprint === draft.last_fingerprint ? draft.no_progress_count + 1 : 0;
-    draft.last_fingerprint = fingerprint;
-    if (draft.no_progress_count >= config2.limits.no_progress_strikes) {
-      draft.status = "halted";
-      draft.current.stage = "halted";
-      draft.halt_reason = `no progress for ${draft.no_progress_count} consecutive cycles on track ${draft.track}`;
-      cause = "stagnation";
-      return;
-    }
-    if (draft.cycle >= track.max_cycles) {
-      draft.status = "halted";
-      draft.current.stage = "halted";
-      draft.halt_reason = `cycle cap ${track.max_cycles} reached for track ${draft.track}`;
-      cause = "cycle-cap";
-      return;
-    }
-    draft.findings = [];
-    draft.cycle_errors = [];
-    draft.cycle += 1;
-    draft.current.stage = "compose";
-  });
-  await archiveFindings(projectDir, after, closedCycle, carried);
-  let handoff = null;
-  try {
-    handoff = await writeHandoff(projectDir, after, closedCycle, input.result, input.agents, carried, errors, maxCycles);
-  } catch (error2) {
-    process.stderr.write(`mjloop: cycle ${closedCycle} handoff was not written: ${String(error2)}
-`);
-  }
-  if (after.status === "halted") await writeHaltReport(projectDir, after, cause, carried);
+function deriveQualityBudget(input) {
+  assertPositiveInteger(input.track.max_cycles, "track max cycles");
+  assertNonNegativeInteger(input.repairAttempts, "repair attempts");
+  const closingAgents = new Set(input.track.closing ?? []);
+  const targetedRepairs = input.targetedRepairs.slice(0, input.repairAttempts);
+  const maxDispatches = input.dispatches.length + strictSpecialists(input) + targetedRepairs.length + closingAgents.size;
+  assertPositiveInteger(maxDispatches, "maximum dispatches");
   return {
-    state: after,
-    carried_findings: carried,
-    fingerprint,
-    strikes: after.no_progress_count,
-    handoff,
-    closing_agents: closing
+    max_cycles: input.track.max_cycles,
+    max_dispatches: maxDispatches,
+    max_context_tokens_per_dispatch: contextCeiling(input.mode, input.hostSafeInput),
+    max_repair_attempts: input.repairAttempts,
+    cost_estimate: costEstimate(input.cost)
   };
 }
-function refOf(signature) {
-  return signature.split(" :: ")[0] ?? signature;
+function strictSpecialists(input) {
+  return input.mode === "strict" ? input.dispatches[0]?.dimensions.length ?? 0 : 0;
 }
-async function archiveFindings(projectDir, state, cycle, findings) {
-  const dir = cycleDirPath(projectDir, state, cycle);
-  await fs13.mkdir(dir, { recursive: true });
-  await fs13.writeFile(path14.join(dir, "findings.json"), `${JSON.stringify(findings, null, 2)}
-`, "utf8");
-}
-var HANDOFF_MAX_BYTES = 6e3;
-var HANDOFF_SUMMARY_MAX = 200;
-var HANDOFF_FINDINGS_MAX = 20;
-var HANDOFF_FILES_MAX = 30;
-var HANDOFF_ERRORS_MAX = 10;
-var HANDOFF_SKILLS_MAX = 20;
-var SEVERITY_ORDER = { high: 0, medium: 1, low: 2 };
-async function writeHandoff(projectDir, state, cycle, result, agents, carried, errors, maxCycles) {
-  const dir = cycleDirPath(projectDir, state, cycle);
-  const cycleRef = cycleDirName(cycle);
-  const reports = await readAgentReports(dir);
-  const roster = await readOptionalJson(path14.join(dir, "roster.json"), RosterSchema);
-  const ledger = await readOptionalJson(path14.join(dir, "verify", "index.json"), LedgerSchema);
-  const skills = await readOptionalJson(path14.join(runDirPath(projectDir, state), SKILL_MANIFEST_FILE), SkillManifestSchema);
-  const document = bound(
-    [
-      `# Handoff \u2014 cycle ${cycle} of ${state.run_id}`,
-      "",
-      resultLine(state, result, maxCycles),
-      "",
-      "## What each agent reported",
-      "",
-      ...agentTable(roster?.selected ?? agents, reports),
-      ...skippedLines(roster?.skipped ?? {}),
-      "",
-      "## Files touched",
-      "",
-      ...filesSection(reports, cycleRef),
-      "",
-      "## Verification",
-      "",
-      ...verificationSection(ledger, cycle),
-      "",
-      "## Open findings",
-      "",
-      ...findingsSection(carried, cycleRef),
-      "",
-      "## Failures that could recur",
-      "",
-      ...errorsSection(errors),
-      "",
-      // No heading at all — not even an empty one — when this run pinned no
-      // manifest. `writeHandoff` existed for every run before dynamic skill
-      // selection did, and a run that still names no feature must render
-      // byte-for-byte what it always has: an empty section a reader cannot
-      // tell apart from "nothing was selected" is worse than no section.
-      ...skills === null ? [] : ["## Skills", "", ...skillsSection(skills), ""]
-    ].join("\n"),
-    cycleRef
-  );
-  await fs13.mkdir(dir, { recursive: true });
-  await fs13.writeFile(path14.join(dir, "handoff.md"), document, "utf8");
-  return path14.join(".mjloop", "runs", runDirName(state), cycleRef, "handoff.md");
-}
-function resultLine(state, result, maxCycles) {
-  if (state.status === "done") return `**Result:** ${result} \u2014 the run is done.`;
-  if (state.status === "halted") return `**Result:** ${result} \u2014 halted: ${state.halt_reason ?? "no reason recorded"}`;
-  return `**Result:** ${result} \u2014 next: cycle ${state.cycle} of ${maxCycles}`;
-}
-function agentTable(drafted, reports) {
-  const rows = ["| Agent | Status | Summary |", "|---|---|---|"];
-  const shown = /* @__PURE__ */ new Set();
-  for (const agent of drafted) {
-    const mine = reports.filter((report) => report.agent === agent);
-    for (const report of mine) shown.add(report.basename);
-    rows.push(...mine.length === 0 ? [`| ${cell(agent)} | \u2014 | no result recorded |`] : mine.map(reportRow));
+function fitContextPacket(input) {
+  assertPositiveInteger(input.ceiling, "context packet ceiling");
+  const mandatory = [...input.mandatory];
+  const remaining = input.optional.map((digest, index) => ({ digest, index }));
+  const dropped = [];
+  while (true) {
+    const optional2 = remaining.map((entry) => entry.digest);
+    const text = packetText(mandatory, optional2);
+    const tokens = measureTokens(text, input.tokenizer);
+    if (tokens.value !== null && tokens.value <= input.ceiling) {
+      return { status: "fit", text, mandatory, optional: optional2, dropped, tokens };
+    }
+    if (remaining.length === 0) {
+      return { status: "budget_exhausted", text, mandatory, optional: optional2, dropped, tokens };
+    }
+    const lowest = remaining.slice().sort((left, right) => left.digest.relevance - right.digest.relevance || left.index - right.index)[0];
+    if (lowest === void 0) throw new Error("optional context selection unexpectedly empty");
+    remaining.splice(remaining.indexOf(lowest), 1);
+    dropped.push(lowest.digest);
   }
-  rows.push(...reports.filter((report) => !shown.has(report.basename)).map(reportRow));
-  return rows;
 }
-function reportRow(report) {
-  const summary = cell(truncate(report.result.summary, HANDOFF_SUMMARY_MAX));
-  return `| ${cell(report.basename)} | ${report.result.status} | ${summary} |`;
+function effectiveBudget(policy, amendments) {
+  const budget = {
+    ...policy.budget,
+    cost_estimate: policy.budget.cost_estimate === null ? null : { ...policy.budget.cost_estimate }
+  };
+  for (const amendment of amendments) {
+    switch (amendment.field) {
+      case "max_cycles":
+        budget.max_cycles = amendment.to;
+        break;
+      case "max_dispatches":
+        budget.max_dispatches = amendment.to;
+        break;
+      case "max_context_tokens_per_dispatch":
+        budget.max_context_tokens_per_dispatch = amendment.to;
+        break;
+      case "max_repair_attempts":
+        budget.max_repair_attempts = amendment.to;
+        break;
+    }
+  }
+  return budget;
 }
-function skippedLines(skipped) {
-  const entries = Object.entries(skipped);
-  if (entries.length === 0) return [];
-  return ["", `Skipped: ${entries.map(([agent, reason]) => `\`${agent}\` \u2014 ${oneLine(reason)}`).join("; ")}`];
+function compareQualityCandidates(a, b) {
+  assertSameRequiredDimensions(a, b);
+  const tokens = compareMeasurement(a.inputTokens, b.inputTokens);
+  if (tokens !== 0) return tokens;
+  const cost = compareMeasurement(a.monetaryCost, b.monetaryCost);
+  if (cost !== 0) return cost;
+  if (isUnavailable(a.monetaryCost) && isUnavailable(b.monetaryCost)) {
+    const proxy = compareProxy(a.costProxy, b.costProxy);
+    if (proxy !== 0) return proxy;
+  }
+  const elapsed = compareMeasurement(a.elapsedMs, b.elapsedMs);
+  if (elapsed !== 0) return elapsed;
+  if (isUnavailable(a.elapsedMs) && isUnavailable(b.elapsedMs)) {
+    const proxy = compareProxy(a.timeProxy, b.timeProxy);
+    if (proxy !== 0) return proxy;
+  }
+  return compareCodeUnits(a.id, b.id);
 }
-function filesSection(reports, cycleRef) {
-  const lines = reports.flatMap((report) => report.result.files_touched.map((file) => `- \`${oneLine(file)}\` \u2014 ${report.basename}`)).filter((line, index, all) => all.indexOf(line) === index).sort();
-  if (lines.length === 0) return ["_none recorded_"];
-  return elide(lines, HANDOFF_FILES_MAX, (rest) => `*${rest} more in ${cycleRef}/<agent>.json*`);
+function packetText(mandatory, optional2) {
+  return mandatory.concat(optional2.map((digest) => digest.text)).join("\n");
 }
-function verificationSection(ledger, cycle) {
-  if (ledger === null || ledger.length === 0) return ["_nothing was verified through the engine_"];
-  return [
-    "| Command | Exit | Log |",
-    "|---|---|---|",
-    ...ledger.map((entry) => `| \`${cell(entry.command)}\` | ${exitCell(entry)} | ${logCell(entry, cycle)} |`)
-  ];
+function costEstimate(cost) {
+  if (cost?.modelId === void 0 || cost.modelId.length === 0 || !isMeasuredTokenCount(cost.inputTokens) || !isMeasuredTokenCount(cost.outputTokens) || cost.currency === void 0 || cost.currency.length !== 3 || !isFiniteNonNegative(cost.inputUnitPrice) || !isFiniteNonNegative(cost.outputUnitPrice) || cost.pricingTableVersion === void 0 || cost.pricingTableVersion.length === 0) return null;
+  const total = cost.inputTokens.value * cost.inputUnitPrice + cost.outputTokens.value * cost.outputUnitPrice;
+  if (!isFiniteNonNegative(total)) return null;
+  return {
+    model_id: cost.modelId,
+    input_tokens: cost.inputTokens.value,
+    output_tokens: cost.outputTokens.value,
+    currency: cost.currency,
+    input_unit_price: cost.inputUnitPrice,
+    output_unit_price: cost.outputUnitPrice,
+    pricing_table_version: cost.pricingTableVersion,
+    total
+  };
 }
-function exitCell(entry) {
-  if (entry.timed_out) return "\u2014 (timed out)";
-  return entry.exit_code === null ? `\u2014 (${entry.phase})` : String(entry.exit_code);
+function assertSameRequiredDimensions(a, b) {
+  const aDimensions = [...new Set(a.requiredDimensions)].sort(compareCodeUnits);
+  const bDimensions = [...new Set(b.requiredDimensions)].sort(compareCodeUnits);
+  if (aDimensions.length !== bDimensions.length || aDimensions.some((dimension, index) => dimension !== bDimensions[index])) {
+    throw new Error("quality candidates must cover the same required dimensions");
+  }
 }
-function logCell(entry, cycle) {
-  const notes = [];
-  if (entry.cached_from_cycle !== null) notes.push(`cached, cycle ${entry.cached_from_cycle}`);
-  if (entry.live_command !== null) notes.push(`config.yaml now says \`${oneLine(entry.live_command)}\``);
-  const tail = notes.length === 0 ? "" : ` (${notes.join("; ")})`;
-  if (entry.log === "") return `\u2014${tail}`;
-  const source = entry.cached_from_cycle ?? cycle;
-  const ref = entry.log.includes("/") ? entry.log : `${cycleDirName(source)}/verify/${entry.log}`;
-  return `\`${oneLine(ref)}\`${tail}`;
+function compareMeasurement(a, b) {
+  const aAvailable = !isUnavailable(a);
+  const bAvailable = !isUnavailable(b);
+  if (!aAvailable) return bAvailable ? 1 : 0;
+  if (!bAvailable) return -1;
+  return a.value - b.value;
 }
-function findingsSection(carried, cycleRef) {
-  if (carried.length === 0) return ["_none recorded_"];
-  const lines = [...carried].sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]).map((finding) => `- **${finding.severity}** \`${oneLine(finding.file)}:${finding.line}\` \u2014 ${oneLine(finding.claim)}`);
-  return elide(lines, HANDOFF_FINDINGS_MAX, (rest) => `*${rest} more in ${cycleRef}/findings.json*`);
+function isUnavailable(measurement) {
+  return measurement.kind === "unavailable" || measurement.value === null;
 }
-function errorsSection(errors) {
-  if (errors.length === 0) return ["_none recorded_"];
-  return elide(
-    errors.map((signature) => `- \`${oneLine(signature)}\``),
-    HANDOFF_ERRORS_MAX,
-    (rest) => `*${rest} more*`
-  );
+function isMeasuredTokenCount(measurement) {
+  return measurement?.kind === "measured" && isNonNegativeInteger(measurement.value);
 }
-function skillsSection(manifest) {
-  const verdict = `- **Concurrency:** \`${manifest.concurrency.mode}\` \u2014 ${oneLine(manifest.concurrency.reason)}`;
-  const lines = manifest.selections.flatMap(
-    (selection) => selection.skillIds.map((skillId, index) => {
-      const reason = selection.reasons[index] ?? "";
-      return `- \`${selection.component}\` / \`${selection.agent}\`: \`${skillId}\` \u2014 ${oneLine(reason)}`;
-    })
-  );
-  if (lines.length === 0) return [verdict, "", "_no skill selected_"];
-  return [verdict, "", ...elide(lines, HANDOFF_SKILLS_MAX, (rest) => `*${rest} more in ${SKILL_MANIFEST_FILE}*`)];
+function isFiniteNonNegative(value) {
+  return value !== void 0 && Number.isFinite(value) && value >= 0;
 }
-function elide(lines, max, marker) {
-  if (lines.length <= max) return lines;
-  return [...lines.slice(0, max), "", marker(lines.length - max)];
+function isNonNegativeInteger(value) {
+  return value !== null && value !== void 0 && Number.isFinite(value) && Number.isInteger(value) && value >= 0;
 }
-function bound(document, cycleRef) {
-  if (Buffer.byteLength(document, "utf8") <= HANDOFF_MAX_BYTES) return document;
-  const marker = `
+function assertNonNegativeInteger(value, name) {
+  if (!isNonNegativeInteger(value)) throw new RangeError(`${name} must be a finite nonnegative integer`);
+}
+function assertPositiveInteger(value, name) {
+  if (!Number.isFinite(value) || !Number.isInteger(value) || value < 1) {
+    throw new RangeError(`${name} must be a finite positive integer`);
+  }
+}
+function compareProxy(a, b) {
+  if (a === void 0) return b === void 0 ? 0 : 1;
+  if (b === void 0) return -1;
+  return a.value - b.value || compareCodeUnits(a.kind, b.kind);
+}
+function compareCodeUnits(a, b) {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
 
-*Truncated at ${HANDOFF_MAX_BYTES} bytes \u2014 the whole cycle is in \`${cycleRef}/\`.*
-`;
-  const budget = HANDOFF_MAX_BYTES - Buffer.byteLength(marker, "utf8");
-  let kept = document.slice(0, budget);
-  while (Buffer.byteLength(kept, "utf8") > budget) kept = kept.slice(0, -1);
-  return kept + marker;
-}
-async function readAgentReports(dir) {
-  const entries = await fs13.readdir(dir, { withFileTypes: true }).catch(() => []);
-  const reports = [];
-  for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
-    if (!entry.isFile() || !entry.name.endsWith(".json")) continue;
-    if (entry.name === "roster.json" || entry.name === "findings.json") continue;
-    const result = await readOptionalJson(path14.join(dir, entry.name), AgentResultSchema);
-    if (result === null) continue;
-    const basename = entry.name.slice(0, -".json".length);
-    reports.push({ basename, agent: basename.split("--")[0] ?? basename, result });
+// src/ops/quality-risk.ts
+var UI_SURFACE_PATH = /\.(vue|tsx|jsx|css|scss|dart|svelte|html|swift|kt)$/i;
+var SIGNALS = [
+  { code: "security.authorization", level: "high", path: /(^|\/)(auth|permissions?|polic(?:y|ies))(\/|\.|$)/i },
+  { code: "data.schema", level: "medium", path: /(^|\/)(migrations?|schema|database)(\/|\.|$)/i },
+  { code: "ui.surface", level: "medium", path: UI_SURFACE_PATH },
+  { code: "build.configuration", level: "medium", path: /(^|\/)(package\.json|tsconfig.*\.json|vite\.config\.)/i }
+];
+var RANK = { low: 0, medium: 1, high: 2 };
+var API_BOUNDARY_PATH = /(^|\/)(api|routes?|controllers?)(\/|\.|$)/i;
+var DESTRUCTIVE_WORDING = /\b(?:delet\w*|remov\w*|drop\w*|truncat\w*|purg\w*)\b/i;
+var AMBIGUOUS_ACCEPTANCE = /\b(as appropriate|as needed|tbd|todo|etc\.?)\b/i;
+var USER_VISIBLE_WORDING = /\b(ui|user interface|screen|page|view|dashboard|form|button|layout|rtl|right[- ]to[- ]left|display|visible)\b/i;
+var USER_VISIBLE_COMPONENT = /(^|[\s_-])(ui|view|page|screen|widget|form|modal|dialog|layout|card|rtl)([\s_-]|$)/i;
+function analyzeQualityRisk(input) {
+  const paths = distinct(input.intendedFiles.concat(input.changedFiles), normalizePath);
+  const acceptance = distinct(input.acceptance, normalizeText);
+  const goal = normalizeText(input.goal);
+  const text = distinct([goal].concat(acceptance), normalizeText);
+  const components = distinct(input.componentKinds, normalizeText);
+  const signals = /* @__PURE__ */ new Map();
+  for (const rule of SIGNALS) {
+    addSignal(signals, rule.code, rule.level, paths.filter((path28) => rule.path.test(path28)));
   }
-  return reports;
+  addSignal(signals, "api.boundary", "medium", paths.filter((path28) => API_BOUNDARY_PATH.test(path28)));
+  addSignal(signals, "data.destructive", "high", text.filter((value) => DESTRUCTIVE_WORDING.test(value)));
+  addSignal(signals, "alignment.ambiguous", "medium", acceptance.filter((value) => AMBIGUOUS_ACCEPTANCE.test(value)));
+  addSignal(signals, "regression.repeated_failure", "medium", repeatedValues(input.priorFailures));
+  const uiEvidence = distinct(
+    paths.filter((path28) => SIGNALS[2].path.test(path28)).concat(components.filter((component) => USER_VISIBLE_COMPONENT.test(component))).concat(text.filter((value) => USER_VISIBLE_WORDING.test(value))),
+    normalizeText
+  );
+  const orderedSignals = [...signals.values()].map((signal) => ({ ...signal, evidence: distinct(signal.evidence, normalizeText) })).sort((left, right) => compareCodeUnits2(left.code, right.code));
+  const highestRank = Math.max(RANK.low, ...orderedSignals.map((signal) => RANK[signal.level]));
+  const level = highestRank === RANK.high ? "high" : highestRank === RANK.medium ? "medium" : "low";
+  return {
+    level,
+    signals: orderedSignals,
+    applicability: {
+      correctness: { value: "required", reason: "Every change requires correctness verification." },
+      security: { value: "required", reason: "Every change requires security review." },
+      alignment: { value: "required", reason: "Every change requires acceptance alignment." },
+      regression: { value: "required", reason: "Every change requires regression coverage." },
+      ui: uiEvidence.length > 0 ? { value: "required", reason: `User-visible surface indicated by: ${uiEvidence.join(", ")}.` } : { value: "not_applicable", reason: "No path, component, goal, or acceptance signal indicates a user-visible surface." }
+    }
+  };
 }
-async function readOptionalJson(file, schema) {
+function addSignal(signals, code, level, evidence) {
+  if (evidence.length === 0) return;
+  const existing = signals.get(code);
+  if (existing === void 0) {
+    signals.set(code, { code, level, evidence: distinct(evidence, normalizeText) });
+    return;
+  }
+  existing.evidence = distinct(existing.evidence.concat(evidence), normalizeText);
+}
+function repeatedValues(values) {
+  const seen = /* @__PURE__ */ new Map();
+  for (const raw of values) {
+    const value = normalizeText(raw);
+    if (value.length === 0) continue;
+    const key = value.toLowerCase();
+    const prior = seen.get(key);
+    if (prior === void 0) seen.set(key, { value, count: 1 });
+    else {
+      prior.count += 1;
+      if (compareCodeUnits2(value, prior.value) < 0) prior.value = value;
+    }
+  }
+  return [...seen.values()].filter((entry) => entry.count > 1).map((entry) => entry.value).sort(compareCodeUnits2);
+}
+function distinct(values, normalize) {
+  const byKey = /* @__PURE__ */ new Map();
+  for (const raw of values) {
+    const value = normalize(raw);
+    if (value.length === 0) continue;
+    const key = value.toLowerCase();
+    const prior = byKey.get(key);
+    if (prior === void 0 || compareCodeUnits2(value, prior) < 0) byKey.set(key, value);
+  }
+  return [...byKey.values()].sort(compareCodeUnits2);
+}
+function compareCodeUnits2(left, right) {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+function normalizePath(value) {
+  return value.trim().replaceAll("\\", "/").replace(/^\.\//, "").replace(/\/{2,}/g, "/");
+}
+function normalizeText(value) {
+  return value.trim().replace(/\s+/g, " ");
+}
+
+// src/ops/quality-policy.ts
+var DIMENSIONS = ["correctness", "security", "alignment", "regression", "ui"];
+var REQUIRED_EVIDENCE = {
+  correctness: ["test"],
+  security: ["command"],
+  alignment: ["agent"],
+  regression: ["test"],
+  ui: ["agent"]
+};
+var QualityPolicyIntegrityError = class extends Error {
+  constructor(detail) {
+    super(`quality policy integrity failure: ${detail}`);
+    this.name = "QualityPolicyIntegrityError";
+  }
+};
+async function buildQualityPolicy(input, now) {
+  const analysis = analyzeQualityRisk(riskInput(input));
+  const dispatches = qualityDispatchCandidates(input, analysis.applicability, analysis.level);
+  const repairAttempts = input.config.orchestration.execution.repair_attempts;
+  const targetedRepairs = Array.from({ length: repairAttempts }, (_, index) => ({
+    agent: dispatches[0].agent,
+    instance: `repair-${index + 1}`,
+    dimensions: dispatches[0].dimensions,
+    reason: `Targeted repair attempt ${index + 1} for the pinned quality plan.`
+  }));
+  const budget = deriveQualityBudget({
+    mode: input.config.orchestration.quality.mode,
+    track: input.track,
+    repairAttempts,
+    dispatches,
+    targetedRepairs
+  });
+  const explicit = input.qualitySource === "explicit";
+  return QualityPolicySchema.parse({
+    version: 1,
+    pinned_at: now().toISOString(),
+    mode: input.config.orchestration.quality.mode,
+    supervision: input.supervision,
+    source: explicit ? "explicit" : "legacy",
+    enforcement: explicit ? "active" : "shadow",
+    risk: { level: analysis.level, signals: analysis.signals },
+    budget,
+    initial_quality_plan: analysis.applicability,
+    dispatches
+  });
+}
+async function previewQualityPolicies(projectDir, input) {
+  const { config: config2, qualitySource } = await loadConfigRecord(projectDir);
+  const track = findTrack(config2, input.track);
+  if (track === void 0) throw new Error(`cannot preview unknown track "${input.track}"`);
+  const evidence = await projectRiskInput(projectDir, {
+    config: config2,
+    qualitySource,
+    track,
+    goal: input.goal ?? `Preview ${input.track} quality policy`,
+    story: input.story,
+    feature: input.feature,
+    supervision: input.supervision ?? "supervised",
+    allowMissingStory: true,
+    includeWorktreeDigest: true
+  });
+  const candidates = [];
+  for (const mode of ["economy", "adaptive", "strict"]) {
+    const modeConfig = {
+      ...config2,
+      orchestration: {
+        ...config2.orchestration,
+        quality: { mode }
+      }
+    };
+    const policy = await buildQualityPolicy({ ...evidence, config: modeConfig, track }, () => /* @__PURE__ */ new Date(0));
+    const inputTokens = measureTokens(JSON.stringify({
+      goal: evidence.goal,
+      acceptance: evidence.acceptance,
+      intendedFiles: evidence.intendedFiles,
+      componentKinds: evidence.componentKinds,
+      dispatches: policy.dispatches
+    }));
+    const preview = {
+      policy,
+      forecast: {
+        inputTokens,
+        outputTokens: { kind: "unavailable", value: null },
+        cost: { kind: "unavailable", currency: null, value: null },
+        elapsed: { kind: "unavailable", valueMs: null }
+      }
+    };
+    candidates.push({
+      mode,
+      preview,
+      candidate: {
+        id: mode,
+        requiredDimensions: DIMENSIONS.filter(
+          (dimension) => policy.initial_quality_plan[dimension].value === "required"
+        ),
+        inputTokens,
+        monetaryCost: { kind: "unavailable", value: null },
+        elapsedMs: { kind: "unavailable", value: null },
+        costProxy: { kind: "dispatch_count", value: policy.dispatches.length },
+        timeProxy: { kind: "sequential_wave_count", value: policy.dispatches.length }
+      }
+    });
+  }
+  candidates.sort((left, right) => compareQualityCandidates(left.candidate, right.candidate));
+  const previews = Object.fromEntries(candidates.map(({ mode, preview }) => [mode, preview]));
+  return previews;
+}
+async function ensureRunQualityPolicy(projectDir, now = () => /* @__PURE__ */ new Date()) {
+  let result = null;
+  let integrityError = null;
+  await new StateStore(projectDir, now).update(async (draft) => {
+    if (draft.run_id === null || draft.track === null || draft.status === "idle") throw new NoActiveRunError();
+    const files = qualityFiles(projectDir, draft);
+    const [policyStatus, ledgerStatus] = await Promise.all([
+      inspectRecord(files.policy, QualityPolicySchema, false),
+      inspectRecord(files.ledger, QualityLedgerSchema, true)
+    ]);
+    const classification = classifyPolicyIntegrity({
+      marker: draft.quality_policy_version,
+      policy: policyStatus,
+      ledger: ledgerStatus
+    });
+    if (classification === "halt") {
+      integrityError = new QualityPolicyIntegrityError(
+        `marker=${String(draft.quality_policy_version)}, policy=${policyStatus}, ledger=${ledgerStatus}`
+      );
+      haltDraft(draft, integrityError.message);
+      return;
+    }
+    if (classification === "ready" || classification === "recover-marker") {
+      result = await readPolicy(projectDir, draft);
+      await readLedger(projectDir, draft);
+      draft.quality_policy_version = 1;
+      return;
+    }
+    try {
+      const { config: config2 } = await loadConfigRecord(projectDir);
+      const track = findTrack(config2, draft.track);
+      if (track === void 0) throw new Error(`active run track "${draft.track}" is no longer configured`);
+      result = await buildProjectQualityPolicy(projectDir, {
+        config: config2,
+        qualitySource: "legacy",
+        track,
+        goal: draft.goal ?? "Legacy run",
+        story: draft.current.story,
+        supervision: "supervised"
+      }, now);
+      await writePolicyOnce(projectDir, draft, result);
+      await writeLedger(projectDir, draft, createInitialQualityLedger(result, now));
+      draft.quality_policy_version = 1;
+    } catch (error2) {
+      integrityError = new QualityPolicyIntegrityError(`legacy bootstrap could not write both records: ${messageOf(error2)}`);
+      haltDraft(draft, integrityError.message);
+    }
+  });
+  if (integrityError !== null) throw integrityError;
+  if (result === null) throw new QualityPolicyIntegrityError("policy bootstrap completed without a readable policy");
+  return result;
+}
+function createInitialQualityLedger(policy, now) {
+  const stampedAt = now().toISOString();
+  const dimensions = Object.fromEntries(DIMENSIONS.map((dimension) => {
+    const applicability = policy.initial_quality_plan[dimension];
+    return [dimension, {
+      applicability: applicability.value,
+      status: applicability.value === "required" ? "pending" : "not_applicable",
+      required_evidence: applicability.value === "required" ? REQUIRED_EVIDENCE[dimension] : [],
+      evidence_refs: [],
+      reason: applicability.reason,
+      inputs_fingerprint: sha256(canonicalJson({
+        version: policy.version,
+        pinned_at: policy.pinned_at,
+        initialized_at: stampedAt,
+        dimension,
+        applicability
+      })),
+      worktree_digest: null,
+      recorded_cycle: null,
+      checked_at: null,
+      invalidated_at: null
+    }];
+  }));
+  return QualityLedgerSchema.parse({ version: 1, cycle: 1, dimensions });
+}
+function classifyPolicyIntegrity(input) {
+  if (input.marker === 1) {
+    return input.policy === "valid" && input.ledger === "valid" ? "ready" : "halt";
+  }
+  if (input.policy === "missing" && input.ledger === "missing") return "legacy-bootstrap";
+  if (input.policy === "valid" && input.ledger === "valid") return "recover-marker";
+  return "halt";
+}
+async function buildProjectQualityPolicy(projectDir, input, now) {
+  return buildQualityPolicy(await projectRiskInput(projectDir, input), now);
+}
+async function resolveQualityContextEvidence(projectDir, input) {
+  const [story, feature, profile] = await Promise.all([
+    input.story === void 0 || input.story === null ? null : input.allowMissingStory === true ? readStory(projectDir, input.story).catch(() => null) : readStory(projectDir, input.story),
+    input.feature === void 0 || input.feature === null ? null : readFeatureBrief(projectDir, input.feature),
+    readAcceptedProfile(projectDir)
+  ]);
+  const componentById = new Map((profile?.components ?? []).map((component) => [component.id, component]));
+  const affected = feature?.brief.affectedComponents.map((id) => componentById.get(id)).filter((component) => component !== void 0) ?? [];
+  const componentKinds = affected.map((component) => component.technology);
+  if (story?.frontmatter.ui === true) componentKinds.push("ui");
+  return {
+    acceptance: distinct2([...story?.frontmatter.acceptance ?? [], ...feature?.brief.acceptance ?? []]),
+    intendedFiles: distinct2([
+      ...affected.map((component) => component.root),
+      ...story === null ? [] : [path14.relative(projectDir, story.file)]
+    ]),
+    componentKinds: distinct2(componentKinds)
+  };
+}
+async function projectRiskInput(projectDir, input) {
+  const [evidence, digest] = await Promise.all([
+    resolveQualityContextEvidence(projectDir, {
+      story: input.story,
+      feature: input.feature,
+      allowMissingStory: input.allowMissingStory
+    }),
+    input.includeWorktreeDigest === true ? worktreeDigest(projectDir) : Promise.resolve(null)
+  ]);
+  return {
+    ...input,
+    ...evidence,
+    // A digest is deliberately not decoded into invented paths. Carrying it as
+    // a non-matching provenance token lets the deterministic input change when
+    // the tree changes without claiming the engine knows which path caused it.
+    changedFiles: digest === null ? [] : [`worktree-digest:${digest}`],
+    priorFailures: []
+  };
+}
+function qualityDispatchCandidates(input, applicability, risk) {
+  const required2 = DIMENSIONS.filter((dimension) => applicability[dimension].value === "required");
+  const permitted = [...input.track.required, ...input.track.available];
+  const agent = permitted.includes("verifier") ? "verifier" : permitted[0];
+  if (agent === void 0) throw new Error("quality policy needs at least one track agent");
+  const base = {
+    agent,
+    instance: null,
+    dimensions: required2,
+    reason: "Collect the deterministic evidence required by the pinned quality plan."
+  };
+  if (input.config.orchestration.quality.mode === "economy") return [base];
+  if (input.config.orchestration.quality.mode === "adaptive" && risk === "low") return [base];
+  return [base, {
+    agent,
+    instance: "independent",
+    dimensions: required2,
+    reason: "Independently review the evidence required by the pinned quality plan."
+  }];
+}
+async function inspectRecord(file, schema, allowBackup) {
+  const primary = await parseRecord(file, schema);
+  if (primary === "valid" || primary === "missing" && !allowBackup) return primary;
+  if (!allowBackup) return "invalid";
+  const backup = await parseRecord(`${file}.bak`, schema);
+  if (backup === "valid") return "valid";
+  return primary === "missing" && backup === "missing" ? "missing" : "invalid";
+}
+async function parseRecord(file, schema) {
   try {
-    const parsed = schema.safeParse(JSON.parse(await fs13.readFile(file, "utf8")));
-    return parsed.success ? parsed.data : null;
-  } catch {
-    return null;
+    const value = JSON.parse(await fs13.readFile(file, "utf8"));
+    return schema.safeParse(value).success ? "valid" : "invalid";
+  } catch (error2) {
+    return error2.code === "ENOENT" ? "missing" : "invalid";
   }
 }
-function cell(text) {
-  return oneLine(text).replaceAll("|", "\\|");
+function haltDraft(draft, reason) {
+  draft.status = "halted";
+  draft.current.stage = "halted";
+  draft.halt_reason = reason;
 }
-function oneLine(text) {
-  return text.replace(/\s+/g, " ").trim();
+function distinct2(values) {
+  return [...new Set(values.map((value) => value.trim()).filter((value) => value.length > 0))].sort();
 }
-function truncate(text, max) {
-  return text.length <= max ? text : `${text.slice(0, max - 1)}\u2026`;
+function riskInput(input) {
+  return {
+    track: input.track.required.join(","),
+    goal: input.goal,
+    acceptance: input.acceptance,
+    intendedFiles: input.intendedFiles,
+    changedFiles: input.changedFiles,
+    componentKinds: input.componentKinds,
+    priorFailures: input.priorFailures
+  };
 }
-async function halt(projectDir, reason, now = () => /* @__PURE__ */ new Date(), options = {}) {
-  const store = new StateStore(projectDir, now);
-  const state = await store.update((draft) => {
-    if (draft.run_id === null || draft.track === null) throw new NoActiveRunError();
-    expect("run", draft.run_id, draft.run_id, options.expectRun);
-    draft.status = "halted";
-    draft.current.stage = "halted";
+function canonicalJson(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (typeof value === "object" && value !== null) {
+    return `{${Object.entries(value).sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0).map(([key, entry]) => `${JSON.stringify(key)}:${canonicalJson(entry)}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+function sha256(value) {
+  return crypto2.createHash("sha256").update(value).digest("hex");
+}
+function messageOf(error2) {
+  return error2 instanceof Error ? error2.message : String(error2);
+}
+
+// src/ops/quality-capability.ts
+function qualityRuntimeEnabled() {
+  return true;
+}
+
+// src/ops/quality-control.ts
+import crypto4 from "node:crypto";
+import fs15 from "node:fs/promises";
+import path16 from "node:path";
+
+// src/ops/destructive-risk.ts
+import crypto3 from "node:crypto";
+import fs14 from "node:fs/promises";
+import path15 from "node:path";
+var DESTRUCTIVE_REQUESTS_FILE = "destructive-requests.json";
+var DestructiveCandidateSchema = strictObject({
+  kind: _enum(["feature_delete", "table_drop", "table_truncate", "bulk_data_delete", "irreversible_migration", "project_wide"]),
+  targets: array(string2().min(1)).max(200),
+  operation: string2().min(1),
+  rollback: string2().nullable()
+});
+var DestructiveRequestSchema2 = strictObject({
+  run: string2().min(1),
+  fingerprint: string2().min(1),
+  candidate: DestructiveCandidateSchema,
+  status: _enum(["pending", "approved", "rejected", "used"]),
+  /**
+   * Whether the operation had already touched the worktree when it was caught.
+   *
+   * The two guards catch an operation at opposite ends of it: a command stopped
+   * at the tool boundary has done nothing, while a feature deleted through edits
+   * is already gone from disk by the time the result names it. Nothing about the
+   * operation itself says which, and the difference decides what a *rejection*
+   * means — nothing to undo, or a revert somebody has to perform and prove — so
+   * it is recorded when the request is written rather than guessed at later.
+   *
+   * A record without the field defaults to `true`, which is the direction every
+   * other unreadable-record rule here fails in: over-suspending costs an
+   * operator one more step, while defaulting to `false` would resume a run whose
+   * destructive action had already happened.
+   */
+  applied: boolean2().default(true),
+  requested_at: string2().min(1),
+  decided_at: string2().nullable(),
+  decided_by: string2().nullable(),
+  /** The operator's own words for the decision, once there is one. */
+  note: string2().max(2e3).nullable().default(null)
+});
+var DestructiveRequestsSchema = strictObject({
+  version: literal(1),
+  requests: array(DestructiveRequestSchema2).max(1e3)
+});
+var DestructiveApprovalRequiredError = class extends Error {
+  constructor(reason) {
+    super(reason);
+    this.name = "DestructiveApprovalRequiredError";
+  }
+};
+var REASON_MAX = 400;
+var EPHEMERAL_DIRECTORIES = /* @__PURE__ */ new Set([
+  ".cache",
+  ".next",
+  ".nuxt",
+  ".turbo",
+  ".venv",
+  "build",
+  "coverage",
+  "dist",
+  "node_modules",
+  "out",
+  "target",
+  "tmp",
+  "venv"
+]);
+var FEATURE_REMOVAL = /\b(?:delet|remov|drop|rip(?:ped|ping)?\s+out)\w*\s+(?:the\s+|an?\s+)?(?:entire\s+|whole\s+)?[\w-]*\s*(?:feature|capability|module)\b/i;
+var FEATURE_DELETE_FILES = 3;
+function classifyDestructiveResult(input) {
+  const directory = featureDirectory(input.deletedFiles);
+  if (directory !== null) {
+    return {
+      kind: "feature_delete",
+      targets: [directory],
+      operation: `delete ${input.deletedFiles.length} files under ${directory} while working on: ${input.goal}`,
+      rollback: "the deletions are recoverable from the worktree until this cycle is committed"
+    };
+  }
+  if (!FEATURE_REMOVAL.test(input.summary)) return null;
+  return {
+    kind: "feature_delete",
+    targets: input.deletedFiles.length > 0 ? [...input.deletedFiles] : [input.goal],
+    operation: `remove a feature while working on: ${input.goal} \u2014 ${input.summary}`,
+    rollback: "the change is recoverable from the worktree until this cycle is committed"
+  };
+}
+function operationFingerprint(runId, candidate) {
+  const canonical = JSON.stringify({
+    run: runId,
+    kind: candidate.kind,
+    targets: normaliseTargets(candidate.targets),
+    operation: candidate.operation
+  });
+  return crypto3.createHash("sha256").update(canonical).digest("hex");
+}
+function destructiveRequestsFile(projectDir, state) {
+  return path15.join(runDirPath(projectDir, state), DESTRUCTIVE_REQUESTS_FILE);
+}
+async function guardDestructiveOperation(projectDir, state, candidate, now = () => /* @__PURE__ */ new Date(), options = {}) {
+  if (!await enforcementActive(projectDir, state) || state.run_id === null) return { allowed: true, reason: "" };
+  const fingerprint2 = operationFingerprint(state.run_id, candidate);
+  if (await consumeApproval(projectDir, state, fingerprint2, now)) return { allowed: true, reason: "" };
+  return {
+    allowed: false,
+    reason: await requestDestructiveDecision(projectDir, state, candidate, fingerprint2, now, options.applied === true)
+  };
+}
+async function requestDestructiveDecision(projectDir, state, candidate, fingerprint2, now, applied) {
+  const file = destructiveRequestsFile(projectDir, state);
+  await withLock(resolveLoopPaths(projectDir).lock, async (ownership) => {
+    const current = await readDestructiveRequestsAt(file);
+    if (latestFor(current, fingerprint2)?.status === "pending") return;
+    const next = {
+      version: 1,
+      requests: [...current.requests, {
+        run: state.run_id,
+        fingerprint: fingerprint2,
+        candidate: { ...candidate, targets: normaliseTargets(candidate.targets) },
+        status: "pending",
+        applied,
+        requested_at: now().toISOString(),
+        decided_at: null,
+        decided_by: null,
+        note: null
+      }]
+    };
+    await ownership.runIfOwned(async (stagingDir) => {
+      await writeJsonAtomic(file, next, { stagingDir });
+    });
+  });
+  const reason = bounded(
+    `destructive operation waiting for a human decision (${candidate.kind}): ${candidate.operation}. Targets: ${normaliseTargets(candidate.targets).join(", ")}. Rollback: ${candidate.rollback ?? "none"}. Approve or reject operation ${fingerprint2.slice(0, 12)}\u2026 to resume.`
+  );
+  await new StateStore(projectDir, now).update((draft) => {
+    if (draft.status !== "running") return;
+    draft.status = "waiting_for_user";
     draft.halt_reason = reason;
   });
-  await writeHaltReport(projectDir, state, "manual", distinctFindings(state.findings));
-  return state;
+  return reason;
 }
-async function nextRunId(projectDir, now, previousRunId) {
-  const date3 = now.toISOString().slice(0, 10);
-  const runsDir = resolveLoopPaths(projectDir).runs;
-  let entries = [];
+async function consumeApproval(projectDir, state, fingerprint2, now) {
+  const file = destructiveRequestsFile(projectDir, state);
+  let spent = false;
+  await withLock(resolveLoopPaths(projectDir).lock, async (ownership) => {
+    const current = await readDestructiveRequestsAt(file);
+    const approved = latestFor(current, fingerprint2);
+    if (approved === void 0 || approved.status !== "approved") return;
+    const next = {
+      version: 1,
+      requests: current.requests.map(
+        (request) => request === approved ? { ...request, status: "used", decided_at: request.decided_at ?? now().toISOString() } : request
+      )
+    };
+    await ownership.runIfOwned(async (stagingDir) => {
+      await writeJsonAtomic(file, next, { stagingDir });
+    });
+    spent = true;
+  });
+  return spent;
+}
+function latestFor(requests, fingerprint2) {
+  return requests.requests.filter((request) => request.fingerprint === fingerprint2).at(-1);
+}
+async function enforcementActive(projectDir, state) {
+  if (!qualityRuntimeEnabled()) return false;
+  if (state.run_id === null || state.track === null || state.quality_policy_version !== 1) return false;
+  return (await readPolicy(projectDir, state)).enforcement === "active";
+}
+async function readDestructiveRequestsAt(file) {
+  let raw;
   try {
-    entries = await fs13.readdir(runsDir);
+    raw = await fs14.readFile(file, "utf8");
   } catch (error2) {
-    if (error2.code !== "ENOENT") throw error2;
+    if (error2.code === "ENOENT") return { version: 1, requests: [] };
+    throw error2;
   }
-  const fromDirs = entries.map((entry) => new RegExp(`^${date3}-(\\d{3})--`).exec(entry)?.[1]);
-  const fromState = new RegExp(`^${date3}-(\\d{3})$`).exec(previousRunId ?? "")?.[1];
-  const used = [...fromDirs, fromState].filter((seq) => seq !== void 0).map(Number);
-  const next = used.length === 0 ? 1 : Math.max(...used) + 1;
-  return `${date3}-${String(next).padStart(3, "0")}`;
+  const parsed = DestructiveRequestsSchema.safeParse(JSON.parse(raw));
+  if (!parsed.success) throw new Error(`${file} is not a readable destructive decision record: ${prettifyError(parsed.error)}`);
+  return parsed.data;
 }
-var NEXT_STEP = {
-  "cycle-cap": `The run used every cycle the track allows. Narrow the goal so it fits and start a
-new run \u2014 or, if the work really is that large, widen the track's \`max_cycles\` in
-\`.mjloop/config.yaml\` first. That second one is the user's call, not the loop's.`,
-  stagnation: `The same work was still outstanding cycle after cycle, so more cycles would not
-have helped and widening \`max_cycles\` will not change the outcome. Narrow the
-goal to the finding that would not move, or fix it by hand and start a new run.`,
-  "repeated-error": `One command failed the same way twice running, so the loop was not making
-progress against it and widening \`max_cycles\` will not change the outcome. Run
-the command named in the reason yourself, fix what it reports, then start a new
-run.`,
-  manual: `The run was stopped by hand. Start a new one when the work is ready to continue.`
+function featureDirectory(files) {
+  const counts = /* @__PURE__ */ new Map();
+  for (const file of files) {
+    const normalised = file.split(path15.sep).join("/");
+    if (isEphemeral(normalised)) continue;
+    for (let directory = path15.posix.dirname(normalised); ancestorWorthCounting(directory); directory = path15.posix.dirname(directory)) {
+      counts.set(directory, (counts.get(directory) ?? 0) + 1);
+    }
+  }
+  const reached = [...counts.entries()].filter(([, count2]) => count2 >= FEATURE_DELETE_FILES);
+  return reached.map(([directory]) => directory).sort().sort((left, right) => right.split("/").length - left.split("/").length)[0] ?? null;
+}
+function ancestorWorthCounting(directory) {
+  return directory !== "." && directory !== "/" && !isEphemeral(directory);
+}
+function isEphemeral(target) {
+  const segments = target.split(/[\\/]+/);
+  return segments.some((segment) => EPHEMERAL_DIRECTORIES.has(segment));
+}
+function normaliseTargets(targets) {
+  return [...new Set(targets.map((target) => target.trim()).filter((target) => target.length > 0))].sort();
+}
+function bounded(text) {
+  return text.length > REASON_MAX ? `${text.slice(0, REASON_MAX)}\u2026` : text;
+}
+
+// src/ops/quality-control.ts
+var QUALITY_USAGE_FILE = "quality-usage.json";
+var QualityUsageSchema = strictObject({
+  version: literal(1),
+  reservations: array(string2().min(1)).max(1e4)
+});
+var QualityBudgetExhaustedError = class extends Error {
+  constructor(field, detail) {
+    super(detail);
+    this.field = field;
+    this.detail = detail;
+    this.name = "QualityBudgetExhaustedError";
+  }
 };
-async function writeHaltReport(projectDir, state, cause, open) {
-  const dir = runDirPath(projectDir, state);
-  await fs13.mkdir(dir, { recursive: true });
-  const cycles = state.history.map((entry) => `| ${entry.cycle} | ${entry.agents.join(", ")} | ${entry.result} |`).join("\n");
-  const findings = open.length === 0 ? "_none recorded_" : open.map((f) => `- **${f.severity}** ${f.file}:${f.line} \u2014 ${f.claim}`).join("\n");
-  const report = `# Halt report \u2014 ${state.run_id}
-
-**Track:** ${state.track}
-**Goal:** ${state.goal ?? "_not set_"}
-**Reason:** ${state.halt_reason ?? "_not set_"}
-**Halted at cycle:** ${state.cycle}
-
-## Cycles
-
-| Cycle | Agents | Result |
-|---|---|---|
-${cycles || "| \u2014 | \u2014 | \u2014 |"}
-
-## Open findings
-
-${findings}
-
-## Next step
-
-Review the per-agent output in this directory.
-
-${NEXT_STEP[cause]}
-`;
-  await fs13.writeFile(path14.join(dir, "HALT.md"), report, "utf8");
+var REASON_MAX2 = 400;
+async function reserveQualityDispatches(projectDir, state, dispatches, now = () => /* @__PURE__ */ new Date()) {
+  const pinned = await enforcedBudget(projectDir, state);
+  if (pinned === null) return { used: 0, remaining: 0 };
+  const { budget } = pinned;
+  for (const dispatch of dispatches) {
+    const tokens = dispatch.context?.tokens.value;
+    if (tokens === void 0 || tokens === null || tokens <= budget.max_context_tokens_per_dispatch) continue;
+    await suspend(
+      projectDir,
+      now,
+      "max_context_tokens_per_dispatch",
+      `the context packet for "${basenameOf(dispatch)}" needs ${tokens} estimated input tokens and this run's ceiling is ${budget.max_context_tokens_per_dispatch}`
+    );
+  }
+  const file = path16.join(runDirPath(projectDir, state), QUALITY_USAGE_FILE);
+  const outcome = {
+    value: null,
+    refusal: null
+  };
+  await withLock(resolveLoopPaths(projectDir).lock, async (ownership) => {
+    const reserved = new Set((await readQualityUsage(file)).reservations);
+    const added = new Set(dispatches.map(reservationKey));
+    for (const key of reserved) added.delete(key);
+    const used = reserved.size + added.size;
+    if (used > budget.max_dispatches) {
+      outcome.refusal = {
+        field: "max_dispatches",
+        detail: `this run has reserved ${reserved.size} of ${budget.max_dispatches} quality dispatches and the next action needs ${added.size} more`
+      };
+      return;
+    }
+    const repairs = count(reserved, isRepairKey) + count(added, isRepairKey);
+    if (repairs > budget.max_repair_attempts) {
+      outcome.refusal = {
+        field: "max_repair_attempts",
+        detail: `this run allows ${budget.max_repair_attempts} targeted repair attempt(s) and the next action would make ${repairs}`
+      };
+      return;
+    }
+    if (added.size > 0) {
+      const next = { version: 1, reservations: [...reserved, ...added] };
+      await ownership.runIfOwned(async (stagingDir) => {
+        await writeJsonAtomic(file, next, { stagingDir });
+      });
+    }
+    outcome.value = { used, remaining: budget.max_dispatches - used };
+  });
+  if (outcome.refusal !== null) await suspend(projectDir, now, outcome.refusal.field, outcome.refusal.detail);
+  if (outcome.value === null) throw new Error("quality dispatch reservation completed without an outcome");
+  return outcome.value;
 }
+async function exhaustQualityBudget(projectDir, reason, now = () => /* @__PURE__ */ new Date()) {
+  return new StateStore(projectDir, now).update((draft) => {
+    suspendDraft(draft, reason);
+  });
+}
+function suspendDraft(draft, reason) {
+  draft.status = "budget_exhausted";
+  draft.halt_reason = reason.length > REASON_MAX2 ? `${reason.slice(0, REASON_MAX2)}\u2026` : reason;
+}
+async function nextCycleRefusal(projectDir, state) {
+  const pinned = await enforcedBudget(projectDir, state);
+  if (pinned === null || state.cycle < pinned.budget.max_cycles) return null;
+  return reasonFor(
+    "max_cycles",
+    `this run may work ${pinned.budget.max_cycles} cycle(s) and cycle ${state.cycle} did not pass`
+  );
+}
+async function qualityStateSummary(projectDir, state) {
+  const pinned = await pinnedBudget(projectDir, state);
+  if (pinned === null) return null;
+  const usage = await readQualityUsage(path16.join(runDirPath(projectDir, state), QUALITY_USAGE_FILE));
+  return {
+    mode: pinned.policy.mode,
+    supervision: pinned.policy.supervision,
+    enforcement: pinned.policy.enforcement,
+    dispatches: { used: usage.reservations.length, max: pinned.budget.max_dispatches },
+    waiting: waitingOn(state)
+  };
+}
+function waitingOn(state) {
+  if (state.status === "budget_exhausted") return { kind: "budget", reason: state.halt_reason ?? "" };
+  if (state.status === "waiting_for_user") return { kind: "decision", reason: state.halt_reason ?? "" };
+  return null;
+}
+async function pinnedBudget(projectDir, state) {
+  if (state.run_id === null || state.track === null || state.quality_policy_version !== 1) return null;
+  const policy = await readPolicy(projectDir, state);
+  return { policy, budget: effectiveBudget(policy, await readAmendments(projectDir, state)) };
+}
+async function enforcedBudget(projectDir, state) {
+  if (!qualityRuntimeEnabled()) return null;
+  const pinned = await pinnedBudget(projectDir, state);
+  return pinned === null || pinned.policy.enforcement !== "active" ? null : pinned;
+}
+async function suspend(projectDir, now, field, detail) {
+  const reason = reasonFor(field, detail);
+  await exhaustQualityBudget(projectDir, reason, now);
+  throw new QualityBudgetExhaustedError(field, reason);
+}
+function reasonFor(field, detail) {
+  return `quality budget ${field} reached: ${detail}. Raise it with one explicit amendment to resume.`;
+}
+async function readQualityUsage(file) {
+  let raw;
+  try {
+    raw = await fs15.readFile(file, "utf8");
+  } catch (error2) {
+    if (error2.code === "ENOENT") return { version: 1, reservations: [] };
+    throw error2;
+  }
+  const parsed = QualityUsageSchema.safeParse(JSON.parse(raw));
+  if (!parsed.success) throw new Error(`${file} is not a readable quality usage record: ${prettifyError(parsed.error)}`);
+  return parsed.data;
+}
+function reservationKey(dispatch) {
+  const fingerprint2 = dispatch.inputFingerprint ?? sha2562(canonicalJson2(dispatch));
+  return [dispatch.agent, dispatch.instance ?? "", fingerprint2].join("\0");
+}
+function isRepairKey(key) {
+  return isRepairInstance(key.split("\0")[1] ?? "");
+}
+function count(keys, predicate) {
+  let total = 0;
+  for (const key of keys) if (predicate(key)) total += 1;
+  return total;
+}
+function basenameOf(dispatch) {
+  return dispatch.instance === null ? dispatch.agent : `${dispatch.agent}--${dispatch.instance}`;
+}
+function canonicalJson2(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson2).join(",")}]`;
+  if (typeof value === "object" && value !== null) {
+    return `{${Object.entries(value).sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0).map(([key, entry]) => `${JSON.stringify(key)}:${canonicalJson2(entry)}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+function sha2562(value) {
+  return crypto4.createHash("sha256").update(value).digest("hex");
+}
+
+// src/ops/quality-ledger.ts
+import { createHash as createHash4 } from "node:crypto";
+
+// src/ops/quality-evidence.ts
+import fs17 from "node:fs/promises";
+import path18 from "node:path";
 
 // src/ops/verify.ts
 import { spawn as spawn2 } from "node:child_process";
 import { createHash as createHash3 } from "node:crypto";
-import fs14 from "node:fs/promises";
-import path15 from "node:path";
+import fs16 from "node:fs/promises";
+import path17 from "node:path";
 var FAILURES_MAX = 20;
 var HEADLINE_MAX = 240;
 var DEFAULT_WAIT_MS = 45e3;
@@ -33049,10 +33808,10 @@ ${detail}`);
 };
 var inFlight = /* @__PURE__ */ new Map();
 function verifyLedgerPath(cycleDir) {
-  return path15.join(cycleDir, "verify", "index.json");
+  return path17.join(cycleDir, "verify", "index.json");
 }
 async function readVerifyLedger(cycleDir) {
-  const raw = await fs14.readFile(verifyLedgerPath(cycleDir), "utf8").catch(() => null);
+  const raw = await fs16.readFile(verifyLedgerPath(cycleDir), "utf8").catch(() => null);
   if (raw === null) return [];
   try {
     const parsed = LedgerSchema.safeParse(JSON.parse(raw));
@@ -33060,6 +33819,27 @@ async function readVerifyLedger(cycleDir) {
   } catch {
     return [];
   }
+}
+async function completedVerifyReceipts(cycleDir, cycle) {
+  const entries = await readVerifyLedger(cycleDir);
+  const receipts = [];
+  for (const entry of entries) {
+    if (entry.phase !== "complete") continue;
+    const ref = canonicalReceiptRef(cycle, entry.log);
+    if (ref === null) continue;
+    receipts.push({
+      ref,
+      kind: entry.slot === "test" ? "test" : "command",
+      slot: entry.slot,
+      command: entry.command,
+      passed: entry.exit_code === 0 && !entry.timed_out
+    });
+  }
+  return receipts;
+}
+function canonicalReceiptRef(cycle, log) {
+  if (/^[A-Za-z0-9_.-]+$/.test(log)) return `cycle-${String(cycle).padStart(2, "0")}/verify/${log}`;
+  return /^cycle-\d{2}\/verify\/[A-Za-z0-9_.-]+$/.test(log) ? log : null;
 }
 var CacheEntrySchema = strictObject({
   fingerprint: string2().min(1),
@@ -33118,7 +33898,7 @@ async function amendLedgerEntry(cycleDir, at, log, patch) {
   });
 }
 async function readCache(runDir) {
-  const raw = await fs14.readFile(path15.join(runDir, "verify-cache.json"), "utf8").catch(() => null);
+  const raw = await fs16.readFile(path17.join(runDir, "verify-cache.json"), "utf8").catch(() => null);
   if (raw === null) return [];
   try {
     const parsed = CacheSchema.safeParse(JSON.parse(raw));
@@ -33128,7 +33908,7 @@ async function readCache(runDir) {
   }
 }
 async function appendCacheEntry(runDir, entry) {
-  const file = path15.join(runDir, "verify-cache.json");
+  const file = path17.join(runDir, "verify-cache.json");
   await serialise(file, async () => {
     const entries = await readCache(runDir);
     entries.push(entry);
@@ -33136,7 +33916,7 @@ async function appendCacheEntry(runDir, entry) {
   });
 }
 function workDirectory(projectDir, state) {
-  if (state.status === "done") return path15.join(runDirPath(projectDir, state), "closing");
+  if (state.status === "done") return path17.join(runDirPath(projectDir, state), "closing");
   return cycleDirPath(projectDir, state);
 }
 async function verifyRun(projectDir, input, now = () => /* @__PURE__ */ new Date(), waitSignal) {
@@ -33155,10 +33935,10 @@ async function verifyRun(projectDir, input, now = () => /* @__PURE__ */ new Date
   }
   const runDir = runDirPath(projectDir, state);
   const workDir = workDirectory(projectDir, state);
-  const verifyDir = path15.join(workDir, "verify");
+  const verifyDir = path17.join(workDir, "verify");
   const logName = label === null ? slot : `${slot}--${label}`;
-  const logFile = path15.join(verifyDir, `${logName}.log`);
-  const pinFile = path15.join(runDir, "verify-pinned.json");
+  const logFile = path17.join(verifyDir, `${logName}.log`);
+  const pinFile = path17.join(runDir, "verify-pinned.json");
   const pinned = await readPin(pinFile);
   if (pinned === null && state.started_at !== null) throw new PinnedVerifyMissingError(pinFile);
   let verify;
@@ -33256,13 +34036,13 @@ async function interimDigest(progress, plan) {
       duration_ms: duration3
     };
   }
-  const text = await fs14.readFile(progress.logFile, "utf8").catch(() => "");
+  const text = await fs16.readFile(progress.logFile, "utf8").catch(() => "");
   const extracted = extract(text, plan.patterns, plan.patternNotice);
   return {
     ...emptyDigest(plan),
     ...extracted,
     phase: "running",
-    log: path15.relative(plan.projectDir, progress.logFile),
+    log: path17.relative(plan.projectDir, progress.logFile),
     headline: extracted.headline === "" ? "the command is still running \u2014 call again for the exit code" : extracted.headline,
     duration_ms: duration3
   };
@@ -33293,9 +34073,9 @@ async function execute(plan, progress) {
   if (plan.cacheOn) {
     const worktree = await worktreeDigest(plan.projectDir);
     if (worktree !== null) {
-      const fingerprint = verifyFingerprint(plan.command, worktree);
-      const hit = await findCacheHit(plan.runDir, fingerprint);
-      if (hit !== null) return await reuse(plan, hit, fingerprint, at);
+      const fingerprint2 = verifyFingerprint(plan.command, worktree);
+      const hit = await findCacheHit(plan.runDir, fingerprint2);
+      if (hit !== null) return await reuse(plan, hit, fingerprint2, at);
     }
   }
   await appendLedgerEntry(plan.workDir, {
@@ -33331,11 +34111,11 @@ async function execute(plan, progress) {
     };
   }
 }
-async function findCacheHit(runDir, fingerprint) {
+async function findCacheHit(runDir, fingerprint2) {
   const entries = await readCache(runDir);
   for (const entry of [...entries].reverse()) {
-    if (entry.fingerprint !== fingerprint) continue;
-    const raw = await fs14.readFile(path15.join(runDir, entry.log)).catch(() => null);
+    if (entry.fingerprint !== fingerprint2) continue;
+    const raw = await fs16.readFile(path17.join(runDir, entry.log)).catch(() => null);
     if (raw === null) continue;
     if (raw.byteLength !== entry.bytes || logIdentity(raw) !== entry.sha256) continue;
     return { entry, text: raw.toString("utf8") };
@@ -33345,8 +34125,8 @@ async function findCacheHit(runDir, fingerprint) {
 function logIdentity(raw) {
   return createHash3("sha256").update(raw).digest("hex");
 }
-async function reuse(plan, hit, fingerprint, at) {
-  const original = path15.join(plan.runDir, hit.entry.log);
+async function reuse(plan, hit, fingerprint2, at) {
+  const original = path17.join(plan.runDir, hit.entry.log);
   const extracted = extract(hit.text, plan.patterns, plan.patternNotice);
   await appendLedgerEntry(plan.workDir, {
     slot: plan.slot,
@@ -33360,7 +34140,7 @@ async function reuse(plan, hit, fingerprint, at) {
     phase: "complete",
     exit_code: 0,
     timed_out: false,
-    fingerprint,
+    fingerprint: fingerprint2,
     cached_from_cycle: hit.entry.cycle,
     duration_ms: 0,
     at
@@ -33369,19 +34149,19 @@ async function reuse(plan, hit, fingerprint, at) {
     ...emptyDigest(plan),
     ...extracted,
     phase: "complete",
-    log: path15.relative(plan.projectDir, original),
+    log: path17.relative(plan.projectDir, original),
     exit_code: 0,
     cached: true,
     cached_from_cycle: hit.entry.cycle,
-    fingerprint
+    fingerprint: fingerprint2
   };
 }
 async function spawnAndDigest(plan, progress, at) {
-  await fs14.mkdir(plan.verifyDir, { recursive: true });
+  await fs16.mkdir(plan.verifyDir, { recursive: true });
   const before = plan.cacheOn ? await worktreeDigest(plan.projectDir) : null;
-  const fingerprint = before === null ? null : verifyFingerprint(plan.command, before);
+  const fingerprint2 = before === null ? null : verifyFingerprint(plan.command, before);
   const started = Date.now();
-  const handle = await fs14.open(plan.logFile, "w");
+  const handle = await fs16.open(plan.logFile, "w");
   let open = true;
   let writes = Promise.resolve();
   const sink = (chunk) => {
@@ -33428,24 +34208,24 @@ async function spawnAndDigest(plan, progress, at) {
   });
   child.stdout?.on("data", sink);
   child.stderr?.on("data", sink);
-  await amendLedgerEntry(plan.workDir, at, `${plan.logName}.log`, { phase: "running", fingerprint });
+  await amendLedgerEntry(plan.workDir, at, `${plan.logName}.log`, { phase: "running", fingerprint: fingerprint2 });
   const outcome = await settling;
   await writes;
   open = false;
   await handle.close();
   const duration3 = Date.now() - started;
   const after = plan.cacheOn ? await worktreeDigest(plan.projectDir) : null;
-  const raw = await fs14.readFile(plan.logFile).catch(() => Buffer.alloc(0));
+  const raw = await fs16.readFile(plan.logFile).catch(() => Buffer.alloc(0));
   const text = raw.toString("utf8");
   const extracted = extract(text, plan.patterns, plan.patternNotice);
   const exitCode = outcome.timedOut ? null : outcome.code;
-  if (exitCode === 0 && !outcome.timedOut && fingerprint !== null && after !== null && after === before) {
+  if (exitCode === 0 && !outcome.timedOut && fingerprint2 !== null && after !== null && after === before) {
     await appendCacheEntry(plan.runDir, {
-      fingerprint,
+      fingerprint: fingerprint2,
       slot: plan.slot,
       command: plan.command,
       cycle: plan.state.cycle,
-      log: path15.relative(plan.runDir, plan.logFile),
+      log: path17.relative(plan.runDir, plan.logFile),
       // The log is not immutable — the next invocation of this slot in this
       // cycle truncates it — so the entry carries what it looked like green.
       bytes: raw.byteLength,
@@ -33458,17 +34238,17 @@ async function spawnAndDigest(plan, progress, at) {
     exit_code: exitCode,
     timed_out: outcome.timedOut,
     duration_ms: duration3,
-    fingerprint
+    fingerprint: fingerprint2
   });
   return {
     ...emptyDigest(plan),
     ...extracted,
     phase: "complete",
-    log: path15.relative(plan.projectDir, plan.logFile),
+    log: path17.relative(plan.projectDir, plan.logFile),
     exit_code: exitCode,
     timed_out: outcome.timedOut,
     duration_ms: duration3,
-    fingerprint
+    fingerprint: fingerprint2
   };
 }
 function killTree(child, signal) {
@@ -33484,7 +34264,7 @@ function killTree(child, signal) {
   }
 }
 async function readPin(file) {
-  const raw = await fs14.readFile(file, "utf8").catch((error2) => {
+  const raw = await fs16.readFile(file, "utf8").catch((error2) => {
     if (error2.code === "ENOENT") return null;
     throw error2;
   });
@@ -33537,6 +34317,1110 @@ function extract(text, patterns, notice) {
 function cap(line) {
   const trimmed = line.trim();
   return trimmed.length > HEADLINE_MAX ? trimmed.slice(0, HEADLINE_MAX) : trimmed;
+}
+
+// src/ops/quality-evidence.ts
+var QualityEvidenceReceiptError = class extends Error {
+  constructor(message) {
+    super(`quality evidence receipt rejected: ${message}`);
+    this.name = "QualityEvidenceReceiptError";
+  }
+};
+async function resolveQualityEvidenceReceipts(projectDir, state, verdict, refs, worktree) {
+  const receipts = [];
+  const traceabilityRefs = [];
+  for (const ref of refs) {
+    const verify = normaliseVerifyRef(ref);
+    if (verify !== null) {
+      const receipt = await verifyReceipt(projectDir, state, verify, worktree);
+      assertOutcome(receipt.entry, verdict, receipt.ref);
+      receipts.push({ kind: receipt.entry.slot === "test" ? "test" : "command", ref: receipt.ref, cycle: receipt.cycle });
+      continue;
+    }
+    const agent = parseAgentRef(ref);
+    if (agent !== null) {
+      const resolved = await agentReceipt(projectDir, state, agent.cycle, agent.file, verdict, ref, worktree);
+      receipts.push(...resolved.receipts);
+      traceabilityRefs.push(...resolved.traceabilityRefs);
+      continue;
+    }
+    throw new QualityEvidenceReceiptError(`"${ref}" is not an engine receipt in this run`);
+  }
+  const distinct3 = distinctReceipts(receipts);
+  return { receipts: distinct3, traceabilityRefs: [...new Set(traceabilityRefs)].sort(), recordedCycle: Math.min(...distinct3.map((receipt) => receipt.cycle)) };
+}
+async function agentReceipt(projectDir, state, cycle, file, verdict, ref, worktree) {
+  assertCycle(state, cycle, ref);
+  const raw = await fs17.readFile(path18.join(cycleDirPath(projectDir, state, cycle), file), "utf8").catch(() => null);
+  if (raw === null) throw new QualityEvidenceReceiptError(`agent receipt "${ref}" does not exist`);
+  let rawValue;
+  try {
+    rawValue = JSON.parse(raw);
+  } catch {
+    throw new QualityEvidenceReceiptError(`agent receipt "${ref}" is not valid JSON`);
+  }
+  const parsed = AgentResultSchema.safeParse(rawValue);
+  if (!parsed.success) throw new QualityEvidenceReceiptError(`agent receipt "${ref}" is not a validated AgentResult`);
+  if (parsed.data.status !== verdict) {
+    throw new QualityEvidenceReceiptError(`agent receipt "${ref}" has status ${parsed.data.status}, not ${verdict}`);
+  }
+  if (cycle < state.cycle && worktree !== null) throw new QualityEvidenceReceiptError(`agent receipt "${ref}" cannot prove the current worktree fingerprint`);
+  const receipts = [{ kind: "agent", ref, cycle }];
+  const traceabilityRefs = [];
+  for (const evidence of parsed.data.evidence) {
+    if (evidence.kind === "file") {
+      traceabilityRefs.push(evidence.ref);
+      continue;
+    }
+    const directRef = normaliseVerifyRef(evidence.ref);
+    const receipt = directRef === null ? await latestCommandReceipt(projectDir, state, evidence.ref, evidence.kind, cycle, worktree) : await verifyReceipt(projectDir, { ...state, cycle }, directRef, worktree);
+    const receiptKind = receipt.entry.slot === "test" ? "test" : "command";
+    if (evidence.kind !== receiptKind) {
+      throw new QualityEvidenceReceiptError(`agent receipt "${ref}" has wrong kind ${evidence.kind}; its engine receipt is ${receiptKind}`);
+    }
+    assertOutcome(receipt.entry, verdict, ref);
+    receipts.push({ kind: receiptKind, ref: receipt.ref, cycle: receipt.cycle });
+  }
+  return { receipts, traceabilityRefs, recordedCycle: Math.min(...receipts.map((receipt) => receipt.cycle)) };
+}
+async function verifyReceipt(projectDir, state, ref, worktree) {
+  const all = await allVerifyReceipts(projectDir, state, state.cycle);
+  const matches = all.filter((receipt) => receipt.ref === ref);
+  if (matches.length === 0) throw new QualityEvidenceReceiptError(`verify receipt "${ref}" does not exist`);
+  const identities = new Set(matches.map(receiptIdentity));
+  if (identities.size > 1) {
+    throw new QualityEvidenceReceiptError(`verify receipt "${ref}" is ambiguous across verify slot/command identities`);
+  }
+  const identity = identities.values().next().value;
+  const cited = matches.filter((receipt) => receiptIdentity(receipt) === identity).at(-1);
+  const latest = all.filter((receipt) => receiptIdentity(receipt) === identity).at(-1);
+  if (latest === void 0 || latest.cycle !== cited.cycle || latest.index !== cited.index) {
+    throw new QualityEvidenceReceiptError(`verify receipt "${ref}" is superseded by a later invocation`);
+  }
+  await assertLogExists(projectDir, state, ref);
+  assertCacheIntegrity(cited, state, worktree, ref);
+  assertPriorFingerprint(cited, state, worktree, ref);
+  return cited;
+}
+function receiptIdentity(receipt) {
+  return `${receipt.entry.slot}\0${receipt.entry.command}`;
+}
+async function latestCommandReceipt(projectDir, state, command, kind, maxCycle, worktree) {
+  const receipts = await allVerifyReceipts(projectDir, state, maxCycle);
+  const matches = receipts.filter((candidate) => candidate.entry.command === command);
+  if (matches.length === 0) throw new QualityEvidenceReceiptError(`agent evidence cites ${kind} "${command}" without an engine verify receipt`);
+  const slots = new Set(matches.map((candidate) => candidate.entry.slot));
+  if (slots.size > 1) throw new QualityEvidenceReceiptError(`agent evidence command "${command}" is ambiguous across verify slots`);
+  const receipt = matches.at(-1);
+  const receiptKind = receipt.entry.slot === "test" ? "test" : "command";
+  if (kind !== receiptKind) throw new QualityEvidenceReceiptError(`agent evidence has wrong kind ${kind}; its engine receipt is ${receiptKind}`);
+  await assertLogExists(projectDir, state, receipt.ref);
+  assertCacheIntegrity(receipt, state, worktree, receipt.ref);
+  assertPriorFingerprint(receipt, state, worktree, receipt.ref);
+  return receipt;
+}
+async function allVerifyReceipts(projectDir, state, maxCycle) {
+  const receipts = [];
+  for (let cycle = 1; cycle <= maxCycle; cycle += 1) {
+    const ledger = await readVerifyLedger(cycleDirPath(projectDir, state, cycle));
+    ledger.forEach((entry, index) => {
+      const ref = canonicalEntryRef(cycle, entry.log);
+      if (ref !== null) receipts.push({ cycle, index, entry, ref });
+    });
+  }
+  return receipts;
+}
+function assertPriorFingerprint(receipt, state, worktree, ref) {
+  if (receipt.cycle >= state.cycle || worktree === null) return;
+  if (receipt.entry.fingerprint !== verifyFingerprint(receipt.entry.command, worktree)) {
+    throw new QualityEvidenceReceiptError(`prior-cycle verify receipt "${ref}" cannot prove the current worktree fingerprint`);
+  }
+}
+function assertCacheIntegrity(receipt, state, worktree, ref) {
+  const cachedFrom = receipt.entry.cached_from_cycle;
+  const source = normaliseVerifyRef(receipt.entry.log);
+  if (cachedFrom === null) {
+    if (source !== null && receipt.cycle !== sourceCycle(source)) {
+      throw new QualityEvidenceReceiptError(`verify receipt "${ref}" points at an older canonical log without cache provenance`);
+    }
+    return;
+  }
+  if (cachedFrom >= receipt.cycle) throw new QualityEvidenceReceiptError(`cached verify receipt "${ref}" has invalid source cycle`);
+  if (source === null || sourceCycle(source) !== cachedFrom) throw new QualityEvidenceReceiptError(`cached verify receipt "${ref}" does not match cached_from_cycle`);
+  if (worktree === null) throw new QualityEvidenceReceiptError(`cached verify receipt "${ref}" requires a current worktree digest`);
+  if (receipt.entry.fingerprint !== verifyFingerprint(receipt.entry.command, worktree)) {
+    throw new QualityEvidenceReceiptError(`cached verify receipt "${ref}" cannot prove the current worktree fingerprint`);
+  }
+}
+function sourceCycle(ref) {
+  return Number(/^cycle-(\d{2})\//.exec(ref)[1]);
+}
+async function assertLogExists(projectDir, state, ref) {
+  const parsed = normaliseVerifyRef(ref);
+  if (parsed === null) throw new QualityEvidenceReceiptError(`verify receipt "${ref}" has an invalid log path`);
+  const [, cycleText, log] = /^cycle-(\d{2})\/verify\/([A-Za-z0-9_.-]+)$/.exec(parsed) ?? [];
+  if (cycleText === void 0 || log === void 0) throw new QualityEvidenceReceiptError(`verify receipt "${ref}" has an invalid log path`);
+  await fs17.access(path18.join(cycleDirPath(projectDir, state, Number(cycleText)), "verify", log)).catch(() => {
+    throw new QualityEvidenceReceiptError(`verify receipt "${ref}" has no engine log`);
+  });
+}
+function assertOutcome(entry, verdict, ref) {
+  if (entry.phase !== "complete") throw new QualityEvidenceReceiptError(`verify receipt "${ref}" did not complete`);
+  const passed = entry.exit_code === 0 && !entry.timed_out;
+  const failed = entry.exit_code !== null && (!passed || entry.timed_out);
+  if (verdict === "pass" && !passed) throw new QualityEvidenceReceiptError(`verify receipt "${ref}" contradicts a passing verdict`);
+  if (verdict === "fail" && !failed) throw new QualityEvidenceReceiptError(`verify receipt "${ref}" does not prove a failure`);
+  if (verdict === "blocked") throw new QualityEvidenceReceiptError(`verify receipt "${ref}" cannot prove a blocked tool`);
+}
+function normaliseVerifyRef(ref) {
+  const outer = /^cycle-\d{2}\/verify\/(.+)$/.exec(ref);
+  if (outer === null) return null;
+  const nested = /^cycle-\d{2}\/verify\/[A-Za-z0-9_.-]+$/.exec(outer[1]);
+  if (nested !== null) return outer[1];
+  return /^cycle-\d{2}\/verify\/[A-Za-z0-9_.-]+$/.test(ref) ? ref : null;
+}
+function parseAgentRef(ref) {
+  const match = /^cycle-(\d{2})\/([A-Za-z0-9_-]+(?:--[A-Za-z0-9_-]+)?\.json)$/.exec(ref);
+  return match === null ? null : { cycle: Number(match[1]), file: match[2] };
+}
+function assertCycle(state, cycle, ref) {
+  if (cycle < 1 || cycle > state.cycle) throw new QualityEvidenceReceiptError(`"${ref}" is outside active run cycle ${state.cycle}`);
+}
+function canonicalEntryRef(cycle, log) {
+  if (/^[A-Za-z0-9_.-]+$/.test(log)) return `cycle-${String(cycle).padStart(2, "0")}/verify/${log}`;
+  return normaliseVerifyRef(log);
+}
+function distinctReceipts(receipts) {
+  const keyed = new Map(receipts.map((receipt) => [`${receipt.kind}\0${receipt.ref}\0${receipt.cycle}`, receipt]));
+  return [...keyed.values()].sort((left, right) => left.kind.localeCompare(right.kind) || left.ref.localeCompare(right.ref));
+}
+
+// src/ops/quality-ledger.ts
+var DIMENSIONS2 = ["correctness", "security", "alignment", "regression", "ui"];
+var UI_SURFACE_PATH2 = /\.(vue|tsx|jsx|css|scss|dart|svelte|html|swift|kt)$/i;
+var SECURITY_SURFACE_PATH = /(^|\/)(auth|permissions?|polic(?:y|ies)|api|routes?|controllers?|migrations?|schema|database)(\/|\.|$)/i;
+var QualityIncompleteError = class extends Error {
+  constructor(violations) {
+    super(`quality evidence is incomplete: ${violations.join("; ")}`);
+    this.violations = violations;
+    this.name = "QualityIncompleteError";
+  }
+};
+async function recordQualityEvidenceBatch(projectDir, state, inputs, now = () => /* @__PURE__ */ new Date()) {
+  for (const input of inputs) rejectNonEvidenceVerdict(input);
+  const rejected = [];
+  const ledger = await updateLedger(projectDir, state, async (draft) => {
+    rejected.length = 0;
+    const digest = await worktreeDigest(projectDir);
+    const stampedAt = now().toISOString();
+    for (const input of inputs) {
+      try {
+        await applyEvidence(projectDir, state, draft, input, digest, stampedAt);
+      } catch (error2) {
+        if (!(error2 instanceof QualityEvidenceReceiptError)) throw error2;
+        rejected.push({ dimension: input.dimension, error: error2 });
+      }
+    }
+  });
+  return { ledger, rejected };
+}
+async function applyEvidence(projectDir, state, ledger, input, digest, stampedAt) {
+  const entry = ledger.dimensions[input.dimension];
+  if (entry.applicability !== "required") {
+    throw new Error(`${input.dimension} is not applicable; only the analyzer may raise its applicability`);
+  }
+  const fingerprint2 = evidenceFingerprint(state, input.dimension, input.criteria, input.changedFiles, input.evidenceRefs, digest);
+  if (digest !== input.worktree) {
+    setPending(entry, {
+      reason: `Evidence is stale: submitted worktree digest does not match the current worktree for ${input.dimension}.`,
+      fingerprint: fingerprint2,
+      invalidatedAt: stampedAt
+    });
+    return;
+  }
+  if (input.evidenceRefs.length === 0) {
+    setPending(entry, {
+      reason: `Evidence references are missing for ${input.dimension}.`,
+      fingerprint: fingerprint2,
+      invalidatedAt: stampedAt
+    });
+    return;
+  }
+  const resolved = await resolveQualityEvidenceReceipts(projectDir, state, input.verdict, input.evidenceRefs, digest);
+  const missingKinds = entry.required_evidence.filter((kind) => !resolved.receipts.some((receipt) => receipt.kind === kind));
+  if (input.verdict === "pass" && missingKinds.length > 0) {
+    setPending(entry, {
+      reason: `Missing required evidence for ${input.dimension}: ${missingKinds.join(", ")}.`,
+      fingerprint: fingerprint2,
+      invalidatedAt: stampedAt
+    });
+    return;
+  }
+  entry.status = input.verdict;
+  entry.evidence_refs = sorted(resolved.receipts.map((receipt) => receipt.ref));
+  entry.reason = input.reason.trim();
+  entry.inputs_fingerprint = fingerprint2;
+  entry.worktree_digest = digest;
+  entry.recorded_cycle = resolved.recordedCycle;
+  ledger.cycle = state.cycle;
+  entry.checked_at = stampedAt;
+  entry.invalidated_at = null;
+}
+async function invalidateQualityEvidence(projectDir, state, change, now = () => /* @__PURE__ */ new Date()) {
+  return updateLedger(projectDir, state, async (ledger) => {
+    const digest = await worktreeDigest(projectDir);
+    const stampedAt = now().toISOString();
+    const files = sorted(change.files);
+    const hasUiFile = files.some((file) => UI_SURFACE_PATH2.test(file));
+    const hasSecurityFile = files.some((file) => SECURITY_SURFACE_PATH.test(file));
+    const requirementsChanged = change.criteriaChanged || change.goalChanged === true;
+    if (hasUiFile && ledger.dimensions.ui.applicability === "not_applicable") {
+      const ui = ledger.dimensions.ui;
+      ui.applicability = "required";
+      ui.required_evidence = ["agent"];
+      ui.reason = `User-visible files require UI evidence: ${files.filter((file) => UI_SURFACE_PATH2.test(file)).join(", ")}.`;
+    }
+    for (const dimension of DIMENSIONS2) {
+      const entry = ledger.dimensions[dimension];
+      const affected = requirementsChanged || change.commandsChanged === true && entry.required_evidence.some(isExecutableEvidence) || files.length > 0 && (dimension === "correctness" || dimension === "regression" || dimension === "security" && hasSecurityFile || dimension === "alignment" || dimension === "ui" && hasUiFile);
+      if (!affected || entry.applicability !== "required") continue;
+      const causes = [
+        requirementsChanged ? "goal or acceptance criteria changed" : null,
+        change.commandsChanged === true && entry.required_evidence.some(isExecutableEvidence) ? "pinned commands changed" : null,
+        files.length > 0 ? `affected files changed: ${files.join(", ")}` : null
+      ].filter((cause) => cause !== null);
+      setPending(entry, {
+        reason: `Evidence invalidated for ${dimension}: ${causes.join("; ")}.`,
+        fingerprint: evidenceFingerprint(state, dimension, [], files, [], digest),
+        invalidatedAt: stampedAt
+      });
+    }
+  });
+}
+function closingViolations(policy, ledger, currentCycle) {
+  const violations = [];
+  for (const dimension of DIMENSIONS2) {
+    const entry = ledger.dimensions[dimension];
+    const policyRequires = policy.initial_quality_plan[dimension].value === "required";
+    const required2 = policyRequires || entry.applicability === "required";
+    if (!required2) continue;
+    if (entry.applicability !== "required") {
+      violations.push(`${dimension}: required by the pinned policy but marked not applicable`);
+      continue;
+    }
+    if (entry.status !== "pass") {
+      const detail = entry.status === "blocked" ? "required tool is blocked" : entry.status === "fail" ? "evidence is contradicted" : "evidence is missing or pending";
+      violations.push(`${dimension}: ${detail}`);
+      continue;
+    }
+    if (entry.invalidated_at !== null) {
+      violations.push(`${dimension}: evidence is stale`);
+      continue;
+    }
+    if (entry.worktree_digest === null && entry.recorded_cycle !== currentCycle) {
+      violations.push(`${dimension}: null-worktree evidence is stale for current cycle ${currentCycle}`);
+      continue;
+    }
+    if (entry.required_evidence.length === 0 || entry.evidence_refs.length === 0) {
+      violations.push(`${dimension}: required evidence is missing`);
+    }
+  }
+  return violations;
+}
+function assertQualityCloseable(policy, ledger, currentCycle) {
+  const violations = closingViolations(policy, ledger, currentCycle);
+  if (violations.length > 0) throw new QualityIncompleteError(violations);
+}
+function rejectNonEvidenceVerdict(input) {
+  if (input.verdict === "not_applicable") {
+    throw new Error("agents cannot set a quality dimension to not_applicable");
+  }
+}
+function isExecutableEvidence(kind) {
+  return kind === "command" || kind === "test";
+}
+function setPending(entry, value) {
+  entry.status = "pending";
+  entry.evidence_refs = [];
+  entry.reason = value.reason;
+  entry.inputs_fingerprint = value.fingerprint;
+  entry.worktree_digest = null;
+  entry.recorded_cycle = null;
+  entry.checked_at = null;
+  entry.invalidated_at = value.invalidatedAt;
+}
+function evidenceFingerprint(state, dimension, criteria, changedFiles, evidenceRefs, digest) {
+  return sha2563(canonicalJson3({
+    dimension,
+    criteria: sorted(criteria),
+    changed_files: sorted(changedFiles),
+    evidence_refs: sorted(evidenceRefs),
+    worktree: digest ?? { unavailable: true, run: state.run_id, cycle: state.cycle }
+  }));
+}
+function sorted(values) {
+  return [...values].sort((left, right) => left < right ? -1 : left > right ? 1 : 0);
+}
+function canonicalJson3(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson3).join(",")}]`;
+  if (value !== null && typeof value === "object") {
+    return `{${Object.entries(value).sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0).map(([key, entry]) => `${JSON.stringify(key)}:${canonicalJson3(entry)}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+function sha2563(value) {
+  return createHash4("sha256").update(value).digest("hex");
+}
+
+// src/ops/run.ts
+var UnknownTrackError = class extends Error {
+  constructor(track, known) {
+    super(`unknown track "${track}" \u2014 config defines: ${known.join(", ")}`);
+    this.name = "UnknownTrackError";
+  }
+};
+var NoActiveRunError = class extends Error {
+  constructor() {
+    super("no active run \u2014 call mjloop_run_start first");
+    this.name = "NoActiveRunError";
+  }
+};
+function runDirName(state) {
+  if (state.run_id === null || state.track === null) throw new NoActiveRunError();
+  return `${state.run_id}--${state.current.story ?? "adhoc"}--${state.track}`;
+}
+function runDirPath(projectDir, state) {
+  return path19.join(resolveLoopPaths(projectDir).runs, runDirName(state));
+}
+function cycleDirPath(projectDir, state, cycle = state.cycle) {
+  return path19.join(runDirPath(projectDir, state), cycleDirName(cycle));
+}
+function cycleDirName(cycle) {
+  return `cycle-${String(cycle).padStart(2, "0")}`;
+}
+async function runStart(projectDir, input, now = () => /* @__PURE__ */ new Date()) {
+  if (input.story !== void 0 && input.story !== null) await readStory(projectDir, input.story);
+  const initialization = { value: null };
+  let integrityError = null;
+  const state = await new StateStore(projectDir, now).update(async (draft) => {
+    const { config: config2, qualitySource } = await loadConfigRecord(projectDir);
+    const track = findTrack(config2, input.track);
+    if (track === void 0) throw new UnknownTrackError(input.track, Object.keys(config2.tracks));
+    const manifest = await resolveSkillManifest(projectDir, config2, input.feature, now);
+    const qualityPolicy = await buildProjectQualityPolicy(projectDir, {
+      config: config2,
+      qualitySource,
+      track,
+      goal: input.goal,
+      story: input.story,
+      feature: input.feature,
+      supervision: input.supervision ?? "supervised"
+    }, now);
+    initialization.value = { config: config2, manifest };
+    draft.run_id = await nextRunId(projectDir, now(), draft.run_id);
+    draft.track = input.track;
+    draft.status = "running";
+    draft.cycle = 1;
+    draft.goal = input.goal;
+    draft.started_at = now().toISOString();
+    draft.current = {
+      plan: input.plan ?? null,
+      story: input.story ?? null,
+      stage: "compose"
+    };
+    draft.findings = [];
+    draft.history = [];
+    draft.no_progress_count = 0;
+    draft.last_fingerprint = null;
+    draft.cycle_errors = [];
+    draft.last_error_fingerprint = null;
+    draft.reproduction = null;
+    draft.quality_policy_version = 1;
+    draft.halt_reason = null;
+    try {
+      await fs18.mkdir(runDirPath(projectDir, draft), { recursive: true });
+      await writePolicyOnce(projectDir, draft, qualityPolicy);
+      await writeLedger(projectDir, draft, createInitialQualityLedger(qualityPolicy, now));
+    } catch (error2) {
+      integrityError = new QualityPolicyIntegrityError(`new run could not write both records: ${errorMessage(error2)}`);
+      draft.status = "halted";
+      draft.current.stage = "halted";
+      draft.halt_reason = integrityError.message;
+    }
+  });
+  if (integrityError !== null) throw integrityError;
+  const initialized = initialization.value;
+  if (initialized === null) throw new Error("run initialization completed without an authoritative config snapshot");
+  await pinVerifyBlock(projectDir, state, initialized.config, now);
+  await writeSkillManifest(projectDir, state, initialized.manifest);
+  return state;
+}
+var VERIFY_PIN_FILE = "verify-pinned.json";
+async function pinVerifyBlock(projectDir, state, config2, now) {
+  const pin = PinnedVerifySchema.parse({
+    version: 1,
+    pinned_at: now().toISOString(),
+    verify: config2.verify
+  });
+  try {
+    await fs18.writeFile(path19.join(runDirPath(projectDir, state), VERIFY_PIN_FILE), `${JSON.stringify(pin, null, 2)}
+`, {
+      encoding: "utf8",
+      flag: "wx"
+    });
+  } catch (error2) {
+    if (error2.code !== "EEXIST") throw error2;
+  }
+}
+function skillSelectionAgents(config2) {
+  const names = Object.values(config2.tracks).flatMap((track) => [
+    ...track.required,
+    ...track.available ?? [],
+    ...track.closing ?? []
+  ]);
+  return names.length === 0 ? [...SKILL_ACCEPTANCE_AGENTS] : [...new Set(names)];
+}
+var SKILL_MANIFEST_FILE = "skill-selection.json";
+async function resolveSkillManifest(projectDir, config2, feature, now) {
+  if (feature === void 0 || feature === null) return null;
+  const record2 = await readFeatureBrief(projectDir, feature);
+  if (record2 === null || record2.brief.status !== "approved") return null;
+  const profile = await readAcceptedProfile(projectDir);
+  if (profile === null) return null;
+  const { skills: acceptedSkills } = await readAcceptedProjectSkills(projectDir);
+  const selections = skillSelectionAgents(config2).flatMap(
+    (agent) => selectSkills({ brief: record2.brief, profile, acceptedSkills, agent })
+  ).sort(compareSelections);
+  return SkillManifestSchema.parse({
+    schema: 1,
+    generatedAt: now().toISOString(),
+    sourceBrief: { id: record2.brief.id, revision: record2.brief.revision },
+    profileRevision: profile.revision,
+    selections,
+    guidance: renderGuidance(selections, acceptedSkills),
+    concurrency: analyseConcurrency(record2.brief, profile, config2.orchestration)
+  });
+}
+function renderGuidance(selections, acceptedSkills) {
+  const selected = new Set(selections.flatMap((selection) => selection.skillIds));
+  const guidance = {};
+  for (const skill of acceptedSkills) {
+    if (selected.has(skill.skillId)) guidance[skill.skillId] = skill.guidance;
+  }
+  return guidance;
+}
+async function writeSkillManifest(projectDir, state, manifest) {
+  if (manifest === null) return;
+  try {
+    await fs18.writeFile(
+      path19.join(runDirPath(projectDir, state), SKILL_MANIFEST_FILE),
+      `${JSON.stringify(manifest, null, 2)}
+`,
+      { encoding: "utf8", flag: "wx" }
+    );
+  } catch (error2) {
+    if (error2.code !== "EEXIST") throw error2;
+  }
+}
+function compareSelections(a, b) {
+  if (a.component !== b.component) return a.component < b.component ? -1 : 1;
+  return a.agent < b.agent ? -1 : a.agent > b.agent ? 1 : 0;
+}
+async function assertRunCanPass(projectDir, state) {
+  if (state.quality_policy_version !== 1) return;
+  const policy = await readPolicy(projectDir, state);
+  if (!qualityRuntimeEnabled() || policy.enforcement !== "active") return;
+  assertQualityCloseable(policy, await readLedger(projectDir, state), state.cycle);
+}
+async function cycleAdvance(projectDir, input, now = () => /* @__PURE__ */ new Date()) {
+  const store = new StateStore(projectDir, now);
+  const config2 = await loadConfig(projectDir);
+  let carried = [];
+  let closedCycle = 0;
+  let fingerprint2 = null;
+  let errors = [];
+  let closing = [];
+  let maxCycles = 0;
+  let cause = "manual";
+  let exhausted = null;
+  if (input.result !== "pass") await invalidateClosedCycleEvidence(projectDir, now);
+  const after = await store.update(async (draft) => {
+    if (draft.status !== "running" || draft.track === null) throw new NoActiveRunError();
+    const track = findTrack(config2, draft.track);
+    if (track === void 0) throw new UnknownTrackError(draft.track, Object.keys(config2.tracks));
+    const opening = structuredClone(draft);
+    carried = distinctFindings(draft.findings);
+    errors = [...draft.cycle_errors].sort();
+    closedCycle = draft.cycle;
+    maxCycles = track.max_cycles;
+    const ref = path19.join(".mjloop", "runs", runDirName(draft));
+    draft.history.push({
+      cycle: draft.cycle,
+      agents: input.agents,
+      result: input.result,
+      ref,
+      at: now().toISOString()
+    });
+    if (input.result === "pass") {
+      await assertRunCanPass(projectDir, draft);
+      draft.status = "done";
+      draft.current.stage = "done";
+      closing = [...track.closing];
+      return;
+    }
+    if (errors.length > 0) {
+      const currentErrors = errorFingerprint(errors);
+      const repeated = currentErrors === draft.last_error_fingerprint;
+      draft.last_error_fingerprint = currentErrors;
+      if (repeated) {
+        draft.status = "halted";
+        draft.current.stage = "halted";
+        draft.halt_reason = `the same verification failure recurred: ${refOf(errors[0] ?? "")}`;
+        cause = "repeated-error";
+        return;
+      }
+    }
+    fingerprint2 = cycleFingerprint(carried, input.result);
+    draft.no_progress_count = fingerprint2 === draft.last_fingerprint ? draft.no_progress_count + 1 : 0;
+    draft.last_fingerprint = fingerprint2;
+    if (draft.no_progress_count >= config2.limits.no_progress_strikes) {
+      draft.status = "halted";
+      draft.current.stage = "halted";
+      draft.halt_reason = `no progress for ${draft.no_progress_count} consecutive cycles on track ${draft.track}`;
+      cause = "stagnation";
+      return;
+    }
+    const refusal = await nextCycleRefusal(projectDir, draft);
+    if (refusal !== null) {
+      Object.assign(draft, opening);
+      suspendDraft(draft, refusal);
+      exhausted = refusal;
+      return;
+    }
+    if (draft.cycle >= track.max_cycles) {
+      draft.status = "halted";
+      draft.current.stage = "halted";
+      draft.halt_reason = `cycle cap ${track.max_cycles} reached for track ${draft.track}`;
+      cause = "cycle-cap";
+      return;
+    }
+    draft.findings = [];
+    draft.cycle_errors = [];
+    draft.cycle += 1;
+    draft.current.stage = "compose";
+  });
+  if (exhausted !== null) throw new QualityBudgetExhaustedError("max_cycles", exhausted);
+  await archiveFindings(projectDir, after, closedCycle, carried);
+  let handoff = null;
+  try {
+    handoff = await writeHandoff(projectDir, after, closedCycle, input.result, input.agents, carried, errors, maxCycles);
+  } catch (error2) {
+    process.stderr.write(`mjloop: cycle ${closedCycle} handoff was not written: ${String(error2)}
+`);
+  }
+  if (after.status === "halted") await writeHaltReport(projectDir, after, cause, carried);
+  return {
+    state: after,
+    carried_findings: carried,
+    fingerprint: fingerprint2,
+    strikes: after.no_progress_count,
+    handoff,
+    closing_agents: closing
+  };
+}
+async function invalidateClosedCycleEvidence(projectDir, now) {
+  try {
+    const state = await new StateStore(projectDir, now).get();
+    if (state.status !== "running" || state.run_id === null || state.quality_policy_version !== 1) return;
+    const reports = await readAgentReports(cycleDirPath(projectDir, state));
+    const files = [...new Set(reports.flatMap((report) => report.result.files_touched))].sort();
+    for (const batch of invalidationBatches(files)) {
+      await invalidateQualityEvidence(projectDir, state, { files: batch, criteriaChanged: false }, now);
+    }
+  } catch (error2) {
+    process.stderr.write(`mjloop: quality evidence was not invalidated: ${String(error2)}
+`);
+  }
+}
+var INVALIDATION_REASON_BUDGET = 3500;
+function invalidationBatches(files) {
+  const batches = [];
+  let batch = [];
+  let width = 0;
+  for (const file of files) {
+    if (batch.length > 0 && width + file.length + 2 > INVALIDATION_REASON_BUDGET) {
+      batches.push(batch);
+      batch = [];
+      width = 0;
+    }
+    batch.push(file);
+    width += file.length + 2;
+  }
+  if (batch.length > 0) batches.push(batch);
+  return batches;
+}
+function refOf(signature) {
+  return signature.split(" :: ")[0] ?? signature;
+}
+async function archiveFindings(projectDir, state, cycle, findings) {
+  const dir = cycleDirPath(projectDir, state, cycle);
+  await fs18.mkdir(dir, { recursive: true });
+  await fs18.writeFile(path19.join(dir, "findings.json"), `${JSON.stringify(findings, null, 2)}
+`, "utf8");
+}
+var HANDOFF_MAX_BYTES = 6e3;
+var HANDOFF_SUMMARY_MAX = 200;
+var HANDOFF_FINDINGS_MAX = 20;
+var HANDOFF_FILES_MAX = 30;
+var HANDOFF_ERRORS_MAX = 10;
+var HANDOFF_SKILLS_MAX = 20;
+var SEVERITY_ORDER = { high: 0, medium: 1, low: 2 };
+async function writeHandoff(projectDir, state, cycle, result, agents, carried, errors, maxCycles) {
+  const dir = cycleDirPath(projectDir, state, cycle);
+  const cycleRef = cycleDirName(cycle);
+  const reports = await readAgentReports(dir);
+  const roster = await readOptionalJson(path19.join(dir, "roster.json"), RosterSchema);
+  const ledger = await readOptionalJson(path19.join(dir, "verify", "index.json"), LedgerSchema);
+  const skills = await readOptionalJson(path19.join(runDirPath(projectDir, state), SKILL_MANIFEST_FILE), SkillManifestSchema);
+  const document = bound(
+    [
+      `# Handoff \u2014 cycle ${cycle} of ${state.run_id}`,
+      "",
+      resultLine(state, result, maxCycles),
+      "",
+      "## What each agent reported",
+      "",
+      ...agentTable(roster?.selected ?? agents, reports),
+      ...skippedLines(roster?.skipped ?? {}),
+      "",
+      "## Files touched",
+      "",
+      ...filesSection(reports, cycleRef),
+      "",
+      "## Verification",
+      "",
+      ...verificationSection(ledger, cycle),
+      "",
+      "## Open findings",
+      "",
+      ...findingsSection(carried, cycleRef),
+      "",
+      "## Failures that could recur",
+      "",
+      ...errorsSection(errors),
+      "",
+      // No heading at all — not even an empty one — when this run pinned no
+      // manifest. `writeHandoff` existed for every run before dynamic skill
+      // selection did, and a run that still names no feature must render
+      // byte-for-byte what it always has: an empty section a reader cannot
+      // tell apart from "nothing was selected" is worse than no section.
+      ...skills === null ? [] : ["## Skills", "", ...skillsSection(skills), ""]
+    ].join("\n"),
+    cycleRef
+  );
+  await fs18.mkdir(dir, { recursive: true });
+  await fs18.writeFile(path19.join(dir, "handoff.md"), document, "utf8");
+  return path19.join(".mjloop", "runs", runDirName(state), cycleRef, "handoff.md");
+}
+function resultLine(state, result, maxCycles) {
+  if (state.status === "done") return `**Result:** ${result} \u2014 the run is done.`;
+  if (state.status === "halted") return `**Result:** ${result} \u2014 halted: ${state.halt_reason ?? "no reason recorded"}`;
+  return `**Result:** ${result} \u2014 next: cycle ${state.cycle} of ${maxCycles}`;
+}
+function agentTable(drafted, reports) {
+  const rows = ["| Agent | Status | Summary |", "|---|---|---|"];
+  const shown = /* @__PURE__ */ new Set();
+  for (const agent of drafted) {
+    const mine = reports.filter((report) => report.agent === agent);
+    for (const report of mine) shown.add(report.basename);
+    rows.push(...mine.length === 0 ? [`| ${cell(agent)} | \u2014 | no result recorded |`] : mine.map(reportRow));
+  }
+  rows.push(...reports.filter((report) => !shown.has(report.basename)).map(reportRow));
+  return rows;
+}
+function reportRow(report) {
+  const summary = cell(truncate(report.result.summary, HANDOFF_SUMMARY_MAX));
+  return `| ${cell(report.basename)} | ${report.result.status} | ${summary} |`;
+}
+function skippedLines(skipped) {
+  const entries = Object.entries(skipped);
+  if (entries.length === 0) return [];
+  return ["", `Skipped: ${entries.map(([agent, reason]) => `\`${agent}\` \u2014 ${oneLine(reason)}`).join("; ")}`];
+}
+function filesSection(reports, cycleRef) {
+  const lines = reports.flatMap((report) => report.result.files_touched.map((file) => `- \`${oneLine(file)}\` \u2014 ${report.basename}`)).filter((line, index, all) => all.indexOf(line) === index).sort();
+  if (lines.length === 0) return ["_none recorded_"];
+  return elide(lines, HANDOFF_FILES_MAX, (rest) => `*${rest} more in ${cycleRef}/<agent>.json*`);
+}
+function verificationSection(ledger, cycle) {
+  if (ledger === null || ledger.length === 0) return ["_nothing was verified through the engine_"];
+  return [
+    "| Command | Exit | Log |",
+    "|---|---|---|",
+    ...ledger.map((entry) => `| \`${cell(entry.command)}\` | ${exitCell(entry)} | ${logCell(entry, cycle)} |`)
+  ];
+}
+function exitCell(entry) {
+  if (entry.timed_out) return "\u2014 (timed out)";
+  return entry.exit_code === null ? `\u2014 (${entry.phase})` : String(entry.exit_code);
+}
+function logCell(entry, cycle) {
+  const notes = [];
+  if (entry.cached_from_cycle !== null) notes.push(`cached, cycle ${entry.cached_from_cycle}`);
+  if (entry.live_command !== null) notes.push(`config.yaml now says \`${oneLine(entry.live_command)}\``);
+  const tail = notes.length === 0 ? "" : ` (${notes.join("; ")})`;
+  if (entry.log === "") return `\u2014${tail}`;
+  const source = entry.cached_from_cycle ?? cycle;
+  const ref = entry.log.includes("/") ? entry.log : `${cycleDirName(source)}/verify/${entry.log}`;
+  return `\`${oneLine(ref)}\`${tail}`;
+}
+function findingsSection(carried, cycleRef) {
+  if (carried.length === 0) return ["_none recorded_"];
+  const lines = [...carried].sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]).map((finding) => `- **${finding.severity}** \`${oneLine(finding.file)}:${finding.line}\` \u2014 ${oneLine(finding.claim)}`);
+  return elide(lines, HANDOFF_FINDINGS_MAX, (rest) => `*${rest} more in ${cycleRef}/findings.json*`);
+}
+function errorsSection(errors) {
+  if (errors.length === 0) return ["_none recorded_"];
+  return elide(
+    errors.map((signature) => `- \`${oneLine(signature)}\``),
+    HANDOFF_ERRORS_MAX,
+    (rest) => `*${rest} more*`
+  );
+}
+function skillsSection(manifest) {
+  const verdict = `- **Concurrency:** \`${manifest.concurrency.mode}\` \u2014 ${oneLine(manifest.concurrency.reason)}`;
+  const lines = manifest.selections.flatMap(
+    (selection) => selection.skillIds.map((skillId, index) => {
+      const reason = selection.reasons[index] ?? "";
+      return `- \`${selection.component}\` / \`${selection.agent}\`: \`${skillId}\` \u2014 ${oneLine(reason)}`;
+    })
+  );
+  if (lines.length === 0) return [verdict, "", "_no skill selected_"];
+  return [verdict, "", ...elide(lines, HANDOFF_SKILLS_MAX, (rest) => `*${rest} more in ${SKILL_MANIFEST_FILE}*`)];
+}
+function elide(lines, max, marker) {
+  if (lines.length <= max) return lines;
+  return [...lines.slice(0, max), "", marker(lines.length - max)];
+}
+function bound(document, cycleRef) {
+  if (Buffer.byteLength(document, "utf8") <= HANDOFF_MAX_BYTES) return document;
+  const marker = `
+
+*Truncated at ${HANDOFF_MAX_BYTES} bytes \u2014 the whole cycle is in \`${cycleRef}/\`.*
+`;
+  const budget = HANDOFF_MAX_BYTES - Buffer.byteLength(marker, "utf8");
+  let kept = document.slice(0, budget);
+  while (Buffer.byteLength(kept, "utf8") > budget) kept = kept.slice(0, -1);
+  return kept + marker;
+}
+async function readAgentReports(dir) {
+  const entries = await fs18.readdir(dir, { withFileTypes: true }).catch(() => []);
+  const reports = [];
+  for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+    if (!entry.isFile() || !entry.name.endsWith(".json")) continue;
+    if (entry.name === "roster.json" || entry.name === "findings.json") continue;
+    const result = await readOptionalJson(path19.join(dir, entry.name), AgentResultSchema);
+    if (result === null) continue;
+    const basename = entry.name.slice(0, -".json".length);
+    reports.push({ basename, agent: basename.split("--")[0] ?? basename, result });
+  }
+  return reports;
+}
+async function readOptionalJson(file, schema) {
+  try {
+    const parsed = schema.safeParse(JSON.parse(await fs18.readFile(file, "utf8")));
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
+}
+function cell(text) {
+  return oneLine(text).replaceAll("|", "\\|");
+}
+function oneLine(text) {
+  return text.replace(/\s+/g, " ").trim();
+}
+function truncate(text, max) {
+  return text.length <= max ? text : `${text.slice(0, max - 1)}\u2026`;
+}
+function errorMessage(error2) {
+  return error2 instanceof Error ? error2.message : String(error2);
+}
+async function halt(projectDir, reason, now = () => /* @__PURE__ */ new Date(), options = {}) {
+  const store = new StateStore(projectDir, now);
+  const state = await store.update((draft) => {
+    if (draft.run_id === null || draft.track === null) throw new NoActiveRunError();
+    expect("run", draft.run_id, draft.run_id, options.expectRun);
+    draft.status = "halted";
+    draft.current.stage = "halted";
+    draft.halt_reason = reason;
+  });
+  await writeHaltReport(projectDir, state, "manual", distinctFindings(state.findings));
+  return state;
+}
+async function nextRunId(projectDir, now, previousRunId) {
+  const date3 = now.toISOString().slice(0, 10);
+  const runsDir = resolveLoopPaths(projectDir).runs;
+  let entries = [];
+  try {
+    entries = await fs18.readdir(runsDir);
+  } catch (error2) {
+    if (error2.code !== "ENOENT") throw error2;
+  }
+  const fromDirs = entries.map((entry) => new RegExp(`^${date3}-(\\d{3})--`).exec(entry)?.[1]);
+  const fromState = new RegExp(`^${date3}-(\\d{3})$`).exec(previousRunId ?? "")?.[1];
+  const used = [...fromDirs, fromState].filter((seq) => seq !== void 0).map(Number);
+  const next = used.length === 0 ? 1 : Math.max(...used) + 1;
+  return `${date3}-${String(next).padStart(3, "0")}`;
+}
+var NEXT_STEP = {
+  "cycle-cap": `The run used every cycle the track allows. Narrow the goal so it fits and start a
+new run \u2014 or, if the work really is that large, widen the track's \`max_cycles\` in
+\`.mjloop/config.yaml\` first. That second one is the user's call, not the loop's.`,
+  stagnation: `The same work was still outstanding cycle after cycle, so more cycles would not
+have helped and widening \`max_cycles\` will not change the outcome. Narrow the
+goal to the finding that would not move, or fix it by hand and start a new run.`,
+  "repeated-error": `One command failed the same way twice running, so the loop was not making
+progress against it and widening \`max_cycles\` will not change the outcome. Run
+the command named in the reason yourself, fix what it reports, then start a new
+run.`,
+  manual: `The run was stopped by hand. Start a new one when the work is ready to continue.`
+};
+async function writeHaltReport(projectDir, state, cause, open) {
+  const dir = runDirPath(projectDir, state);
+  await fs18.mkdir(dir, { recursive: true });
+  const cycles = state.history.map((entry) => `| ${entry.cycle} | ${entry.agents.join(", ")} | ${entry.result} |`).join("\n");
+  const findings = open.length === 0 ? "_none recorded_" : open.map((f) => `- **${f.severity}** ${f.file}:${f.line} \u2014 ${f.claim}`).join("\n");
+  const report = `# Halt report \u2014 ${state.run_id}
+
+**Track:** ${state.track}
+**Goal:** ${state.goal ?? "_not set_"}
+**Reason:** ${state.halt_reason ?? "_not set_"}
+**Halted at cycle:** ${state.cycle}
+
+## Cycles
+
+| Cycle | Agents | Result |
+|---|---|---|
+${cycles || "| \u2014 | \u2014 | \u2014 |"}
+
+## Open findings
+
+${findings}
+
+## Next step
+
+Review the per-agent output in this directory.
+
+${NEXT_STEP[cause]}
+`;
+  await fs18.writeFile(path19.join(dir, "HALT.md"), report, "utf8");
+}
+
+// src/store/quality-store.ts
+var QUALITY_POLICY_FILE = "quality-policy.json";
+var QUALITY_LEDGER_FILE = "quality-ledger.json";
+var QUALITY_AMENDMENTS_FILE = "quality-amendments.jsonl";
+function qualityFiles(projectDir, state) {
+  const runDir = runDirPath(projectDir, state);
+  return {
+    policy: path20.join(runDir, QUALITY_POLICY_FILE),
+    ledger: path20.join(runDir, QUALITY_LEDGER_FILE),
+    amendments: path20.join(runDir, QUALITY_AMENDMENTS_FILE)
+  };
+}
+var QualityPolicyExistsError = class extends Error {
+  constructor(file) {
+    super(`${file} already exists \u2014 a run quality policy is never rewritten`);
+    this.name = "QualityPolicyExistsError";
+  }
+};
+var QualityLedgerStateDriftError = class extends Error {
+  constructor(supplied, current) {
+    super(
+      `quality ledger state drift: supplied run=${String(supplied.run_id)} cycle=${supplied.cycle} status=${supplied.status}; current run=${String(current.run_id)} cycle=${current.cycle} status=${current.status}`
+    );
+    this.name = "QualityLedgerStateDriftError";
+  }
+};
+async function writePolicyOnce(projectDir, state, policy) {
+  const file = qualityFiles(projectDir, state).policy;
+  const parsed = QualityPolicySchema.parse(policy);
+  await fs19.mkdir(path20.dirname(file), { recursive: true });
+  try {
+    await fs19.writeFile(file, `${JSON.stringify(parsed, null, 2)}
+`, { encoding: "utf8", flag: "wx" });
+  } catch (error2) {
+    if (error2.code === "EEXIST") throw new QualityPolicyExistsError(file);
+    throw error2;
+  }
+}
+async function readPolicy(projectDir, state) {
+  const { value } = await readJsonValidated(qualityFiles(projectDir, state).policy, QualityPolicySchema);
+  return value;
+}
+async function writeLedger(projectDir, state, ledger) {
+  const file = qualityFiles(projectDir, state).ledger;
+  await writeJsonAtomic(file, QualityLedgerSchema.parse(ledger));
+}
+async function updateLedger(projectDir, state, mutate) {
+  const paths = resolveLoopPaths(projectDir);
+  return withLock(paths.lock, async (ownership) => {
+    const { value: current } = await readJsonValidated(paths.state, StateSchema);
+    if (current.run_id !== state.run_id || current.cycle !== state.cycle || current.status !== state.status) {
+      throw new QualityLedgerStateDriftError(state, current);
+    }
+    const file = qualityFiles(projectDir, current).ledger;
+    const { value, recovered } = await readJsonValidated(file, QualityLedgerSchema);
+    const draft = structuredClone(value);
+    await mutate(draft);
+    const parsed = QualityLedgerSchema.parse(draft);
+    await ownership.runIfOwned(async (stagingDir) => {
+      await writeJsonAtomic(file, parsed, { backup: !recovered, stagingDir });
+    });
+    return parsed;
+  });
+}
+async function readLedger(projectDir, state) {
+  const { value } = await readJsonValidated(qualityFiles(projectDir, state).ledger, QualityLedgerSchema);
+  return value;
+}
+async function readAmendments(projectDir, state) {
+  return readAmendmentsAt(qualityFiles(projectDir, state).amendments);
+}
+async function readAmendmentsAt(file) {
+  return (await readAmendmentFile(file)).amendments;
+}
+async function readAmendmentFile(file) {
+  let raw;
+  try {
+    raw = await fs19.readFile(file, "utf8");
+  } catch (error2) {
+    if (error2.code === "ENOENT") return { raw: "", amendments: [] };
+    throw error2;
+  }
+  const lines = raw.split("\n");
+  if (lines.at(-1) === "") lines.pop();
+  const amendments = lines.map((line, index) => parseAmendmentLine(file, line, index + 1));
+  return { raw, amendments };
+}
+function parseAmendmentLine(file, line, lineNumber) {
+  let value;
+  try {
+    value = JSON.parse(line);
+  } catch (error2) {
+    throw new StateCorruptedError(`${file} has an invalid quality amendment on line ${lineNumber}: ${error2.message}`);
+  }
+  const parsed = QualityAmendmentSchema.safeParse(value);
+  if (!parsed.success) {
+    throw new StateCorruptedError(`${file} has an invalid quality amendment on line ${lineNumber}: ${parsed.error.message}`);
+  }
+  return parsed.data;
+}
+
+// src/ops/quality-roster.ts
+import crypto5 from "node:crypto";
+var SPECIALIST_ROLES = {
+  correctness: [],
+  security: ["security"],
+  alignment: ["critic", "plan-critic", "story-critic"],
+  regression: [],
+  ui: ["ui-critic"]
+};
+var OUTPUT_CONTRACT = "Return the standard AgentResult shape: status, summary, evidence, findings, files_touched, next_hint.";
+function planQualityDispatches(input) {
+  const dispatches = [...input.policy.dispatches];
+  if (input.policy.mode === "strict") {
+    const permitted = permittedAgents(input.config, input.track);
+    const forbidden = new Set(forbiddenSpecialists(input.config));
+    const fallbackAgent = input.policy.dispatches[0]?.agent;
+    if (fallbackAgent === void 0) throw new Error("a quality policy needs at least one dispatch to plan a strict roster from");
+    for (const dimension of requiredDimensions(input.policy)) {
+      dispatches.push(specialistDispatch(dimension, permitted, forbidden, fallbackAgent));
+    }
+  }
+  const wave = waveIndex(input.track, dispatches.map((dispatch) => dispatch.agent));
+  const ordered = [...dispatches].sort(
+    (left, right) => (wave.get(left.agent) ?? Number.MAX_SAFE_INTEGER) - (wave.get(right.agent) ?? Number.MAX_SAFE_INTEGER) || compareCodeUnits3(left.agent, right.agent) || compareCodeUnits3(left.instance ?? "", right.instance ?? "")
+  );
+  const ceiling = contextCeiling(input.policy.mode);
+  return ordered.map((dispatch) => {
+    const context = buildContext(input, dispatch, ceiling);
+    return { ...dispatch, inputFingerprint: fingerprint(dispatch, context), context };
+  });
+}
+function qualityRosterViolations(dispatches, selected) {
+  const selectedSet = new Set(selected);
+  const missing = [...new Set(dispatches.filter((dispatch) => !selectedSet.has(dispatch.agent)).map((dispatch) => dispatch.agent))];
+  return missing.sort(compareCodeUnits3).map((agent) => ({ code: "roster.quality", params: { agent } }));
+}
+function requiredDimensions(policy) {
+  return Object.keys(policy.initial_quality_plan).filter((dimension) => policy.initial_quality_plan[dimension].value === "required");
+}
+function specialistDispatch(dimension, permitted, forbidden, fallbackAgent) {
+  const specialist = SPECIALIST_ROLES[dimension].find((role) => permitted.has(role) && !forbidden.has(role));
+  if (specialist !== void 0) {
+    return {
+      agent: specialist,
+      instance: null,
+      dimensions: [dimension],
+      reason: `Independent ${dimension} review by the track's ${specialist} specialist, required by the pinned strict quality plan.`
+    };
+  }
+  return {
+    agent: fallbackAgent,
+    instance: dimension,
+    dimensions: [dimension],
+    reason: `The track has no permitted ${dimension} specialist \u2014 ${fallbackAgent} covers it under a "${dimension}" instance instead of a new role.`
+  };
+}
+function waveIndex(track, agents) {
+  const unique = [...new Set(agents)];
+  const waves = dispatchWaves(track, unique);
+  const index = /* @__PURE__ */ new Map();
+  waves.forEach((wave, position) => {
+    for (const agent of wave) index.set(agent, position);
+  });
+  return index;
+}
+function buildContext(input, dispatch, ceiling) {
+  const mandatory = [
+    `Goal: ${input.goal}`,
+    `Role: act as the ${input.trackName} track's ${dispatch.agent} role; only that role's mandate applies to this dispatch.`,
+    `Reason: ${dispatch.reason}`,
+    `Output contract: ${OUTPUT_CONTRACT}`
+  ];
+  const optional2 = [
+    ...ranked(input.acceptance, (text) => `Acceptance: ${text}`, 400),
+    ...ranked(input.intendedFiles, (text) => `File: ${text}`, 300),
+    ...ranked(input.componentKinds, (text) => `Component: ${text}`, 250),
+    ...dispatch.dimensions.map((dimension, index) => ({
+      text: `Criteria (${dimension}): ${input.policy.initial_quality_plan[dimension].reason}`,
+      relevance: 100 - index
+    })),
+    ...input.policy.risk.signals.flatMap((signal) => signal.evidence.map((evidence) => ({
+      text: `Evidence (${signal.code}, ${signal.level}): ${evidence}`,
+      relevance: RISK_RELEVANCE[signal.level]
+    })))
+  ];
+  return fitContextPacket({ mandatory, optional: optional2, ceiling });
+}
+function ranked(values, format, base) {
+  return values.map((value, index) => ({ text: format(value), relevance: base - index }));
+}
+var RISK_RELEVANCE = { high: 60, medium: 40, low: 20 };
+function fingerprint(dispatch, context) {
+  return crypto5.createHash("sha256").update(canonicalJson4({ dispatch, text: context.text })).digest("hex");
+}
+function canonicalJson4(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson4).join(",")}]`;
+  if (typeof value === "object" && value !== null) {
+    return `{${Object.entries(value).sort(([left], [right]) => compareCodeUnits3(left, right)).map(([key, entry]) => `${JSON.stringify(key)}:${canonicalJson4(entry)}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+function compareCodeUnits3(left, right) {
+  return left < right ? -1 : left > right ? 1 : 0;
 }
 
 // src/ops/log.ts
@@ -33629,6 +35513,14 @@ var ContradictedEvidenceError = class extends Error {
     this.name = "ContradictedEvidenceError";
   }
 };
+var DuplicateQualityDispatchError = class extends Error {
+  constructor(agent, instance, fingerprint2) {
+    super(
+      `"${instance === null ? agent : `${agent}--${instance}`}" repeats a quality dispatch this cycle already answered (input fingerprint ${fingerprint2.slice(0, 12)}\u2026) with the same verdict over the same evidence and the same files. Re-running a dispatch against evidence that has not moved cannot move a dimension: run the command whose receipt is missing, or dispatch the agent the pending dimension is waiting on.`
+    );
+    this.name = "DuplicateQualityDispatchError";
+  }
+};
 function outcomeOf(entry) {
   if (entry.phase === "queued") return "it never started \u2014 it was still waiting for the project verify lock";
   if (entry.phase === "running") return "it had not finished";
@@ -33657,13 +35549,13 @@ async function runLog(projectDir, input, now = () => /* @__PURE__ */ new Date())
     const config3 = await loadConfig(projectDir);
     const track2 = findTrack(config3, state.track);
     if (track2 !== void 0 && track2.closing.includes(agent.data)) {
-      const dir = path16.join(runDirPath(projectDir, state), "closing");
+      const dir = path21.join(runDirPath(projectDir, state), "closing");
       const closingLedger = await readVerifyLedger(dir);
       refuseContradicted(projectDir, dir, agent.data, parsed.value, closingLedger, track2.gate?.proven_by);
-      await fs15.mkdir(dir, { recursive: true });
+      await fs20.mkdir(dir, { recursive: true });
       const capped2 = await capAndSpill(projectDir, dir, basename, parsed.value, closingLedger);
-      const file2 = path16.join(dir, `${basename}.json`);
-      await fs15.writeFile(file2, `${JSON.stringify(capped2, null, 2)}
+      const file2 = path21.join(dir, `${basename}.json`);
+      await fs20.writeFile(file2, `${JSON.stringify(capped2, null, 2)}
 `, "utf8");
       return { path: file2, findingsAdded: 0, gateOpened: false };
     }
@@ -33686,12 +35578,15 @@ async function runLog(projectDir, input, now = () => /* @__PURE__ */ new Date())
   if (violation !== null) throw new OrderViolationError(agent.data, violation, state.track);
   const ledger = await readVerifyLedger(cycleDir);
   refuseContradicted(projectDir, cycleDir, agent.data, parsed.value, ledger, gate?.proven_by);
+  await refuseRepeatedDispatch(projectDir, state, { agent: agent.data, instance: input.instance ?? null }, parsed.value, cycleDir);
+  await reserveRepairAttempt(projectDir, state, { agent: agent.data, instance: input.instance ?? null }, now);
+  await refuseDestructiveResult(projectDir, state, parsed.value, now);
   const capped = await capAndSpill(projectDir, cycleDir, basename, parsed.value, ledger);
   const proof = gate !== void 0 && agent.data === gate.proven_by && capped.status === "pass" ? capped.evidence.find((entry) => entry.kind === "command" || entry.kind === "test") : void 0;
   const signatures = errorSignature(capped.evidence, capped.status);
-  await fs15.mkdir(cycleDir, { recursive: true });
-  const file = path16.join(cycleDir, `${basename}.json`);
-  await fs15.writeFile(file, `${JSON.stringify(capped, null, 2)}
+  await fs20.mkdir(cycleDir, { recursive: true });
+  const file = path21.join(cycleDir, `${basename}.json`);
+  await fs20.writeFile(file, `${JSON.stringify(capped, null, 2)}
 `, "utf8");
   if (track.map !== void 0 && agent.data === track.map.drafted_by && capped.status === "pass") {
     try {
@@ -33715,7 +35610,121 @@ async function runLog(projectDir, input, now = () => /* @__PURE__ */ new Date())
       }
     });
   }
+  await recordDispatchResult(projectDir, state, { agent: agent.data, instance: input.instance ?? null }, capped, now);
   return { path: file, findingsAdded: capped.findings.length, gateOpened: proof !== void 0 };
+}
+async function recordDispatchResult(projectDir, state, dispatch, result, now = () => /* @__PURE__ */ new Date()) {
+  try {
+    await foldDispatchIntoLedger(projectDir, state, dispatch, result, now);
+  } catch (error2) {
+    process.stderr.write(`mjloop: the quality ledger was not updated for "${dispatch.agent}": ${String(error2)}
+`);
+  }
+}
+async function foldDispatchIntoLedger(projectDir, state, dispatch, result, now) {
+  const plan = await scheduledDispatch(projectDir, state, dispatch);
+  if (plan === null) return;
+  const ledger = await readLedger(projectDir, state);
+  const receipts = await citedReceipts(cycleDirPath(projectDir, state), state.cycle, result);
+  const selfRef = `cycle-${String(state.cycle).padStart(2, "0")}/${basenameOf2(dispatch)}.json`;
+  const submitted = [];
+  for (const dimension of plan.dispatch.dimensions) {
+    const entry = ledger.dimensions[dimension];
+    if (entry.applicability !== "required") continue;
+    const refs = receipts.filter((receipt) => entry.required_evidence.includes(receipt.kind)).map((receipt) => receipt.ref);
+    if (entry.required_evidence.includes("agent")) refs.unshift(selfRef);
+    if (refs.length === 0 && entry.status !== "pending" && result.status === "pass") continue;
+    submitted.push({
+      dimension,
+      verdict: result.status,
+      evidenceRefs: refs,
+      reason: `${basenameOf2(dispatch)} returned ${result.status} for ${dimension} under the pinned quality plan.`,
+      criteria: plan.acceptance,
+      changedFiles: result.files_touched
+    });
+  }
+  if (submitted.length === 0) return;
+  const digest = await worktreeDigest(projectDir);
+  const inputs = submitted.map((input) => ({ ...input, worktree: digest }));
+  await recordQualityEvidenceBatch(projectDir, state, inputs, now);
+}
+async function scheduledDispatch(projectDir, state, dispatch) {
+  if (state.run_id === null || state.track === null || state.quality_policy_version !== 1) return null;
+  const policy = await readPolicy(projectDir, state);
+  const config2 = await loadConfig(projectDir);
+  const track = findTrack(config2, state.track);
+  if (track === void 0) return null;
+  const evidence = await resolveQualityContextEvidence(projectDir, { story: state.current.story, allowMissingStory: true });
+  const planned = planQualityDispatches({
+    trackName: state.track,
+    track,
+    config: config2,
+    policy,
+    goal: state.goal ?? "",
+    ...evidence
+  });
+  const scheduled = planned.find(
+    (candidate) => candidate.agent === dispatch.agent && (candidate.instance ?? null) === dispatch.instance
+  );
+  return scheduled === void 0 ? null : { policy, dispatch: scheduled, acceptance: evidence.acceptance };
+}
+async function citedReceipts(cycleDir, cycle, result) {
+  if (result.status === "blocked") return [];
+  const named = new Set(result.evidence.filter((entry) => entry.kind !== "file").map((entry) => entry.ref));
+  const latest = /* @__PURE__ */ new Map();
+  for (const receipt of await completedVerifyReceipts(cycleDir, cycle)) {
+    if (!named.has(receipt.command) && !named.has(receipt.ref)) continue;
+    if (receipt.passed !== (result.status === "pass")) continue;
+    latest.set(`${receipt.slot}\0${receipt.command}`, receipt);
+  }
+  return [...latest.values()];
+}
+async function refuseRepeatedDispatch(projectDir, state, dispatch, result, cycleDir) {
+  if (!qualityRuntimeEnabled()) return;
+  const plan = await scheduledDispatch(projectDir, state, dispatch);
+  if (plan === null || plan.policy.enforcement !== "active") return;
+  const raw = await fs20.readFile(path21.join(cycleDir, `${basenameOf2(dispatch)}.json`), "utf8").catch(() => null);
+  if (raw === null) return;
+  let previous;
+  try {
+    const parsed = AgentResultSchema.safeParse(JSON.parse(raw));
+    if (!parsed.success) return;
+    previous = parsed.data;
+  } catch {
+    return;
+  }
+  if (answerIdentity(previous) !== answerIdentity(result)) return;
+  throw new DuplicateQualityDispatchError(dispatch.agent, dispatch.instance, plan.dispatch.inputFingerprint);
+}
+async function reserveRepairAttempt(projectDir, state, dispatch, now) {
+  if (!qualityRuntimeEnabled() || !isRepairInstance(dispatch.instance)) return;
+  if (state.quality_policy_version !== 1) return;
+  const base = (await readPolicy(projectDir, state)).dispatches[0];
+  if (base === void 0) return;
+  await reserveQualityDispatches(projectDir, state, [{ ...base, agent: dispatch.agent, instance: dispatch.instance }], now);
+}
+async function refuseDestructiveResult(projectDir, state, result, now) {
+  if (!qualityRuntimeEnabled() || state.quality_policy_version !== 1) return;
+  const deletedFiles = [];
+  for (const file of result.files_touched) {
+    const absolute = path21.isAbsolute(file) ? file : path21.join(projectDir, file);
+    const exists4 = await fs20.stat(absolute).then(() => true, () => false);
+    if (!exists4) deletedFiles.push(file);
+  }
+  const candidate = classifyDestructiveResult({ goal: state.goal ?? "", deletedFiles, summary: result.summary });
+  if (candidate === null) return;
+  const outcome = await guardDestructiveOperation(projectDir, state, candidate, now, { applied: true });
+  if (!outcome.allowed) throw new DestructiveApprovalRequiredError(outcome.reason);
+}
+function answerIdentity(result) {
+  return JSON.stringify({
+    status: result.status,
+    evidence: result.evidence.map((entry) => [entry.kind, entry.ref]).sort(),
+    files: [...result.files_touched].sort()
+  });
+}
+function basenameOf2(dispatch) {
+  return dispatch.instance === null ? dispatch.agent : `${dispatch.agent}--${dispatch.instance}`;
 }
 async function refuseUnselectedSkills(projectDir, state, agent, result) {
   if (result.skills_used.length === 0) return;
@@ -33725,8 +35734,8 @@ async function refuseUnselectedSkills(projectDir, state, agent, result) {
 }
 async function selectedSkillsFor(projectDir, state, agent) {
   if (state.run_id === null || state.track === null) return /* @__PURE__ */ new Set();
-  const file = path16.join(runDirPath(projectDir, state), SKILL_MANIFEST_FILE);
-  const raw = await fs15.readFile(file, "utf8").catch(() => null);
+  const file = path21.join(runDirPath(projectDir, state), SKILL_MANIFEST_FILE);
+  const raw = await fs20.readFile(file, "utf8").catch(() => null);
   if (raw === null) return /* @__PURE__ */ new Set();
   const parsed = safeJson(raw);
   if (parsed === null) return /* @__PURE__ */ new Set();
@@ -33745,7 +35754,7 @@ function safeJson(raw) {
 var CycleRosterFields = object2({ selected: array(string2().min(1)).default([]) });
 async function selectedThisCycle(cycleDir) {
   try {
-    const raw = await fs15.readFile(path16.join(cycleDir, "roster.json"), "utf8");
+    const raw = await fs20.readFile(path21.join(cycleDir, "roster.json"), "utf8");
     const parsed = CycleRosterFields.safeParse(JSON.parse(raw));
     return parsed.success ? new Set(parsed.data.selected) : null;
   } catch {
@@ -33766,7 +35775,7 @@ async function findOrderViolation(cycleDir, track, agent) {
   return null;
 }
 async function predecessorLogged(cycleDir, predecessor) {
-  const entries = await fs15.readdir(cycleDir).catch(() => []);
+  const entries = await fs20.readdir(cycleDir).catch(() => []);
   return entries.some((name) => {
     if (!name.endsWith(".json")) return false;
     const basename = name.slice(0, -".json".length);
@@ -33778,7 +35787,7 @@ function refuseContradicted(projectDir, workDir, agent, result, ledger, provenBy
   for (const entry of result.evidence) {
     const recorded = latestEntry(ledger, entry.ref);
     if (recorded === null || exitedZero(recorded)) continue;
-    const log = recorded.log === "" ? null : path16.relative(projectDir, ledgerLogFile(workDir, recorded));
+    const log = recorded.log === "" ? null : path21.relative(projectDir, ledgerLogFile(workDir, recorded));
     throw new ContradictedEvidenceError(agent, recorded, log);
   }
 }
@@ -33795,31 +35804,31 @@ function exitedZero(entry) {
   return entry.exit_code === 0;
 }
 function ledgerLogFile(workDir, entry) {
-  return path16.dirname(entry.log) === "." ? path16.join(workDir, "verify", entry.log) : path16.join(workDir, "..", entry.log);
+  return path21.dirname(entry.log) === "." ? path21.join(workDir, "verify", entry.log) : path21.join(workDir, "..", entry.log);
 }
 async function capAndSpill(projectDir, workDir, basename, result, ledger) {
-  const evidenceDir = path16.join(workDir, "evidence");
+  const evidenceDir = path21.join(workDir, "evidence");
   const engineLog = /* @__PURE__ */ new Map();
   result.evidence.forEach((entry, index) => {
     const recorded = latestEntry(ledger, entry.ref);
     if (recorded === null || recorded.log === "") return;
-    engineLog.set(index, path16.relative(projectDir, ledgerLogFile(workDir, recorded)));
+    engineLog.set(index, path21.relative(projectDir, ledgerLogFile(workDir, recorded)));
   });
   const { result: capped, spills } = capEvidence(
     result,
-    (index) => engineLog.get(index) ?? path16.relative(projectDir, spillFile(evidenceDir, basename, index))
+    (index) => engineLog.get(index) ?? path21.relative(projectDir, spillFile(evidenceDir, basename, index))
   );
   const fresh = spills.filter((spill) => !engineLog.has(spill.index));
   if (fresh.length > 0) {
-    await fs15.mkdir(evidenceDir, { recursive: true });
+    await fs20.mkdir(evidenceDir, { recursive: true });
     for (const spill of fresh) {
-      await fs15.writeFile(spillFile(evidenceDir, basename, spill.index), spill.text, "utf8");
+      await fs20.writeFile(spillFile(evidenceDir, basename, spill.index), spill.text, "utf8");
     }
   }
   return capped;
 }
 function spillFile(evidenceDir, basename, index) {
-  return path16.join(evidenceDir, `${basename}--${index}.txt`);
+  return path21.join(evidenceDir, `${basename}--${index}.txt`);
 }
 var MAP_FILE = "map.md";
 var MAP_MAX_BYTES = 8e3;
@@ -33829,8 +35838,8 @@ var SECTION_HEADING = /^## Cycle (\d+) — (\S+) \(HEAD (.+)\)$/;
 var SECTION_FILE = /^- `(.+)`$/;
 var NO_GIT = "no git";
 async function writeRunMap(projectDir, state, agent, result) {
-  const file = path16.join(runDirPath(projectDir, state), MAP_FILE);
-  const existing = await fs15.readFile(file, "utf8").catch(() => null);
+  const file = path21.join(runDirPath(projectDir, state), MAP_FILE);
+  const existing = await fs20.readFile(file, "utf8").catch(() => null);
   const sections = existing === null ? [] : parseSections(existing);
   const files = mappedFiles(result);
   sections.push({
@@ -33840,7 +35849,7 @@ async function writeRunMap(projectDir, state, agent, result) {
     body: renderBody(result.summary, files, supersededBy(sections, files), resultRef(state.cycle, agent)),
     files
   });
-  await fs15.writeFile(file, render(state, sections, agent), "utf8");
+  await fs20.writeFile(file, render(state, sections, agent), "utf8");
 }
 function mappedFiles(result) {
   const refs = result.evidence.filter((entry) => entry.kind === "file").map((entry) => entry.ref);
@@ -33955,11 +35964,11 @@ function parseSections(text) {
 }
 
 // src/ops/memory.ts
-import fs17 from "node:fs/promises";
+import fs22 from "node:fs/promises";
 
 // src/store/memory-store.ts
-import fs16 from "node:fs/promises";
-import path17 from "node:path";
+import fs21 from "node:fs/promises";
+import path22 from "node:path";
 var MemoryNotFoundError = class extends Error {
   constructor(id, dir) {
     super(`no memory "${id}" under ${dir}`);
@@ -33973,7 +35982,7 @@ function memoryFileName(frontmatter) {
 }
 async function listFiles(dir) {
   try {
-    return await fs16.readdir(dir);
+    return await fs21.readdir(dir);
   } catch (error2) {
     if (error2.code !== "ENOENT") throw error2;
     return [];
@@ -33984,9 +35993,9 @@ async function listMemories(projectDir) {
   const entries = await listFiles(dir);
   const memories = [];
   for (const name of entries.filter((entry) => entry.endsWith(".md"))) {
-    const file = path17.join(dir, name);
+    const file = path22.join(dir, name);
     try {
-      const { data, body } = parseFrontmatter(await fs16.readFile(file, "utf8"));
+      const { data, body } = parseFrontmatter(await fs21.readFile(file, "utf8"));
       const parsed = MemoryFrontmatterSchema.safeParse(data);
       if (!parsed.success) continue;
       memories.push({ frontmatter: parsed.data, body, file });
@@ -34014,9 +36023,9 @@ async function readMemory(projectDir, id) {
 }
 async function writeMemory(projectDir, memory) {
   const dir = resolveLoopPaths(projectDir).memory;
-  await fs16.mkdir(dir, { recursive: true });
-  const file = path17.join(dir, memoryFileName(memory.frontmatter));
-  await fs16.writeFile(file, serialiseFrontmatter(memory.frontmatter, memory.body), { encoding: "utf8", flag: "wx" });
+  await fs21.mkdir(dir, { recursive: true });
+  const file = path22.join(dir, memoryFileName(memory.frontmatter));
+  await fs21.writeFile(file, serialiseFrontmatter(memory.frontmatter, memory.body), { encoding: "utf8", flag: "wx" });
   return file;
 }
 
@@ -34029,7 +36038,7 @@ var InvalidMemoryInputError = class extends Error {
 };
 async function memoryAdd(projectDir, input, now = () => /* @__PURE__ */ new Date()) {
   const paths = resolveLoopPaths(projectDir);
-  await fs17.mkdir(paths.root, { recursive: true });
+  await fs22.mkdir(paths.root, { recursive: true });
   return withLock(paths.lock, async () => {
     const used = await usedMemoryNumbers(projectDir);
     const next = used.length === 0 ? 1 : Math.max(...used) + 1;
@@ -34115,8 +36124,8 @@ function score(memory, terms) {
 }
 
 // src/ops/plan.ts
-import fs18 from "node:fs/promises";
-import path18 from "node:path";
+import fs23 from "node:fs/promises";
+import path23 from "node:path";
 var InvalidPlanInputError = class extends Error {
   constructor(detail) {
     super(detail);
@@ -34125,7 +36134,7 @@ var InvalidPlanInputError = class extends Error {
 };
 async function planCreate(projectDir, input, now = () => /* @__PURE__ */ new Date()) {
   const paths = resolveLoopPaths(projectDir);
-  await fs18.mkdir(paths.root, { recursive: true });
+  await fs23.mkdir(paths.root, { recursive: true });
   return withLock(paths.lock, async () => {
     const existing = await listPlanIds(projectDir);
     const next = existing.length === 0 ? 1 : Math.max(...existing.map((id2) => Number(id2.slice(1)))) + 1;
@@ -34257,8 +36266,8 @@ async function storyUpdate(projectDir, storyId, patch, now = () => /* @__PURE__ 
       );
       assertDependenciesResolve(siblings, merged.data);
     }
-    const renamed = path18.join(path18.dirname(current.file), storyFileName(merged.data));
-    if (renamed !== current.file) await fs18.rename(current.file, renamed);
+    const renamed = path23.join(path23.dirname(current.file), storyFileName(merged.data));
+    if (renamed !== current.file) await fs23.rename(current.file, renamed);
     const file = await writeStory(projectDir, { frontmatter: merged.data, body: current.body });
     const manifest = await renderManifest(projectDir, planId, now);
     return { id: storyId, file, manifest };
@@ -34294,14 +36303,14 @@ async function storyNext(projectDir, planId) {
 }
 
 // src/ops/history.ts
-import fs19 from "node:fs/promises";
-import path19 from "node:path";
+import fs24 from "node:fs/promises";
+import path24 from "node:path";
 var HISTORY_DEFAULT_LIMIT = 50;
 async function readRunHistory(projectDir, options = {}) {
   const limit = options.limit ?? HISTORY_DEFAULT_LIMIT;
   if (limit <= 0) return [];
   const runsDir = resolveLoopPaths(projectDir).runs;
-  const entries = await fs19.readdir(runsDir, { withFileTypes: true }).catch(() => []);
+  const entries = await fs24.readdir(runsDir, { withFileTypes: true }).catch(() => []);
   const names = entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort().reverse();
   const live = await readLiveRun(projectDir);
   const runs = [];
@@ -34311,7 +36320,7 @@ async function readRunHistory(projectDir, options = {}) {
     const [runId, story, track] = parts;
     if (options.track !== void 0 && track !== options.track) continue;
     runs.push(
-      await readRun(path19.join(runsDir, name), {
+      await readRun(path24.join(runsDir, name), {
         id: name,
         run_id: runId,
         track,
@@ -34336,12 +36345,12 @@ async function readLiveRun(projectDir) {
   };
 }
 async function readRun(dir, identity) {
-  const inside = await fs19.readdir(dir, { withFileTypes: true }).catch(() => []);
+  const inside = await fs24.readdir(dir, { withFileTypes: true }).catch(() => []);
   const timing = identity.live !== null && identity.live.dir === identity.id ? identity.live : null;
   const cycleDirs = inside.filter((entry) => entry.isDirectory() && /^cycle-\d+$/.test(entry.name)).map((entry) => ({ name: entry.name, cycle: Number(entry.name.slice("cycle-".length)) })).sort((a, b) => a.cycle - b.cycle);
   const cycles = [];
   for (const { name, cycle } of cycleDirs) {
-    cycles.push(await readCycle(path19.join(dir, name), cycle, timing?.closedAt.get(cycle) ?? null));
+    cycles.push(await readCycle(path24.join(dir, name), cycle, timing?.closedAt.get(cycle) ?? null));
   }
   const hasClosing = inside.some((entry) => entry.isDirectory() && entry.name === "closing");
   return {
@@ -34355,17 +36364,17 @@ async function readRun(dir, identity) {
     cycles,
     // The closing pass has no cycle number and `state.history` has no entry for
     // it: it happens after the run's last cycle closed.
-    closing: hasClosing ? await readCycle(path19.join(dir, "closing"), 0, null) : null
+    closing: hasClosing ? await readCycle(path24.join(dir, "closing"), 0, null) : null
   };
 }
 async function readCycle(dir, cycle, at) {
-  const inside = await fs19.readdir(dir).catch(() => []);
-  const roster = await readJson(path19.join(dir, "roster.json"), RosterFields);
-  const verify = await readJson(path19.join(dir, "verify", "index.json"), LedgerSchema);
+  const inside = await fs24.readdir(dir).catch(() => []);
+  const roster = await readJson(path24.join(dir, "roster.json"), RosterFields);
+  const verify = await readJson(path24.join(dir, "verify", "index.json"), LedgerSchema);
   const agents = [];
   for (const entry of inside.filter((name) => name.endsWith(".json")).sort()) {
     if (entry === "roster.json" || entry === "findings.json") continue;
-    const result = await readJson(path19.join(dir, entry), ResultFields);
+    const result = await readJson(path24.join(dir, entry), ResultFields);
     if (result === null) continue;
     const [name, instance] = splitInstance(entry.slice(0, -".json".length));
     agents.push({
@@ -34404,7 +36413,7 @@ var ResultFields = object2({
 });
 async function readJson(file, schema) {
   try {
-    const parsed = schema.safeParse(JSON.parse(await fs19.readFile(file, "utf8")));
+    const parsed = schema.safeParse(JSON.parse(await fs24.readFile(file, "utf8")));
     return parsed.success ? parsed.data : null;
   } catch {
     return null;
@@ -34423,6 +36432,7 @@ async function preflightEstimate(projectDir, input) {
   for (const agent of forbidden) perCycle.delete(agent);
   for (const agent of closing) perCycle.delete(agent);
   const dispatchesPerCycle = perCycle.size;
+  const quality = await previewQualityPolicies(projectDir, input);
   return {
     track: input.track,
     max_cycles: track.max_cycles,
@@ -34447,7 +36457,11 @@ async function preflightEstimate(projectDir, input) {
       // would understate the widest run by exactly the agent idea 9 introduced.
       dispatches: track.max_cycles * dispatchesPerCycle + closing.size
     },
-    comparable: await readComparable(projectDir, input)
+    comparable: await readComparable(projectDir, input),
+    quality: {
+      selected: quality[config2.orchestration.quality.mode],
+      comparisons: quality
+    }
   };
 }
 async function readComparable(projectDir, input) {
@@ -34484,13 +36498,13 @@ function minutesOf(run2) {
   return elapsed / 6e4;
 }
 function rangeOf(values, decimals) {
-  const sorted = [...values].sort((a, b) => a - b);
-  const middle = Math.floor(sorted.length / 2);
-  const median = sorted.length % 2 === 1 ? sorted[middle] ?? 0 : ((sorted[middle - 1] ?? 0) + (sorted[middle] ?? 0)) / 2;
+  const sorted2 = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted2.length / 2);
+  const median = sorted2.length % 2 === 1 ? sorted2[middle] ?? 0 : ((sorted2[middle - 1] ?? 0) + (sorted2[middle] ?? 0)) / 2;
   return {
     median: round(median, decimals),
-    min: round(sorted[0] ?? 0, decimals),
-    max: round(sorted.at(-1) ?? 0, decimals)
+    min: round(sorted2[0] ?? 0, decimals),
+    max: round(sorted2.at(-1) ?? 0, decimals)
   };
 }
 function round(value, decimals) {
@@ -34500,8 +36514,8 @@ function round(value, decimals) {
 }
 
 // src/ops/roster.ts
-import fs20 from "node:fs/promises";
-import path20 from "node:path";
+import fs25 from "node:fs/promises";
+import path25 from "node:path";
 function describeViolation(violation) {
   const agent = violation.params?.["agent"];
   const track = violation.params?.["track"];
@@ -34522,6 +36536,8 @@ function describeViolation(violation) {
       return `"${agent}" is both drafted and skipped \u2014 a roster must say one or the other`;
     case "roster.unexplained":
       return `"${agent}" was omitted without a reason \u2014 add it to skipped`;
+    case "roster.quality":
+      return `"${agent}" is required by the pinned quality plan's dispatch schedule and cannot be dropped`;
   }
 }
 var RosterViolationError = class extends Error {
@@ -34606,6 +36622,16 @@ async function cycleRosterSet(projectDir, parsed) {
   const state = await new StateStore(projectDir).get();
   if (state.status !== "running" || state.track === null) throw new NoActiveRunError();
   const { config: config2, track } = await loadTrack(projectDir, state.track);
+  const policy = await ensureRunQualityPolicy(projectDir);
+  const evidence = await resolveQualityContextEvidence(projectDir, { story: state.current.story, allowMissingStory: true });
+  const qualityDispatches = planQualityDispatches({
+    trackName: state.track,
+    track,
+    config: config2,
+    policy,
+    goal: state.goal ?? "",
+    ...evidence
+  });
   const violations = [];
   if (parsed.cycle !== state.cycle) {
     violations.push({
@@ -34619,9 +36645,13 @@ async function cycleRosterSet(projectDir, parsed) {
     });
   }
   violations.push(...rosterViolations(state.track, track, config2, parsed.selected, parsed.skipped));
+  if (qualityRuntimeEnabled() && policy.enforcement === "active") {
+    violations.push(...qualityRosterViolations(qualityDispatches, parsed.selected));
+  }
   if (violations.length > 0) throw new RosterViolationError(violations);
-  const { path: file } = await write(path20.join(cycleDirPath(projectDir, state), "roster.json"), parsed);
-  return { path: file, waves: dispatchWaves(track, parsed.selected) };
+  await reserveQualityDispatches(projectDir, state, qualityDispatches);
+  const { path: file } = await write(path25.join(cycleDirPath(projectDir, state), "roster.json"), parsed);
+  return { path: file, waves: dispatchWaves(track, parsed.selected), quality_dispatches: qualityDispatches };
 }
 async function closingRosterSet(projectDir, parsed) {
   const state = await new StateStore(projectDir).get();
@@ -34657,8 +36687,8 @@ async function closingRosterSet(projectDir, parsed) {
     }
   }
   if (violations.length > 0) throw new RosterViolationError(violations);
-  const { path: file } = await write(path20.join(runDirPath(projectDir, state), "closing", "roster.json"), parsed);
-  return { path: file, waves: dispatchWaves(track, parsed.selected) };
+  const { path: file } = await write(path25.join(runDirPath(projectDir, state), "closing", "roster.json"), parsed);
+  return { path: file, waves: dispatchWaves(track, parsed.selected), quality_dispatches: [] };
 }
 function contradictions(selected, skipped) {
   return Object.keys(skipped).filter((agent) => selected.has(agent)).map((agent) => `"${agent}" is both drafted and skipped \u2014 a roster must say one or the other`);
@@ -34670,20 +36700,20 @@ async function loadTrack(projectDir, name) {
   return { config: config2, track };
 }
 async function write(file, roster) {
-  await fs20.mkdir(path20.dirname(file), { recursive: true });
-  await fs20.writeFile(file, `${JSON.stringify(roster, null, 2)}
+  await fs25.mkdir(path25.dirname(file), { recursive: true });
+  await fs25.writeFile(file, `${JSON.stringify(roster, null, 2)}
 `, "utf8");
   return { path: file };
 }
 
 // src/ops/summary.ts
-import fs21 from "node:fs/promises";
-import path21 from "node:path";
+import fs26 from "node:fs/promises";
+import path26 from "node:path";
 var NO_FINDINGS = { high: 0, medium: 0, low: 0 };
 var MAP_FILE2 = "map.md";
 async function hasDesignSystem(projectDir) {
   try {
-    return (await fs21.stat(resolveLoopPaths(projectDir).designSystem)).isFile();
+    return (await fs26.stat(resolveLoopPaths(projectDir).designSystem)).isFile();
   } catch {
     return false;
   }
@@ -34691,11 +36721,11 @@ async function hasDesignSystem(projectDir) {
 async function runMap(projectDir, state) {
   if (state.run_id === null || state.track === null) return null;
   try {
-    if (!(await fs21.stat(path21.join(runDirPath(projectDir, state), MAP_FILE2))).isFile()) return null;
+    if (!(await fs26.stat(path26.join(runDirPath(projectDir, state), MAP_FILE2))).isFile()) return null;
   } catch {
     return null;
   }
-  return path21.join(".mjloop", "runs", runDirName(state), MAP_FILE2);
+  return path26.join(".mjloop", "runs", runDirName(state), MAP_FILE2);
 }
 async function stateSummary(projectDir) {
   let config2 = null;
@@ -34729,7 +36759,8 @@ async function stateSummary(projectDir) {
       reproduction: null,
       design_system: false,
       map: null,
-      config_error: configError
+      config_error: configError,
+      quality: null
     };
   }
   let maxCycles = null;
@@ -34762,7 +36793,11 @@ async function stateSummary(projectDir) {
     reproduction,
     design_system: await hasDesignSystem(projectDir),
     map: await runMap(projectDir, state),
-    config_error: configError
+    config_error: configError,
+    // Degrades rather than fails, exactly as `config_error` does: this line is
+    // rendered on every session start, and an unreadable run record must not
+    // turn it into a stack trace.
+    quality: await qualityStateSummary(projectDir, state).catch(() => null)
   };
 }
 
@@ -34843,15 +36878,15 @@ function byDraftedThenName(a, b) {
 }
 
 // src/util/entrypoint.ts
-import fs22 from "node:fs/promises";
-import path22 from "node:path";
+import fs27 from "node:fs/promises";
+import path27 from "node:path";
 import { pathToFileURL } from "node:url";
 async function isEntrypoint(moduleUrl) {
   const argv1 = process.argv[1];
   if (argv1 === void 0) return false;
-  let resolved = path22.resolve(argv1);
+  let resolved = path27.resolve(argv1);
   try {
-    resolved = await fs22.realpath(resolved);
+    resolved = await fs27.realpath(resolved);
   } catch {
   }
   return moduleUrl === pathToFileURL(resolved).href;
@@ -34867,6 +36902,16 @@ function resolveProjectDir(projectDir) {
 function ok(payload) {
   const text = typeof payload === "string" ? payload : JSON.stringify(payload, null, 2);
   return { content: [{ type: "text", text }] };
+}
+function summarizeQualityDispatches(dispatches) {
+  return dispatches.map(({ agent, instance, dimensions, reason, inputFingerprint, context }) => ({
+    agent,
+    instance,
+    dimensions,
+    reason,
+    inputFingerprint,
+    tokens: context.tokens
+  }));
 }
 async function guard(fn) {
   try {
@@ -34908,6 +36953,7 @@ function buildServer() {
         project_dir: projectDirArg,
         track: IdSchema.describe("Track name as defined in .mjloop/config.yaml"),
         goal: string2().min(1).describe("What this run must achieve"),
+        supervision: _enum(["supervised", "unattended"]).optional().default("supervised"),
         plan: IdSchema.nullish().describe("Plan id, e.g. P001"),
         story: IdSchema.nullish().describe("Story id, e.g. P001-S02"),
         feature: FeatureIdSchema.nullish().describe(
@@ -34915,11 +36961,12 @@ function buildServer() {
         )
       }
     },
-    async ({ project_dir, track, goal, plan, story, feature }) => guard(
+    async ({ project_dir, track, goal, supervision, plan, story, feature }) => guard(
       async () => ok(
         await runStart(resolveProjectDir(project_dir), {
           track,
           goal,
+          supervision,
           plan: plan ?? null,
           story: story ?? null,
           // Validated by `FeatureIdSchema` on the way in rather than left to
@@ -34957,12 +37004,14 @@ function buildServer() {
         if (cycle === void 0) {
           throw new Error("give a cycle number, or set closing=true to declare the run's closing pass");
         }
-        return ok(await rosterSet(dir, { cycle, selected, skipped }));
+        const result2 = await rosterSet(dir, { cycle, selected, skipped });
+        return ok({ ...result2, quality_dispatches: summarizeQualityDispatches(result2.quality_dispatches) });
       }
       if (cycle !== void 0) {
         throw new Error("a closing roster belongs to no cycle \u2014 it records the pass that ended the run; drop the cycle argument");
       }
-      return ok(await rosterSet(dir, { closing: true, selected, skipped }));
+      const result = await rosterSet(dir, { closing: true, selected, skipped });
+      return ok({ ...result, quality_dispatches: summarizeQualityDispatches(result.quality_dispatches) });
     })
   );
   server.registerTool(
@@ -35422,7 +37471,7 @@ function buildServer() {
     "mjloop_report_get",
     {
       title: "Read a report over past runs",
-      description: "Three projections of one bounded read, each cheaper folded into this tool than declared beside it \u2014 see this file's header for what a fourth declaration costs on every turn. telemetry: what every specialist this project drafted actually returned, so a mode or an available list can be pruned on evidence \u2014 a report, never a rule. preflight: the shape of a run on a track before it starts \u2014 roster, dispatches per cycle, ceiling, and what comparable past runs took. skills: this machine's skill library (source, revision, license, audit) beside this project's acceptances of it (digest, components, agents, policy, status) \u2014 a read of what mjloop-cli skills already decided, never a way to decide it. None is folded into routine output; ask for it.",
+      description: "Three projections of one bounded read, each cheaper folded into this tool than declared beside it \u2014 see this file's header for what a fourth declaration costs on every turn. telemetry: what every specialist this project drafted actually returned, so a mode or an available list can be pruned on evidence \u2014 a report, never a rule. preflight: the shape of a run before it starts \u2014 roster, dispatch ceiling, comparable past runs, and selected plus all-mode quality-policy forecasts; it writes no run pin. skills: this machine's skill library (source, revision, license, audit) beside this project's acceptances of it (digest, components, agents, policy, status) \u2014 a read of what mjloop-cli skills already decided, never a way to decide it. None is folded into routine output; ask for it.",
       inputSchema: {
         project_dir: projectDirArg,
         report: _enum(["telemetry", "preflight", "skills"]),
