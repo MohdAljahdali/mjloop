@@ -3,9 +3,10 @@
  *
  * Deliberately narrow. A whole-codebase mutation run answers "how thorough is
  * the suite overall", which is not a question worth a multi-hour run; this one
- * answers "can any of the five predicates that decide whether work is allowed
- * to close be broken without a test noticing", and demands 100% for exactly
- * that set.
+ * answers "can any of the three predicates that decide whether work may close,
+ * whether a run's records may be trusted, or whether a destructive operation
+ * needs a human be broken without a test noticing", and demands 100% for
+ * exactly that set.
  *
  * Every entry is pure — no filesystem, clock, subprocess or network in reach —
  * which is what makes 100% a reachable bar rather than an aspiration: a
@@ -91,7 +92,18 @@ export default {
     // two did not: it is what stands between an agent and an irreversible
     // operation, and it had whole branches with no coverage at all.
     'src/ops/destructive-risk.ts:163-219',
-    'src/ops/destructive-risk.ts:421-585',
+    // `classifyCommand` to the end of the file, which is every remaining pure
+    // helper the two ranges above resolve through — including `normaliseTargets`
+    // and `bounded`, which the classifier's targets and operation text pass
+    // through on the way out. Everything that touches disk
+    // (`readDestructiveRequestsAt` and the guards around it) sits above 421 and
+    // is in neither range.
+    //
+    // The end bound is deliberately past EOF rather than the current last line:
+    // Stryker clamps it, and an exact bound silently drops any helper added
+    // below it — which is how `normaliseTargets` and `bounded` fell out of this
+    // range once before, when comment lines shifted them past it.
+    'src/ops/destructive-risk.ts:421-99999',
   ],
   // Generated output and declaration noise are not behaviour.
   ignorePatterns: ['dist', 'node_modules', 'coverage', 'reports', 'src/**/*.d.ts', 'src/web/public'],

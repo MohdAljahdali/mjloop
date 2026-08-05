@@ -250,6 +250,10 @@ describe('the classifier as a whole candidate', () => {
     it.each([
       ['files at the project root name no feature', ['a.ts', 'b.ts', 'c.ts']],
       ['a rebuilt directory is not a feature', ['dist/a.js', 'dist/b.js', 'dist/c.js']],
+      // A *file* named like a rebuilt directory is discounted too, and it is
+      // discounted before its parent is counted — otherwise `src` here would
+      // reach the threshold on two real files plus one that does not count.
+      ['a file named like a rebuilt directory does not count toward its parent', ['src/a.ts', 'src/b.ts', 'src/dist']],
     ])('%s', (_name, deletedFiles) => {
       expect(classifyDestructiveResult({ goal: 'Rebuild', deletedFiles, summary: 'Cleaned up.' })).toBeNull()
     })
@@ -382,8 +386,15 @@ describe('the classifier as a whole candidate', () => {
       expect(classifyDestructiveTool(bashInput('rm --recursive src/billing'))?.targets).toEqual(['src/billing'])
     })
 
-    it('reports an unknown target when the paths arrive on stdin', () => {
-      expect(classifyDestructiveTool(bashInput('find . -name billing | xargs rm -rf'))).toMatchObject({
+    it.each([
+      ['no trailing space', 'find . -name billing | xargs rm -rf'],
+      // With a trailing space the argv ends in whitespace, and a split that did
+      // not trim first would read that as a fourth, empty operand — which is an
+      // operand, so the command would report a target instead of admitting it
+      // does not know one yet.
+      ['a trailing space', 'find . -name billing | xargs rm -rf '],
+    ])('reports an unknown target when the paths arrive on stdin (%s)', (_name, command) => {
+      expect(classifyDestructiveTool(bashInput(command))).toMatchObject({
         kind: 'feature_delete',
         targets: [UNKNOWN],
         rollback: 'unknown until the piped command that names the paths has run',
