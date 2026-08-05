@@ -25,10 +25,10 @@ import { qualityFiles, readAmendments } from '../../src/store/quality-store.js'
 import { StateStore } from '../../src/store/state-store.js'
 import { makeTmpProject, type TmpProject } from '../helpers/tmp-project.js'
 
-// The rollout gate is closed in production until Task 17, so mocking it open is
-// the only way this file can reach the enforcing path at all. The last test
-// closes it again, because a closed gate must leave every seam exactly where it
-// was.
+// Task 17 opened the rollout gate in production, but this file still mocks it
+// open rather than relying on that default, so these tests keep exercising the
+// enforcing path even if the gate closes again. The last test closes it again,
+// because a closed gate must leave every seam exactly where it was.
 vi.mock('../../src/ops/quality-capability.js', () => ({ qualityRuntimeEnabled: vi.fn(() => true) }))
 import { qualityRuntimeEnabled } from '../../src/ops/quality-capability.js'
 
@@ -247,7 +247,7 @@ describe('amendQualityBudget', () => {
     expect(resumed.cycle).toBe(2)
   })
 
-  it('still halts a shadow run on the track cap, amendment or not', async () => {
+  it('still halts a shadow run on the track cap', async () => {
     await seedShadowPolicy(project.dir)
     await seedCycleCeiling(project.dir, 1)
 
