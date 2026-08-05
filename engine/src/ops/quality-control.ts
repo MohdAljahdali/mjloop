@@ -241,6 +241,19 @@ export async function nextCycleRefusal(projectDir: string, state: State): Promis
 }
 
 /**
+ * Whether this run's ceiling on cycles is its pinned budget rather than the
+ * live track cap.
+ *
+ * `cycleAdvance` asks so its own `cycle-cap` halt can stand aside for a run
+ * `nextCycleRefusal` already owns the ceiling of: the pin starts as the track's
+ * cap, so leaving the halt in force would end terminally on the old number the
+ * moment an operator raised the pinned one.
+ */
+export async function enforcesQualityBudget(projectDir: string, state: State): Promise<boolean> {
+  return (await enforcedBudget(projectDir, state)) !== null
+}
+
+/**
  * Raise one ceiling for one suspended run, and resume it.
  *
  * The pin is never touched. The amendment is appended first and the run is only

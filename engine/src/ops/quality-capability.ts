@@ -7,7 +7,7 @@
  * and still closes exactly as it did before this milestone, while a project
  * that opted in has its pinned plan enforced.
  *
- * Kept as a function rather than inlined at its five call sites: it is the one
+ * Kept as a function rather than inlined at its seven call sites: it is the one
  * place the rollout is decided, and `tests/integration/quality-modes.test.ts`
  * asserts both directions of that split against this switch rather than against
  * a mock, so closing it again goes red rather than quietly reverting behaviour.

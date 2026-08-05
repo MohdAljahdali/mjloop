@@ -29,7 +29,12 @@ import {
   createInitialQualityLedger,
 } from './quality-policy.js'
 import { qualityRuntimeEnabled } from './quality-capability.js'
-import { QualityBudgetExhaustedError, nextCycleRefusal, suspendDraft } from './quality-control.js'
+import {
+  QualityBudgetExhaustedError,
+  enforcesQualityBudget,
+  nextCycleRefusal,
+  suspendDraft,
+} from './quality-control.js'
 import { assertQualityCloseable, invalidateQualityEvidence } from './quality-ledger.js'
 import { readLedger, readPolicy, writeLedger, writePolicyOnce } from '../store/quality-store.js'
 
@@ -654,8 +659,9 @@ export async function cycleAdvance(
     // measured against the number it started with plus whatever an operator
     // explicitly amended — not against a live config value that may have moved,
     // and not terminally when an amendment could legitimately continue the run.
-    // The `cycle-cap` halt below therefore ends every run that enforces no
-    // budget, which today is every run.
+    // The `cycle-cap` halt below therefore ends only the runs that enforce no
+    // budget — every pre-milestone run and every run pinned `shadow` — and
+    // stands aside for the rest, whose ceiling this refusal already is.
     const refusal = await nextCycleRefusal(projectDir, draft)
     if (refusal !== null) {
       // Rolled back to where this update began, so the advance the suspension
@@ -670,7 +676,10 @@ export async function cycleAdvance(
       return
     }
 
-    if (draft.cycle >= track.max_cycles) {
+    // The enforcement check is made only at the boundary, where its answer can
+    // change the outcome: below the cap the halt cannot fire anyway, and the
+    // check costs a policy and amendment read.
+    if (draft.cycle >= track.max_cycles && !(await enforcesQualityBudget(projectDir, draft))) {
       draft.status = 'halted'
       draft.current.stage = 'halted'
       draft.halt_reason = `cycle cap ${track.max_cycles} reached for track ${draft.track}`

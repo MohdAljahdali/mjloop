@@ -33669,6 +33669,9 @@ async function nextCycleRefusal(projectDir, state) {
     `this run may work ${pinned.budget.max_cycles} cycle(s) and cycle ${state.cycle} did not pass`
   );
 }
+async function enforcesQualityBudget(projectDir, state) {
+  return await enforcedBudget(projectDir, state) !== null;
+}
 async function qualityStateSummary(projectDir, state) {
   const pinned = await pinnedBudget(projectDir, state);
   if (pinned === null) return null;
@@ -34897,7 +34900,7 @@ async function cycleAdvance(projectDir, input, now = () => /* @__PURE__ */ new D
       exhausted = refusal;
       return;
     }
-    if (draft.cycle >= track.max_cycles) {
+    if (draft.cycle >= track.max_cycles && !await enforcesQualityBudget(projectDir, draft)) {
       draft.status = "halted";
       draft.current.stage = "halted";
       draft.halt_reason = `cycle cap ${track.max_cycles} reached for track ${draft.track}`;

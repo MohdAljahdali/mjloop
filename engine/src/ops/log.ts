@@ -589,12 +589,14 @@ export async function runLog(
  * agent's: `{agent, instance}` is matched against `planQualityDispatches`, and
  * an agent the plan did not schedule records nothing at all.
  *
- * **Counterfactual until Task 17.** The ledger is written on every run,
- * including a shadow one, because the whole point of the shadow phase is to
- * observe what the closure rule *would* have said — but nothing here may
- * change what `runLog` returns or refuses. It cannot: every failure is dropped
- * to stderr, and the one refusal this milestone adds lives in `runLog`'s own
- * refusal block, before anything is written.
+ * **Load-bearing for an enforcing run, counterfactual for a shadow one.** The
+ * ledger is written on every run either way, because the whole point of the
+ * shadow phase is to observe what the closure rule *would* have said — but
+ * nothing here may change what `runLog` returns or refuses. It cannot: every
+ * failure is dropped to stderr, and the refusals this milestone adds live in
+ * `runLog`'s own refusal block, before anything is written. What an `active`
+ * pin makes of the fold is decided later and elsewhere, by
+ * `assertRunCanPass` reading the ledger this wrote.
  */
 export async function recordDispatchResult(
   projectDir: string,

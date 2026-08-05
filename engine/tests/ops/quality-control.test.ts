@@ -88,8 +88,24 @@ async function cycleFiles(dir: string): Promise<string[]> {
   return fs.readdir(cycleDirPath(dir, state)).catch(() => [])
 }
 
+/**
+ * Pin `max_cycles` where production pins it: equal to the track's own cap.
+ *
+ * `deriveQualityBudget` initializes the pin *from* the track, so a fixture that
+ * left the track higher than the pin would give an amendment headroom no real
+ * run has — and would hide a cycle-cap halt firing on the live number.
+ */
+async function seedCycleCeiling(dir: string, cap: number): Promise<void> {
+  const config = await loadConfig(dir)
+  const track = config.tracks.edit
+  if (track === undefined) throw new Error('the edit track this fixture configures is missing')
+  track.max_cycles = cap
+  await writeConfig(dir, config)
+  await seedBudget(dir, { max_cycles: cap })
+}
+
 async function seedAtCeiling(dir: string, field: QualityBudgetField): Promise<void> {
-  if (field === 'max_cycles') return seedBudget(dir, { max_cycles: 1 })
+  if (field === 'max_cycles') return seedCycleCeiling(dir, 1)
   if (field === 'max_context_tokens_per_dispatch') return seedBudget(dir, { max_context_tokens_per_dispatch: 1 })
   if (field === 'max_repair_attempts') return seedBudget(dir, { max_repair_attempts: 0 })
   await seedBudget(dir, { max_dispatches: 1 })
@@ -207,6 +223,39 @@ describe('amendQualityBudget', () => {
     await expect(rosterSet(project.dir, nextRoster())).resolves.toMatchObject({
       path: expect.stringContaining('roster.json'),
     })
+  })
+
+  it('lets an amended max_cycles open the next cycle rather than halting on the track cap', async () => {
+    await seedCycleCeiling(project.dir, 1)
+    await expect(cycleAdvance(project.dir, { agents: ['editor'], result: 'fail' }, clock)).rejects.toBeInstanceOf(
+      QualityBudgetExhaustedError,
+    )
+    const suspended = await new StateStore(project.dir).get()
+
+    await amendQualityBudget(
+      project.dir,
+      { run: suspended.run_id ?? '', field: 'max_cycles', from: 1, to: 2, reason: 'one more cycle', decided_by: 'operator' },
+      clock,
+    )
+    await cycleAdvance(project.dir, { agents: ['editor'], result: 'fail' }, clock)
+
+    // The pin the operator raised is the ceiling, not the track's own cap of 1:
+    // an amendment that only converted a suspension into a terminal halt would
+    // be worth nothing.
+    const resumed = await new StateStore(project.dir).get()
+    expect(resumed.status).toBe('running')
+    expect(resumed.cycle).toBe(2)
+  })
+
+  it('still halts a shadow run on the track cap, amendment or not', async () => {
+    await seedShadowPolicy(project.dir)
+    await seedCycleCeiling(project.dir, 1)
+
+    await cycleAdvance(project.dir, { agents: ['editor'], result: 'fail' }, clock)
+
+    const state = await new StateStore(project.dir).get()
+    expect(state.status).toBe('halted')
+    expect(state.halt_reason).toBe('cycle cap 1 reached for track edit')
   })
 
   it.each([
