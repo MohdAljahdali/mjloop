@@ -163,6 +163,21 @@ export function installAnnouncer(fn: Announcer): void {
   announce = fn
 }
 
+/**
+ * The same door, for a refusal a component discovers *after* its write landed.
+ *
+ * There is exactly one such case: a quality decision the engine accepted, and a
+ * socket that had gone away by the time the run was told to resume. The write
+ * happened and the engine state is already resumed, so this is not a receipt —
+ * but the reader still has to be told the terminal never got the command.
+ * Routed through the installed announcer rather than through `useToasts()`,
+ * because that is what keeps the ephemeral toast and the durable notice log
+ * from disagreeing (`App.vue`'s `announceAndLog`).
+ */
+export function announceClient(message: AnnouncedMessage): void {
+  announce(message)
+}
+
 function settle(receipt: Receipt): void {
   const heldWrite = pending.get(receipt.id)
   if (heldWrite === undefined) return

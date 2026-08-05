@@ -10,9 +10,10 @@ import { HISTORY_DEFAULT_LIMIT } from '../ops/history.js'
 import { preflightEstimate, type Preflight } from '../ops/preflight.js'
 import { readProjectSkills } from '../ops/project-skills.js'
 import { effectiveBudget } from '../ops/quality-budget.js'
+import { QUALITY_USAGE_FILE, readQualityUsage } from '../ops/quality-control.js'
 import { rosterValidity, type RosterValidity } from '../ops/roster.js'
-import { UnknownTrackError } from '../ops/run.js'
-import { readTelemetry, type Telemetry } from '../ops/telemetry.js'
+import { runDirName, UnknownTrackError } from '../ops/run.js'
+import { qualityTelemetry, readTelemetry, type Telemetry } from '../ops/telemetry.js'
 import { readVerifyLedger } from '../ops/verify.js'
 import { AgentResultSchema, RosterSchema } from '../schemas/contract.js'
 import type { FeatureBrief, FeatureBriefStatus } from '../schemas/feature.js'
@@ -922,12 +923,20 @@ export const QUALITY_EVIDENCE_MAX = 20
 export async function readQualityRun(projectDir: string, runId: string): Promise<QualityRunView> {
   const dir = path.join(resolveLoopPaths(projectDir).runs, runId)
   const policy = await readQualityRecord(path.join(dir, QUALITY_POLICY_FILE), QualityPolicySchema, 'quality')
-  const [ledger, amendments, requests] = await Promise.all([
+  const [ledger, amendments, requests, usage, live] = await Promise.all([
     readQualityRecord(path.join(dir, QUALITY_LEDGER_FILE), QualityLedgerSchema, 'quality'),
     readAmendmentsAt(path.join(dir, QUALITY_AMENDMENTS_FILE)),
     readDestructiveRequestsAt(path.join(dir, DESTRUCTIVE_REQUESTS_FILE)),
+    readQualityUsage(path.join(dir, QUALITY_USAGE_FILE)),
+    // The state file describes exactly one run. It supplies this view's two
+    // clocks and nothing else, and only when the run it describes is the run
+    // being read — an archived run reports `unavailable` elapsed rather than
+    // borrowing another run's timestamps.
+    new StateStore(projectDir).read().then(({ state }) => (state.run_id !== null && runDirName(state) === runId ? state : null)).catch(() => null),
   ])
   const reference = (value: string): string => publicReference(value, projectDir, dir)
+  const budget = effectiveBudget(policy, amendments)
+  const latest = latestPerOperation(requests.requests)
 
   return {
     policy: {
@@ -961,12 +970,38 @@ export async function readQualityRun(projectDir: string, runId: string): Promise
       decided_at,
       decided_by,
     })),
-    effectiveBudget: effectiveBudget(policy, amendments),
+    effectiveBudget: budget,
     // The last word recorded about each operation is what `decideDestructiveRequest`
     // answers, so the pending one is found the same way it decides: the newest
-    // record, never an earlier proposal somebody has already dealt with.
-    pendingRequest: publicRequest(requests.requests.filter((request) => request.status === 'pending').at(-1), reference),
+    // record *for each operation*, never an earlier proposal somebody has
+    // already dealt with. A decision is appended beside the request it answers
+    // rather than replacing it (`quality-control.ts:354`), so filtering the raw
+    // array by status would keep offering an Approve button for an operation
+    // that has been approved and spent — one the write door would then refuse.
+    pendingRequest: publicRequest(
+      latest.filter((request) => request.status === 'pending').at(-1),
+      reference,
+    ),
+    telemetry: qualityTelemetry({
+      mode: policy.mode,
+      budget,
+      dispatches: { used: usage.reservations.length, max: budget.max_dispatches },
+      startedAt: live?.started_at ?? null,
+      lastTransitionAt: live?.updated_at ?? null,
+      // One interval per operation, from the record's own timestamps. Taken
+      // from the same last-word-per-operation list the pending request is, so
+      // an answered request contributes one closed wait rather than a closed
+      // one and an open one.
+      waits: latest.map((request) => ({ requestedAt: request.requested_at, decidedAt: request.decided_at })),
+    }),
   }
+}
+
+/** The newest record for each operation, in the order the operations were first proposed. */
+function latestPerOperation(requests: readonly DestructiveRequest[]): DestructiveRequest[] {
+  const byFingerprint = new Map<string, DestructiveRequest>()
+  for (const request of requests) byFingerprint.set(request.fingerprint, request)
+  return [...byFingerprint.values()]
 }
 
 /**

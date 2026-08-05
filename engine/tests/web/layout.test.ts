@@ -46,3 +46,24 @@ describe('the quality mode cards at 390px', () => {
     expect(panels).toMatch(/\.quality-card:focus-within\s*\{[^}]*outline:/)
   })
 })
+
+/**
+ * The same source-stylesheet rule, for the two rows the pinned policy adds:
+ * the preflight mode comparison and the evidence ledger. Both are multi-column
+ * on a laptop and both have to stack — not scroll sideways — inside 390px, in
+ * either direction, which is a logical-property fact rather than a `left`/`right`
+ * one and so is asserted on the source.
+ */
+describe('the pinned quality evidence at 390px', () => {
+  it('stacks the mode comparison and the ledger rows rather than scrolling the page sideways', async () => {
+    const panels = await fs.readFile(path.resolve(process.cwd(), 'src/web/app/styles/60-panels.css'), 'utf8')
+    expect(panels).toMatch(/\.quality-compare\s*\{[^}]*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/)
+    expect(panels).toMatch(/\.quality-ledger-row\s*\{[^}]*grid-template-columns:/)
+    expect(panels).toMatch(
+      /@media \(max-width: 390px\)\s*\{[\s\S]*?\.quality-compare\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/,
+    )
+    expect(panels).toMatch(
+      /@media \(max-width: 390px\)\s*\{[\s\S]*?\.quality-ledger-row\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/,
+    )
+  })
+})

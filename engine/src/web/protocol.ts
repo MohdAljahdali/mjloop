@@ -1,6 +1,7 @@
 import * as z from 'zod'
 import type { DestructiveRequest } from '../ops/destructive-risk.js'
 import type { StateSummary } from '../ops/summary.js'
+import type { QualityTelemetry } from '../ops/telemetry.js'
 import type {
   QualityAmendment,
   QualityBudget,
@@ -125,6 +126,23 @@ export interface QualityRunView {
   /** The ceilings the run is actually working against — the pin plus every amendment on disk. */
   effectiveBudget: QualityBudget
   pendingRequest: DestructiveRequest | null
+  /**
+   * What this run has cost, in the units the engine can honestly produce.
+   *
+   * On this response rather than a route of its own, which is the deliberate
+   * widening Task 14 left open: every input `qualityTelemetry` takes is a
+   * record in the same run directory this view already opens — the effective
+   * budget's price record, the charge record beside it, and the decision
+   * timestamps `pendingRequest` is read from — so a second route would be a
+   * second read of the same four files, stamped by the same revision, for a
+   * screen that draws both halves in one block.
+   *
+   * Every field carries the kind of claim it is, and `unavailable` reaches the
+   * page as `unavailable`: the elapsed clocks come off the run `state.json`,
+   * which describes exactly one run, so an archived run reports no duration
+   * rather than a computed one.
+   */
+  telemetry: QualityTelemetry
 }
 
 export interface StoryView {

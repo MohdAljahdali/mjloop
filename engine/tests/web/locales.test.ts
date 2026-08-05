@@ -6,6 +6,12 @@ import { ResultSchema, StageSchema, StatusSchema } from '../../src/schemas/state
 import { ApprovalDecisionSchema, StoryStatusSchema } from '../../src/schemas/plan.js'
 import { FeatureBriefStatusSchema } from '../../src/schemas/feature.js'
 import { FeatureDiscoveryModeSchema, QualityModeSchema, SkillUpdateModeSchema } from '../../src/schemas/config.js'
+import {
+  DestructiveRequestSchema,
+  QualityBudgetFieldSchema,
+  QualityDimensionSchema,
+  QualityVerdictSchema,
+} from '../../src/schemas/quality.js'
 import { SkillPackageSchema } from '../../src/schemas/skill-library.js'
 import { ProjectSkillAcceptanceSchema } from '../../src/schemas/skill-acceptance.js'
 import { ConcurrencyDecisionSchema } from '../../src/schemas/skill-selection.js'
@@ -69,6 +75,11 @@ const NAMESPACES = [
   'pane',
   'plans',
   'preflight',
+  // The pinned quality policy, its ledger, its ceilings and the two operator
+  // dialogs. Its own namespace rather than `run.`/`evidence.`: the same strings
+  // are drawn by both panels and by two dialogs hosted in `App.vue`, and a
+  // prefix naming one of the panels would be wrong in three of the four places.
+  'quality',
   'queue',
   'rail',
   'roster',
@@ -301,6 +312,16 @@ describe('locales', () => {
     expect(family('skills.update.')).toEqual([...SkillUpdateModeSchema.options].sort())
     expect(family('config.qualityValue.')).toEqual([...QualityModeSchema.options].sort())
     expect(family('config.qualityHelp.')).toEqual([...QualityModeSchema.options].sort())
+    // The pinned policy's own four families. Every one is chosen at runtime
+    // from an engine enum, so a member added to a schema fails here rather
+    // than rendering `not_applicable` at an operator.
+    expect(family('quality.mode.')).toEqual([...QualityModeSchema.options].sort())
+    expect(family('quality.verdict.')).toEqual([...QualityVerdictSchema.options].sort())
+    expect(family('quality.dimension.')).toEqual([...QualityDimensionSchema.options].sort())
+    expect(family('quality.budgetField.')).toEqual([...QualityBudgetFieldSchema.options].sort())
+    // The kinds a destructive request can carry — `schemas/quality.ts`'s copy
+    // of the closed list `ops/destructive-risk.ts` writes into the record.
+    expect(family('quality.decisionKind.')).toEqual([...DestructiveRequestSchema.shape.kind.options].sort())
     expect(family('skills.state.')).toEqual([...ProjectSkillAcceptanceSchema.shape.status.options].sort())
     expect(family('skills.audit.')).toEqual([...SkillPackageSchema.shape.audit.shape.state.options].sort())
     expect(family('manifest.mode.')).toEqual([...ConcurrencyDecisionSchema.shape.mode.options].sort())

@@ -4,6 +4,7 @@ import { mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import type { Snapshot } from '../../src/web/protocol.js'
 import { emptySnapshot, readLocale } from './helpers/page.js'
+import { pendingRequest, qualityView } from './helpers/quality.js'
 
 /**
  * The Evidence panel — `panels/evidence.js`, `describe('evidence')` at
@@ -496,5 +497,67 @@ describe('Evidence.vue', () => {
     socket.deliver({ type: 'snapshot', snapshot: emptySnapshot({ revisions: { ...emptySnapshot().revisions, cycle: 'moved' } }) })
     await nextTick()
     expect(count(`/api/runs/${idA}/1`)).toBe(1)
+  })
+})
+
+/* ── the quality record of a finished run, read-only ──────────────────────── */
+
+describe('the run\'s quality record (Evidence.vue)', () => {
+  const id = '2026-07-28-002--adhoc--build'
+
+  async function mountEvidence(view: unknown) {
+    serve({
+      '/api/runs': [{ id, story: null, track: 'build', cycles: 0, halted: false }],
+      [`/api/runs/${id}`]: { id, halt: null, cycles: [] },
+      [`/api/runs/${id}/quality`]: view,
+    })
+    const { Evidence } = await boot()
+    const wrapper = mount(Evidence)
+    await vi.waitFor(() => expect(wrapper.find('[data-act="open-run"]').exists()).toBe(true))
+    await wrapper.get('[data-act="open-run"]').trigger('click')
+    await vi.waitFor(() => expect(wrapper.find('#run-open-quality').exists()).toBe(true))
+    return wrapper
+  }
+
+  it('renders unavailable cost honestly and gives every verdict a text label', async () => {
+    const wrapper = await mountEvidence(qualityView())
+    expect(wrapper.text()).toContain(english['quality.costUnavailable'])
+    expect(wrapper.get('[data-dimension="security"]').text()).toContain(english['quality.verdict.pass'])
+  })
+
+  it('never draws one run\'s quality record under another run\'s heading', async () => {
+    // `feed()` keeps the last good body through a failed fetch, which is right
+    // for a blip and wrong for a 404: most runs on disk pinned no policy at
+    // all, and the body still held is the *previous* run's.
+    const other = '2026-07-28-003--adhoc--build'
+    serve({
+      '/api/runs': [
+        { id, story: null, track: 'build', cycles: 0, halted: false },
+        { id: other, story: null, track: 'build', cycles: 0, halted: false },
+      ],
+      [`/api/runs/${id}`]: { id, halt: null, cycles: [] },
+      [`/api/runs/${other}`]: { id: other, halt: null, cycles: [] },
+      [`/api/runs/${id}/quality`]: qualityView(),
+    })
+    const { Evidence } = await boot()
+    const wrapper = mount(Evidence)
+    await vi.waitFor(() => expect(wrapper.findAll('[data-act="open-run"]')).toHaveLength(2))
+    await wrapper.findAll('[data-act="open-run"]')[0]?.trigger('click')
+    await vi.waitFor(() => expect(wrapper.find('#run-open-quality').exists()).toBe(true))
+
+    await wrapper.findAll('[data-act="open-run"]')[1]?.trigger('click')
+    await vi.waitFor(() => expect(wrapper.get('#run-open-title').text()).toBe(other))
+    expect(wrapper.find('#run-open-quality').exists()).toBe(false)
+  })
+
+  it('is a record and never a control — the two operator doors are not on this panel', async () => {
+    // The same document the Run panel draws, with a decision still waiting on
+    // a person. Evidence reports what happened; approving a destructive
+    // operation is a decision about the *open* run, and it belongs to the one
+    // panel that knows a run is open.
+    const wrapper = await mountEvidence(qualityView({ pendingRequest: pendingRequest() }))
+    expect(wrapper.find('#run-quality-decide').exists()).toBe(false)
+    expect(wrapper.find('#run-quality-amend').exists()).toBe(false)
+    expect(wrapper.get('#run-open-quality').text()).toContain('DROP TABLE users')
   })
 })

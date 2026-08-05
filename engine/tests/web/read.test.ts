@@ -1101,6 +1101,49 @@ describe('read', () => {
       expect((await readQualityRun(project.dir, runId)).pendingRequest).toBe(null)
     })
 
+    it('takes the last word about each operation, and reports what the run has cost without inventing any of it', async () => {
+      const runId = await startQualityRun()
+      const file = path.join(project.dir, '.mjloop', 'runs', runId, 'destructive-requests.json')
+      const proposed = {
+        run: runId.slice(0, 14),
+        fingerprint: 'b'.repeat(64),
+        candidate: { kind: 'table_drop', targets: ['users'], operation: 'psql -c DROP TABLE users', rollback: null },
+        status: 'pending',
+        applied: false,
+        requested_at: NOW.toISOString(),
+        decided_at: null,
+        decided_by: null,
+        note: null,
+      }
+      // The two records one decision leaves behind: `decideDestructiveRequest`
+      // appends its answer *beside* the request rather than replacing it, so a
+      // reader that filtered the raw array by status would keep offering an
+      // Approve button for an operation that has already been approved.
+      const decided = {
+        ...proposed,
+        status: 'approved',
+        decided_at: new Date(NOW.getTime() + 60_000).toISOString(),
+        decided_by: 'Mohd',
+      }
+      const requests = DestructiveRequestsSchema.parse({ version: 1, requests: [proposed, decided] })
+      await fs.writeFile(file, `${JSON.stringify(requests, null, 2)}\n`, 'utf8')
+
+      const view = await readQualityRun(project.dir, runId)
+
+      expect(view.pendingRequest).toBe(null)
+      // One closed wait, not one closed and one still open — the same
+      // last-word-per-operation reading the pending request is found by.
+      expect(view.telemetry.waitingElapsed).toEqual({ kind: 'measured', valueMs: 60_000 })
+      // Nothing has priced this run and no host reported usage, so both stay
+      // blank rather than being computed from the ceiling they are budgeted at.
+      expect(view.telemetry.estimatedCost).toEqual({ kind: 'unavailable', currency: null, value: null })
+      expect(view.telemetry.outputTokens).toEqual({ kind: 'unavailable', value: null })
+      expect(view.telemetry.mode).toBe(view.policy.mode)
+      // Charged against the ceiling the amendments actually produce, and
+      // counted from the run's own usage record: nothing has been dispatched.
+      expect(view.telemetry.dispatches).toEqual({ used: 0, max: view.effectiveBudget.max_dispatches })
+    })
+
     it('bounds the amendments and the evidence one response carries', async () => {
       const runId = await startQualityRun()
       for (let index = 0; index < QUALITY_AMENDMENTS_MAX + 5; index += 1) await amend('max_cycles', index + 4)

@@ -164,7 +164,7 @@ export async function reserveQualityDispatches(
   }
 
   await withLock(resolveLoopPaths(projectDir).lock, async (ownership) => {
-    const reserved = new Set((await readUsage(file)).reservations)
+    const reserved = new Set((await readQualityUsage(file)).reservations)
     const added = new Set(dispatches.map(reservationKey))
     for (const key of reserved) added.delete(key)
 
@@ -410,7 +410,7 @@ function revertReason(request: DestructiveRequest): string {
 export async function qualityStateSummary(projectDir: string, state: State): Promise<QualityStateSummary | null> {
   const pinned = await pinnedBudget(projectDir, state)
   if (pinned === null) return null
-  const usage = await readUsage(path.join(runDirPath(projectDir, state), QUALITY_USAGE_FILE))
+  const usage = await readQualityUsage(path.join(runDirPath(projectDir, state), QUALITY_USAGE_FILE))
   return {
     mode: pinned.policy.mode,
     supervision: pinned.policy.supervision,
@@ -465,7 +465,14 @@ function reasonFor(field: QualityBudgetField, detail: string): string {
   return `quality budget ${field} reached: ${detail}. Raise it with one explicit amendment to resume.`
 }
 
-async function readUsage(file: string): Promise<QualityUsage> {
+/**
+ * One run's charge record, by path.
+ *
+ * Exported so a reader outside this file can count what a run has spent
+ * without a second walk that would answer "what is a dispatch?" differently —
+ * `web/read.ts`'s quality view is the only such caller.
+ */
+export async function readQualityUsage(file: string): Promise<QualityUsage> {
   let raw: string
   try {
     raw = await fs.readFile(file, 'utf8')

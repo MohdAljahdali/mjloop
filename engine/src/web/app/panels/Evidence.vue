@@ -17,10 +17,13 @@ import { computed, ref } from 'vue'
 import { snapshot } from '../stores/session.js'
 import { useI18n } from '../composables/useI18n.js'
 import { useFeed } from '../composables/useFeed.js'
-import type { RunSummary, RunDetail } from '../types/protocol.js'
+import { qualityLedgerRows, qualityTelemetryRows, qualityViewFor } from '../composables/useRun.js'
+import type { QualityRunView, RunSummary, RunDetail } from '../types/protocol.js'
 import Bdi from '../components/Bdi.vue'
+import Tx from '../components/Tx.vue'
 import EvidenceRunRow from '../components/EvidenceRunRow.vue'
 import CycleFeed from '../components/CycleFeed.vue'
+import QualityLedgerRow from '../components/QualityLedgerRow.vue'
 
 const { t } = useI18n()
 
@@ -56,6 +59,26 @@ const openRun = computed(() => runFeed.value.value)
  * what picks its revision: `revisions.cycle` for this one, `revisions.runs`
  * for every earlier, inert cycle directory.
  */
+/**
+ * The open run's quality record — read-only, and only for the run that is open.
+ *
+ * The same document the Run panel draws, without either operator door: this
+ * panel reports what a run did, and approving a destructive operation or
+ * raising a ceiling are decisions about a run that is still going. Followed on
+ * `revisions.quality` and `revisions.state` for the same reason the Run panel
+ * does, and asked for only while a run is open here.
+ *
+ * A run that pinned no policy answers 404 and this stays null — most runs on
+ * disk predate quality policies entirely.
+ */
+const qualityFeed = useFeed<QualityRunView>({
+  dep: (state) => (opened.value === null ? null : `${opened.value}:${state.revisions.quality}:${state.revisions.state}`),
+  path: () => `/api/runs/${encodeURIComponent(opened.value ?? '')}/quality`,
+})
+const quality = computed(() => qualityViewFor(qualityFeed.value.value, qualityFeed.error.value))
+const ledgerRows = computed(() => (quality.value === null ? [] : qualityLedgerRows(quality.value.ledger)))
+const telemetryRows = computed(() => (quality.value === null ? [] : qualityTelemetryRows(quality.value.telemetry)))
+
 const openCycle = computed(() => {
   const state = snapshot.value
   const view = openRun.value
@@ -102,6 +125,39 @@ const openCycle = computed(() => {
         <summary>{{ t('evidence.haltReport') }}</summary>
         <pre id="run-open-haltbody" class="excerpt"><Bdi :value="openRun.halt" /></pre>
       </details>
+      <section v-if="quality !== null" id="run-open-quality" class="block">
+        <h3>{{ t('quality.title') }}</h3>
+        <p :data-quality-mode="quality.policy.mode">
+          <span class="quality-card-name">{{ t(`quality.mode.${quality.policy.mode}`) }}</span>
+          <span class="tag">{{ t('quality.pinned') }}</span>
+        </p>
+        <p class="hint" :data-enforcement="quality.policy.enforcement">
+          {{ t(`quality.enforcement.${quality.policy.enforcement}`) }} — {{ t(`quality.source.${quality.policy.source}`) }}
+        </p>
+
+        <dl class="facts">
+          <div v-for="row in telemetryRows" :key="row.key" class="fact" :data-telemetry="row.key" :data-kind="row.kind">
+            <dt>{{ t(row.label) }}</dt>
+            <dd>
+              <template v-if="row.value === null">{{ t(row.unavailable) }}</template>
+              <Tx v-else-if="row.kind === 'estimated'" key-name="quality.estimatedValue" :params="{ value: row.value }" />
+              <Bdi v-else :value="row.value" />
+            </dd>
+          </div>
+        </dl>
+
+        <ul class="quality-ledger">
+          <QualityLedgerRow v-for="row in ledgerRows" :key="row.dimension" :dimension="row.dimension" :entry="row.entry" />
+        </ul>
+
+        <!-- The operation a decision was — or is still — about, as a record.
+             There is no button here: this panel never decides anything. -->
+        <p v-if="quality.pendingRequest !== null" class="record">
+          <span>{{ t('quality.decisionOperation') }}</span>
+          <code><Bdi :value="quality.pendingRequest.candidate.operation" /></code>
+        </p>
+      </section>
+
       <div id="run-open-cycles">
         <CycleFeed
           v-for="cycle in openRun.cycles"

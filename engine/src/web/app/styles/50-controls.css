@@ -165,6 +165,39 @@ dialog label {
   margin-block-start: 18px;
 }
 
+/* Approve and Reject, as two native radios in a `<fieldset>` — the group's
+   single tab stop, its roving focus and the "radio, 1 of 2" a screen reader
+   announces are the browser's own, exactly as `QualityModeCard.vue` argues for
+   the mode cards. The `<legend>` is what names the choice; the labels sit on
+   one row wide and wrap on a narrow screen rather than scrolling. */
+.quality-choice {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-block-start: 14px;
+  border: 0;
+  padding: 0;
+}
+
+.quality-choice label {
+  flex-direction: row;
+  align-items: center;
+  gap: 7px;
+  margin-block-start: 0;
+  min-height: 44px;
+}
+
+/* One target per line: these are references, and a wrapped list of them reads
+   as one string. */
+.quality-targets {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
 .toast button:not(.icon) {
   padding: 3px 11px;
   font-size: 12px;
