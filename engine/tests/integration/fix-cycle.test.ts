@@ -8,6 +8,7 @@ import { rosterSet } from '../../src/ops/roster.js'
 import { cycleAdvance, runDirPath, runStart } from '../../src/ops/run.js'
 import { stateSummary } from '../../src/ops/summary.js'
 import { StateStore } from '../../src/store/state-store.js'
+import { pinInstantVerify, qualityEvidence } from '../helpers/quality-evidence.js'
 import { makeTmpProject, type TmpProject } from '../helpers/tmp-project.js'
 
 const NOW = new Date('2026-07-26T10:36:00.000Z')
@@ -20,6 +21,9 @@ beforeEach(async () => {
   project = await makeTmpProject()
   await fs.cp(FIXTURE, project.dir, { recursive: true })
   await initLoop(project.dir, clock)
+  // Before `runStart`, which pins the verify block: a fresh project pins an
+  // explicit quality mode, so its cycle closes only on engine receipts.
+  await pinInstantVerify(project.dir)
   await runStart(project.dir, { track: 'fix', goal: 'submitLabel returns a stale value' }, clock)
 })
 afterEach(async () => { await project.cleanup() })
@@ -109,7 +113,7 @@ describe('a full fix run', () => {
         result: {
           status: 'pass',
           summary: 'The reproducing command passes and the rest of the suite is unchanged.',
-          evidence: [{ kind: 'command', ref: 'npm test', excerpt: 'tests 1, pass 1, fail 0' }],
+          evidence: await qualityEvidence(project.dir, clock),
           findings: [],
           files_touched: [],
           next_hint: null,

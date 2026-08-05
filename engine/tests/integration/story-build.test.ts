@@ -9,6 +9,7 @@ import { gateSet, planCreate, storyAdd, storyNext, storyUpdate } from '../../src
 import { rosterSet } from '../../src/ops/roster.js'
 import { cycleAdvance, runDirName, runDirPath, runStart } from '../../src/ops/run.js'
 import { findPlanDir, readStory } from '../../src/store/plan-store.js'
+import { pinInstantVerify, qualityEvidence } from '../helpers/quality-evidence.js'
 import { makeTmpProject, type TmpProject } from '../helpers/tmp-project.js'
 
 const NOW = new Date('2026-07-27T09:00:00.000Z')
@@ -36,6 +37,8 @@ describe('a story-driven build', () => {
 
     await storyUpdate(project.dir, 'P001-S01', { status: 'doing' }, clock)
 
+    // Before `runStart`, which pins the verify block.
+    await pinInstantVerify(project.dir)
     const state = await runStart(
       project.dir,
       { track: 'build', goal: 'Login form shows an error on bad input', plan: 'P001', story: 'P001-S01' },
@@ -80,7 +83,7 @@ describe('a story-driven build', () => {
         result: {
           status: 'pass',
           summary: 'The acceptance criterion is met and the suite is green.',
-          evidence: [{ kind: 'command', ref: 'npm test', excerpt: 'tests 1, pass 1, fail 0' }],
+          evidence: await qualityEvidence(project.dir, clock),
           findings: [],
           files_touched: [],
           next_hint: null,

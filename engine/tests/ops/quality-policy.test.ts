@@ -113,8 +113,12 @@ describe('quality policy construction', () => {
     }
   })
 
-  it('keeps the production rollout capability closed', () => {
-    expect(qualityRuntimeEnabled()).toBe(false)
+  // Inverted from "keeps the production rollout capability closed" when the
+  // gate was opened. The behaviour behind it is asserted in both directions by
+  // `tests/integration/quality-modes.test.ts`, which reads the same real
+  // switch; this one keeps the flag itself named in the policy suite.
+  it('opens the production rollout capability', () => {
+    expect(qualityRuntimeEnabled()).toBe(true)
   })
 })
 

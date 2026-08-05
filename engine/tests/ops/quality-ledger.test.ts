@@ -6,6 +6,7 @@ import { promisify } from 'node:util'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   assertQualityCloseable,
+  closingViolations,
   invalidateQualityEvidence,
   recordQualityEvidence,
   recordQualityEvidenceBatch,
@@ -124,6 +125,93 @@ describe('closing evidence', () => {
     const ledger = passingLedger()
     ledger.cycle = 2
     expect(() => assertQualityCloseable(policy(), ledger, 2)).toThrow('correctness')
+  })
+})
+
+/**
+ * The close predicate stated as the exact list it returns, rather than as
+ * "something threw".
+ *
+ * `assertQualityCloseable` above names only the dimension, so a rule that
+ * refused for the wrong *reason* — or refused a dimension it should have
+ * skipped, or accepted one it should have refused — reads identically through
+ * it. These cases pin the reason text and, just as importantly, pin the cases
+ * that must produce no violation at all.
+ */
+describe('the close predicate itself', () => {
+  it('returns nothing for a ledger that satisfies the pinned plan', () => {
+    expect(closingViolations(policy(), passingLedger(), 1)).toEqual([])
+  })
+
+  it.each([
+    ['blocked', 'required tool is blocked'],
+    ['fail', 'evidence is contradicted'],
+    ['pending', 'evidence is missing or pending'],
+  ] as const)('reports a %s dimension as "%s"', (status, detail) => {
+    const ledger = passingLedger()
+    ledger.dimensions.security.status = status
+    expect(closingViolations(policy(), ledger, 1)).toEqual([`security: ${detail}`])
+  })
+
+  it('checks a dimension the ledger raised even though the pinned plan did not require it', () => {
+    // The analyzer may raise `ui` mid-run; the policy still says
+    // `not_applicable`. Either source alone makes the dimension count.
+    const ledger = withRequiredUi(passingLedger())
+    ledger.dimensions.ui.status = 'pending'
+    expect(closingViolations(policy(), ledger, 1)).toEqual(['ui: evidence is missing or pending'])
+  })
+
+  it('refuses a dimension the pinned plan requires that the ledger marks not applicable', () => {
+    const ledger = passingLedger()
+    ledger.dimensions.alignment.applicability = 'not_applicable'
+    expect(closingViolations(policy(), ledger, 1)).toEqual([
+      'alignment: required by the pinned policy but marked not applicable',
+    ])
+  })
+
+  it('reports stale evidence separately from missing evidence', () => {
+    const ledger = passingLedger()
+    ledger.dimensions.regression.invalidated_at = AT
+    expect(closingViolations(policy(), ledger, 1)).toEqual(['regression: evidence is stale'])
+  })
+
+  it('accepts null-worktree evidence recorded in the current cycle and refuses it in an older one', () => {
+    const current = recordedAtCycle(passingLedger(), 2)
+    expect(closingViolations(policy(), current, 2)).toEqual([])
+
+    const older = recordedAtCycle(passingLedger(), 2)
+    older.dimensions.correctness.recorded_cycle = 1
+    expect(closingViolations(policy(), older, 2)).toEqual([
+      'correctness: null-worktree evidence is stale for current cycle 2',
+    ])
+  })
+
+  it('accepts evidence stamped against a worktree whatever cycle recorded it', () => {
+    // A digest is proof about the tree, so it does not expire with the cycle —
+    // which is the whole reason the rule above is conditioned on a null one.
+    const ledger = recordedAtCycle(passingLedger(), 2)
+    ledger.dimensions.correctness.worktree_digest = 'b'.repeat(40)
+    ledger.dimensions.correctness.recorded_cycle = 1
+    expect(closingViolations(policy(), ledger, 2)).toEqual([])
+  })
+
+  it.each([
+    ['required_evidence', (entry: QualityLedger['dimensions']['correctness']) => { entry.required_evidence = [] }],
+    ['evidence_refs', (entry: QualityLedger['dimensions']['correctness']) => { entry.evidence_refs = [] }],
+  ] as const)('refuses a pass with an empty %s list', (_name, empty) => {
+    const ledger = passingLedger()
+    empty(ledger.dimensions.correctness)
+    expect(closingViolations(policy(), ledger, 1)).toEqual(['correctness: required evidence is missing'])
+  })
+
+  it('reports every failing dimension rather than stopping at the first', () => {
+    const ledger = passingLedger()
+    ledger.dimensions.correctness.status = 'pending'
+    ledger.dimensions.regression.status = 'fail'
+    expect(closingViolations(policy(), ledger, 1)).toEqual([
+      'correctness: evidence is missing or pending',
+      'regression: evidence is contradicted',
+    ])
   })
 })
 
@@ -493,6 +581,14 @@ function pendingLedger(): QualityLedger {
       entry.evidence_refs = []
       entry.checked_at = null
     }
+  }
+  return ledger
+}
+
+/** Stamp every required dimension as recorded in one cycle, so a per-dimension case is the only variable. */
+function recordedAtCycle(ledger: QualityLedger, cycle: number): QualityLedger {
+  for (const entry of Object.values(ledger.dimensions)) {
+    if (entry.applicability === 'required') entry.recorded_cycle = cycle
   }
   return ledger
 }

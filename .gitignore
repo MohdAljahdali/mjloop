@@ -17,6 +17,12 @@ engine/.ts-out/
 # Test output
 coverage/
 
+# Mutation testing output. `reports/` is Stryker's HTML/JSON report and
+# `.stryker-tmp/` is the sandbox it copies the project into per mutant; both
+# are rebuilt by `npm run test:mutation:quality` and neither is ever shipped.
+engine/reports/
+engine/.stryker-tmp/
+
 # Logs
 *.log
 npm-debug.log*

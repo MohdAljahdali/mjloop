@@ -2,9 +2,11 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { evaluateStopGuard } from '../../src/cli/index.js'
 import { initLoop } from '../../src/ops/init.js'
 import { runLog } from '../../src/ops/log.js'
+import { QualityBudgetExhaustedError } from '../../src/ops/quality-control.js'
 import { cycleAdvance, runStart } from '../../src/ops/run.js'
 import { stateSummary } from '../../src/ops/summary.js'
 import { loadConfig, writeConfig } from '../../src/store/config-store.js'
+import { StateStore } from '../../src/store/state-store.js'
 import { makeTmpProject, type TmpProject } from '../helpers/tmp-project.js'
 
 const NOW = new Date('2026-07-27T09:00:00.000Z')
@@ -57,7 +59,7 @@ describe('an autonomous run', () => {
     expect(released.block).toBe(false)
   })
 
-  it('is released by the cycle cap when nothing repeats', async () => {
+  it('is released by the pinned cycle budget when nothing repeats', async () => {
     const config = await loadConfig(project.dir)
     config.tracks.build = { required: ['builder', 'verifier'], available: [], closing: [], max_cycles: 2, order: [] }
     await writeConfig(project.dir, config)
@@ -67,10 +69,15 @@ describe('an autonomous run', () => {
     await cycleAdvance(project.dir, { agents: ['builder', 'verifier'], result: 'fail' }, clock)
 
     await runLog(project.dir, { agent: 'verifier', result: failing('error B', 'second') }, clock)
-    const second = await cycleAdvance(project.dir, { agents: ['builder', 'verifier'], result: 'fail' }, clock)
+    // An enforcing run reaching its pinned `max_cycles` is suspended for an
+    // amendment, not halted — and the hook must release either way, because
+    // neither is a run that can carry itself any further on its own.
+    await expect(cycleAdvance(project.dir, { agents: ['builder', 'verifier'], result: 'fail' }, clock))
+      .rejects.toThrow(QualityBudgetExhaustedError)
 
-    expect(second.state.status).toBe('halted')
-    expect(second.state.halt_reason).toContain('cycle cap 2')
+    const state = await new StateStore(project.dir).get()
+    expect(state.status).toBe('budget_exhausted')
+    expect(state.halt_reason).toContain('quality budget max_cycles reached')
     expect(evaluateStopGuard(HOOK, await stateSummary(project.dir), true).block).toBe(false)
   })
 

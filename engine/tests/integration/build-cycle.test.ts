@@ -8,7 +8,10 @@ import { rosterSet } from '../../src/ops/roster.js'
 import { cycleAdvance, runDirPath, runStart } from '../../src/ops/run.js'
 import { stateSummary } from '../../src/ops/summary.js'
 import { readVerifyLedger, verifyRun } from '../../src/ops/verify.js'
+import { QualityBudgetExhaustedError } from '../../src/ops/quality-control.js'
 import { loadConfig, writeConfig } from '../../src/store/config-store.js'
+import { StateStore } from '../../src/store/state-store.js'
+import { pinInstantVerify, qualityEvidence } from '../helpers/quality-evidence.js'
 import { makeTmpProject, type TmpProject } from '../helpers/tmp-project.js'
 
 const NOW = new Date('2026-07-26T10:36:00.000Z')
@@ -92,6 +95,7 @@ const BUILDER_PASS = {
 
 describe('a multi-cycle build run', () => {
   it('carries findings forward and lands on done', async () => {
+    await pinInstantVerify(project.dir)
     await runStart(project.dir, { track: 'build', goal: 'Add a Send button' }, clock)
 
     await rosterSet(project.dir, { cycle: 1, selected: ['builder', 'verifier'], skipped: { ...SPECIALISTS_SKIPPED, scout: 'goal names the file', critic: 'single-file change' } })
@@ -116,7 +120,13 @@ describe('a multi-cycle build run', () => {
 
     await rosterSet(project.dir, { cycle: 3, selected: ['builder', 'verifier'], skipped: { ...SPECIALISTS_SKIPPED, scout: 'area already mapped', critic: 'no new interface' } })
     await runLog(project.dir, { agent: 'builder', result: BUILDER_PASS }, clock)
-    await runLog(project.dir, { agent: 'verifier', result: VERIFIER_PASS }, clock)
+    // The cycle that actually closes needs engine receipts, not a claim: this
+    // project pins an explicit quality mode.
+    await runLog(
+      project.dir,
+      { agent: 'verifier', result: { ...VERIFIER_PASS, evidence: await qualityEvidence(project.dir, clock) } },
+      clock,
+    )
     const third = await cycleAdvance(project.dir, { agents: ['builder', 'verifier'], result: 'pass' }, clock)
 
     expect(third.state.status).toBe('done')
@@ -173,7 +183,7 @@ describe('a multi-cycle build run', () => {
     }
   })
 
-  it('still honours the cap when the work keeps changing', async () => {
+  it('still honours the cycle budget when the work keeps changing', async () => {
     const config = await loadConfig(project.dir)
     config.tracks.build = { required: ['builder', 'verifier'], available: [], closing: [], max_cycles: 2, order: [] }
     await writeConfig(project.dir, config)
@@ -183,10 +193,14 @@ describe('a multi-cycle build run', () => {
     await cycleAdvance(project.dir, { agents: ['builder', 'verifier'], result: 'fail' }, clock)
 
     await runLog(project.dir, { agent: 'verifier', result: verifierFail(['a different defect']) }, clock)
-    const second = await cycleAdvance(project.dir, { agents: ['builder', 'verifier'], result: 'fail' }, clock)
+    // The cap still binds; under an active policy it binds as the pinned
+    // `max_cycles`, which suspends for an amendment instead of ending the run.
+    await expect(cycleAdvance(project.dir, { agents: ['builder', 'verifier'], result: 'fail' }, clock))
+      .rejects.toThrow(QualityBudgetExhaustedError)
 
-    expect(second.state.status).toBe('halted')
-    expect(second.state.halt_reason).toBe('cycle cap 2 reached for track build')
+    const state = await new StateStore(project.dir).get()
+    expect(state.status).toBe('budget_exhausted')
+    expect(state.halt_reason).toContain('this run may work 2 cycle(s) and cycle 2 did not pass')
   })
 })
 
@@ -242,6 +256,9 @@ async function stagedFiles(runDir: string, options: { cyclesOnly?: boolean } = {
 describe('the pass that ends a build run', () => {
   it('closes with docs, which re-verifies and lands in the commit without moving the verdict', async () => {
     await pinVerify(VERIFY_TEST)
+    // A `lint` slot as well, because the pinned quality plan asks `security`
+    // for `command` evidence and only a non-`test` slot resolves to that kind.
+    await pinInstantVerify(project.dir)
     await runStart(project.dir, { track: 'build', goal: 'Add a Send button' }, clock)
 
     await rosterSet(project.dir, {
@@ -266,9 +283,9 @@ describe('the pass that ends a build run', () => {
     )
 
     // Run through the engine, so the cycle carries a ledger of its own for the
-    // closing pass to be compared against.
-    const inCycle = await verifyRun(project.dir, { slot: 'test', wait_ms: 4000 }, clock)
-    expect(inCycle.exit_code).toBe(0)
+    // closing pass to be compared against. The agent never supplies the kind —
+    // the slot does — so each citation is labelled the way its slot resolves.
+    const evidence = await qualityEvidence(project.dir, clock)
     await runLog(
       project.dir,
       {
@@ -276,7 +293,7 @@ describe('the pass that ends a build run', () => {
         result: {
           status: 'pass',
           summary: 'The suite the engine ran exits 0.',
-          evidence: [{ kind: 'command', ref: inCycle.command, excerpt: 'tests 1, pass 1, fail 0' }],
+          evidence,
           findings: [],
           files_touched: [],
           next_hint: null,
@@ -311,7 +328,9 @@ describe('the pass that ends a build run', () => {
     // reader of `cycle-01` would otherwise see a row for a command run after
     // the cycle closed.
     expect(path.dirname(reverified.log)).toBe(path.relative(project.dir, path.join(dir, 'closing', 'verify')))
-    expect(await readVerifyLedger(path.join(dir, 'cycle-01'))).toHaveLength(1)
+    // Two: the `test` and `lint` slots the cycle ran, and nothing the closing
+    // pass added — which is the point of the assertion.
+    expect(await readVerifyLedger(path.join(dir, 'cycle-01'))).toHaveLength(2)
     expect(await readVerifyLedger(path.join(dir, 'closing'))).toHaveLength(1)
 
     // 3. docs logs, carrying the run it was dispatched under. Its finding is

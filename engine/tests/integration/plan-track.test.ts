@@ -8,6 +8,7 @@ import { ApprovalRequiredError, gateSet, planCreate, storyAdd } from '../../src/
 import { rosterSet } from '../../src/ops/roster.js'
 import { cycleAdvance, runStart } from '../../src/ops/run.js'
 import { findPlanDir } from '../../src/store/plan-store.js'
+import { pinInstantVerify, qualityEvidence } from '../helpers/quality-evidence.js'
 import { makeTmpProject, type TmpProject } from '../helpers/tmp-project.js'
 
 const NOW = new Date('2026-07-27T09:00:00.000Z')
@@ -52,6 +53,8 @@ const WRITER_PASS = {
 beforeEach(async () => {
   project = await makeTmpProject({ 'package.json': JSON.stringify({ scripts: { test: 'vitest run' } }) })
   await initLoop(project.dir, clock)
+  // Before `runStart`, which pins the verify block.
+  await pinInstantVerify(project.dir)
   await planCreate(project.dir, { slug: 'user-auth', title: 'User authentication' }, clock)
   await runStart(project.dir, { track: 'plan', goal: 'Add authentication', plan: 'P001' }, clock)
 })
@@ -102,6 +105,25 @@ describe('an idea becomes stories', () => {
     await storyAdd(
       project.dir,
       { plan: 'P001', title: 'Session token', acceptance: ['Tokens expire after 24h'], depends_on: ['P001-S01'] },
+      clock,
+    )
+
+    // `planner` is the plan track's first required agent, so it is also the
+    // agent the pinned quality plan routes its base dispatch to — this track
+    // has no `verifier`. Its result is what carries the cycle's evidence.
+    await runLog(
+      project.dir,
+      {
+        agent: 'planner',
+        result: {
+          status: 'pass',
+          summary: 'The plan is written and its stories are in dependency order.',
+          evidence: await qualityEvidence(project.dir, clock),
+          findings: [],
+          files_touched: [],
+          next_hint: null,
+        },
+      },
       clock,
     )
 

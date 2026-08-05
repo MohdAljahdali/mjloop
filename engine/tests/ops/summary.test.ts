@@ -5,6 +5,7 @@ import { renderSummaryLine, stateSummary } from '../../src/ops/summary.js'
 import { initLoop } from '../../src/ops/init.js'
 import { cycleAdvance, runDirPath, runStart } from '../../src/ops/run.js'
 import { runLog } from '../../src/ops/log.js'
+import { QualityBudgetExhaustedError } from '../../src/ops/quality-control.js'
 import { resolveLoopPaths } from '../../src/store/paths.js'
 import { makeTmpProject, type TmpProject } from '../helpers/tmp-project.js'
 
@@ -63,7 +64,7 @@ describe('stateSummary', () => {
     expect(renderSummaryLine(summary)).toContain('cycle 1/1')
   })
 
-  it('still reports the findings a halted run ended with', async () => {
+  it('still reports the findings a suspended run stopped on', async () => {
     await initLoop(project.dir, clock)
     await runStart(project.dir, { track: 'edit', goal: 'Rename submit label' }, clock)
     await runLog(
@@ -81,12 +82,15 @@ describe('stateSummary', () => {
       },
       clock,
     )
-    await cycleAdvance(project.dir, { agents: ['editor', 'verifier'], result: 'fail' }, clock)
+    // An enforcing run reaching its pinned `max_cycles` is suspended for an
+    // amendment rather than halted.
+    await expect(cycleAdvance(project.dir, { agents: ['editor', 'verifier'], result: 'fail' }, clock))
+      .rejects.toThrow(QualityBudgetExhaustedError)
 
-    // HALT.md lists this finding as open. A summary reading 0H/0M/0L would
-    // tell a resumed session the run ended with nothing outstanding.
+    // A summary reading 0H/0M/0L would tell a resumed session the run stopped
+    // with nothing outstanding.
     const summary = await stateSummary(project.dir)
-    expect(summary.status).toBe('halted')
+    expect(summary.status).toBe('budget_exhausted')
     expect(summary.findings).toEqual({ high: 1, medium: 0, low: 0 })
     expect(renderSummaryLine(summary)).toContain('findings 1H/0M/0L')
   })
@@ -103,16 +107,22 @@ describe('stateSummary', () => {
     expect(renderSummaryLine(summary)).toContain('cycle 1/?')
   })
 
-  it('surfaces the halt reason', async () => {
+  it('surfaces the suspension reason', async () => {
     await initLoop(project.dir, clock)
     await runStart(project.dir, { track: 'edit', goal: 'Rename' }, clock)
-    await cycleAdvance(project.dir, { agents: ['editor', 'verifier'], result: 'fail' }, clock)
+    await expect(cycleAdvance(project.dir, { agents: ['editor', 'verifier'], result: 'fail' }, clock))
+      .rejects.toThrow(QualityBudgetExhaustedError)
 
     const summary = await stateSummary(project.dir)
-    expect(summary.status).toBe('halted')
-    expect(summary.halt_reason).toContain('cycle cap 1')
-    expect(summary.last_cycle).toEqual({ result: 'fail', agents: ['editor', 'verifier'] })
-    expect(renderSummaryLine(summary)).toContain('halted')
+    expect(summary.status).toBe('budget_exhausted')
+    // The reason has to carry the way out, because a suspension nobody can
+    // lift is not an ending.
+    expect(summary.halt_reason).toContain('quality budget max_cycles reached')
+    expect(summary.halt_reason).toContain('Raise it with one explicit amendment to resume')
+    // No closed cycle: a suspension pauses the run *at* the cycle it was
+    // working, which is what lets an amendment resume it there.
+    expect(summary.last_cycle).toBeNull()
+    expect(renderSummaryLine(summary)).toContain('budget_exhausted')
   })
 })
 

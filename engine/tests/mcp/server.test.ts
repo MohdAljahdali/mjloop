@@ -13,6 +13,7 @@ import { acceptProfile } from '../../src/store/project-profile-store.js'
 import { readPolicy } from '../../src/store/quality-store.js'
 import { writePackage } from '../../src/store/skill-library-store.js'
 import { StateStore } from '../../src/store/state-store.js'
+import { pinInstantVerify, qualityEvidence } from '../helpers/quality-evidence.js'
 import { makeTmpProject, type TmpProject } from '../helpers/tmp-project.js'
 
 let project: TmpProject
@@ -42,6 +43,9 @@ function isError(result: unknown): boolean {
 /** A passing `build` cycle, which is the only precondition of a closing pass. */
 async function passingBuildRun(): Promise<{ runId: string; closingAgents: string[] }> {
   await client.callTool({ name: 'mjloop_init', arguments: { project_dir: project.dir } })
+  // Between init and start, because `runStart` pins the verify block: a fresh
+  // project pins an explicit quality mode and closes only on engine receipts.
+  await pinInstantVerify(project.dir)
   await client.callTool({
     name: 'mjloop_run_start',
     arguments: { project_dir: project.dir, track: 'build', goal: 'Add the export button' },
@@ -62,6 +66,21 @@ async function passingBuildRun(): Promise<{ runId: string; closingAgents: string
       },
     },
   })
+  // `verifier` is ordered after `builder` on the build track.
+  await client.callTool({
+    name: 'mjloop_run_log',
+    arguments: {
+      project_dir: project.dir,
+      agent: 'builder',
+      result: {
+        status: 'pass',
+        summary: 'Added the export button.',
+        evidence: [{ kind: 'file', ref: 'src/Export.tsx', excerpt: 'export button' }],
+        findings: [],
+        files_touched: ['src/Export.tsx'],
+      },
+    },
+  })
   await client.callTool({
     name: 'mjloop_run_log',
     arguments: {
@@ -70,7 +89,7 @@ async function passingBuildRun(): Promise<{ runId: string; closingAgents: string
       result: {
         status: 'pass',
         summary: 'The suite is green with the button in place.',
-        evidence: [{ kind: 'command', ref: 'npm test', excerpt: '12 passed' }],
+        evidence: await qualityEvidence(project.dir),
         findings: [],
         files_touched: ['src/Export.tsx'],
       },
@@ -301,6 +320,7 @@ describe('tool behaviour', () => {
 
   it('drives a full passing edit cycle', async () => {
     await client.callTool({ name: 'mjloop_init', arguments: { project_dir: project.dir } })
+    await pinInstantVerify(project.dir)
     await client.callTool({
       name: 'mjloop_run_start',
       arguments: { project_dir: project.dir, track: 'edit', goal: 'Rename submit label' },
@@ -309,7 +329,23 @@ describe('tool behaviour', () => {
       name: 'mjloop_roster_set',
       arguments: { project_dir: project.dir, cycle: 1, selected: ['editor', 'verifier'], skipped: {} },
     })
+    // `verifier` is ordered after `editor` on the edit track, and this roster
+    // drafted both — so `editor` logs first or the verifier result is refused.
     await client.callTool({
+      name: 'mjloop_run_log',
+      arguments: {
+        project_dir: project.dir,
+        agent: 'editor',
+        result: {
+          status: 'pass',
+          summary: 'Renamed the submit label.',
+          evidence: [{ kind: 'file', ref: 'src/Button.tsx', excerpt: "return 'Send'" }],
+          findings: [],
+          files_touched: ['src/Button.tsx'],
+        },
+      },
+    })
+    const logged = await client.callTool({
       name: 'mjloop_run_log',
       arguments: {
         project_dir: project.dir,
@@ -317,12 +353,14 @@ describe('tool behaviour', () => {
         result: {
           status: 'pass',
           summary: 'All tests pass after the rename.',
-          evidence: [{ kind: 'command', ref: 'npm test', excerpt: '12 passed' }],
+          evidence: await qualityEvidence(project.dir),
           findings: [],
           files_touched: ['src/Button.tsx'],
         },
       },
     })
+    expect(isError(logged)).toBe(false)
+
     const advanced = await client.callTool({
       name: 'mjloop_cycle_advance',
       arguments: { project_dir: project.dir, agents: ['editor', 'verifier'], result: 'pass' },
@@ -335,6 +373,7 @@ describe('tool behaviour', () => {
   // nothing on the leader's side consumes it yet.
   it('summarizes quality_dispatches on the wire instead of shipping each context packet\'s full text', async () => {
     await client.callTool({ name: 'mjloop_init', arguments: { project_dir: project.dir } })
+    await pinInstantVerify(project.dir)
     await client.callTool({
       name: 'mjloop_run_start',
       arguments: { project_dir: project.dir, track: 'edit', goal: 'Rename submit label' },

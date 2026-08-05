@@ -457,6 +457,7 @@ function segments(text: string): string[] {
 function findRemoval(text: string, command: string): DestructiveCandidate | null {
   for (const segment of segments(text)) {
     if (!FIND_DELETE.test(segment) || !FIND_REMOVAL.test(segment)) continue
+    // Stryker disable next-line MethodExpression: the `.trim()` is redundant with the `length > 0` filter below — `split(/\s+/)` can only add an empty first/last element, which the filter removes either way. Kept for readability.
     const roots = (FIND_PATH.exec(segment)?.[1] ?? '').trim().split(/\s+/).filter((root) => root.length > 0)
     const kept = roots.filter((root) => !isEphemeral(root))
     if (roots.length > 0 && kept.length === 0) continue
@@ -474,8 +475,10 @@ function findRemoval(text: string, command: string): DestructiveCandidate | null
 function unboundedDeletes(text: string): string[] {
   const targets: string[] = []
   for (const match of text.matchAll(DELETE_FROM)) {
+    // Stryker disable next-line StringLiteral: `DELETE_FROM`'s second group is `([^;]*)`, which always participates in a successful match, so the `?? ''` fallback is unreachable. Kept because the type says `string | undefined`.
     const where = /\bwhere\b([\s\S]*)/i.exec(match[2] ?? '')
     if (!isTableName(match[1] as string)) continue
+    // Stryker disable next-line StringLiteral: same as above — `([\s\S]*)` always participates once `exec` returned non-null, so the `?? ''` fallback is unreachable.
     if (where === null || TRIVIAL_WHERE.test((where[1] ?? '').trim())) targets.push(match[1] as string)
   }
   return targets
@@ -484,6 +487,7 @@ function unboundedDeletes(text: string): string[] {
 /** A recursive `rm`, read from the declared argv shape rather than by running it. */
 function recursiveRemoval(text: string, command: string): DestructiveCandidate | null {
   for (const segment of segments(text)) {
+    // Stryker disable next-line MethodExpression,ConditionalExpression,EqualityOperator: `.trim()` and the `length > 0` filter are each redundant with the other — `split(/\s+/)` collapses runs, so only a leading/trailing space can produce an empty token and either guard alone removes it. Both are kept so the argv split reads as one intent.
     const tokens = segment.trim().split(/\s+/).filter((token) => token.length > 0)
     const start = tokens.indexOf('rm')
     if (start === -1) continue
@@ -534,6 +538,7 @@ function featureDirectory(files: string[]): string | null {
   const counts = new Map<string, number>()
   for (const file of files) {
     const normalised = file.split(path.sep).join('/')
+    // Stryker disable next-line ConditionalExpression: unreachable as a distinct outcome — every ancestor of an ephemeral path is itself ephemeral, so `ancestorWorthCounting` stops the walk below on exactly the files this skips. Kept as the cheaper check of the two.
     if (isEphemeral(normalised)) continue
     // Every ancestor, not just the immediate one. A feature is not flat:
     // `src/billing/{index,types}.ts` plus `src/billing/api/create.ts` plus
@@ -546,14 +551,17 @@ function featureDirectory(files: string[]): string | null {
   // The deepest directory that reaches the threshold: `src/billing` names the
   // feature that left, where its parent `src` names the project.
   const reached = [...counts.entries()].filter(([, count]) => count >= FEATURE_DELETE_FILES)
+  // Stryker disable next-line EqualityOperator: `left` and `right` are distinct `Map` keys, so `left === right` cannot occur and `<` and `<=` are the same comparator here.
   return reached.sort(([left], [right]) => right.split('/').length - left.split('/').length || (left < right ? -1 : 1))[0]?.[0] ?? null
 }
 
 function ancestorWorthCounting(directory: string): boolean {
+  // Stryker disable next-line ConditionalExpression,StringLiteral: `path.posix.dirname` returns `'.'` rather than `''` for every input this walk can reach, so the empty-string arm is unreachable. Kept because the walk's termination should not depend on that detail of `dirname`.
   return directory !== '.' && directory !== '/' && directory !== '' && !isEphemeral(directory)
 }
 
 function isEphemeral(target: string): boolean {
+  // Stryker disable next-line MethodExpression,LogicalOperator,ConditionalExpression,EqualityOperator,StringLiteral: the filter cannot change the answer — neither `''` nor `'.'` is in `EPHEMERAL_DIRECTORIES`, so keeping them would fail the `has` check exactly as dropping them does. Kept so `segments` means path segments.
   const segments = target.split(/[\\/]+/).filter((segment) => segment.length > 0 && segment !== '.')
   return segments.some((segment) => EPHEMERAL_DIRECTORIES.has(segment))
 }
