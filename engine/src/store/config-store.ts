@@ -2,7 +2,12 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import * as YAML from 'yaml'
 import * as z from 'zod'
-import { ConfigSchema, LEGACY_CONFIG_KEYS, type Config } from '../schemas/config.js'
+import {
+  ConfigSchema,
+  LEGACY_CONFIG_KEYS,
+  type Config,
+  type QualityConfigSource,
+} from '../schemas/config.js'
 import { resolveLoopPaths } from './paths.js'
 
 export class ConfigMissingError extends Error {
@@ -12,7 +17,30 @@ export class ConfigMissingError extends Error {
   }
 }
 
-export async function loadConfig(projectDir: string): Promise<Config> {
+function hasOwn(record: object, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(record, key)
+}
+
+function qualityConfigSource(document: unknown): QualityConfigSource {
+  if (typeof document !== 'object' || document === null || Array.isArray(document)) return 'default-existing'
+  if (!hasOwn(document, 'orchestration')) return 'default-existing'
+
+  const orchestration = (document as Record<string, unknown>).orchestration
+  if (typeof orchestration !== 'object' || orchestration === null || Array.isArray(orchestration)) {
+    return 'default-existing'
+  }
+  if (!hasOwn(orchestration, 'quality')) return 'default-existing'
+
+  const quality = (orchestration as Record<string, unknown>).quality
+  if (typeof quality !== 'object' || quality === null || Array.isArray(quality)) return 'default-existing'
+  if (hasOwn(quality, 'mode')) return 'explicit'
+  if (hasOwn(quality, 'independent_plan_review') || hasOwn(quality, 'independent_verification')) return 'legacy'
+  return 'default-existing'
+}
+
+export async function loadConfigRecord(
+  projectDir: string,
+): Promise<{ config: Config; qualitySource: QualityConfigSource }> {
   const file = resolveLoopPaths(projectDir).config
   let raw: string
   try {
@@ -31,6 +59,7 @@ export async function loadConfig(projectDir: string): Promise<Config> {
     // both `always` and `never`, because YAML refuses the document outright.
     throw new Error(`${file} is not valid YAML:\n${(error as Error).message}`)
   }
+  const qualitySource = qualityConfigSource(document)
   const stripped =
     typeof document === 'object' && document !== null && !Array.isArray(document)
       ? Object.fromEntries(
@@ -41,7 +70,11 @@ export async function loadConfig(projectDir: string): Promise<Config> {
       : document
   const parsed = ConfigSchema.safeParse(stripped)
   if (!parsed.success) throw new Error(`${file} is invalid:\n${z.prettifyError(parsed.error)}`)
-  return parsed.data
+  return { config: parsed.data, qualitySource }
+}
+
+export async function loadConfig(projectDir: string): Promise<Config> {
+  return (await loadConfigRecord(projectDir)).config
 }
 
 export async function writeConfig(projectDir: string, config: Config): Promise<void> {

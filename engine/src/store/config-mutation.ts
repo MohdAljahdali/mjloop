@@ -10,6 +10,7 @@ import {
   DiscoveryCompletionSchema,
   FeatureDiscoveryModeSchema,
   LEGACY_CONFIG_KEYS,
+  QualityModeSchema,
   SkillSourceSchema,
   SkillUpdateModeSchema,
   SpecialistModeSchema,
@@ -19,6 +20,8 @@ import {
 import { writeTextAtomic } from './atomic.js'
 import { withLock } from './lock.js'
 import { resolveLoopPaths } from './paths.js'
+import { StateStore } from './state-store.js'
+import { ensureRunQualityPolicy } from '../ops/quality-policy.js'
 
 const VerifySlotSchema = z.enum(['test', 'lint', 'build'])
 
@@ -99,12 +102,9 @@ export const ConfigChangeSchema = z.discriminatedUnion('kind', [
     kind: z.literal('orchestration.execution.repair_attempts'),
     value: z.number().int().min(0).max(5),
   }),
-  // The one section whose leaves share a type, so one kind with a `key` costs
-  // nothing in strictness — the same shape `gate` and `limit` already use.
   z.strictObject({
-    kind: z.literal('orchestration.quality'),
-    key: z.enum(['independent_plan_review', 'independent_verification']),
-    value: z.boolean(),
+    kind: z.literal('orchestration.quality.mode'),
+    value: QualityModeSchema,
   }),
   z.strictObject({
     kind: z.literal('orchestration.skills.sources'),
@@ -149,7 +149,38 @@ export async function mutateConfig(projectDir: string, patch: ConfigPatch): Prom
   const parsedPatch = ConfigPatchSchema.parse(patch)
   const paths = resolveLoopPaths(projectDir)
 
-  return withLock(paths.lock, async () => {
+  // A run opened before quality pins existed must snapshot the old setting
+  // before this guarded write moves it. Existing pinned runs are only
+  // validated here; ensureRunQualityPolicy never rewrites their policy.
+  if (parsedPatch.changes.some((change) => change.kind === 'orchestration.quality.mode')) {
+    try {
+      const state = await new StateStore(projectDir).get()
+      const active = ['running', 'paused', 'waiting_for_user', 'budget_exhausted'].includes(state.status)
+      if (state.run_id !== null && state.track !== null && active) {
+        await ensureRunQualityPolicy(projectDir)
+      }
+    } catch (error) {
+      try {
+        await fs.access(paths.state)
+      } catch {
+        // Store-only tests and configuration preparation legitimately have no
+        // state file yet. A project with a state file must not hide a corrupt
+        // or incomplete policy behind a successful mode change.
+        return mutateConfigWithoutBootstrap(projectDir, parsedPatch, paths)
+      }
+      throw error
+    }
+  }
+
+  return mutateConfigWithoutBootstrap(projectDir, parsedPatch, paths)
+}
+
+async function mutateConfigWithoutBootstrap(
+  projectDir: string,
+  parsedPatch: ConfigPatch,
+  paths: ReturnType<typeof resolveLoopPaths>,
+): Promise<{ revision: string }> {
+  return withLock(paths.lock, async (ownership) => {
     let raw: string
     try {
       raw = await fs.readFile(paths.config, 'utf8')
@@ -181,7 +212,9 @@ export async function mutateConfig(projectDir: string, patch: ConfigPatch): Prom
     }
 
     const next = document.toString({ lineWidth: 100 })
-    await writeTextAtomic(paths.config, next)
+    await ownership.runIfOwned(async (stagingDir) => {
+      await writeTextAtomic(paths.config, next, { stagingDir })
+    })
     return { revision: configRevision(next) }
   })
 }
@@ -248,8 +281,14 @@ function applyChange(document: YAML.Document, change: ConfigChange): void {
     case 'orchestration.execution.repair_attempts':
       document.setIn(['orchestration', 'execution', 'repair_attempts'], change.value)
       return
-    case 'orchestration.quality':
-      document.setIn(['orchestration', 'quality', change.key], change.value)
+    case 'orchestration.quality.mode':
+      if (document.hasIn(['orchestration', 'quality', 'independent_plan_review'])) {
+        document.deleteIn(['orchestration', 'quality', 'independent_plan_review'])
+      }
+      if (document.hasIn(['orchestration', 'quality', 'independent_verification'])) {
+        document.deleteIn(['orchestration', 'quality', 'independent_verification'])
+      }
+      document.setIn(['orchestration', 'quality', 'mode'], change.value)
       return
     case 'orchestration.skills.sources':
       document.setIn(['orchestration', 'skills', 'sources'], change.value)

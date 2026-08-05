@@ -2239,7 +2239,7 @@ var require_websocket = __commonJS({
     var http2 = __require("http");
     var net = __require("net");
     var tls = __require("tls");
-    var { randomBytes, createHash } = __require("crypto");
+    var { randomBytes, createHash: createHash2 } = __require("crypto");
     var { Duplex, Readable } = __require("stream");
     var { URL: URL2 } = __require("url");
     var PerMessageDeflate = require_permessage_deflate();
@@ -2896,7 +2896,7 @@ var require_websocket = __commonJS({
           abortHandshake(websocket, socket, "Invalid Upgrade header");
           return;
         }
-        const digest = createHash("sha1").update(key + GUID).digest("base64");
+        const digest = createHash2("sha1").update(key + GUID).digest("base64");
         if (res.headers["sec-websocket-accept"] !== digest) {
           abortHandshake(websocket, socket, "Invalid Sec-WebSocket-Accept header");
           return;
@@ -2977,21 +2977,21 @@ var require_websocket = __commonJS({
       }
       return tls.connect(options);
     }
-    function abortHandshake(websocket, stream, message) {
+    function abortHandshake(websocket, stream2, message) {
       websocket._readyState = WebSocket2.CLOSING;
       const err = new Error(message);
       Error.captureStackTrace(err, abortHandshake);
-      if (stream.setHeader) {
-        stream[kAborted] = true;
-        stream.abort();
-        if (stream.socket && !stream.socket.destroyed) {
-          stream.socket.destroy();
+      if (stream2.setHeader) {
+        stream2[kAborted] = true;
+        stream2.abort();
+        if (stream2.socket && !stream2.socket.destroyed) {
+          stream2.socket.destroy();
         }
         process.nextTick(emitErrorAndClose, websocket, err);
       } else {
-        stream.destroy(err);
-        stream.once("error", websocket.emit.bind(websocket, "error"));
-        stream.once("close", websocket.emitClose.bind(websocket));
+        stream2.destroy(err);
+        stream2.once("error", websocket.emit.bind(websocket, "error"));
+        stream2.once("close", websocket.emitClose.bind(websocket));
       }
     }
     function sendAfterClose(websocket, data, cb) {
@@ -3048,8 +3048,8 @@ var require_websocket = __commonJS({
     function receiverOnPong(data) {
       this[kWebSocket].emit("pong", data);
     }
-    function resume(stream) {
-      stream.resume();
+    function resume(stream2) {
+      stream2.resume();
     }
     function senderOnError(err) {
       const websocket = this[kWebSocket];
@@ -3119,8 +3119,8 @@ var require_stream = __commonJS({
     "use strict";
     var WebSocket2 = require_websocket();
     var { Duplex } = __require("stream");
-    function emitClose(stream) {
-      stream.emit("close");
+    function emitClose(stream2) {
+      stream2.emit("close");
     }
     function duplexOnEnd() {
       if (!this.destroyed && this._writableState.finished) {
@@ -3263,7 +3263,7 @@ var require_websocket_server = __commonJS({
     var EventEmitter = __require("events");
     var http2 = __require("http");
     var { Duplex } = __require("stream");
-    var { createHash } = __require("crypto");
+    var { createHash: createHash2 } = __require("crypto");
     var extension = require_extension();
     var PerMessageDeflate = require_permessage_deflate();
     var subprotocol = require_subprotocol();
@@ -3560,7 +3560,7 @@ var require_websocket_server = __commonJS({
           );
         }
         if (this._state > RUNNING) return abortHandshake(socket, 503);
-        const digest = createHash("sha1").update(key + GUID).digest("base64");
+        const digest = createHash2("sha1").update(key + GUID).digest("base64");
         const headers = [
           "HTTP/1.1 101 Switching Protocols",
           "Upgrade: websocket",
@@ -3722,17 +3722,17 @@ var require_visit = __commonJS({
     visit.BREAK = BREAK;
     visit.SKIP = SKIP;
     visit.REMOVE = REMOVE;
-    function visit_(key, node, visitor, path27) {
-      const ctrl = callVisitor(key, node, visitor, path27);
+    function visit_(key, node, visitor, path31) {
+      const ctrl = callVisitor(key, node, visitor, path31);
       if (identity.isNode(ctrl) || identity.isPair(ctrl)) {
-        replaceNode(key, path27, ctrl);
-        return visit_(key, ctrl, visitor, path27);
+        replaceNode(key, path31, ctrl);
+        return visit_(key, ctrl, visitor, path31);
       }
       if (typeof ctrl !== "symbol") {
         if (identity.isCollection(node)) {
-          path27 = Object.freeze(path27.concat(node));
+          path31 = Object.freeze(path31.concat(node));
           for (let i = 0; i < node.items.length; ++i) {
-            const ci = visit_(i, node.items[i], visitor, path27);
+            const ci = visit_(i, node.items[i], visitor, path31);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -3743,13 +3743,13 @@ var require_visit = __commonJS({
             }
           }
         } else if (identity.isPair(node)) {
-          path27 = Object.freeze(path27.concat(node));
-          const ck = visit_("key", node.key, visitor, path27);
+          path31 = Object.freeze(path31.concat(node));
+          const ck = visit_("key", node.key, visitor, path31);
           if (ck === BREAK)
             return BREAK;
           else if (ck === REMOVE)
             node.key = null;
-          const cv = visit_("value", node.value, visitor, path27);
+          const cv = visit_("value", node.value, visitor, path31);
           if (cv === BREAK)
             return BREAK;
           else if (cv === REMOVE)
@@ -3770,17 +3770,17 @@ var require_visit = __commonJS({
     visitAsync.BREAK = BREAK;
     visitAsync.SKIP = SKIP;
     visitAsync.REMOVE = REMOVE;
-    async function visitAsync_(key, node, visitor, path27) {
-      const ctrl = await callVisitor(key, node, visitor, path27);
+    async function visitAsync_(key, node, visitor, path31) {
+      const ctrl = await callVisitor(key, node, visitor, path31);
       if (identity.isNode(ctrl) || identity.isPair(ctrl)) {
-        replaceNode(key, path27, ctrl);
-        return visitAsync_(key, ctrl, visitor, path27);
+        replaceNode(key, path31, ctrl);
+        return visitAsync_(key, ctrl, visitor, path31);
       }
       if (typeof ctrl !== "symbol") {
         if (identity.isCollection(node)) {
-          path27 = Object.freeze(path27.concat(node));
+          path31 = Object.freeze(path31.concat(node));
           for (let i = 0; i < node.items.length; ++i) {
-            const ci = await visitAsync_(i, node.items[i], visitor, path27);
+            const ci = await visitAsync_(i, node.items[i], visitor, path31);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -3791,13 +3791,13 @@ var require_visit = __commonJS({
             }
           }
         } else if (identity.isPair(node)) {
-          path27 = Object.freeze(path27.concat(node));
-          const ck = await visitAsync_("key", node.key, visitor, path27);
+          path31 = Object.freeze(path31.concat(node));
+          const ck = await visitAsync_("key", node.key, visitor, path31);
           if (ck === BREAK)
             return BREAK;
           else if (ck === REMOVE)
             node.key = null;
-          const cv = await visitAsync_("value", node.value, visitor, path27);
+          const cv = await visitAsync_("value", node.value, visitor, path31);
           if (cv === BREAK)
             return BREAK;
           else if (cv === REMOVE)
@@ -3824,23 +3824,23 @@ var require_visit = __commonJS({
       }
       return visitor;
     }
-    function callVisitor(key, node, visitor, path27) {
+    function callVisitor(key, node, visitor, path31) {
       if (typeof visitor === "function")
-        return visitor(key, node, path27);
+        return visitor(key, node, path31);
       if (identity.isMap(node))
-        return visitor.Map?.(key, node, path27);
+        return visitor.Map?.(key, node, path31);
       if (identity.isSeq(node))
-        return visitor.Seq?.(key, node, path27);
+        return visitor.Seq?.(key, node, path31);
       if (identity.isPair(node))
-        return visitor.Pair?.(key, node, path27);
+        return visitor.Pair?.(key, node, path31);
       if (identity.isScalar(node))
-        return visitor.Scalar?.(key, node, path27);
+        return visitor.Scalar?.(key, node, path31);
       if (identity.isAlias(node))
-        return visitor.Alias?.(key, node, path27);
+        return visitor.Alias?.(key, node, path31);
       return void 0;
     }
-    function replaceNode(key, path27, node) {
-      const parent = path27[path27.length - 1];
+    function replaceNode(key, path31, node) {
+      const parent = path31[path31.length - 1];
       if (identity.isCollection(parent)) {
         parent.items[key] = node;
       } else if (identity.isPair(parent)) {
@@ -4450,10 +4450,10 @@ var require_Collection = __commonJS({
     var createNode = require_createNode();
     var identity = require_identity();
     var Node = require_Node();
-    function collectionFromPath(schema, path27, value) {
+    function collectionFromPath(schema, path31, value) {
       let v = value;
-      for (let i = path27.length - 1; i >= 0; --i) {
-        const k = path27[i];
+      for (let i = path31.length - 1; i >= 0; --i) {
+        const k = path31[i];
         if (typeof k === "number" && Number.isInteger(k) && k >= 0) {
           const a = [];
           a[k] = v;
@@ -4472,7 +4472,7 @@ var require_Collection = __commonJS({
         sourceObjects: /* @__PURE__ */ new Map()
       });
     }
-    var isEmptyPath = (path27) => path27 == null || typeof path27 === "object" && !!path27[Symbol.iterator]().next().done;
+    var isEmptyPath = (path31) => path31 == null || typeof path31 === "object" && !!path31[Symbol.iterator]().next().done;
     var Collection = class extends Node.NodeBase {
       constructor(type, schema) {
         super(type);
@@ -4502,11 +4502,11 @@ var require_Collection = __commonJS({
        * be a Pair instance or a `{ key, value }` object, which may not have a key
        * that already exists in the map.
        */
-      addIn(path27, value) {
-        if (isEmptyPath(path27))
+      addIn(path31, value) {
+        if (isEmptyPath(path31))
           this.add(value);
         else {
-          const [key, ...rest] = path27;
+          const [key, ...rest] = path31;
           const node = this.get(key, true);
           if (identity.isCollection(node))
             node.addIn(rest, value);
@@ -4520,8 +4520,8 @@ var require_Collection = __commonJS({
        * Removes a value from the collection.
        * @returns `true` if the item was found and removed.
        */
-      deleteIn(path27) {
-        const [key, ...rest] = path27;
+      deleteIn(path31) {
+        const [key, ...rest] = path31;
         if (rest.length === 0)
           return this.delete(key);
         const node = this.get(key, true);
@@ -4535,8 +4535,8 @@ var require_Collection = __commonJS({
        * scalar values from their surrounding node; to disable set `keepScalar` to
        * `true` (collections are always returned intact).
        */
-      getIn(path27, keepScalar) {
-        const [key, ...rest] = path27;
+      getIn(path31, keepScalar) {
+        const [key, ...rest] = path31;
         const node = this.get(key, true);
         if (rest.length === 0)
           return !keepScalar && identity.isScalar(node) ? node.value : node;
@@ -4554,8 +4554,8 @@ var require_Collection = __commonJS({
       /**
        * Checks if the collection includes a value with the key `key`.
        */
-      hasIn(path27) {
-        const [key, ...rest] = path27;
+      hasIn(path31) {
+        const [key, ...rest] = path31;
         if (rest.length === 0)
           return this.has(key);
         const node = this.get(key, true);
@@ -4565,8 +4565,8 @@ var require_Collection = __commonJS({
        * Sets a value in this collection. For `!!set`, `value` needs to be a
        * boolean to add/remove the item from the set.
        */
-      setIn(path27, value) {
-        const [key, ...rest] = path27;
+      setIn(path31, value) {
+        const [key, ...rest] = path31;
         if (rest.length === 0) {
           this.set(key, value);
         } else {
@@ -7081,9 +7081,9 @@ var require_Document = __commonJS({
           this.contents.add(value);
       }
       /** Adds a value to the document. */
-      addIn(path27, value) {
+      addIn(path31, value) {
         if (assertCollection(this.contents))
-          this.contents.addIn(path27, value);
+          this.contents.addIn(path31, value);
       }
       /**
        * Create a new `Alias` node, ensuring that the target `node` has the required anchor.
@@ -7158,14 +7158,14 @@ var require_Document = __commonJS({
        * Removes a value from the document.
        * @returns `true` if the item was found and removed.
        */
-      deleteIn(path27) {
-        if (Collection.isEmptyPath(path27)) {
+      deleteIn(path31) {
+        if (Collection.isEmptyPath(path31)) {
           if (this.contents == null)
             return false;
           this.contents = null;
           return true;
         }
-        return assertCollection(this.contents) ? this.contents.deleteIn(path27) : false;
+        return assertCollection(this.contents) ? this.contents.deleteIn(path31) : false;
       }
       /**
        * Returns item at `key`, or `undefined` if not found. By default unwraps
@@ -7180,10 +7180,10 @@ var require_Document = __commonJS({
        * scalar values from their surrounding node; to disable set `keepScalar` to
        * `true` (collections are always returned intact).
        */
-      getIn(path27, keepScalar) {
-        if (Collection.isEmptyPath(path27))
+      getIn(path31, keepScalar) {
+        if (Collection.isEmptyPath(path31))
           return !keepScalar && identity.isScalar(this.contents) ? this.contents.value : this.contents;
-        return identity.isCollection(this.contents) ? this.contents.getIn(path27, keepScalar) : void 0;
+        return identity.isCollection(this.contents) ? this.contents.getIn(path31, keepScalar) : void 0;
       }
       /**
        * Checks if the document includes a value with the key `key`.
@@ -7194,10 +7194,10 @@ var require_Document = __commonJS({
       /**
        * Checks if the document includes a value at `path`.
        */
-      hasIn(path27) {
-        if (Collection.isEmptyPath(path27))
+      hasIn(path31) {
+        if (Collection.isEmptyPath(path31))
           return this.contents !== void 0;
-        return identity.isCollection(this.contents) ? this.contents.hasIn(path27) : false;
+        return identity.isCollection(this.contents) ? this.contents.hasIn(path31) : false;
       }
       /**
        * Sets a value in this document. For `!!set`, `value` needs to be a
@@ -7214,13 +7214,13 @@ var require_Document = __commonJS({
        * Sets a value in this document. For `!!set`, `value` needs to be a
        * boolean to add/remove the item from the set.
        */
-      setIn(path27, value) {
-        if (Collection.isEmptyPath(path27)) {
+      setIn(path31, value) {
+        if (Collection.isEmptyPath(path31)) {
           this.contents = value;
         } else if (this.contents == null) {
-          this.contents = Collection.collectionFromPath(this.schema, Array.from(path27), value);
+          this.contents = Collection.collectionFromPath(this.schema, Array.from(path31), value);
         } else if (assertCollection(this.contents)) {
-          this.contents.setIn(path27, value);
+          this.contents.setIn(path31, value);
         }
       }
       /**
@@ -9180,9 +9180,9 @@ var require_cst_visit = __commonJS({
     visit.BREAK = BREAK;
     visit.SKIP = SKIP;
     visit.REMOVE = REMOVE;
-    visit.itemAtPath = (cst, path27) => {
+    visit.itemAtPath = (cst, path31) => {
       let item = cst;
-      for (const [field, index] of path27) {
+      for (const [field, index] of path31) {
         const tok = item?.[field];
         if (tok && "items" in tok) {
           item = tok.items[index];
@@ -9191,23 +9191,23 @@ var require_cst_visit = __commonJS({
       }
       return item;
     };
-    visit.parentCollection = (cst, path27) => {
-      const parent = visit.itemAtPath(cst, path27.slice(0, -1));
-      const field = path27[path27.length - 1][0];
+    visit.parentCollection = (cst, path31) => {
+      const parent = visit.itemAtPath(cst, path31.slice(0, -1));
+      const field = path31[path31.length - 1][0];
       const coll = parent?.[field];
       if (coll && "items" in coll)
         return coll;
       throw new Error("Parent collection not found");
     };
-    function _visit(path27, item, visitor) {
-      let ctrl = visitor(item, path27);
+    function _visit(path31, item, visitor) {
+      let ctrl = visitor(item, path31);
       if (typeof ctrl === "symbol")
         return ctrl;
       for (const field of ["key", "value"]) {
         const token = item[field];
         if (token && "items" in token) {
           for (let i = 0; i < token.items.length; ++i) {
-            const ci = _visit(Object.freeze(path27.concat([[field, i]])), token.items[i], visitor);
+            const ci = _visit(Object.freeze(path31.concat([[field, i]])), token.items[i], visitor);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -9218,10 +9218,10 @@ var require_cst_visit = __commonJS({
             }
           }
           if (typeof ctrl === "function" && field === "key")
-            ctrl = ctrl(item, path27);
+            ctrl = ctrl(item, path31);
         }
       }
-      return typeof ctrl === "function" ? ctrl(item, path27) : ctrl;
+      return typeof ctrl === "function" ? ctrl(item, path31) : ctrl;
     }
     exports.visit = visit;
   }
@@ -10523,14 +10523,14 @@ var require_parser = __commonJS({
             case "scalar":
             case "single-quoted-scalar":
             case "double-quoted-scalar": {
-              const fs27 = this.flowScalar(this.type);
+              const fs31 = this.flowScalar(this.type);
               if (atNextItem || it.value) {
-                map.items.push({ start, key: fs27, sep: [] });
+                map.items.push({ start, key: fs31, sep: [] });
                 this.onKeyLine = true;
               } else if (it.sep) {
-                this.stack.push(fs27);
+                this.stack.push(fs31);
               } else {
-                Object.assign(it, { key: fs27, sep: [] });
+                Object.assign(it, { key: fs31, sep: [] });
                 this.onKeyLine = true;
               }
               return;
@@ -10658,13 +10658,13 @@ var require_parser = __commonJS({
             case "scalar":
             case "single-quoted-scalar":
             case "double-quoted-scalar": {
-              const fs27 = this.flowScalar(this.type);
+              const fs31 = this.flowScalar(this.type);
               if (!it || it.value)
-                fc.items.push({ start: [], key: fs27, sep: [] });
+                fc.items.push({ start: [], key: fs31, sep: [] });
               else if (it.sep)
-                this.stack.push(fs27);
+                this.stack.push(fs31);
               else
-                Object.assign(it, { key: fs27, sep: [] });
+                Object.assign(it, { key: fs31, sep: [] });
               return;
             }
             case "flow-map-end":
@@ -10973,9 +10973,9 @@ var require_dist = __commonJS({
 });
 
 // src/web/cli.ts
-import { spawn } from "node:child_process";
-import fs26 from "node:fs/promises";
-import path26 from "node:path";
+import { spawn as spawn2 } from "node:child_process";
+import fs30 from "node:fs/promises";
+import path30 from "node:path";
 import { fileURLToPath as fileURLToPath3 } from "node:url";
 
 // src/store/paths.ts
@@ -11087,10 +11087,10 @@ async function isEntrypoint(moduleUrl) {
 }
 
 // src/web/server.ts
-import crypto6 from "node:crypto";
-import fs25 from "node:fs/promises";
+import crypto7 from "node:crypto";
+import fs29 from "node:fs/promises";
 import http from "node:http";
-import path25 from "node:path";
+import path29 from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 
 // node_modules/ws/wrapper.mjs
@@ -11101,7 +11101,7 @@ var import_websocket = __toESM(require_websocket(), 1);
 var import_websocket_server = __toESM(require_websocket_server(), 1);
 
 // src/web/api.ts
-import crypto5 from "node:crypto";
+import crypto6 from "node:crypto";
 
 // node_modules/zod/v4/core/core.js
 var _a;
@@ -11344,10 +11344,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj, path27) {
-  if (!path27)
+function getElementAtPath(obj, path31) {
+  if (!path31)
     return obj;
-  return path27.reduce((acc, key) => acc?.[key], obj);
+  return path31.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -11756,11 +11756,11 @@ function explicitlyAborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path27, issues) {
+function prefixIssues(path31, issues) {
   return issues.map((iss) => {
     var _a3;
     (_a3 = iss).path ?? (_a3.path = []);
-    iss.path.unshift(path27);
+    iss.path.unshift(path31);
     return iss;
   });
 }
@@ -11907,16 +11907,16 @@ function flattenError(error2, mapper = (issue2) => issue2.message) {
 }
 function formatError(error2, mapper = (issue2) => issue2.message) {
   const fieldErrors = { _errors: [] };
-  const processError = (error3, path27 = []) => {
+  const processError = (error3, path31 = []) => {
     for (const issue2 of error3.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path27, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path31, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path27, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path31, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path27, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path31, ...issue2.path]);
       } else {
-        const fullpath = [...path27, ...issue2.path];
+        const fullpath = [...path31, ...issue2.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue2));
         } else {
@@ -11943,8 +11943,8 @@ function formatError(error2, mapper = (issue2) => issue2.message) {
 }
 function toDotPath(_path) {
   const segs = [];
-  const path27 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
-  for (const seg of path27) {
+  const path31 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
+  for (const seg of path31) {
     if (typeof seg === "number")
       segs.push(`[${seg}]`);
     else if (typeof seg === "symbol")
@@ -16272,7 +16272,7 @@ config(en_default());
 
 // src/schemas/state.ts
 var IdSchema = string2().regex(/^[A-Za-z0-9_-]+$/, 'only letters, digits, "-" and "_" are allowed');
-var StatusSchema = _enum(["idle", "running", "paused", "halted", "done", "failed"]);
+var StatusSchema = _enum(["idle", "running", "paused", "waiting_for_user", "budget_exhausted", "halted", "done", "failed"]);
 var StageSchema = _enum(["idle", "compose", "execute", "judge", "halted", "done"]);
 var SeveritySchema = _enum(["high", "medium", "low"]);
 var ResultSchema = _enum(["pass", "fail", "blocked"]);
@@ -16332,6 +16332,11 @@ var StateSchema = strictObject({
    * exists to prevent.
    */
   started_at: iso_exports.datetime().nullable().default(null),
+  /**
+   * Marks a run that has an immutable quality policy pin. It defaults to null
+   * so state files written before quality policies existed remain readable.
+   */
+  quality_policy_version: literal(1).nullable().default(null),
   current: strictObject({
     plan: IdSchema.nullable(),
     story: IdSchema.nullable(),
@@ -16578,15 +16583,15 @@ function findOrderCycle(order) {
   const GRAY = 1;
   const BLACK = 2;
   const color = /* @__PURE__ */ new Map();
-  const path27 = [];
+  const path31 = [];
   function visit(node) {
     color.set(node, GRAY);
-    path27.push(node);
+    path31.push(node);
     for (const next of successors.get(node) ?? []) {
       const state = color.get(next) ?? WHITE;
       if (state === GRAY) {
-        const start = path27.indexOf(next);
-        return [...path27.slice(start), next];
+        const start = path31.indexOf(next);
+        return [...path31.slice(start), next];
       }
       if (state === WHITE) {
         const found = visit(next);
@@ -16594,7 +16599,7 @@ function findOrderCycle(order) {
       }
     }
     color.set(node, BLACK);
-    path27.pop();
+    path31.pop();
     return null;
   }
   for (const node of nodes) {
@@ -16637,6 +16642,17 @@ var UncertainConcurrencySchema = _enum(["sequential", "ask", "parallel"]);
 var AfterPlanApprovalSchema = _enum(["auto", "manual"]);
 var SkillSourceSchema = _enum(["github", "registry", "web", "skills-sh"]);
 var SkillUpdateModeSchema = _enum(["auto", "review", "pinned"]);
+var QualityModeSchema = _enum(["economy", "adaptive", "strict"]);
+var ExplicitQualitySchema = strictObject({ mode: QualityModeSchema });
+var LegacyQualitySchema = strictObject({
+  independent_plan_review: boolean2().default(false),
+  independent_verification: boolean2().default(false)
+});
+var QualityConfigSchema = union([ExplicitQualitySchema, LegacyQualitySchema]).transform((quality) => {
+  if ("mode" in quality) return quality;
+  const count = Number(quality.independent_plan_review) + Number(quality.independent_verification);
+  return { mode: count === 0 ? "economy" : count === 2 ? "strict" : "adaptive" };
+}).prefault({});
 var OrchestrationSchema = strictObject({
   profile: strictObject({
     /**
@@ -16679,10 +16695,7 @@ var OrchestrationSchema = strictObject({
      */
     repair_attempts: number2().int().min(0).max(5).default(1)
   }).prefault({}),
-  quality: strictObject({
-    independent_plan_review: boolean2().default(false),
-    independent_verification: boolean2().default(false)
-  }).prefault({}),
+  quality: QualityConfigSchema,
   skills: strictObject({
     /**
      * An empty list is meaningful and permitted: it is how a project says no
@@ -17064,72 +17077,13 @@ var ManifestSchema = strictObject({
 });
 
 // src/web/read.ts
-import fs18 from "node:fs/promises";
-import path17 from "node:path";
+import fs22 from "node:fs/promises";
+import path21 from "node:path";
 import { fileURLToPath } from "node:url";
 
-// src/ops/history.ts
-import fs12 from "node:fs/promises";
-import path12 from "node:path";
-
-// src/schemas/verify.ts
-var VerifySlotSchema = _enum(["test", "lint", "build"]);
-var VerifyPhaseSchema = _enum(["queued", "running", "complete"]);
-var LedgerEntrySchema = strictObject({
-  slot: VerifySlotSchema,
-  /** What was executed — the pinned string, byte for byte. */
-  command: string2().min(1),
-  /**
-   * Which copy of the verify block this invocation executed. `'live'` occurs
-   * only for a run started before the pin existed (`state.started_at === null`).
-   */
-  source: _enum(["pinned", "live"]),
-  /**
-   * What `.mjloop/config.yaml` holds for this slot *now*, when it differs from
-   * the command that ran. `null` when they agree, and when there is no pin.
-   *
-   * Drift is recorded and never obeyed, and never refuses anything: a rule that
-   * halted a run on drift would hand any agent holding `Write` a way to stop
-   * the run by editing a file this project deliberately leaves hand-editable.
-   */
-  live_command: string2().min(1).nullable().default(null),
-  /** Log file name within `cycle-NN/verify/`. Empty when nothing was written. */
-  log: string2(),
-  phase: VerifyPhaseSchema,
-  /** `null` while queued or running, and on a timeout or a kill. */
-  exit_code: number2().int().nullable(),
-  timed_out: boolean2().default(false),
-  /**
-   * The cache fingerprint (`verifyFingerprint`). `null` when the cache is off
-   * or the worktree could not be digested. It is **not** the in-flight
-   * de-duplication key — that one is `slot::label::command` and always exists.
-   */
-  fingerprint: string2().min(1).nullable().default(null),
-  /** Set when this entry reused an earlier cycle's green result. */
-  cached_from_cycle: number2().int().positive().nullable().default(null),
-  /** Filled in by the amendment; `null` until the child exits. */
-  duration_ms: number2().int().nonnegative().nullable().default(null),
-  /**
-   * When the entry was first written. The amendment matches on this and the
-   * log name, both of which are known before the file exists — which is what
-   * lets a queued entry be written before there is anything else to say.
-   */
-  at: iso_exports.datetime()
-});
-var LedgerSchema = array(LedgerEntrySchema);
-var PinnedVerifySchema = strictObject({
-  /**
-   * Bumped only if this wrapper's own shape changes. The block inside it needs
-   * no version of its own: it is re-parsed through the live `VerifySchema`, so
-   * a pin written before a key existed gains that key's default on read. That
-   * is the whole reason this wraps `VerifySchema` rather than restating the
-   * three command strings — every future `verify.*` key is pinned
-   * automatically, and every older pin keeps parsing.
-   */
-  version: literal(1),
-  pinned_at: string2().min(1),
-  verify: VerifySchema
-});
+// src/ops/destructive-risk.ts
+import fs16 from "node:fs/promises";
+import path16 from "node:path";
 
 // src/store/atomic.ts
 import { randomUUID } from "node:crypto";
@@ -17142,38 +17096,57 @@ var StateCorruptedError = class extends Error {
   }
 };
 async function writeTextAtomic(file, text, options = {}) {
-  const { backup = true } = options;
+  const { backup = true, stagingDir } = options;
   await fs2.mkdir(path3.dirname(file), { recursive: true });
+  const stage = stagingDir ?? path3.dirname(file);
+  const nonce = `${process.pid}.${randomUUID()}`;
+  const temp = path3.join(stage, `${path3.basename(file)}.${nonce}.tmp`);
+  const backupTemp = path3.join(stage, `${path3.basename(file)}.${nonce}.bak.tmp`);
+  let hasBackup = false;
   if (backup) {
     try {
-      await fs2.copyFile(file, `${file}.bak`);
+      await fs2.copyFile(file, backupTemp);
+      hasBackup = true;
     } catch (error2) {
       if (error2.code !== "ENOENT") throw error2;
     }
   }
-  const temp = `${file}.${process.pid}.${randomUUID()}.tmp`;
   try {
     await fs2.writeFile(temp, text, "utf8");
+    if (hasBackup) await fs2.rename(backupTemp, `${file}.bak`);
     await fs2.rename(temp, file);
   } catch (error2) {
     await fs2.rm(temp, { force: true }).catch(() => void 0);
+    await fs2.rm(backupTemp, { force: true }).catch(() => void 0);
     throw error2;
   }
 }
 async function writeJsonAtomic(file, data, options = {}) {
-  const { backup = true } = options;
+  const { backup = true, stagingDir } = options;
   await fs2.mkdir(path3.dirname(file), { recursive: true });
+  const stage = stagingDir ?? path3.dirname(file);
+  const nonce = `${process.pid}.${randomUUID()}`;
+  const temp = path3.join(stage, `${path3.basename(file)}.${nonce}.tmp`);
+  const backupTemp = path3.join(stage, `${path3.basename(file)}.${nonce}.bak.tmp`);
+  let hasBackup = false;
   if (backup) {
     try {
-      await fs2.copyFile(file, `${file}.bak`);
+      await fs2.copyFile(file, backupTemp);
+      hasBackup = true;
     } catch (error2) {
       if (error2.code !== "ENOENT") throw error2;
     }
   }
-  const temp = `${file}.${process.pid}.${randomUUID()}.tmp`;
-  await fs2.writeFile(temp, `${JSON.stringify(data, null, 2)}
+  try {
+    await fs2.writeFile(temp, `${JSON.stringify(data, null, 2)}
 `, "utf8");
-  await fs2.rename(temp, file);
+    if (hasBackup) await fs2.rename(backupTemp, `${file}.bak`);
+    await fs2.rename(temp, file);
+  } catch (error2) {
+    await fs2.rm(temp, { force: true }).catch(() => void 0);
+    await fs2.rm(backupTemp, { force: true }).catch(() => void 0);
+    throw error2;
+  }
 }
 async function readJsonValidated(file, schema) {
   try {
@@ -17205,6 +17178,12 @@ var LockTimeoutError = class extends Error {
     this.name = "LockTimeoutError";
   }
 };
+var LockOwnershipLostError = class extends Error {
+  constructor(lockDir) {
+    super(`lost ownership of ${lockDir} before guarded publish`);
+    this.name = "LockOwnershipLostError";
+  }
+};
 async function withLock(lockDir, fn, options = {}) {
   const { timeoutMs = 5e3, staleMs = 3e4, pollMs = 25, onWait } = options;
   const deadline = Date.now() + timeoutMs;
@@ -17232,7 +17211,7 @@ async function withLock(lockDir, fn, options = {}) {
     }
   }
   try {
-    return await fn();
+    return await fn(createOwnership(lockDir, ownedSnapshot, { timeoutMs, staleMs, pollMs }));
   } finally {
     const current = await statSnapshot(lockDir);
     if (current !== null && isSameInstance(current, ownedSnapshot)) {
@@ -17240,15 +17219,64 @@ async function withLock(lockDir, fn, options = {}) {
     }
   }
 }
+function createOwnership(lockDir, ownedSnapshot, options) {
+  const assertOwned = async () => {
+    const current = await statSnapshot(lockDir);
+    if (current === null || !isSameInstance(current, ownedSnapshot)) throw new LockOwnershipLostError(lockDir);
+  };
+  return {
+    assertOwned,
+    async runIfOwned(publish) {
+      const markerDir = `${lockDir}.reclaiming`;
+      const markerSnapshot = await acquireMarker(
+        markerDir,
+        options.pollMs,
+        options.staleMs,
+        Date.now() + options.timeoutMs
+      );
+      try {
+        await assertOwned();
+        try {
+          return await publish(lockDir);
+        } catch (error2) {
+          await assertOwned();
+          throw error2;
+        }
+      } finally {
+        await removeIfSameInstance(markerDir, markerSnapshot);
+      }
+    }
+  };
+}
+async function acquireMarker(markerDir, pollMs, staleMs, deadline) {
+  while (true) {
+    try {
+      await fs3.mkdir(markerDir);
+      const snapshot = await statSnapshot(markerDir);
+      if (snapshot !== null) return snapshot;
+    } catch (error2) {
+      if (error2.code !== "EEXIST") throw error2;
+      if (Date.now() >= deadline) {
+        throw new LockTimeoutError(`could not acquire ${markerDir} within the lock timeout`);
+      }
+      const marker = await statSnapshot(markerDir);
+      if (marker !== null && marker.ageMs >= staleMs) await removeIfSameInstance(markerDir, marker);
+      else await new Promise((resolve) => setTimeout(resolve, pollMs));
+    }
+  }
+}
 async function reclaimIfSameInstance(lockDir, observed, pollMs, staleMs) {
   const reclaimMarker = `${lockDir}.reclaiming`;
+  let markerSnapshot = null;
   try {
     await fs3.mkdir(reclaimMarker);
+    markerSnapshot = await statSnapshot(reclaimMarker);
+    if (markerSnapshot === null) return;
   } catch (error2) {
     if (error2.code === "EEXIST") {
       const marker = await statSnapshot(reclaimMarker);
       if (marker !== null && marker.ageMs >= staleMs) {
-        await fs3.rm(reclaimMarker, { recursive: true, force: true });
+        await removeIfSameInstance(reclaimMarker, marker);
       } else {
         await new Promise((resolve) => setTimeout(resolve, pollMs));
       }
@@ -17261,7 +17289,13 @@ async function reclaimIfSameInstance(lockDir, observed, pollMs, staleMs) {
     if (current === null || !isSameInstance(current, observed)) return;
     await fs3.rm(lockDir, { recursive: true, force: true });
   } finally {
-    await fs3.rm(reclaimMarker, { recursive: true, force: true });
+    await removeIfSameInstance(reclaimMarker, markerSnapshot);
+  }
+}
+async function removeIfSameInstance(path31, ownedSnapshot) {
+  const current = await statSnapshot(path31);
+  if (current !== null && isSameInstance(current, ownedSnapshot)) {
+    await fs3.rm(path31, { recursive: true, force: true });
   }
 }
 function isSameInstance(a, b) {
@@ -17276,49 +17310,182 @@ async function statSnapshot(lockDir) {
   }
 }
 
-// src/store/state-store.ts
-var InvalidStateError = class extends Error {
-  constructor(message) {
-    super(message);
-    this.name = "InvalidStateError";
+// src/store/quality-store.ts
+import fs15 from "node:fs/promises";
+import path15 from "node:path";
+
+// src/schemas/quality.ts
+var SHA256_SCHEMA = string2().regex(/^[a-f0-9]{64}$/, "must be a lowercase SHA-256 hex digest");
+var RunIdSchema = string2().regex(/^\d{4}-\d{2}-\d{2}-\d{3}$/, "a run id looks like 2026-08-04-001");
+var ProseSchema = string2().trim().min(1).max(4e3);
+var ReferenceSchema = string2().trim().min(1).max(1e3);
+var DecisionBySchema = string2().trim().min(1).max(200);
+function distinctStrings(values, ctx, field) {
+  if (new Set(values).size !== values.length) ctx.addIssue({ code: "custom", path: [field], message: `${field} must not contain duplicates` });
+}
+var QualityDimensionSchema = _enum(["correctness", "security", "alignment", "regression", "ui"]);
+var QualityVerdictSchema = _enum(["pending", "pass", "fail", "blocked", "not_applicable"]);
+var QualityEvidenceKindSchema = _enum(["command", "test", "agent", "human"]);
+var SupervisionSchema = _enum(["supervised", "unattended"]);
+var QualityEnforcementSchema = _enum(["shadow", "active"]);
+var MeasurementKindSchema = _enum(["measured", "estimated", "unavailable"]);
+var RiskLevelSchema = _enum(["low", "medium", "high"]);
+var QualityRiskCodeSchema = _enum([
+  "alignment.ambiguous",
+  "api.boundary",
+  "build.configuration",
+  "data.destructive",
+  "data.schema",
+  "regression.repeated_failure",
+  "security.authorization",
+  "ui.surface"
+]);
+var QualityApplicabilitySchema = _enum(["required", "not_applicable"]);
+var QualityConfigSourceSchema = _enum(["explicit", "legacy"]);
+var QualityBudgetFieldSchema = _enum([
+  "max_cycles",
+  "max_dispatches",
+  "max_context_tokens_per_dispatch",
+  "max_repair_attempts"
+]);
+var CostEstimateSchema = strictObject({
+  model_id: string2().trim().min(1).max(200),
+  input_tokens: number2().int().nonnegative(),
+  output_tokens: number2().int().nonnegative(),
+  currency: string2().trim().length(3),
+  input_unit_price: number2().nonnegative(),
+  output_unit_price: number2().nonnegative(),
+  pricing_table_version: string2().trim().min(1).max(200),
+  total: number2().nonnegative()
+});
+var QualityBudgetSchema = strictObject({
+  max_cycles: number2().int().positive(),
+  max_dispatches: number2().int().positive(),
+  max_context_tokens_per_dispatch: number2().int().positive(),
+  max_repair_attempts: number2().int().nonnegative(),
+  cost_estimate: CostEstimateSchema.nullable()
+});
+var QualityRiskSignalSchema = strictObject({
+  code: QualityRiskCodeSchema,
+  level: RiskLevelSchema,
+  evidence: array(ReferenceSchema).max(100)
+});
+var QualityRiskSchema = strictObject({
+  level: RiskLevelSchema,
+  signals: array(QualityRiskSignalSchema).max(100)
+});
+var QualityDispatchSchema = strictObject({
+  agent: IdSchema,
+  instance: IdSchema.nullable(),
+  dimensions: array(QualityDimensionSchema).min(1).max(5),
+  reason: ProseSchema
+});
+var QualityApplicabilityRecordSchema = strictObject({
+  value: QualityApplicabilitySchema,
+  reason: ProseSchema
+});
+var InitialQualityPlanSchema = strictObject({
+  correctness: QualityApplicabilityRecordSchema,
+  security: QualityApplicabilityRecordSchema,
+  alignment: QualityApplicabilityRecordSchema,
+  regression: QualityApplicabilityRecordSchema,
+  ui: QualityApplicabilityRecordSchema
+});
+var QualityPolicySchema = strictObject({
+  version: literal(1),
+  pinned_at: iso_exports.datetime(),
+  mode: QualityModeSchema,
+  supervision: SupervisionSchema,
+  enforcement: QualityEnforcementSchema,
+  source: QualityConfigSourceSchema,
+  risk: QualityRiskSchema,
+  budget: QualityBudgetSchema,
+  initial_quality_plan: InitialQualityPlanSchema,
+  dispatches: array(QualityDispatchSchema).max(100)
+}).superRefine((policy, ctx) => {
+  if (policy.enforcement === "active" && policy.source !== "explicit") {
+    ctx.addIssue({ code: "custom", path: ["enforcement"], message: "active enforcement requires an explicit quality mode" });
   }
-};
-var StateStore = class {
-  constructor(projectDir, now = () => /* @__PURE__ */ new Date()) {
-    this.now = now;
-    this.paths = resolveLoopPaths(projectDir);
+});
+var QualityLedgerEntrySchema = strictObject({
+  applicability: QualityApplicabilitySchema,
+  status: QualityVerdictSchema,
+  required_evidence: array(QualityEvidenceKindSchema).max(4),
+  evidence_refs: array(ReferenceSchema).max(100),
+  reason: ProseSchema,
+  inputs_fingerprint: SHA256_SCHEMA,
+  /** The engine-sampled tree identity; null is cycle-scoped and never reusable. */
+  worktree_digest: SHA256_SCHEMA.nullable(),
+  /** Cycle that recorded the evidence, not an agent supplied claim. */
+  recorded_cycle: number2().int().positive().nullable(),
+  checked_at: iso_exports.datetime().nullable(),
+  invalidated_at: iso_exports.datetime().nullable()
+}).superRefine((entry, ctx) => {
+  if (entry.applicability === "required" && entry.status === "not_applicable") {
+    ctx.addIssue({ code: "custom", path: ["status"], message: "a required dimension cannot be not_applicable" });
   }
-  paths;
-  async get() {
-    return (await this.read()).state;
+  if (entry.applicability === "not_applicable" && entry.status !== "not_applicable") {
+    ctx.addIssue({ code: "custom", path: ["status"], message: "a non-applicable dimension must be not_applicable" });
   }
-  /**
-   * The state plus whether it came from `.bak`. Most callers want `get`; a
-   * caller that acts on the state rather than reporting it needs to know the
-   * primary was unreadable, because a recovered value is by definition the
-   * *previous* write — stale by exactly one update.
-   */
-  async read() {
-    const { value, recovered } = await readJsonValidated(this.paths.state, StateSchema);
-    return { state: value, recovered };
+});
+var QualityLedgerSchema = strictObject({
+  version: literal(1),
+  /** Advanced only by the engine's cycle transition seam. */
+  cycle: number2().int().positive(),
+  dimensions: strictObject({
+    correctness: QualityLedgerEntrySchema,
+    security: QualityLedgerEntrySchema,
+    alignment: QualityLedgerEntrySchema,
+    regression: QualityLedgerEntrySchema,
+    ui: QualityLedgerEntrySchema
+  })
+});
+var QualityAmendmentSchema = strictObject({
+  version: literal(1),
+  run: RunIdSchema,
+  field: QualityBudgetFieldSchema,
+  from: number2().int().nonnegative(),
+  to: number2().int().nonnegative(),
+  reason: ProseSchema,
+  decided_at: iso_exports.datetime(),
+  decided_by: DecisionBySchema
+}).superRefine((amendment, ctx) => {
+  if (amendment.to <= amendment.from) {
+    ctx.addIssue({ code: "custom", path: ["to"], message: "an amendment must increase its budget field" });
   }
-  async update(mutate) {
-    return withLock(this.paths.lock, async () => {
-      const { value, recovered } = await readJsonValidated(this.paths.state, StateSchema);
-      const draft = structuredClone(value);
-      await mutate(draft);
-      draft.updated_at = this.now().toISOString();
-      const parsed = StateSchema.safeParse(draft);
-      if (!parsed.success) throw new InvalidStateError(prettifyError(parsed.error));
-      await writeJsonAtomic(this.paths.state, parsed.data, { backup: !recovered });
-      return parsed.data;
-    });
-  }
-};
+});
+var DestructiveDecisionSchema = strictObject({
+  decision: _enum(["approve", "reject"]),
+  decided_at: iso_exports.datetime(),
+  decided_by: DecisionBySchema,
+  note: ProseSchema.nullable(),
+  used_at: iso_exports.datetime().nullable()
+});
+var DestructiveRequestSchema = strictObject({
+  version: literal(1),
+  run: RunIdSchema,
+  operation_fingerprint: SHA256_SCHEMA,
+  kind: _enum(["feature_delete", "table_drop", "table_truncate", "bulk_data_delete", "irreversible_migration", "project_wide"]),
+  targets: array(ReferenceSchema).min(1).max(100),
+  operation: ProseSchema,
+  reason: ProseSchema,
+  approval_impact: ProseSchema,
+  rejection_impact: ProseSchema,
+  rollback: ProseSchema.nullable(),
+  completed_work: array(ReferenceSchema).max(100),
+  evidence_refs: array(ReferenceSchema).max(100),
+  requested_at: iso_exports.datetime(),
+  capability_hash: SHA256_SCHEMA,
+  decision: DestructiveDecisionSchema.nullable()
+}).superRefine((request, ctx) => {
+  distinctStrings(request.targets, ctx, "targets");
+  distinctStrings(request.completed_work, ctx, "completed_work");
+  distinctStrings(request.evidence_refs, ctx, "evidence_refs");
+});
 
 // src/ops/run.ts
-import fs11 from "node:fs/promises";
-import path11 from "node:path";
+import fs14 from "node:fs/promises";
+import path14 from "node:path";
 
 // src/schemas/skill-library.ts
 var DigestSchema = string2().regex(/^[a-f0-9]{64}$/, "a digest is 64 lower-case hex characters");
@@ -17519,6 +17686,65 @@ var SkillManifestSchema = strictObject({
   }
 });
 
+// src/schemas/verify.ts
+var VerifySlotSchema = _enum(["test", "lint", "build"]);
+var VerifyPhaseSchema = _enum(["queued", "running", "complete"]);
+var LedgerEntrySchema = strictObject({
+  slot: VerifySlotSchema,
+  /** What was executed — the pinned string, byte for byte. */
+  command: string2().min(1),
+  /**
+   * Which copy of the verify block this invocation executed. `'live'` occurs
+   * only for a run started before the pin existed (`state.started_at === null`).
+   */
+  source: _enum(["pinned", "live"]),
+  /**
+   * What `.mjloop/config.yaml` holds for this slot *now*, when it differs from
+   * the command that ran. `null` when they agree, and when there is no pin.
+   *
+   * Drift is recorded and never obeyed, and never refuses anything: a rule that
+   * halted a run on drift would hand any agent holding `Write` a way to stop
+   * the run by editing a file this project deliberately leaves hand-editable.
+   */
+  live_command: string2().min(1).nullable().default(null),
+  /** Log file name within `cycle-NN/verify/`. Empty when nothing was written. */
+  log: string2(),
+  phase: VerifyPhaseSchema,
+  /** `null` while queued or running, and on a timeout or a kill. */
+  exit_code: number2().int().nullable(),
+  timed_out: boolean2().default(false),
+  /**
+   * The cache fingerprint (`verifyFingerprint`). `null` when the cache is off
+   * or the worktree could not be digested. It is **not** the in-flight
+   * de-duplication key — that one is `slot::label::command` and always exists.
+   */
+  fingerprint: string2().min(1).nullable().default(null),
+  /** Set when this entry reused an earlier cycle's green result. */
+  cached_from_cycle: number2().int().positive().nullable().default(null),
+  /** Filled in by the amendment; `null` until the child exits. */
+  duration_ms: number2().int().nonnegative().nullable().default(null),
+  /**
+   * When the entry was first written. The amendment matches on this and the
+   * log name, both of which are known before the file exists — which is what
+   * lets a queued entry be written before there is anything else to say.
+   */
+  at: iso_exports.datetime()
+});
+var LedgerSchema = array(LedgerEntrySchema);
+var PinnedVerifySchema = strictObject({
+  /**
+   * Bumped only if this wrapper's own shape changes. The block inside it needs
+   * no version of its own: it is re-parsed through the live `VerifySchema`, so
+   * a pin written before a key existed gains that key's default on read. That
+   * is the whole reason this wraps `VerifySchema` rather than restating the
+   * three command strings — every future `verify.*` key is pinned
+   * automatically, and every older pin keeps parsing.
+   */
+  version: literal(1),
+  pinned_at: string2().min(1),
+  verify: VerifySchema
+});
+
 // src/store/config-store.ts
 import fs4 from "node:fs/promises";
 var YAML = __toESM(require_dist(), 1);
@@ -17528,7 +17754,24 @@ var ConfigMissingError = class extends Error {
     this.name = "ConfigMissingError";
   }
 };
-async function loadConfig(projectDir) {
+function hasOwn(record2, key) {
+  return Object.prototype.hasOwnProperty.call(record2, key);
+}
+function qualityConfigSource(document2) {
+  if (typeof document2 !== "object" || document2 === null || Array.isArray(document2)) return "default-existing";
+  if (!hasOwn(document2, "orchestration")) return "default-existing";
+  const orchestration = document2.orchestration;
+  if (typeof orchestration !== "object" || orchestration === null || Array.isArray(orchestration)) {
+    return "default-existing";
+  }
+  if (!hasOwn(orchestration, "quality")) return "default-existing";
+  const quality = orchestration.quality;
+  if (typeof quality !== "object" || quality === null || Array.isArray(quality)) return "default-existing";
+  if (hasOwn(quality, "mode")) return "explicit";
+  if (hasOwn(quality, "independent_plan_review") || hasOwn(quality, "independent_verification")) return "legacy";
+  return "default-existing";
+}
+async function loadConfigRecord(projectDir) {
   const file = resolveLoopPaths(projectDir).config;
   let raw;
   try {
@@ -17544,6 +17787,7 @@ async function loadConfig(projectDir) {
     throw new Error(`${file} is not valid YAML:
 ${error2.message}`);
   }
+  const qualitySource = qualityConfigSource(document2);
   const stripped = typeof document2 === "object" && document2 !== null && !Array.isArray(document2) ? Object.fromEntries(
     Object.entries(document2).filter(
       ([key]) => !LEGACY_CONFIG_KEYS.includes(key)
@@ -17552,7 +17796,10 @@ ${error2.message}`);
   const parsed = ConfigSchema.safeParse(stripped);
   if (!parsed.success) throw new Error(`${file} is invalid:
 ${prettifyError(parsed.error)}`);
-  return parsed.data;
+  return { config: parsed.data, qualitySource };
+}
+async function loadConfig(projectDir) {
+  return (await loadConfigRecord(projectDir)).config;
 }
 
 // src/store/feature-store.ts
@@ -18207,6 +18454,48 @@ async function writeStory(projectDir, story) {
   return file;
 }
 
+// src/store/state-store.ts
+var InvalidStateError = class extends Error {
+  constructor(message) {
+    super(message);
+    this.name = "InvalidStateError";
+  }
+};
+var StateStore = class {
+  constructor(projectDir, now = () => /* @__PURE__ */ new Date()) {
+    this.now = now;
+    this.paths = resolveLoopPaths(projectDir);
+  }
+  paths;
+  async get() {
+    return (await this.read()).state;
+  }
+  /**
+   * The state plus whether it came from `.bak`. Most callers want `get`; a
+   * caller that acts on the state rather than reporting it needs to know the
+   * primary was unreadable, because a recovered value is by definition the
+   * *previous* write — stale by exactly one update.
+   */
+  async read() {
+    const { value, recovered } = await readJsonValidated(this.paths.state, StateSchema);
+    return { state: value, recovered };
+  }
+  async update(mutate) {
+    return withLock(this.paths.lock, async (ownership) => {
+      const { value, recovered } = await readJsonValidated(this.paths.state, StateSchema);
+      const draft = structuredClone(value);
+      await mutate(draft);
+      draft.updated_at = this.now().toISOString();
+      const parsed = StateSchema.safeParse(draft);
+      if (!parsed.success) throw new InvalidStateError(prettifyError(parsed.error));
+      await ownership.runIfOwned(async (stagingDir) => {
+        await writeJsonAtomic(this.paths.state, parsed.data, { backup: !recovered, stagingDir });
+      });
+      return parsed.data;
+    });
+  }
+};
+
 // src/ops/fingerprint.ts
 import path7 from "node:path";
 function distinctFindings(findings) {
@@ -18463,6 +18752,800 @@ function quoted2(ids) {
   return ids.map((id) => `"${id}"`).join(", ");
 }
 
+// src/ops/quality-policy.ts
+import crypto3 from "node:crypto";
+import fs11 from "node:fs/promises";
+import path11 from "node:path";
+
+// src/store/git.ts
+import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
+var UNTRACKED_MAX = 5e3;
+var EXCLUDE_LOOP = ":(exclude).mjloop/";
+async function worktreeDigest(projectDir, signal) {
+  const hash = createHash("sha256");
+  const head = await capture(["rev-parse", "HEAD"], projectDir, signal);
+  if (head === null) return null;
+  hash.update("head\0").update(head.trim()).update("\0");
+  hash.update("diff\0");
+  const diffed = await stream(
+    [
+      "diff",
+      "HEAD",
+      "--binary",
+      "--no-textconv",
+      "--ignore-submodules=none",
+      "--submodule=diff",
+      "--",
+      ".",
+      EXCLUDE_LOOP
+    ],
+    projectDir,
+    hash,
+    signal
+  );
+  if (!diffed) return null;
+  hash.update("\0");
+  const listed = await capture(["ls-files", "--others", "--exclude-standard", "-z", "--", ".", EXCLUDE_LOOP], projectDir, signal);
+  if (listed === null) return null;
+  const untracked = listed.split("\0").filter((entry) => entry.length > 0).sort();
+  if (untracked.length > UNTRACKED_MAX) return null;
+  hash.update("untracked\0");
+  for (const file of untracked) hash.update(file).update("\0");
+  if (untracked.length > 0) {
+    if (untracked.some((file) => file.includes("\n"))) return null;
+    const hashed = await stream(["hash-object", "--stdin-paths"], projectDir, hash, signal, `${untracked.join("\n")}
+`);
+    if (!hashed) return null;
+  }
+  return hash.digest("hex");
+}
+async function run(args, cwd, sink, signal, stdin) {
+  return await new Promise((resolve) => {
+    let child;
+    try {
+      child = spawn("git", args, { cwd, signal, stdio: [stdin === void 0 ? "ignore" : "pipe", "pipe", "ignore"] });
+    } catch {
+      return resolve(false);
+    }
+    child.stdout?.on("data", sink);
+    child.on("error", () => resolve(false));
+    child.on("close", (code) => resolve(code === 0));
+    if (stdin !== void 0) {
+      child.stdin?.on("error", () => {
+      });
+      child.stdin?.end(stdin);
+    }
+  });
+}
+async function stream(args, cwd, hash, signal, stdin) {
+  return await run(args, cwd, (chunk) => hash.update(chunk), signal, stdin);
+}
+async function capture(args, cwd, signal) {
+  const chunks = [];
+  const ok2 = await run(args, cwd, (chunk) => chunks.push(chunk), signal);
+  return ok2 ? Buffer.concat(chunks).toString("utf8") : null;
+}
+
+// src/ops/quality-budget.ts
+var CONTEXT_CEILINGS = {
+  economy: 8e3,
+  adaptive: 12e3,
+  strict: 16e3
+};
+function measureTokens(text, tokenizer) {
+  if (tokenizer !== void 0) {
+    const value = tokenizer.count(text);
+    assertNonNegativeInteger(value, "tokenizer count");
+    return { value, kind: "measured" };
+  }
+  return { value: Math.ceil(Buffer.byteLength(text, "utf8") / 2), kind: "estimated" };
+}
+function contextCeiling(mode, hostSafeInput) {
+  const profile = CONTEXT_CEILINGS[mode];
+  if (hostSafeInput !== void 0) assertPositiveInteger(hostSafeInput, "host-safe input ceiling");
+  return hostSafeInput === void 0 ? profile : Math.min(profile, hostSafeInput);
+}
+function deriveQualityBudget(input) {
+  assertPositiveInteger(input.track.max_cycles, "track max cycles");
+  assertNonNegativeInteger(input.repairAttempts, "repair attempts");
+  const closingAgents = new Set(input.track.closing ?? []);
+  const targetedRepairs = input.targetedRepairs.slice(0, input.repairAttempts);
+  const maxDispatches = input.dispatches.length + strictSpecialists(input) + targetedRepairs.length + closingAgents.size;
+  assertPositiveInteger(maxDispatches, "maximum dispatches");
+  return {
+    max_cycles: input.track.max_cycles,
+    max_dispatches: maxDispatches,
+    max_context_tokens_per_dispatch: contextCeiling(input.mode, input.hostSafeInput),
+    max_repair_attempts: input.repairAttempts,
+    cost_estimate: costEstimate(input.cost)
+  };
+}
+function strictSpecialists(input) {
+  return input.mode === "strict" ? input.dispatches[0]?.dimensions.length ?? 0 : 0;
+}
+function effectiveBudget(policy, amendments) {
+  const budget = {
+    ...policy.budget,
+    cost_estimate: policy.budget.cost_estimate === null ? null : { ...policy.budget.cost_estimate }
+  };
+  for (const amendment of amendments) {
+    switch (amendment.field) {
+      case "max_cycles":
+        budget.max_cycles = amendment.to;
+        break;
+      case "max_dispatches":
+        budget.max_dispatches = amendment.to;
+        break;
+      case "max_context_tokens_per_dispatch":
+        budget.max_context_tokens_per_dispatch = amendment.to;
+        break;
+      case "max_repair_attempts":
+        budget.max_repair_attempts = amendment.to;
+        break;
+    }
+  }
+  return budget;
+}
+function compareQualityCandidates(a, b) {
+  assertSameRequiredDimensions(a, b);
+  const tokens = compareMeasurement(a.inputTokens, b.inputTokens);
+  if (tokens !== 0) return tokens;
+  const cost = compareMeasurement(a.monetaryCost, b.monetaryCost);
+  if (cost !== 0) return cost;
+  if (isUnavailable(a.monetaryCost) && isUnavailable(b.monetaryCost)) {
+    const proxy = compareProxy(a.costProxy, b.costProxy);
+    if (proxy !== 0) return proxy;
+  }
+  const elapsed2 = compareMeasurement(a.elapsedMs, b.elapsedMs);
+  if (elapsed2 !== 0) return elapsed2;
+  if (isUnavailable(a.elapsedMs) && isUnavailable(b.elapsedMs)) {
+    const proxy = compareProxy(a.timeProxy, b.timeProxy);
+    if (proxy !== 0) return proxy;
+  }
+  return compareCodeUnits(a.id, b.id);
+}
+function costEstimate(cost) {
+  if (cost?.modelId === void 0 || cost.modelId.length === 0 || !isMeasuredTokenCount(cost.inputTokens) || !isMeasuredTokenCount(cost.outputTokens) || cost.currency === void 0 || cost.currency.length !== 3 || !isFiniteNonNegative(cost.inputUnitPrice) || !isFiniteNonNegative(cost.outputUnitPrice) || cost.pricingTableVersion === void 0 || cost.pricingTableVersion.length === 0) return null;
+  const total = cost.inputTokens.value * cost.inputUnitPrice + cost.outputTokens.value * cost.outputUnitPrice;
+  if (!isFiniteNonNegative(total)) return null;
+  return {
+    model_id: cost.modelId,
+    input_tokens: cost.inputTokens.value,
+    output_tokens: cost.outputTokens.value,
+    currency: cost.currency,
+    input_unit_price: cost.inputUnitPrice,
+    output_unit_price: cost.outputUnitPrice,
+    pricing_table_version: cost.pricingTableVersion,
+    total
+  };
+}
+function assertSameRequiredDimensions(a, b) {
+  const aDimensions = [...new Set(a.requiredDimensions)].sort(compareCodeUnits);
+  const bDimensions = [...new Set(b.requiredDimensions)].sort(compareCodeUnits);
+  if (aDimensions.length !== bDimensions.length || aDimensions.some((dimension, index) => dimension !== bDimensions[index])) {
+    throw new Error("quality candidates must cover the same required dimensions");
+  }
+}
+function compareMeasurement(a, b) {
+  const aAvailable = !isUnavailable(a);
+  const bAvailable = !isUnavailable(b);
+  if (!aAvailable) return bAvailable ? 1 : 0;
+  if (!bAvailable) return -1;
+  return a.value - b.value;
+}
+function isUnavailable(measurement) {
+  return measurement.kind === "unavailable" || measurement.value === null;
+}
+function isMeasuredTokenCount(measurement) {
+  return measurement?.kind === "measured" && isNonNegativeInteger(measurement.value);
+}
+function isFiniteNonNegative(value) {
+  return value !== void 0 && Number.isFinite(value) && value >= 0;
+}
+function isNonNegativeInteger(value) {
+  return value !== null && value !== void 0 && Number.isFinite(value) && Number.isInteger(value) && value >= 0;
+}
+function assertNonNegativeInteger(value, name) {
+  if (!isNonNegativeInteger(value)) throw new RangeError(`${name} must be a finite nonnegative integer`);
+}
+function assertPositiveInteger(value, name) {
+  if (!Number.isFinite(value) || !Number.isInteger(value) || value < 1) {
+    throw new RangeError(`${name} must be a finite positive integer`);
+  }
+}
+function compareProxy(a, b) {
+  if (a === void 0) return b === void 0 ? 0 : 1;
+  if (b === void 0) return -1;
+  return a.value - b.value || compareCodeUnits(a.kind, b.kind);
+}
+function compareCodeUnits(a, b) {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+// src/ops/quality-risk.ts
+var UI_SURFACE_PATH = /\.(vue|tsx|jsx|css|scss|dart|svelte|html|swift|kt)$/i;
+var SIGNALS = [
+  { code: "security.authorization", level: "high", path: /(^|\/)(auth|permissions?|polic(?:y|ies))(\/|\.|$)/i },
+  { code: "data.schema", level: "medium", path: /(^|\/)(migrations?|schema|database)(\/|\.|$)/i },
+  { code: "ui.surface", level: "medium", path: UI_SURFACE_PATH },
+  { code: "build.configuration", level: "medium", path: /(^|\/)(package\.json|tsconfig.*\.json|vite\.config\.)/i }
+];
+var RANK = { low: 0, medium: 1, high: 2 };
+var API_BOUNDARY_PATH = /(^|\/)(api|routes?|controllers?)(\/|\.|$)/i;
+var DESTRUCTIVE_WORDING = /\b(?:delet\w*|remov\w*|drop\w*|truncat\w*|purg\w*)\b/i;
+var AMBIGUOUS_ACCEPTANCE = /\b(as appropriate|as needed|tbd|todo|etc\.?)\b/i;
+var USER_VISIBLE_WORDING = /\b(ui|user interface|screen|page|view|dashboard|form|button|layout|rtl|right[- ]to[- ]left|display|visible)\b/i;
+var USER_VISIBLE_COMPONENT = /(^|[\s_-])(ui|view|page|screen|widget|form|modal|dialog|layout|card|rtl)([\s_-]|$)/i;
+function analyzeQualityRisk(input) {
+  const paths = distinct(input.intendedFiles.concat(input.changedFiles), normalizePath);
+  const acceptance = distinct(input.acceptance, normalizeText);
+  const goal = normalizeText(input.goal);
+  const text = distinct([goal].concat(acceptance), normalizeText);
+  const components = distinct(input.componentKinds, normalizeText);
+  const signals = /* @__PURE__ */ new Map();
+  for (const rule of SIGNALS) {
+    addSignal(signals, rule.code, rule.level, paths.filter((path31) => rule.path.test(path31)));
+  }
+  addSignal(signals, "api.boundary", "medium", paths.filter((path31) => API_BOUNDARY_PATH.test(path31)));
+  addSignal(signals, "data.destructive", "high", text.filter((value) => DESTRUCTIVE_WORDING.test(value)));
+  addSignal(signals, "alignment.ambiguous", "medium", acceptance.filter((value) => AMBIGUOUS_ACCEPTANCE.test(value)));
+  addSignal(signals, "regression.repeated_failure", "medium", repeatedValues(input.priorFailures));
+  const uiEvidence = distinct(
+    paths.filter((path31) => SIGNALS[2].path.test(path31)).concat(components.filter((component) => USER_VISIBLE_COMPONENT.test(component))).concat(text.filter((value) => USER_VISIBLE_WORDING.test(value))),
+    normalizeText
+  );
+  const orderedSignals = [...signals.values()].map((signal) => ({ ...signal, evidence: distinct(signal.evidence, normalizeText) })).sort((left, right) => compareCodeUnits2(left.code, right.code));
+  const highestRank = Math.max(RANK.low, ...orderedSignals.map((signal) => RANK[signal.level]));
+  const level = highestRank === RANK.high ? "high" : highestRank === RANK.medium ? "medium" : "low";
+  return {
+    level,
+    signals: orderedSignals,
+    applicability: {
+      correctness: { value: "required", reason: "Every change requires correctness verification." },
+      security: { value: "required", reason: "Every change requires security review." },
+      alignment: { value: "required", reason: "Every change requires acceptance alignment." },
+      regression: { value: "required", reason: "Every change requires regression coverage." },
+      ui: uiEvidence.length > 0 ? { value: "required", reason: `User-visible surface indicated by: ${uiEvidence.join(", ")}.` } : { value: "not_applicable", reason: "No path, component, goal, or acceptance signal indicates a user-visible surface." }
+    }
+  };
+}
+function addSignal(signals, code, level, evidence) {
+  if (evidence.length === 0) return;
+  const existing = signals.get(code);
+  if (existing === void 0) {
+    signals.set(code, { code, level, evidence: distinct(evidence, normalizeText) });
+    return;
+  }
+  existing.evidence = distinct(existing.evidence.concat(evidence), normalizeText);
+}
+function repeatedValues(values) {
+  const seen = /* @__PURE__ */ new Map();
+  for (const raw of values) {
+    const value = normalizeText(raw);
+    if (value.length === 0) continue;
+    const key = value.toLowerCase();
+    const prior = seen.get(key);
+    if (prior === void 0) seen.set(key, { value, count: 1 });
+    else {
+      prior.count += 1;
+      if (compareCodeUnits2(value, prior.value) < 0) prior.value = value;
+    }
+  }
+  return [...seen.values()].filter((entry) => entry.count > 1).map((entry) => entry.value).sort(compareCodeUnits2);
+}
+function distinct(values, normalize) {
+  const byKey = /* @__PURE__ */ new Map();
+  for (const raw of values) {
+    const value = normalize(raw);
+    if (value.length === 0) continue;
+    const key = value.toLowerCase();
+    const prior = byKey.get(key);
+    if (prior === void 0 || compareCodeUnits2(value, prior) < 0) byKey.set(key, value);
+  }
+  return [...byKey.values()].sort(compareCodeUnits2);
+}
+function compareCodeUnits2(left, right) {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+function normalizePath(value) {
+  return value.trim().replaceAll("\\", "/").replace(/^\.\//, "").replace(/\/{2,}/g, "/");
+}
+function normalizeText(value) {
+  return value.trim().replace(/\s+/g, " ");
+}
+
+// src/ops/quality-policy.ts
+var DIMENSIONS = ["correctness", "security", "alignment", "regression", "ui"];
+var REQUIRED_EVIDENCE = {
+  correctness: ["test"],
+  security: ["command"],
+  alignment: ["agent"],
+  regression: ["test"],
+  ui: ["agent"]
+};
+var QualityPolicyIntegrityError = class extends Error {
+  constructor(detail) {
+    super(`quality policy integrity failure: ${detail}`);
+    this.name = "QualityPolicyIntegrityError";
+  }
+};
+async function buildQualityPolicy(input, now) {
+  const analysis = analyzeQualityRisk(riskInput(input));
+  const dispatches = qualityDispatchCandidates(input, analysis.applicability, analysis.level);
+  const repairAttempts = input.config.orchestration.execution.repair_attempts;
+  const targetedRepairs = Array.from({ length: repairAttempts }, (_, index) => ({
+    agent: dispatches[0].agent,
+    instance: `repair-${index + 1}`,
+    dimensions: dispatches[0].dimensions,
+    reason: `Targeted repair attempt ${index + 1} for the pinned quality plan.`
+  }));
+  const budget = deriveQualityBudget({
+    mode: input.config.orchestration.quality.mode,
+    track: input.track,
+    repairAttempts,
+    dispatches,
+    targetedRepairs
+  });
+  const explicit = input.qualitySource === "explicit";
+  return QualityPolicySchema.parse({
+    version: 1,
+    pinned_at: now().toISOString(),
+    mode: input.config.orchestration.quality.mode,
+    supervision: input.supervision,
+    source: explicit ? "explicit" : "legacy",
+    enforcement: explicit ? "active" : "shadow",
+    risk: { level: analysis.level, signals: analysis.signals },
+    budget,
+    initial_quality_plan: analysis.applicability,
+    dispatches
+  });
+}
+async function previewQualityPolicies(projectDir, input) {
+  const { config: config2, qualitySource } = await loadConfigRecord(projectDir);
+  const track = findTrack(config2, input.track);
+  if (track === void 0) throw new Error(`cannot preview unknown track "${input.track}"`);
+  const evidence = await projectRiskInput(projectDir, {
+    config: config2,
+    qualitySource,
+    track,
+    goal: input.goal ?? `Preview ${input.track} quality policy`,
+    story: input.story,
+    feature: input.feature,
+    supervision: input.supervision ?? "supervised",
+    allowMissingStory: true,
+    includeWorktreeDigest: true
+  });
+  const candidates = [];
+  for (const mode of ["economy", "adaptive", "strict"]) {
+    const modeConfig = {
+      ...config2,
+      orchestration: {
+        ...config2.orchestration,
+        quality: { mode }
+      }
+    };
+    const policy = await buildQualityPolicy({ ...evidence, config: modeConfig, track }, () => /* @__PURE__ */ new Date(0));
+    const inputTokens = measureTokens(JSON.stringify({
+      goal: evidence.goal,
+      acceptance: evidence.acceptance,
+      intendedFiles: evidence.intendedFiles,
+      componentKinds: evidence.componentKinds,
+      dispatches: policy.dispatches
+    }));
+    const preview = {
+      policy,
+      forecast: {
+        inputTokens,
+        outputTokens: { kind: "unavailable", value: null },
+        cost: { kind: "unavailable", currency: null, value: null },
+        elapsed: { kind: "unavailable", valueMs: null }
+      }
+    };
+    candidates.push({
+      mode,
+      preview,
+      candidate: {
+        id: mode,
+        requiredDimensions: DIMENSIONS.filter(
+          (dimension) => policy.initial_quality_plan[dimension].value === "required"
+        ),
+        inputTokens,
+        monetaryCost: { kind: "unavailable", value: null },
+        elapsedMs: { kind: "unavailable", value: null },
+        costProxy: { kind: "dispatch_count", value: policy.dispatches.length },
+        timeProxy: { kind: "sequential_wave_count", value: policy.dispatches.length }
+      }
+    });
+  }
+  candidates.sort((left, right) => compareQualityCandidates(left.candidate, right.candidate));
+  const previews = Object.fromEntries(candidates.map(({ mode, preview }) => [mode, preview]));
+  return previews;
+}
+async function ensureRunQualityPolicy(projectDir, now = () => /* @__PURE__ */ new Date()) {
+  let result = null;
+  let integrityError = null;
+  await new StateStore(projectDir, now).update(async (draft) => {
+    if (draft.run_id === null || draft.track === null || draft.status === "idle") throw new NoActiveRunError();
+    const files = qualityFiles(projectDir, draft);
+    const [policyStatus, ledgerStatus] = await Promise.all([
+      inspectRecord(files.policy, QualityPolicySchema, false),
+      inspectRecord(files.ledger, QualityLedgerSchema, true)
+    ]);
+    const classification = classifyPolicyIntegrity({
+      marker: draft.quality_policy_version,
+      policy: policyStatus,
+      ledger: ledgerStatus
+    });
+    if (classification === "halt") {
+      integrityError = new QualityPolicyIntegrityError(
+        `marker=${String(draft.quality_policy_version)}, policy=${policyStatus}, ledger=${ledgerStatus}`
+      );
+      haltDraft(draft, integrityError.message);
+      return;
+    }
+    if (classification === "ready" || classification === "recover-marker") {
+      result = await readPolicy(projectDir, draft);
+      await readLedger(projectDir, draft);
+      draft.quality_policy_version = 1;
+      return;
+    }
+    try {
+      const { config: config2 } = await loadConfigRecord(projectDir);
+      const track = findTrack(config2, draft.track);
+      if (track === void 0) throw new Error(`active run track "${draft.track}" is no longer configured`);
+      result = await buildProjectQualityPolicy(projectDir, {
+        config: config2,
+        qualitySource: "legacy",
+        track,
+        goal: draft.goal ?? "Legacy run",
+        story: draft.current.story,
+        supervision: "supervised"
+      }, now);
+      await writePolicyOnce(projectDir, draft, result);
+      await writeLedger(projectDir, draft, createInitialQualityLedger(result, now));
+      draft.quality_policy_version = 1;
+    } catch (error2) {
+      integrityError = new QualityPolicyIntegrityError(`legacy bootstrap could not write both records: ${messageOf(error2)}`);
+      haltDraft(draft, integrityError.message);
+    }
+  });
+  if (integrityError !== null) throw integrityError;
+  if (result === null) throw new QualityPolicyIntegrityError("policy bootstrap completed without a readable policy");
+  return result;
+}
+function createInitialQualityLedger(policy, now) {
+  const stampedAt = now().toISOString();
+  const dimensions = Object.fromEntries(DIMENSIONS.map((dimension) => {
+    const applicability = policy.initial_quality_plan[dimension];
+    return [dimension, {
+      applicability: applicability.value,
+      status: applicability.value === "required" ? "pending" : "not_applicable",
+      required_evidence: applicability.value === "required" ? REQUIRED_EVIDENCE[dimension] : [],
+      evidence_refs: [],
+      reason: applicability.reason,
+      inputs_fingerprint: sha256(canonicalJson({
+        version: policy.version,
+        pinned_at: policy.pinned_at,
+        initialized_at: stampedAt,
+        dimension,
+        applicability
+      })),
+      worktree_digest: null,
+      recorded_cycle: null,
+      checked_at: null,
+      invalidated_at: null
+    }];
+  }));
+  return QualityLedgerSchema.parse({ version: 1, cycle: 1, dimensions });
+}
+function classifyPolicyIntegrity(input) {
+  if (input.marker === 1) {
+    return input.policy === "valid" && input.ledger === "valid" ? "ready" : "halt";
+  }
+  if (input.policy === "missing" && input.ledger === "missing") return "legacy-bootstrap";
+  if (input.policy === "valid" && input.ledger === "valid") return "recover-marker";
+  return "halt";
+}
+async function buildProjectQualityPolicy(projectDir, input, now) {
+  return buildQualityPolicy(await projectRiskInput(projectDir, input), now);
+}
+async function resolveQualityContextEvidence(projectDir, input) {
+  const [story, feature, profile] = await Promise.all([
+    input.story === void 0 || input.story === null ? null : input.allowMissingStory === true ? readStory(projectDir, input.story).catch(() => null) : readStory(projectDir, input.story),
+    input.feature === void 0 || input.feature === null ? null : readFeatureBrief(projectDir, input.feature),
+    readAcceptedProfile(projectDir)
+  ]);
+  const componentById = new Map((profile?.components ?? []).map((component) => [component.id, component]));
+  const affected = feature?.brief.affectedComponents.map((id) => componentById.get(id)).filter((component) => component !== void 0) ?? [];
+  const componentKinds = affected.map((component) => component.technology);
+  if (story?.frontmatter.ui === true) componentKinds.push("ui");
+  return {
+    acceptance: distinct2([...story?.frontmatter.acceptance ?? [], ...feature?.brief.acceptance ?? []]),
+    intendedFiles: distinct2([
+      ...affected.map((component) => component.root),
+      ...story === null ? [] : [path11.relative(projectDir, story.file)]
+    ]),
+    componentKinds: distinct2(componentKinds)
+  };
+}
+async function projectRiskInput(projectDir, input) {
+  const [evidence, digest] = await Promise.all([
+    resolveQualityContextEvidence(projectDir, {
+      story: input.story,
+      feature: input.feature,
+      allowMissingStory: input.allowMissingStory
+    }),
+    input.includeWorktreeDigest === true ? worktreeDigest(projectDir) : Promise.resolve(null)
+  ]);
+  return {
+    ...input,
+    ...evidence,
+    // A digest is deliberately not decoded into invented paths. Carrying it as
+    // a non-matching provenance token lets the deterministic input change when
+    // the tree changes without claiming the engine knows which path caused it.
+    changedFiles: digest === null ? [] : [`worktree-digest:${digest}`],
+    priorFailures: []
+  };
+}
+function qualityDispatchCandidates(input, applicability, risk) {
+  const required2 = DIMENSIONS.filter((dimension) => applicability[dimension].value === "required");
+  const permitted = [...input.track.required, ...input.track.available];
+  const agent = permitted.includes("verifier") ? "verifier" : permitted[0];
+  if (agent === void 0) throw new Error("quality policy needs at least one track agent");
+  const base = {
+    agent,
+    instance: null,
+    dimensions: required2,
+    reason: "Collect the deterministic evidence required by the pinned quality plan."
+  };
+  if (input.config.orchestration.quality.mode === "economy") return [base];
+  if (input.config.orchestration.quality.mode === "adaptive" && risk === "low") return [base];
+  return [base, {
+    agent,
+    instance: "independent",
+    dimensions: required2,
+    reason: "Independently review the evidence required by the pinned quality plan."
+  }];
+}
+async function inspectRecord(file, schema, allowBackup) {
+  const primary = await parseRecord(file, schema);
+  if (primary === "valid" || primary === "missing" && !allowBackup) return primary;
+  if (!allowBackup) return "invalid";
+  const backup = await parseRecord(`${file}.bak`, schema);
+  if (backup === "valid") return "valid";
+  return primary === "missing" && backup === "missing" ? "missing" : "invalid";
+}
+async function parseRecord(file, schema) {
+  try {
+    const value = JSON.parse(await fs11.readFile(file, "utf8"));
+    return schema.safeParse(value).success ? "valid" : "invalid";
+  } catch (error2) {
+    return error2.code === "ENOENT" ? "missing" : "invalid";
+  }
+}
+function haltDraft(draft, reason) {
+  draft.status = "halted";
+  draft.current.stage = "halted";
+  draft.halt_reason = reason;
+}
+function distinct2(values) {
+  return [...new Set(values.map((value) => value.trim()).filter((value) => value.length > 0))].sort();
+}
+function riskInput(input) {
+  return {
+    track: input.track.required.join(","),
+    goal: input.goal,
+    acceptance: input.acceptance,
+    intendedFiles: input.intendedFiles,
+    changedFiles: input.changedFiles,
+    componentKinds: input.componentKinds,
+    priorFailures: input.priorFailures
+  };
+}
+function canonicalJson(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (typeof value === "object" && value !== null) {
+    return `{${Object.entries(value).sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0).map(([key, entry]) => `${JSON.stringify(key)}:${canonicalJson(entry)}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+function sha256(value) {
+  return crypto3.createHash("sha256").update(value).digest("hex");
+}
+function messageOf(error2) {
+  return error2 instanceof Error ? error2.message : String(error2);
+}
+
+// src/ops/quality-control.ts
+import fs12 from "node:fs/promises";
+import path12 from "node:path";
+var QUALITY_USAGE_FILE = "quality-usage.json";
+var QualityUsageSchema = strictObject({
+  version: literal(1),
+  reservations: array(string2().min(1)).max(1e4)
+});
+var QualityAmendmentRefusedError = class extends Error {
+  constructor(detail) {
+    super(`quality budget amendment refused: ${detail}`);
+    this.name = "QualityAmendmentRefusedError";
+  }
+};
+var QualityDecisionRefusedError = class extends Error {
+  constructor(detail) {
+    super(`destructive decision refused: ${detail}`);
+    this.name = "QualityDecisionRefusedError";
+  }
+};
+var REASON_MAX = 400;
+async function amendQualityBudget(projectDir, input, now = () => /* @__PURE__ */ new Date()) {
+  const state = await new StateStore(projectDir, now).get();
+  if (state.status !== "budget_exhausted") {
+    throw new QualityAmendmentRefusedError(`a budget is amended only while a run is suspended; this one is "${state.status}"`);
+  }
+  if (state.run_id === null || state.run_id !== input.run) {
+    throw new QualityAmendmentRefusedError(`it names run "${input.run}" and the current run is "${String(state.run_id)}"`);
+  }
+  if (input.to <= input.from) {
+    throw new QualityAmendmentRefusedError(`a ceiling is raised, never lowered: ${input.from} \u2192 ${input.to}`);
+  }
+  const pinned = await pinnedBudget(projectDir, state);
+  if (pinned === null) throw new QualityAmendmentRefusedError("this run pinned no quality policy");
+  const current = pinned.budget[input.field];
+  if (current !== input.from) {
+    throw new QualityAmendmentRefusedError(
+      `it was written against ${input.field} = ${input.from} and the current effective ceiling is ${current}`
+    );
+  }
+  await appendAmendment(projectDir, state, {
+    version: 1,
+    run: state.run_id,
+    field: input.field,
+    from: input.from,
+    to: input.to,
+    reason: input.reason,
+    decided_at: now().toISOString(),
+    decided_by: input.decided_by
+  });
+  return new StateStore(projectDir, now).update((draft) => {
+    if (draft.status !== "budget_exhausted" || draft.run_id !== state.run_id) {
+      throw new QualityAmendmentRefusedError("the run moved on while the amendment was being recorded");
+    }
+    draft.status = "running";
+    draft.halt_reason = null;
+  });
+}
+async function decideDestructiveRequest(projectDir, input, now = () => /* @__PURE__ */ new Date()) {
+  const state = await new StateStore(projectDir, now).get();
+  if (state.status !== "waiting_for_user") {
+    throw new QualityDecisionRefusedError(
+      `an operation is decided only while a run is waiting for one; this one is "${state.status}"`
+    );
+  }
+  if (state.run_id === null || state.run_id !== input.run) {
+    throw new QualityDecisionRefusedError(`it names run "${input.run}" and the current run is "${String(state.run_id)}"`);
+  }
+  const file = destructiveRequestsFile(projectDir, state);
+  const answered = { request: null };
+  await withLock(resolveLoopPaths(projectDir).lock, async (ownership) => {
+    const current = await readDestructiveRequests(projectDir, state);
+    const live = current.requests.filter((request2) => request2.fingerprint === input.fingerprint).at(-1);
+    if (live === void 0 || live.status !== "pending") return;
+    const decided = {
+      ...live,
+      status: input.decision === "approve" ? "approved" : "rejected",
+      decided_at: now().toISOString(),
+      decided_by: input.decided_by,
+      note: input.note
+    };
+    answered.request = decided;
+    const next = { version: 1, requests: [...current.requests, decided] };
+    await ownership.runIfOwned(async (stagingDir) => {
+      await writeJsonAtomic(file, next, { stagingDir });
+    });
+  });
+  const request = answered.request;
+  if (request === null) {
+    throw new QualityDecisionRefusedError(
+      `no operation ${input.fingerprint.slice(0, 12)}\u2026 is waiting for a decision on this run`
+    );
+  }
+  const held = request.status === "rejected" && request.applied ? revertReason(request) : null;
+  return new StateStore(projectDir, now).update((draft) => {
+    if (draft.status !== "waiting_for_user" || draft.run_id !== state.run_id) {
+      throw new QualityDecisionRefusedError("the run moved on while the decision was being recorded");
+    }
+    if (held !== null) {
+      draft.halt_reason = held;
+      return;
+    }
+    draft.status = "running";
+    draft.halt_reason = null;
+  });
+}
+function revertReason(request) {
+  const head = `destructive operation rejected (${request.candidate.kind}): `;
+  const tail = ". Its edits are already in the worktree, so this run stays suspended until the executor reverts them and reports the reverted diff under a new worktree fingerprint. The engine does not revert files itself. Halt the run with a reason if there is no revert and no non-destructive alternative.";
+  const room = Math.max(REASON_MAX - head.length - tail.length, 0);
+  const { operation } = request.candidate;
+  return `${head}${operation.length > room ? `${operation.slice(0, Math.max(room - 1, 0))}\u2026` : operation}${tail}`;
+}
+async function qualityStateSummary(projectDir, state) {
+  const pinned = await pinnedBudget(projectDir, state);
+  if (pinned === null) return null;
+  const usage = await readQualityUsage(path12.join(runDirPath(projectDir, state), QUALITY_USAGE_FILE));
+  return {
+    mode: pinned.policy.mode,
+    supervision: pinned.policy.supervision,
+    enforcement: pinned.policy.enforcement,
+    dispatches: { used: usage.reservations.length, max: pinned.budget.max_dispatches },
+    waiting: waitingOn(state)
+  };
+}
+function waitingOn(state) {
+  if (state.status === "budget_exhausted") return { kind: "budget", reason: state.halt_reason ?? "" };
+  if (state.status === "waiting_for_user") return { kind: "decision", reason: state.halt_reason ?? "" };
+  return null;
+}
+async function pinnedBudget(projectDir, state) {
+  if (state.run_id === null || state.track === null || state.quality_policy_version !== 1) return null;
+  const policy = await readPolicy(projectDir, state);
+  return { policy, budget: effectiveBudget(policy, await readAmendments(projectDir, state)) };
+}
+async function readQualityUsage(file) {
+  let raw;
+  try {
+    raw = await fs12.readFile(file, "utf8");
+  } catch (error2) {
+    if (error2.code === "ENOENT") return { version: 1, reservations: [] };
+    throw error2;
+  }
+  const parsed = QualityUsageSchema.safeParse(JSON.parse(raw));
+  if (!parsed.success) throw new Error(`${file} is not a readable quality usage record: ${prettifyError(parsed.error)}`);
+  return parsed.data;
+}
+
+// src/ops/verify.ts
+import fs13 from "node:fs/promises";
+import path13 from "node:path";
+function verifyLedgerPath(cycleDir) {
+  return path13.join(cycleDir, "verify", "index.json");
+}
+async function readVerifyLedger(cycleDir) {
+  const raw = await fs13.readFile(verifyLedgerPath(cycleDir), "utf8").catch(() => null);
+  if (raw === null) return [];
+  try {
+    const parsed = LedgerSchema.safeParse(JSON.parse(raw));
+    return parsed.success ? parsed.data : [];
+  } catch {
+    return [];
+  }
+}
+var CacheEntrySchema = strictObject({
+  fingerprint: string2().min(1),
+  slot: VerifySlotSchema,
+  command: string2().min(1),
+  cycle: number2().int().positive(),
+  /** Run-relative, e.g. `cycle-02/verify/test.log`. */
+  log: string2().min(1),
+  /**
+   * The identity of the log **as it was when the entry was green**, checked
+   * again on every hit.
+   *
+   * The entry stores a path, and that path is not immutable: a second
+   * invocation of the same slot in the same cycle opens the very same file with
+   * flag `'w'`. So a green run, a red re-run and a revert put the green entry's
+   * fingerprint back in reach while the file it names holds the red output — and
+   * a hit would then return `exit_code: 0` beside a headline and failures
+   * extracted from a failing run. Existence is not identity; these two fields
+   * are. A mismatch is a miss, which costs one re-run and can never be wrong.
+   */
+  bytes: number2().int().nonnegative(),
+  sha256: string2().length(64),
+  at: iso_exports.datetime()
+});
+var CacheSchema = array(CacheEntrySchema);
+
 // src/ops/run.ts
 var UnknownTrackError = class extends Error {
   constructor(track, known) {
@@ -18481,7 +19564,7 @@ function runDirName(state) {
   return `${state.run_id}--${state.current.story ?? "adhoc"}--${state.track}`;
 }
 function runDirPath(projectDir, state) {
-  return path11.join(resolveLoopPaths(projectDir).runs, runDirName(state));
+  return path14.join(resolveLoopPaths(projectDir).runs, runDirName(state));
 }
 async function halt(projectDir, reason, now = () => /* @__PURE__ */ new Date(), options = {}) {
   const store = new StateStore(projectDir, now);
@@ -18510,7 +19593,7 @@ run.`,
 };
 async function writeHaltReport(projectDir, state, cause, open) {
   const dir = runDirPath(projectDir, state);
-  await fs11.mkdir(dir, { recursive: true });
+  await fs14.mkdir(dir, { recursive: true });
   const cycles = state.history.map((entry) => `| ${entry.cycle} | ${entry.agents.join(", ")} | ${entry.result} |`).join("\n");
   const findings = open.length === 0 ? "_none recorded_" : open.map((f) => `- **${f.severity}** ${f.file}:${f.line} \u2014 ${f.claim}`).join("\n");
   const report = `# Halt report \u2014 ${state.run_id}
@@ -18536,16 +19619,164 @@ Review the per-agent output in this directory.
 
 ${NEXT_STEP[cause]}
 `;
-  await fs11.writeFile(path11.join(dir, "HALT.md"), report, "utf8");
+  await fs14.writeFile(path14.join(dir, "HALT.md"), report, "utf8");
+}
+
+// src/store/quality-store.ts
+var QUALITY_POLICY_FILE = "quality-policy.json";
+var QUALITY_LEDGER_FILE = "quality-ledger.json";
+var QUALITY_AMENDMENTS_FILE = "quality-amendments.jsonl";
+function qualityFiles(projectDir, state) {
+  const runDir = runDirPath(projectDir, state);
+  return {
+    policy: path15.join(runDir, QUALITY_POLICY_FILE),
+    ledger: path15.join(runDir, QUALITY_LEDGER_FILE),
+    amendments: path15.join(runDir, QUALITY_AMENDMENTS_FILE)
+  };
+}
+var QualityPolicyExistsError = class extends Error {
+  constructor(file) {
+    super(`${file} already exists \u2014 a run quality policy is never rewritten`);
+    this.name = "QualityPolicyExistsError";
+  }
+};
+async function writePolicyOnce(projectDir, state, policy) {
+  const file = qualityFiles(projectDir, state).policy;
+  const parsed = QualityPolicySchema.parse(policy);
+  await fs15.mkdir(path15.dirname(file), { recursive: true });
+  try {
+    await fs15.writeFile(file, `${JSON.stringify(parsed, null, 2)}
+`, { encoding: "utf8", flag: "wx" });
+  } catch (error2) {
+    if (error2.code === "EEXIST") throw new QualityPolicyExistsError(file);
+    throw error2;
+  }
+}
+async function readPolicy(projectDir, state) {
+  const { value } = await readJsonValidated(qualityFiles(projectDir, state).policy, QualityPolicySchema);
+  return value;
+}
+async function writeLedger(projectDir, state, ledger) {
+  const file = qualityFiles(projectDir, state).ledger;
+  await writeJsonAtomic(file, QualityLedgerSchema.parse(ledger));
+}
+async function readLedger(projectDir, state) {
+  const { value } = await readJsonValidated(qualityFiles(projectDir, state).ledger, QualityLedgerSchema);
+  return value;
+}
+async function appendAmendment(projectDir, state, amendment) {
+  const file = qualityFiles(projectDir, state).amendments;
+  const paths = resolveLoopPaths(projectDir);
+  await fs15.mkdir(paths.root, { recursive: true });
+  await withLock(paths.lock, async () => {
+    const { raw } = await readAmendmentFile(file);
+    const parsed = QualityAmendmentSchema.parse(amendment);
+    await fs15.mkdir(path15.dirname(file), { recursive: true });
+    const separator = raw.length > 0 && !raw.endsWith("\n") ? "\n" : "";
+    await fs15.appendFile(file, `${separator}${JSON.stringify(parsed)}
+`, "utf8");
+  });
+}
+async function readAmendments(projectDir, state) {
+  return readAmendmentsAt(qualityFiles(projectDir, state).amendments);
+}
+async function readAmendmentsAt(file) {
+  return (await readAmendmentFile(file)).amendments;
+}
+async function readAmendmentFile(file) {
+  let raw;
+  try {
+    raw = await fs15.readFile(file, "utf8");
+  } catch (error2) {
+    if (error2.code === "ENOENT") return { raw: "", amendments: [] };
+    throw error2;
+  }
+  const lines = raw.split("\n");
+  if (lines.at(-1) === "") lines.pop();
+  const amendments = lines.map((line, index) => parseAmendmentLine(file, line, index + 1));
+  return { raw, amendments };
+}
+function parseAmendmentLine(file, line, lineNumber) {
+  let value;
+  try {
+    value = JSON.parse(line);
+  } catch (error2) {
+    throw new StateCorruptedError(`${file} has an invalid quality amendment on line ${lineNumber}: ${error2.message}`);
+  }
+  const parsed = QualityAmendmentSchema.safeParse(value);
+  if (!parsed.success) {
+    throw new StateCorruptedError(`${file} has an invalid quality amendment on line ${lineNumber}: ${parsed.error.message}`);
+  }
+  return parsed.data;
+}
+
+// src/ops/destructive-risk.ts
+var DESTRUCTIVE_REQUESTS_FILE = "destructive-requests.json";
+var DestructiveCandidateSchema = strictObject({
+  kind: _enum(["feature_delete", "table_drop", "table_truncate", "bulk_data_delete", "irreversible_migration", "project_wide"]),
+  targets: array(string2().min(1)).max(200),
+  operation: string2().min(1),
+  rollback: string2().nullable()
+});
+var DestructiveRequestSchema2 = strictObject({
+  run: string2().min(1),
+  fingerprint: string2().min(1),
+  candidate: DestructiveCandidateSchema,
+  status: _enum(["pending", "approved", "rejected", "used"]),
+  /**
+   * Whether the operation had already touched the worktree when it was caught.
+   *
+   * The two guards catch an operation at opposite ends of it: a command stopped
+   * at the tool boundary has done nothing, while a feature deleted through edits
+   * is already gone from disk by the time the result names it. Nothing about the
+   * operation itself says which, and the difference decides what a *rejection*
+   * means — nothing to undo, or a revert somebody has to perform and prove — so
+   * it is recorded when the request is written rather than guessed at later.
+   *
+   * A record without the field defaults to `true`, which is the direction every
+   * other unreadable-record rule here fails in: over-suspending costs an
+   * operator one more step, while defaulting to `false` would resume a run whose
+   * destructive action had already happened.
+   */
+  applied: boolean2().default(true),
+  requested_at: string2().min(1),
+  decided_at: string2().nullable(),
+  decided_by: string2().nullable(),
+  /** The operator's own words for the decision, once there is one. */
+  note: string2().max(2e3).nullable().default(null)
+});
+var DestructiveRequestsSchema = strictObject({
+  version: literal(1),
+  requests: array(DestructiveRequestSchema2).max(1e3)
+});
+function destructiveRequestsFile(projectDir, state) {
+  return path16.join(runDirPath(projectDir, state), DESTRUCTIVE_REQUESTS_FILE);
+}
+async function readDestructiveRequests(projectDir, state) {
+  return readDestructiveRequestsAt(destructiveRequestsFile(projectDir, state));
+}
+async function readDestructiveRequestsAt(file) {
+  let raw;
+  try {
+    raw = await fs16.readFile(file, "utf8");
+  } catch (error2) {
+    if (error2.code === "ENOENT") return { version: 1, requests: [] };
+    throw error2;
+  }
+  const parsed = DestructiveRequestsSchema.safeParse(JSON.parse(raw));
+  if (!parsed.success) throw new Error(`${file} is not a readable destructive decision record: ${prettifyError(parsed.error)}`);
+  return parsed.data;
 }
 
 // src/ops/history.ts
+import fs17 from "node:fs/promises";
+import path17 from "node:path";
 var HISTORY_DEFAULT_LIMIT = 50;
 async function readRunHistory(projectDir, options = {}) {
   const limit = options.limit ?? HISTORY_DEFAULT_LIMIT;
   if (limit <= 0) return [];
   const runsDir = resolveLoopPaths(projectDir).runs;
-  const entries2 = await fs12.readdir(runsDir, { withFileTypes: true }).catch(() => []);
+  const entries2 = await fs17.readdir(runsDir, { withFileTypes: true }).catch(() => []);
   const names = entries2.filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort().reverse();
   const live = await readLiveRun(projectDir);
   const runs = [];
@@ -18555,7 +19786,7 @@ async function readRunHistory(projectDir, options = {}) {
     const [runId, story, track] = parts;
     if (options.track !== void 0 && track !== options.track) continue;
     runs.push(
-      await readRun(path12.join(runsDir, name), {
+      await readRun(path17.join(runsDir, name), {
         id: name,
         run_id: runId,
         track,
@@ -18580,12 +19811,12 @@ async function readLiveRun(projectDir) {
   };
 }
 async function readRun(dir, identity) {
-  const inside = await fs12.readdir(dir, { withFileTypes: true }).catch(() => []);
+  const inside = await fs17.readdir(dir, { withFileTypes: true }).catch(() => []);
   const timing = identity.live !== null && identity.live.dir === identity.id ? identity.live : null;
   const cycleDirs = inside.filter((entry) => entry.isDirectory() && /^cycle-\d+$/.test(entry.name)).map((entry) => ({ name: entry.name, cycle: Number(entry.name.slice("cycle-".length)) })).sort((a, b) => a.cycle - b.cycle);
   const cycles = [];
   for (const { name, cycle } of cycleDirs) {
-    cycles.push(await readCycle(path12.join(dir, name), cycle, timing?.closedAt.get(cycle) ?? null));
+    cycles.push(await readCycle(path17.join(dir, name), cycle, timing?.closedAt.get(cycle) ?? null));
   }
   const hasClosing = inside.some((entry) => entry.isDirectory() && entry.name === "closing");
   return {
@@ -18599,17 +19830,17 @@ async function readRun(dir, identity) {
     cycles,
     // The closing pass has no cycle number and `state.history` has no entry for
     // it: it happens after the run's last cycle closed.
-    closing: hasClosing ? await readCycle(path12.join(dir, "closing"), 0, null) : null
+    closing: hasClosing ? await readCycle(path17.join(dir, "closing"), 0, null) : null
   };
 }
 async function readCycle(dir, cycle, at) {
-  const inside = await fs12.readdir(dir).catch(() => []);
-  const roster = await readJson(path12.join(dir, "roster.json"), RosterFields);
-  const verify = await readJson(path12.join(dir, "verify", "index.json"), LedgerSchema);
+  const inside = await fs17.readdir(dir).catch(() => []);
+  const roster = await readJson(path17.join(dir, "roster.json"), RosterFields);
+  const verify = await readJson(path17.join(dir, "verify", "index.json"), LedgerSchema);
   const agents = [];
   for (const entry of inside.filter((name) => name.endsWith(".json")).sort()) {
     if (entry === "roster.json" || entry === "findings.json") continue;
-    const result = await readJson(path12.join(dir, entry), ResultFields);
+    const result = await readJson(path17.join(dir, entry), ResultFields);
     if (result === null) continue;
     const [name, instance] = splitInstance(entry.slice(0, -".json".length));
     agents.push({
@@ -18648,7 +19879,7 @@ var ResultFields = object({
 });
 async function readJson(file, schema) {
   try {
-    const parsed = schema.safeParse(JSON.parse(await fs12.readFile(file, "utf8")));
+    const parsed = schema.safeParse(JSON.parse(await fs17.readFile(file, "utf8")));
     return parsed.success ? parsed.data : null;
   } catch {
     return null;
@@ -18667,6 +19898,7 @@ async function preflightEstimate(projectDir, input) {
   for (const agent of forbidden) perCycle.delete(agent);
   for (const agent of closing) perCycle.delete(agent);
   const dispatchesPerCycle = perCycle.size;
+  const quality = await previewQualityPolicies(projectDir, input);
   return {
     track: input.track,
     max_cycles: track.max_cycles,
@@ -18691,20 +19923,24 @@ async function preflightEstimate(projectDir, input) {
       // would understate the widest run by exactly the agent idea 9 introduced.
       dispatches: track.max_cycles * dispatchesPerCycle + closing.size
     },
-    comparable: await readComparable(projectDir, input)
+    comparable: await readComparable(projectDir, input),
+    quality: {
+      selected: quality[config2.orchestration.quality.mode],
+      comparisons: quality
+    }
   };
 }
 async function readComparable(projectDir, input) {
   const storyBound = (input.story ?? null) !== null;
   const history = await readRunHistory(projectDir, { track: input.track });
   const comparable = history.filter(
-    (run) => !run.halted && !run.running && run.cycles.length > 0 && run.story !== null === storyBound
+    (run2) => !run2.halted && !run2.running && run2.cycles.length > 0 && run2.story !== null === storyBound
   );
   if (comparable.length === 0) return null;
   const timed = comparable.map(minutesOf).filter((value) => value !== null);
   return {
     runs: comparable.length,
-    cycles: rangeOf(comparable.map((run) => run.cycles.length)),
+    cycles: rangeOf(comparable.map((run2) => run2.cycles.length)),
     dispatches: rangeOf(comparable.map(dispatchesIn)),
     // An existing project sees cycles and dispatches immediately and durations
     // from its next run: nothing archives a finished run's clock, so only the
@@ -18712,20 +19948,20 @@ async function readComparable(projectDir, input) {
     minutes: timed.length === 0 ? null : rangeOf(timed, 1)
   };
 }
-function dispatchesIn(run) {
-  const passes = run.closing === null ? run.cycles : [...run.cycles, run.closing];
+function dispatchesIn(run2) {
+  const passes = run2.closing === null ? run2.cycles : [...run2.cycles, run2.closing];
   let total = 0;
   for (const cycle of passes) {
     total += (/* @__PURE__ */ new Set([...cycle.selected, ...cycle.agents.map((agent) => agent.name)])).size;
   }
   return total;
 }
-function minutesOf(run) {
-  const last = run.cycles.at(-1);
-  if (run.started_at === null || last === void 0 || last.at === null) return null;
-  const elapsed = Date.parse(last.at) - Date.parse(run.started_at);
-  if (!Number.isFinite(elapsed) || elapsed < 0) return null;
-  return elapsed / 6e4;
+function minutesOf(run2) {
+  const last = run2.cycles.at(-1);
+  if (run2.started_at === null || last === void 0 || last.at === null) return null;
+  const elapsed2 = Date.parse(last.at) - Date.parse(run2.started_at);
+  if (!Number.isFinite(elapsed2) || elapsed2 < 0) return null;
+  return elapsed2 / 6e4;
 }
 function rangeOf(values, decimals) {
   const sorted = [...values].sort((a, b) => a - b);
@@ -18744,8 +19980,8 @@ function round(value, decimals) {
 }
 
 // src/ops/project-skills.ts
-import fs13 from "node:fs/promises";
-import path13 from "node:path";
+import fs18 from "node:fs/promises";
+import path18 from "node:path";
 
 // src/schemas/project-skills.ts
 var SkillFrontmatterSchema = object({
@@ -18766,15 +20002,15 @@ var UnreadableProjectSkillSchema = strictObject({
 });
 
 // src/ops/project-skills.ts
-var PROJECT_SKILLS_DIR = path13.join(".claude", "skills");
+var PROJECT_SKILLS_DIR = path18.join(".claude", "skills");
 function repoRelative(dirName) {
   return `.claude/skills/${dirName}/SKILL.md`;
 }
 async function readProjectSkills(projectDir) {
-  const root = path13.join(projectDir, PROJECT_SKILLS_DIR);
+  const root = path18.join(projectDir, PROJECT_SKILLS_DIR);
   let entries2;
   try {
-    entries2 = await fs13.readdir(root, { withFileTypes: true });
+    entries2 = await fs18.readdir(root, { withFileTypes: true });
   } catch {
     return { skills: [], unreadable: [] };
   }
@@ -18783,10 +20019,10 @@ async function readProjectSkills(projectDir) {
   for (const entry of entries2) {
     if (!entry.isDirectory() && !entry.isSymbolicLink()) continue;
     const at = repoRelative(entry.name);
-    const file = path13.join(root, entry.name, "SKILL.md");
+    const file = path18.join(root, entry.name, "SKILL.md");
     let raw;
     try {
-      raw = await fs13.readFile(file, "utf8");
+      raw = await fs18.readFile(file, "utf8");
     } catch {
       continue;
     }
@@ -18883,6 +20119,50 @@ async function loadTrack(projectDir, name) {
 // src/ops/telemetry.ts
 var TELEMETRY_MAX_ROWS = 40;
 var TELEMETRY_FLAG_DRAFTS = 5;
+var UNAVAILABLE_TOKENS = { kind: "unavailable", value: null };
+var UNAVAILABLE_ELAPSED = { kind: "unavailable", valueMs: null };
+function qualityTelemetry(input) {
+  const priced = input.budget.cost_estimate;
+  const waits = input.waits ?? [];
+  const closed = waits.filter((wait) => wait.decidedAt !== null);
+  const waitingMs = sumMs(closed.map((wait) => span(wait.requestedAt, wait.decidedAt)));
+  const open = waits.find((wait) => wait.decidedAt === null);
+  const total = span(input.startedAt, open?.requestedAt ?? input.lastTransitionAt);
+  const activeMs = total === null || waitingMs === null ? null : Math.max(total - waitingMs, 0);
+  return {
+    mode: input.mode,
+    inputTokens: priced !== null ? { kind: "measured", value: priced.input_tokens } : hostTokens(input.usage?.inputTokens) ?? estimatedTokens(input.inputPacket),
+    outputTokens: priced !== null ? { kind: "measured", value: priced.output_tokens } : hostTokens(input.usage?.outputTokens) ?? UNAVAILABLE_TOKENS,
+    estimatedCost: priced === null ? { kind: "unavailable", currency: null, value: null } : { kind: "measured", currency: priced.currency, value: priced.total },
+    activeElapsed: elapsed(activeMs),
+    waitingElapsed: closed.length === 0 ? UNAVAILABLE_ELAPSED : elapsed(waitingMs),
+    dispatches: input.dispatches
+  };
+}
+function hostTokens(value) {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0 ? { kind: "measured", value } : null;
+}
+function estimatedTokens(packet) {
+  if (packet === null || packet === void 0) return UNAVAILABLE_TOKENS;
+  const measured = measureTokens(packet);
+  return { kind: measured.kind, value: measured.value };
+}
+function elapsed(valueMs) {
+  return valueMs === null ? UNAVAILABLE_ELAPSED : { kind: "measured", valueMs };
+}
+function span(from, to) {
+  if (from === null || from === void 0 || to === null || to === void 0) return null;
+  const value = Date.parse(to) - Date.parse(from);
+  return Number.isFinite(value) && value >= 0 ? value : null;
+}
+function sumMs(values) {
+  let total = 0;
+  for (const value of values) {
+    if (value === null) return null;
+    total += value;
+  }
+  return total;
+}
 async function readTelemetry(projectDir, options = {}) {
   const history = await readRunHistory(projectDir, options);
   const config2 = await loadConfig(projectDir).catch(() => null);
@@ -18906,10 +20186,10 @@ async function readTelemetry(projectDir, options = {}) {
     return created;
   };
   let cycles = 0;
-  for (const run of history) {
-    cycles += run.cycles.length;
+  for (const run2 of history) {
+    cycles += run2.cycles.length;
     const mentioned = /* @__PURE__ */ new Set();
-    const passes = run.closing === null ? run.cycles : [...run.cycles, run.closing];
+    const passes = run2.closing === null ? run2.cycles : [...run2.cycles, run2.closing];
     for (const cycle of passes) {
       for (const agent of new Set(cycle.selected)) {
         rowFor(agent).drafted += 1;
@@ -18932,7 +20212,7 @@ async function readTelemetry(projectDir, options = {}) {
     for (const agent of mentioned) {
       const row = rowFor(agent);
       row.runs += 1;
-      row.last_seen ??= run.run_id;
+      row.last_seen ??= run2.run_id;
     }
   }
   if (config2 !== null && history.length > 0) {
@@ -18956,51 +20236,10 @@ function byDraftedThenName(a, b) {
   return b.drafted - a.drafted || a.agent.localeCompare(b.agent);
 }
 
-// src/ops/verify.ts
-import fs14 from "node:fs/promises";
-import path14 from "node:path";
-function verifyLedgerPath(cycleDir) {
-  return path14.join(cycleDir, "verify", "index.json");
-}
-async function readVerifyLedger(cycleDir) {
-  const raw = await fs14.readFile(verifyLedgerPath(cycleDir), "utf8").catch(() => null);
-  if (raw === null) return [];
-  try {
-    const parsed = LedgerSchema.safeParse(JSON.parse(raw));
-    return parsed.success ? parsed.data : [];
-  } catch {
-    return [];
-  }
-}
-var CacheEntrySchema = strictObject({
-  fingerprint: string2().min(1),
-  slot: VerifySlotSchema,
-  command: string2().min(1),
-  cycle: number2().int().positive(),
-  /** Run-relative, e.g. `cycle-02/verify/test.log`. */
-  log: string2().min(1),
-  /**
-   * The identity of the log **as it was when the entry was green**, checked
-   * again on every hit.
-   *
-   * The entry stores a path, and that path is not immutable: a second
-   * invocation of the same slot in the same cycle opens the very same file with
-   * flag `'w'`. So a green run, a red re-run and a revert put the green entry's
-   * fingerprint back in reach while the file it names holds the red output — and
-   * a hit would then return `exit_code: 0` beside a headline and failures
-   * extracted from a failing run. Existence is not identity; these two fields
-   * are. A mismatch is a miss, which costs one re-run and can never be wrong.
-   */
-  bytes: number2().int().nonnegative(),
-  sha256: string2().length(64),
-  at: iso_exports.datetime()
-});
-var CacheSchema = array(CacheEntrySchema);
-
 // src/store/config-mutation.ts
 var YAML3 = __toESM(require_dist(), 1);
-import crypto3 from "node:crypto";
-import fs15 from "node:fs/promises";
+import crypto4 from "node:crypto";
+import fs19 from "node:fs/promises";
 var VerifySlotSchema2 = _enum(["test", "lint", "build"]);
 var ConfigChangeSchema = discriminatedUnion("kind", [
   strictObject({
@@ -19079,12 +20318,9 @@ var ConfigChangeSchema = discriminatedUnion("kind", [
     kind: literal("orchestration.execution.repair_attempts"),
     value: number2().int().min(0).max(5)
   }),
-  // The one section whose leaves share a type, so one kind with a `key` costs
-  // nothing in strictness — the same shape `gate` and `limit` already use.
   strictObject({
-    kind: literal("orchestration.quality"),
-    key: _enum(["independent_plan_review", "independent_verification"]),
-    value: boolean2()
+    kind: literal("orchestration.quality.mode"),
+    value: QualityModeSchema
   }),
   strictObject({
     kind: literal("orchestration.skills.sources"),
@@ -19106,23 +20342,42 @@ var ConfigPatchSchema = strictObject({
 var ConfigMutationError = class extends Error {
   kind;
   path;
-  constructor(kind, path27 = []) {
+  constructor(kind, path31 = []) {
     super(kind);
     this.name = "ConfigMutationError";
     this.kind = kind;
-    this.path = path27;
+    this.path = path31;
   }
 };
 function configRevision(raw) {
-  return crypto3.createHash("sha256").update(raw).digest("hex");
+  return crypto4.createHash("sha256").update(raw).digest("hex");
 }
 async function mutateConfig(projectDir, patch) {
   const parsedPatch = ConfigPatchSchema.parse(patch);
   const paths = resolveLoopPaths(projectDir);
-  return withLock(paths.lock, async () => {
+  if (parsedPatch.changes.some((change) => change.kind === "orchestration.quality.mode")) {
+    try {
+      const state = await new StateStore(projectDir).get();
+      const active = ["running", "paused", "waiting_for_user", "budget_exhausted"].includes(state.status);
+      if (state.run_id !== null && state.track !== null && active) {
+        await ensureRunQualityPolicy(projectDir);
+      }
+    } catch (error2) {
+      try {
+        await fs19.access(paths.state);
+      } catch {
+        return mutateConfigWithoutBootstrap(projectDir, parsedPatch, paths);
+      }
+      throw error2;
+    }
+  }
+  return mutateConfigWithoutBootstrap(projectDir, parsedPatch, paths);
+}
+async function mutateConfigWithoutBootstrap(projectDir, parsedPatch, paths) {
+  return withLock(paths.lock, async (ownership) => {
     let raw;
     try {
-      raw = await fs15.readFile(paths.config, "utf8");
+      raw = await fs19.readFile(paths.config, "utf8");
     } catch (error2) {
       if (error2.code === "ENOENT") throw new ConfigMutationError("missing");
       throw error2;
@@ -19144,7 +20399,9 @@ async function mutateConfig(projectDir, patch) {
       throw new ConfigMutationError("invalid", issuePath);
     }
     const next = document2.toString({ lineWidth: 100 });
-    await writeTextAtomic(paths.config, next);
+    await ownership.runIfOwned(async (stagingDir) => {
+      await writeTextAtomic(paths.config, next, { stagingDir });
+    });
     return { revision: configRevision(next) };
   });
 }
@@ -19209,8 +20466,14 @@ function applyChange(document2, change) {
     case "orchestration.execution.repair_attempts":
       document2.setIn(["orchestration", "execution", "repair_attempts"], change.value);
       return;
-    case "orchestration.quality":
-      document2.setIn(["orchestration", "quality", change.key], change.value);
+    case "orchestration.quality.mode":
+      if (document2.hasIn(["orchestration", "quality", "independent_plan_review"])) {
+        document2.deleteIn(["orchestration", "quality", "independent_plan_review"]);
+      }
+      if (document2.hasIn(["orchestration", "quality", "independent_verification"])) {
+        document2.deleteIn(["orchestration", "quality", "independent_verification"]);
+      }
+      document2.setIn(["orchestration", "quality", "mode"], change.value);
       return;
     case "orchestration.skills.sources":
       document2.setIn(["orchestration", "skills", "sources"], change.value);
@@ -19224,8 +20487,8 @@ function applyChange(document2, change) {
 }
 
 // src/store/memory-store.ts
-import fs16 from "node:fs/promises";
-import path15 from "node:path";
+import fs20 from "node:fs/promises";
+import path19 from "node:path";
 
 // src/schemas/memory.ts
 var MemoryKindSchema = _enum(["decision", "lesson", "pattern"]);
@@ -19272,7 +20535,7 @@ var MemoryNotFoundError = class extends Error {
 };
 async function listFiles(dir) {
   try {
-    return await fs16.readdir(dir);
+    return await fs20.readdir(dir);
   } catch (error2) {
     if (error2.code !== "ENOENT") throw error2;
     return [];
@@ -19283,9 +20546,9 @@ async function listMemories(projectDir) {
   const entries2 = await listFiles(dir);
   const memories = [];
   for (const name of entries2.filter((entry) => entry.endsWith(".md"))) {
-    const file = path15.join(dir, name);
+    const file = path19.join(dir, name);
     try {
-      const { data, body } = parseFrontmatter(await fs16.readFile(file, "utf8"));
+      const { data, body } = parseFrontmatter(await fs20.readFile(file, "utf8"));
       const parsed = MemoryFrontmatterSchema.safeParse(data);
       if (!parsed.success) continue;
       memories.push({ frontmatter: parsed.data, body, file });
@@ -19302,14 +20565,14 @@ async function readMemory(projectDir, id) {
 }
 
 // src/store/agent-store.ts
-import crypto4 from "node:crypto";
-import fs17 from "node:fs/promises";
-import path16 from "node:path";
+import crypto5 from "node:crypto";
+import fs21 from "node:fs/promises";
+import path20 from "node:path";
 function agentDigest(raw) {
-  return crypto4.createHash("sha256").update(raw).digest("hex");
+  return crypto5.createHash("sha256").update(raw).digest("hex");
 }
 function projectAgentsDir(projectDir) {
-  return path16.join(projectDir, ".claude", "agents");
+  return path20.join(projectDir, ".claude", "agents");
 }
 var KNOWN = ["name", "description", "tools", "model"];
 function toDoc(name, raw, file, source) {
@@ -19340,16 +20603,16 @@ function toDoc(name, raw, file, source) {
 async function listAgents(dir, source) {
   let names;
   try {
-    names = (await fs17.readdir(dir)).filter((name) => name.endsWith(".md")).sort();
+    names = (await fs21.readdir(dir)).filter((name) => name.endsWith(".md")).sort();
   } catch {
     return { agents: [], unreadable: [] };
   }
   const agents = [];
   const unreadable = [];
   for (const entry of names) {
-    const file = path16.join(dir, entry);
+    const file = path20.join(dir, entry);
     try {
-      agents.push(toDoc(entry.slice(0, -3), await fs17.readFile(file, "utf8"), file, source));
+      agents.push(toDoc(entry.slice(0, -3), await fs21.readFile(file, "utf8"), file, source));
     } catch {
       unreadable.push({ path: file });
     }
@@ -19360,7 +20623,7 @@ async function readAgent(projectDir, name) {
   const file = agentFile(projectDir, name);
   let raw;
   try {
-    raw = await fs17.readFile(file, "utf8");
+    raw = await fs21.readFile(file, "utf8");
   } catch {
     return null;
   }
@@ -19377,7 +20640,7 @@ function agentFile(projectDir, name) {
   if (!AgentNameSchema.safeParse(name).success) {
     throw new AgentWriteError("invalid", "not an agent name");
   }
-  return path16.join(projectAgentsDir(projectDir), `${name}.md`);
+  return path20.join(projectAgentsDir(projectDir), `${name}.md`);
 }
 function document(input) {
   const data = { name: input.name, description: input.description };
@@ -19397,7 +20660,7 @@ async function writeAgent(projectDir, input, options) {
   return withLock(resolveLoopPaths(projectDir).lock, async () => {
     let current = null;
     try {
-      current = await fs17.readFile(file, "utf8");
+      current = await fs21.readFile(file, "utf8");
     } catch {
       current = null;
     }
@@ -19411,7 +20674,7 @@ async function writeAgent(projectDir, input, options) {
       }
     }
     const next = document(input);
-    await fs17.mkdir(projectAgentsDir(projectDir), { recursive: true });
+    await fs21.mkdir(projectAgentsDir(projectDir), { recursive: true });
     await writeTextAtomic(file, next);
     return { digest: agentDigest(next) };
   });
@@ -19421,7 +20684,7 @@ async function deleteAgent(projectDir, name, expectDigest, options) {
   await withLock(resolveLoopPaths(projectDir).lock, async () => {
     let current;
     try {
-      current = await fs17.readFile(file, "utf8");
+      current = await fs21.readFile(file, "utf8");
     } catch {
       throw new AgentWriteError("missing", "that agent is gone");
     }
@@ -19429,7 +20692,7 @@ async function deleteAgent(projectDir, name, expectDigest, options) {
       throw new AgentWriteError("stale", "the file moved underneath the editor");
     }
     if (options?.guard !== void 0) await options.guard();
-    await fs17.rm(file);
+    await fs21.rm(file);
   });
 }
 
@@ -19450,7 +20713,7 @@ async function readState(projectDir) {
 }
 async function readConfigView(projectDir) {
   const paths = resolveLoopPaths(projectDir);
-  const raw = await fs18.readFile(paths.config, "utf8").catch(() => null);
+  const raw = await fs22.readFile(paths.config, "utf8").catch(() => null);
   try {
     return {
       raw,
@@ -19518,7 +20781,7 @@ async function readAgentsView(projectDir) {
     // The plugin's own unreadable files are not this project's problem to
     // report — a broken plugin file is a bug in the plugin, and a project
     // cannot act on it.
-    unreadable: project.unreadable.map((entry) => ({ path: path17.basename(entry.path) }))
+    unreadable: project.unreadable.map((entry) => ({ path: path21.basename(entry.path) }))
   };
 }
 async function readFeatures(projectDir) {
@@ -19545,17 +20808,17 @@ async function readPlanDetail(projectDir, planId) {
   } catch {
     throw new NotFoundError("plan");
   }
-  const raw = await fs18.readFile(path17.join(dir, "PLAN.md"), "utf8").catch(() => null);
+  const raw = await fs22.readFile(path21.join(dir, "PLAN.md"), "utf8").catch(() => null);
   const parsed = raw === null ? null : PlanFrontmatterSchema.safeParse(parseFrontmatter(raw).data);
   const frontmatter = parsed?.success === true ? parsed.data : null;
   const [review, stories, manifestTitle] = await Promise.all([
-    fs18.readFile(path17.join(dir, "REVIEW.md"), "utf8").catch(() => null),
+    fs22.readFile(path21.join(dir, "REVIEW.md"), "utf8").catch(() => null),
     readStoryDetails(projectDir, planId),
     readManifestTitle(dir)
   ]);
   return {
     id: planId,
-    title: frontmatter?.title ?? manifestTitle ?? path17.basename(dir),
+    title: frontmatter?.title ?? manifestTitle ?? path21.basename(dir),
     // The whole record — `decision`, `by`, `at`, `note` — where the snapshot
     // carries only the decision. An approval is auditable or it is a flag.
     approval: frontmatter?.approval ?? null,
@@ -19587,26 +20850,26 @@ async function readStoryDetail(projectDir, storyId) {
 }
 async function readManifestTitle(dir) {
   try {
-    const parsed = ManifestSchema.safeParse(JSON.parse(await fs18.readFile(path17.join(dir, "manifest.json"), "utf8")));
+    const parsed = ManifestSchema.safeParse(JSON.parse(await fs22.readFile(path21.join(dir, "manifest.json"), "utf8")));
     return parsed.success ? parsed.data.title : null;
   } catch {
     return null;
   }
 }
 async function readTranscript(projectDir, jobId) {
-  const file = path17.join(resolveLoopPaths(projectDir).webTranscripts, `${jobId}.log`);
+  const file = path21.join(resolveLoopPaths(projectDir).webTranscripts, `${jobId}.log`);
   try {
-    return await fs18.readFile(file, "utf8");
+    return await fs22.readFile(file, "utf8");
   } catch {
     throw new NotFoundError("transcript");
   }
 }
 async function readRuns(projectDir) {
   const runs = resolveLoopPaths(projectDir).runs;
-  const names = await fs18.readdir(runs, { withFileTypes: true }).then((found) => found.filter((entry) => entry.isDirectory()).map((entry) => entry.name)).catch(() => []);
+  const names = await fs22.readdir(runs, { withFileTypes: true }).then((found) => found.filter((entry) => entry.isDirectory()).map((entry) => entry.name)).catch(() => []);
   const out = [];
   for (const name of names.sort().reverse()) {
-    const inside = await fs18.readdir(path17.join(runs, name)).catch(() => []);
+    const inside = await fs22.readdir(path21.join(runs, name)).catch(() => []);
     const [, story, track] = name.split("--");
     out.push({
       id: name,
@@ -19620,38 +20883,38 @@ async function readRuns(projectDir) {
 }
 async function readStoryRuns(projectDir, storyId) {
   const runs = await readRuns(projectDir);
-  return runs.filter((run) => run.story === storyId);
+  return runs.filter((run2) => run2.story === storyId);
 }
 async function readRunDetail(projectDir, runId) {
-  const dir = path17.join(resolveLoopPaths(projectDir).runs, runId);
-  const inside = await fs18.readdir(dir).catch(() => null);
+  const dir = path21.join(resolveLoopPaths(projectDir).runs, runId);
+  const inside = await fs22.readdir(dir).catch(() => null);
   if (inside === null) throw new NotFoundError("run");
   return {
     id: runId,
-    halt: await fs18.readFile(path17.join(dir, "HALT.md"), "utf8").catch(() => null),
+    halt: await fs22.readFile(path21.join(dir, "HALT.md"), "utf8").catch(() => null),
     cycles: inside.filter((entry) => /^cycle-\d+$/.test(entry)).map((entry) => Number(entry.slice("cycle-".length))).sort((a, b) => a - b)
   };
 }
 async function readSkillManifest(projectDir, runId) {
-  const dir = path17.join(resolveLoopPaths(projectDir).runs, runId);
-  const exists = await fs18.readdir(dir).catch(() => null);
+  const dir = path21.join(resolveLoopPaths(projectDir).runs, runId);
+  const exists = await fs22.readdir(dir).catch(() => null);
   if (exists === null) throw new NotFoundError("run");
-  return readJson2(path17.join(dir, "skill-selection.json"), SkillManifestSchema);
+  return readJson2(path21.join(dir, "skill-selection.json"), SkillManifestSchema);
 }
 var CYCLE_VERIFY_MAX = 50;
 var CYCLE_HANDOFF_MAX = 12e3;
 async function readCycleDetail(projectDir, runId, cycle) {
-  const dir = path17.join(resolveLoopPaths(projectDir).runs, runId, `cycle-${String(cycle).padStart(2, "0")}`);
-  const inside = await fs18.readdir(dir).catch(() => null);
+  const dir = path21.join(resolveLoopPaths(projectDir).runs, runId, `cycle-${String(cycle).padStart(2, "0")}`);
+  const inside = await fs22.readdir(dir).catch(() => null);
   if (inside === null) throw new NotFoundError("cycle");
-  const roster = await readJson2(path17.join(dir, "roster.json"), RosterSchema);
-  const findings = await readJson2(path17.join(dir, "findings.json"), FindingSchema.array());
+  const roster = await readJson2(path21.join(dir, "roster.json"), RosterSchema);
+  const findings = await readJson2(path21.join(dir, "findings.json"), FindingSchema.array());
   const ledger = await readVerifyLedger(dir);
-  const handoff = await fs18.readFile(path17.join(dir, "handoff.md"), "utf8").catch(() => null);
+  const handoff = await fs22.readFile(path21.join(dir, "handoff.md"), "utf8").catch(() => null);
   const agents = [];
   for (const entry of inside.filter((name) => name.endsWith(".json")).sort()) {
     if (entry === "roster.json" || entry === "findings.json") continue;
-    const result = await readJson2(path17.join(dir, entry), AgentResultSchema);
+    const result = await readJson2(path21.join(dir, entry), AgentResultSchema);
     if (result !== null) agents.push({ agent: entry.replace(/\.json$/, ""), result });
   }
   return {
@@ -19669,10 +20932,10 @@ async function readCycleDetail(projectDir, runId, cycle) {
   };
 }
 async function readRosterProgress(projectDir, runId, cycle) {
-  const dir = path17.join(resolveLoopPaths(projectDir).runs, runId, `cycle-${String(cycle).padStart(2, "0")}`);
-  const roster = await readJson2(path17.join(dir, "roster.json"), RosterSchema);
+  const dir = path21.join(resolveLoopPaths(projectDir).runs, runId, `cycle-${String(cycle).padStart(2, "0")}`);
+  const roster = await readJson2(path21.join(dir, "roster.json"), RosterSchema);
   if (roster === null) return null;
-  const inside = await fs18.readdir(dir).catch(() => []);
+  const inside = await fs22.readdir(dir).catch(() => []);
   const landed = roster.selected.filter((agent) => inside.includes(`${agent}.json`));
   return { cycle, selected: roster.selected, landed };
 }
@@ -19700,6 +20963,102 @@ async function readPreflightEstimate(projectDir, track) {
     throw error2;
   }
 }
+var QUALITY_AMENDMENTS_MAX = 25;
+var QUALITY_EVIDENCE_MAX = 20;
+async function readQualityRun(projectDir, runId) {
+  const dir = path21.join(resolveLoopPaths(projectDir).runs, runId);
+  const policy = await readQualityRecord(path21.join(dir, QUALITY_POLICY_FILE), QualityPolicySchema, "quality");
+  const [ledger, amendments, requests, usage, live] = await Promise.all([
+    readQualityRecord(path21.join(dir, QUALITY_LEDGER_FILE), QualityLedgerSchema, "quality"),
+    readAmendmentsAt(path21.join(dir, QUALITY_AMENDMENTS_FILE)),
+    readDestructiveRequestsAt(path21.join(dir, DESTRUCTIVE_REQUESTS_FILE)),
+    readQualityUsage(path21.join(dir, QUALITY_USAGE_FILE)),
+    // The state file describes exactly one run. It supplies this view's two
+    // clocks and nothing else, and only when the run it describes is the run
+    // being read — an archived run reports `unavailable` elapsed rather than
+    // borrowing another run's timestamps.
+    new StateStore(projectDir).read().then(({ state }) => state.run_id !== null && runDirName(state) === runId ? state : null).catch(() => null)
+  ]);
+  const reference = (value) => publicReference(value, projectDir, dir);
+  const budget = effectiveBudget(policy, amendments);
+  const latest = latestPerOperation(requests.requests);
+  return {
+    policy: {
+      ...policy,
+      risk: {
+        ...policy.risk,
+        signals: policy.risk.signals.map((signal) => ({ ...signal, evidence: signal.evidence.map(reference) }))
+      },
+      dispatches: policy.dispatches.map(({ agent, instance, dimensions, reason }) => ({
+        agent,
+        instance,
+        dimensions,
+        reason
+      }))
+    },
+    ledger: {
+      ...ledger,
+      dimensions: Object.fromEntries(
+        Object.entries(ledger.dimensions).map(([dimension, entry]) => [
+          dimension,
+          { ...entry, evidence_refs: entry.evidence_refs.slice(-QUALITY_EVIDENCE_MAX).map(reference) }
+        ])
+      )
+    },
+    amendments: amendments.slice(-QUALITY_AMENDMENTS_MAX).map(({ run: run2, field, from, to, reason, decided_at, decided_by }) => ({
+      run: run2,
+      field,
+      from,
+      to,
+      reason,
+      decided_at,
+      decided_by
+    })),
+    effectiveBudget: budget,
+    // The last word recorded about each operation is what `decideDestructiveRequest`
+    // answers, so the pending one is found the same way it decides: the newest
+    // record *for each operation*, never an earlier proposal somebody has
+    // already dealt with. A decision is appended beside the request it answers
+    // rather than replacing it (`quality-control.ts:354`), so filtering the raw
+    // array by status would keep offering an Approve button for an operation
+    // that has been approved and spent — one the write door would then refuse.
+    pendingRequest: publicRequest(
+      latest.filter((request) => request.status === "pending").at(-1),
+      reference
+    ),
+    telemetry: qualityTelemetry({
+      mode: policy.mode,
+      budget,
+      dispatches: { used: usage.reservations.length, max: budget.max_dispatches },
+      startedAt: live?.started_at ?? null,
+      lastTransitionAt: live?.updated_at ?? null,
+      // One interval per operation, from the record's own timestamps. Taken
+      // from the same last-word-per-operation list the pending request is, so
+      // an answered request contributes one closed wait rather than a closed
+      // one and an open one.
+      waits: latest.map((request) => ({ requestedAt: request.requested_at, decidedAt: request.decided_at }))
+    })
+  };
+}
+function latestPerOperation(requests) {
+  const byFingerprint = /* @__PURE__ */ new Map();
+  for (const request of requests) byFingerprint.set(request.fingerprint, request);
+  return [...byFingerprint.values()];
+}
+function publicRequest(request, reference) {
+  if (request === void 0) return null;
+  return { ...request, candidate: { ...request.candidate, targets: request.candidate.targets.map(reference) } };
+}
+function publicReference(reference, projectDir, runDir) {
+  if (!path21.isAbsolute(reference)) return reference;
+  for (const root of [runDir, projectDir]) {
+    const inside = path21.relative(root, reference);
+    if (inside.length > 0 && !inside.startsWith("..") && !path21.isAbsolute(inside)) {
+      return inside.split(path21.sep).join("/");
+    }
+  }
+  return path21.basename(reference);
+}
 async function readRosterValidity(projectDir, track, candidate) {
   try {
     return await rosterValidity(projectDir, { track, ...candidate });
@@ -19709,9 +21068,21 @@ async function readRosterValidity(projectDir, track, candidate) {
     throw error2;
   }
 }
+async function readQualityRecord(file, schema, what) {
+  let raw;
+  try {
+    raw = await fs22.readFile(file, "utf8");
+  } catch (error2) {
+    if (error2.code === "ENOENT") throw new NotFoundError(what);
+    throw error2;
+  }
+  const parsed = schema.safeParse(JSON.parse(raw));
+  if (parsed.data === void 0 || !parsed.success) throw new Error(`${file} is not a readable quality record`);
+  return parsed.data;
+}
 async function readJson2(file, schema) {
   try {
-    const parsed = schema.safeParse(JSON.parse(await fs18.readFile(file, "utf8")));
+    const parsed = schema.safeParse(JSON.parse(await fs22.readFile(file, "utf8")));
     return parsed.success ? parsed.data : null;
   } catch {
     return null;
@@ -20006,11 +21377,11 @@ var ok = (body) => ({ status: 200, body });
 var fail = (status, code) => ({ status, body: { error: { code } } });
 async function handleApi(projectDir, method, pathname) {
   const mark = pathname.indexOf("?");
-  const path27 = mark === -1 ? pathname : pathname.slice(0, mark);
+  const path31 = mark === -1 ? pathname : pathname.slice(0, mark);
   const query = new URLSearchParams(mark === -1 ? "" : pathname.slice(mark + 1));
-  if (!path27.startsWith("/api/") && path27 !== "/api") return null;
+  if (!path31.startsWith("/api/") && path31 !== "/api") return null;
   if (method !== "GET") return fail(405, "error.badRequest");
-  const segments = path27.split("/").filter((part) => part.length > 0).slice(1);
+  const segments = path31.split("/").filter((part) => part.length > 0).slice(1);
   try {
     return await route(projectDir, segments, query);
   } catch (error2) {
@@ -20044,6 +21415,7 @@ async function route(projectDir, segments, query) {
       if (first === void 0 || !RUN_ID.test(first)) return fail(400, "error.badRequest");
       if (segments.length === 2) return ok(await readRunDetail(projectDir, first));
       if (segments.length === 3 && second === "skills") return ok(await readSkillManifest(projectDir, first));
+      if (segments.length === 3 && second === "quality") return ok(await readQualityRun(projectDir, first));
       if (segments.length === 3) {
         const cycle = Number(second);
         if (!Number.isInteger(cycle) || cycle < 1 || cycle > 999) return fail(400, "error.badRequest");
@@ -20115,7 +21487,7 @@ async function route(projectDir, segments, query) {
   return fail(404, "error.notFound");
 }
 function etag(body) {
-  return `W/"${crypto5.createHash("sha1").update(body).digest("base64url")}"`;
+  return `W/"${crypto6.createHash("sha1").update(body).digest("base64url")}"`;
 }
 function sendApi(request, response, result) {
   const body = JSON.stringify(result.body);
@@ -20136,21 +21508,30 @@ function sendApi(request, response, result) {
 }
 
 // src/web/queue.ts
-import fs19 from "node:fs/promises";
-import path18 from "node:path";
+import fs23 from "node:fs/promises";
+import path22 from "node:path";
 
 // src/web/completion.ts
-var NEW_TRACKER = { started: false, runId: null };
+var NEW_TRACKER = { started: false, runId: null, prior: null };
 var TERMINAL = /* @__PURE__ */ new Set(["done", "halted", "failed", "idle"]);
+var SUSPENDED = /* @__PURE__ */ new Set(["waiting_for_user", "budget_exhausted"]);
 function observe(tracker, summary) {
   if (summary.recovered) {
     return { tracker, verdict: tracker.started ? "running" : "waiting" };
   }
   if (!tracker.started) {
-    if (summary.status !== "running") return { tracker, verdict: "waiting" };
-    return { tracker: { started: true, runId: summary.run_id }, verdict: "running" };
+    const prior = tracker.prior ?? { runId: summary.run_id };
+    const suspended = SUSPENDED.has(summary.status);
+    if (summary.status !== "running" && !(suspended && summary.run_id !== prior.runId)) {
+      return { tracker: { ...tracker, prior }, verdict: "waiting" };
+    }
+    return {
+      tracker: { started: true, runId: summary.run_id, prior },
+      verdict: suspended ? "suspended" : "running"
+    };
   }
   if (summary.run_id !== tracker.runId) return { tracker, verdict: "complete" };
+  if (SUSPENDED.has(summary.status)) return { tracker, verdict: "suspended" };
   return { tracker, verdict: TERMINAL.has(summary.status) ? "complete" : "running" };
 }
 function isStalled(verdict, msSinceOutput, thresholdMs) {
@@ -20425,14 +21806,14 @@ var JobQueue = class {
    * it must never be a job that stops running because of it.
    */
   async writeTranscriptChunk(jobId, chunk) {
-    const file = path18.join(this.transcriptDir(), `${jobId}.log`);
+    const file = path22.join(this.transcriptDir(), `${jobId}.log`);
     try {
-      await fs19.appendFile(file, chunk);
+      await fs23.appendFile(file, chunk);
     } catch (error2) {
       if (error2.code !== "ENOENT") return;
       try {
-        await fs19.mkdir(this.transcriptDir(), { recursive: true });
-        await fs19.appendFile(file, chunk);
+        await fs23.mkdir(this.transcriptDir(), { recursive: true });
+        await fs23.appendFile(file, chunk);
       } catch {
       }
     }
@@ -20464,14 +21845,14 @@ var JobQueue = class {
     const dir = this.transcriptDir();
     let names;
     try {
-      names = await fs19.readdir(dir);
+      names = await fs23.readdir(dir);
     } catch {
       return;
     }
     const stamped = await Promise.all(
       names.filter((name) => name.endsWith(".log") && !protectedIds.has(name.slice(0, -".log".length))).map(async (name) => {
-        const file = path18.join(dir, name);
-        const stats = await fs19.stat(file).catch(() => null);
+        const file = path22.join(dir, name);
+        const stats = await fs23.stat(file).catch(() => null);
         return stats === null ? null : { file, mtimeMs: stats.mtimeMs, size: stats.size };
       })
     );
@@ -20493,7 +21874,7 @@ var JobQueue = class {
       toDelete.add(oldest.file);
       total -= oldest.size;
     }
-    await Promise.all([...toDelete].map((file) => fs19.unlink(file).catch(() => {
+    await Promise.all([...toDelete].map((file) => fs23.unlink(file).catch(() => {
     })));
   }
   beginShutdown(active, outcome) {
@@ -20562,8 +21943,8 @@ var JobQueue = class {
 };
 
 // src/web/marker.ts
-import fs20 from "node:fs/promises";
-import path19 from "node:path";
+import fs24 from "node:fs/promises";
+import path23 from "node:path";
 var ServerMarkerSchema = strictObject({
   port: number2().int().positive().max(65535),
   /**
@@ -20584,15 +21965,15 @@ var ServerMarkerSchema = strictObject({
 async function writeServerMarker(projectDir, marker) {
   const file = resolveLoopPaths(projectDir).webServer;
   try {
-    await fs20.mkdir(path19.dirname(file), { recursive: true });
-    await fs20.writeFile(file, `${JSON.stringify(marker, null, 2)}
+    await fs24.mkdir(path23.dirname(file), { recursive: true });
+    await fs24.writeFile(file, `${JSON.stringify(marker, null, 2)}
 `, "utf8");
   } catch {
   }
 }
 async function clearServerMarker(projectDir) {
   try {
-    await fs20.rm(resolveLoopPaths(projectDir).webServer, { force: true });
+    await fs24.rm(resolveLoopPaths(projectDir).webServer, { force: true });
   } catch {
   }
 }
@@ -20601,13 +21982,13 @@ async function clearServerMarker(projectDir) {
 import os2 from "node:os";
 
 // src/ops/plan.ts
-import fs21 from "node:fs/promises";
-import path21 from "node:path";
+import fs25 from "node:fs/promises";
+import path25 from "node:path";
 
 // src/ops/manifest.ts
-import path20 from "node:path";
+import path24 from "node:path";
 function manifestPath(planDir) {
-  return path20.join(planDir, "manifest.json");
+  return path24.join(planDir, "manifest.json");
 }
 async function renderManifest(projectDir, planId, now = () => /* @__PURE__ */ new Date()) {
   const plan = await readPlan(projectDir, planId);
@@ -20624,7 +22005,7 @@ async function renderManifest(projectDir, planId, now = () => /* @__PURE__ */ ne
       status: story.frontmatter.status,
       ui: story.frontmatter.ui,
       depends_on: story.frontmatter.depends_on,
-      file: path20.relative(plan.dir, story.file)
+      file: path24.relative(plan.dir, story.file)
     }))
   });
   await writeJsonAtomic(manifestPath(plan.dir), manifest, { backup: false });
@@ -20704,8 +22085,8 @@ async function storyUpdate(projectDir, storyId, patch, now = () => /* @__PURE__ 
       );
       assertDependenciesResolve(siblings, merged.data);
     }
-    const renamed = path21.join(path21.dirname(current.file), storyFileName(merged.data));
-    if (renamed !== current.file) await fs21.rename(current.file, renamed);
+    const renamed = path25.join(path25.dirname(current.file), storyFileName(merged.data));
+    if (renamed !== current.file) await fs25.rename(current.file, renamed);
     const file = await writeStory(projectDir, { frontmatter: merged.data, body: current.body });
     const manifest = await renderManifest(projectDir, planId, now);
     return { id: storyId, file, manifest };
@@ -20713,13 +22094,13 @@ async function storyUpdate(projectDir, storyId, patch, now = () => /* @__PURE__ 
 }
 
 // src/ops/summary.ts
-import fs22 from "node:fs/promises";
-import path22 from "node:path";
+import fs26 from "node:fs/promises";
+import path26 from "node:path";
 var NO_FINDINGS = { high: 0, medium: 0, low: 0 };
 var MAP_FILE = "map.md";
 async function hasDesignSystem(projectDir) {
   try {
-    return (await fs22.stat(resolveLoopPaths(projectDir).designSystem)).isFile();
+    return (await fs26.stat(resolveLoopPaths(projectDir).designSystem)).isFile();
   } catch {
     return false;
   }
@@ -20727,11 +22108,11 @@ async function hasDesignSystem(projectDir) {
 async function runMap(projectDir, state) {
   if (state.run_id === null || state.track === null) return null;
   try {
-    if (!(await fs22.stat(path22.join(runDirPath(projectDir, state), MAP_FILE))).isFile()) return null;
+    if (!(await fs26.stat(path26.join(runDirPath(projectDir, state), MAP_FILE))).isFile()) return null;
   } catch {
     return null;
   }
-  return path22.join(".mjloop", "runs", runDirName(state), MAP_FILE);
+  return path26.join(".mjloop", "runs", runDirName(state), MAP_FILE);
 }
 async function stateSummary(projectDir) {
   let config2 = null;
@@ -20765,7 +22146,8 @@ async function stateSummary(projectDir) {
       reproduction: null,
       design_system: false,
       map: null,
-      config_error: configError
+      config_error: configError,
+      quality: null
     };
   }
   let maxCycles = null;
@@ -20798,7 +22180,11 @@ async function stateSummary(projectDir) {
     reproduction,
     design_system: await hasDesignSystem(projectDir),
     map: await runMap(projectDir, state),
-    config_error: configError
+    config_error: configError,
+    // Degrades rather than fails, exactly as `config_error` does: this line is
+    // rendered on every session start, and an unreadable run record must not
+    // turn it into a stack trace.
+    quality: await qualityStateSummary(projectDir, state).catch(() => null)
   };
 }
 
@@ -20881,6 +22267,32 @@ var WriteSchema = discriminatedUnion("kind", [
     kind: literal("agent.delete"),
     name: AgentNameSchema,
     digest: string2().regex(/^[a-f0-9]{64}$/)
+  }),
+  strictObject({
+    kind: literal("quality.decision"),
+    run: string2().min(1).max(200),
+    /**
+     * The operation being decided, as the server fingerprinted it. Matched
+     * against the request the run is waiting on rather than joined onto a path,
+     * exactly as `feature.approve`'s digest is a token to be matched.
+     */
+    fingerprint: string2().regex(/^[a-f0-9]{64}$/),
+    decision: _enum(["approve", "reject"]),
+    note: string2().max(2e3).nullable().default(null)
+  }),
+  strictObject({
+    kind: literal("quality.budget"),
+    run: string2().min(1).max(200),
+    /**
+     * A ceiling, and never the mode. The mode is pinned for the life of a run —
+     * a run that changed modes halfway would have no single policy its evidence
+     * was measured against — so it is not a field this door has rather than a
+     * value it refuses.
+     */
+    field: QualityBudgetFieldSchema,
+    from: number2().int().nonnegative(),
+    to: number2().int().positive(),
+    reason: string2().min(1).max(2e3)
   }),
   strictObject({
     kind: literal("skill.agents"),
@@ -20974,6 +22386,25 @@ var HANDLERS = {
       }
     });
   },
+  "quality.decision": async (projectDir, write) => {
+    await decideDestructiveRequest(projectDir, {
+      run: write.run,
+      fingerprint: write.fingerprint,
+      decision: write.decision,
+      note: write.note,
+      decided_by: decidedBy()
+    });
+  },
+  "quality.budget": async (projectDir, write) => {
+    await amendQualityBudget(projectDir, {
+      run: write.run,
+      field: write.field,
+      from: write.from,
+      to: write.to,
+      reason: write.reason,
+      decided_by: decidedBy()
+    });
+  },
   "skill.agents": async (projectDir, write) => {
     await setAcceptanceAgents(projectDir, write.skill, write.agents, write.digest);
   }
@@ -21003,6 +22434,12 @@ async function applyWrite(projectDir, write) {
         reserved: "write.refused.agent.shadow"
       };
       return { ok: false, code: code[error2.kind] };
+    }
+    if (error2 instanceof QualityDecisionRefusedError) {
+      return { ok: false, code: "write.stale.qualityDecision" };
+    }
+    if (error2 instanceof QualityAmendmentRefusedError) {
+      return { ok: false, code: "write.stale.qualityBudget" };
     }
     if (error2 instanceof ConfigMutationError) {
       return {
@@ -21137,15 +22574,15 @@ var spawnPtySession = ({ cwd, command, cols, rows }) => {
 };
 
 // src/web/snapshot.ts
-import fs24 from "node:fs/promises";
-import path24 from "node:path";
+import fs28 from "node:fs/promises";
+import path28 from "node:path";
 
 // src/web/revision.ts
-import fs23 from "node:fs/promises";
-import path23 from "node:path";
+import fs27 from "node:fs/promises";
+import path27 from "node:path";
 async function stamp(file) {
   try {
-    const stats = await fs23.stat(file);
+    const stats = await fs27.stat(file);
     return `${Math.trunc(stats.mtimeMs)}.${stats.size}`;
   } catch {
     return "-";
@@ -21153,12 +22590,12 @@ async function stamp(file) {
 }
 async function stampDir(dir, documents) {
   const parts = [await stamp(dir)];
-  for (const document2 of documents) parts.push(await stamp(path23.join(dir, document2)));
+  for (const document2 of documents) parts.push(await stamp(path27.join(dir, document2)));
   return parts.join(":");
 }
 async function entries(dir) {
   try {
-    return (await fs23.readdir(dir)).sort();
+    return (await fs27.readdir(dir)).sort();
   } catch {
     return [];
   }
@@ -21170,7 +22607,7 @@ async function stampListing(dir) {
 async function stampTree(dir) {
   const parts = [await stamp(dir)];
   for (const name of await entries(dir)) {
-    const child = path23.join(dir, name);
+    const child = path27.join(dir, name);
     parts.push(`${name}=${await stamp(child)}=${await stampListing(child)}`);
   }
   return parts.join("|");
@@ -21178,9 +22615,9 @@ async function stampTree(dir) {
 async function stampProjectSkills(dir) {
   const parts = [await stamp(dir)];
   for (const name of await entries(dir)) {
-    const child = path23.join(dir, name);
+    const child = path27.join(dir, name);
     parts.push(
-      `${name}=${await stamp(child)}=${await stampListing(child)}=${await stamp(path23.join(child, "SKILL.md"))}`
+      `${name}=${await stamp(child)}=${await stampListing(child)}=${await stamp(path27.join(child, "SKILL.md"))}`
     );
   }
   return parts.join("|");
@@ -21192,22 +22629,30 @@ async function stampLibrary(projectDir) {
     return "-";
   }
 }
-async function readRevisions(projectDir, tick, running) {
+var QUALITY_DOCUMENTS = [QUALITY_POLICY_FILE, QUALITY_LEDGER_FILE, QUALITY_AMENDMENTS_FILE];
+async function stampQuality(runsDir, runDir) {
+  if (runDir === null) return "-";
+  const parts = [];
+  for (const document2 of QUALITY_DOCUMENTS) parts.push(await stamp(path27.join(runsDir, runDir, document2)));
+  return parts.join(":");
+}
+async function readRevisions(projectDir, tick, running, runDir) {
   const paths = resolveLoopPaths(projectDir);
   const planDirs = await entries(paths.plans);
   const plans = {};
   for (const dir of planDirs) {
-    const documents = await stampDir(path23.join(paths.plans, dir), PLAN_DOCUMENTS);
-    const stories = await stamp(path23.join(paths.plans, dir, "stories"));
+    const documents = await stampDir(path27.join(paths.plans, dir), PLAN_DOCUMENTS);
+    const stories = await stamp(path27.join(paths.plans, dir, "stories"));
     const key = /^P\d{3}(?=-|$)/.exec(dir)?.[0] ?? dir;
     const stamped = `${documents}:${stories}`;
     plans[key] = plans[key] === void 0 ? stamped : `${plans[key]}|${stamped}`;
   }
-  const [state, config2, memory, runs, profile, features, acceptances, library, projectSkills, agents] = await Promise.all([
+  const [state, config2, memory, runs, quality, profile, features, acceptances, library, projectSkills, agents] = await Promise.all([
     stamp(paths.state),
     stamp(paths.config),
     stampListing(paths.memory),
     stampListing(paths.runs),
+    stampQuality(paths.runs, runDir),
     // `proposed.json` by name for the reason `PLAN_DOCUMENTS` names its three:
     // init overwrites the proposal in place, and a fingerprint built from the
     // directory's mtime alone would sit there showing the previous scan. The
@@ -21223,11 +22668,11 @@ async function readRevisions(projectDir, tick, running) {
     // when the thing it draws changes is a panel showing yesterday.
     // `stampProjectSkills`, not `stampTree`: a `SKILL.md` is a level deeper
     // than `stampTree` reaches, so an in-place edit needs its own stamp.
-    stampProjectSkills(path23.join(projectDir, ".claude", "skills")),
+    stampProjectSkills(path27.join(projectDir, ".claude", "skills")),
     // `.claude/agents/` — same rationale as `.claude/skills/` above. `stampTree`
     // is enough: an agent is one file directly inside the directory, not a
     // level deeper the way a `SKILL.md` is.
-    stampTree(path23.join(projectDir, ".claude", "agents"))
+    stampTree(path27.join(projectDir, ".claude", "agents"))
   ]);
   return {
     state,
@@ -21236,6 +22681,7 @@ async function readRevisions(projectDir, tick, running) {
     runs,
     cycle: running ? String(tick) : "idle",
     memory,
+    quality,
     profile,
     features,
     skills: `${acceptances}|${library}|${projectSkills}`,
@@ -21251,7 +22697,8 @@ async function buildSnapshot(projectDir, cache = emptyCache()) {
   cache.tick += 1;
   const [state, guards] = await Promise.all([stateSummary(projectDir), readGuards(projectDir)]);
   const running = state.status === "running";
-  const revisions = await readRevisions(projectDir, cache.tick, running);
+  const openRun = state.run_id === null || state.track === null ? null : runDirName2(state.run_id, state.story, state.track);
+  const revisions = await readRevisions(projectDir, cache.tick, running, openRun);
   const plansRevision = JSON.stringify(revisions.plans);
   if (plansRevision !== cache.plansRevision) {
     cache.plans = await readPlans(projectDir);
@@ -21259,7 +22706,7 @@ async function buildSnapshot(projectDir, cache = emptyCache()) {
   }
   const [runs, roster] = await Promise.all([
     listRuns(projectDir),
-    running && state.run_id !== null && state.track !== null ? readRosterProgress(projectDir, runDirName2(state.run_id, state.story, state.track), state.cycle) : Promise.resolve(null)
+    running && openRun !== null ? readRosterProgress(projectDir, openRun, state.cycle) : Promise.resolve(null)
   ]);
   return { project: projectDir, state, plans: cache.plans, runs, guards, roster, revisions };
 }
@@ -21307,14 +22754,14 @@ async function readPlanView(projectDir, id) {
     id,
     // The directory name is the last resort, and it always exists — `findPlanDir`
     // found the plan by it.
-    title: frontmatter?.title ?? manifest?.title ?? path24.basename(dir),
+    title: frontmatter?.title ?? manifest?.title ?? path28.basename(dir),
     approval: frontmatter?.approval?.decision ?? null,
     stories: manifest?.stories ?? []
   };
 }
 async function readPlanFrontmatter(dir) {
   try {
-    const raw = await fs24.readFile(path24.join(dir, "PLAN.md"), "utf8");
+    const raw = await fs28.readFile(path28.join(dir, "PLAN.md"), "utf8");
     const parsed = PlanFrontmatterSchema.safeParse(parseFrontmatter(raw).data);
     if (!parsed.success) return null;
     return { title: parsed.data.title, approval: parsed.data.approval };
@@ -21324,7 +22771,7 @@ async function readPlanFrontmatter(dir) {
 }
 async function readManifest(dir) {
   try {
-    const raw = await fs24.readFile(path24.join(dir, "manifest.json"), "utf8");
+    const raw = await fs28.readFile(path28.join(dir, "manifest.json"), "utf8");
     const parsed = ManifestSchema.safeParse(JSON.parse(raw));
     if (!parsed.success) return null;
     return {
@@ -21343,7 +22790,7 @@ async function readManifest(dir) {
 }
 async function listRuns(projectDir) {
   try {
-    const entries2 = await fs24.readdir(resolveLoopPaths(projectDir).runs, { withFileTypes: true });
+    const entries2 = await fs28.readdir(resolveLoopPaths(projectDir).runs, { withFileTypes: true });
     return entries2.filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort().reverse();
   } catch {
     return [];
@@ -21369,11 +22816,13 @@ var OK_CODES = {
   "agent.create": "write.ok.agent",
   "agent.update": "write.ok.agent",
   "agent.delete": "write.ok.agent",
-  "skill.agents": "write.ok.skill"
+  "skill.agents": "write.ok.skill",
+  "quality.decision": "write.ok.qualityDecision",
+  "quality.budget": "write.ok.qualityBudget"
 };
 function tokenMatches(expected, given) {
   if (given === null || given.length !== expected.length) return false;
-  return crypto6.timingSafeEqual(Buffer.from(expected), Buffer.from(given));
+  return crypto7.timingSafeEqual(Buffer.from(expected), Buffer.from(given));
 }
 var COOKIE = "mjloop_token";
 function readCookie(header, name) {
@@ -21389,7 +22838,7 @@ function suppliedToken(url, cookieHeader) {
 }
 async function startServer(options) {
   const { projectDir } = options;
-  const token = crypto6.randomBytes(32).toString("hex");
+  const token = crypto7.randomBytes(32).toString("hex");
   const sockets = /* @__PURE__ */ new Set();
   const broadcast = (message) => {
     const payload = JSON.stringify(message);
@@ -21565,15 +23014,15 @@ async function handleRequest(request, response, token, projectDir) {
     return;
   }
   const requested = url.pathname === "/" ? "/index.html" : url.pathname;
-  const file = path25.resolve(PUBLIC_DIR, `.${requested}`);
+  const file = path29.resolve(PUBLIC_DIR, `.${requested}`);
   if (!file.startsWith(PUBLIC_DIR)) {
     response.writeHead(403).end();
     return;
   }
   try {
-    const body = await fs25.readFile(file);
+    const body = await fs29.readFile(file);
     response.writeHead(200, {
-      "content-type": MIME[path25.extname(file)] ?? "application/octet-stream",
+      "content-type": MIME[path29.extname(file)] ?? "application/octet-stream",
       // The page carries a token in its URL. Keeping it out of caches and
       // referrers is most of what stops it leaking.
       "cache-control": "no-store",
@@ -21605,7 +23054,7 @@ function parseArgs(argv, cwd) {
       case "--dir": {
         const value = argv[++index];
         if (value === void 0) throw new UsageError("--dir needs a path");
-        args.dir = path26.resolve(cwd, value);
+        args.dir = path30.resolve(cwd, value);
         break;
       }
       case "--port": {
@@ -21629,7 +23078,7 @@ function parseArgs(argv, cwd) {
 function openBrowser(url) {
   const [command, args] = process.platform === "darwin" ? ["open", [url]] : process.platform === "win32" ? ["cmd.exe", ["/d", "/s", "/c", "start", "", url]] : ["xdg-open", [url]];
   try {
-    spawn(command, args, { detached: true, stdio: "ignore" }).unref();
+    spawn2(command, args, { detached: true, stdio: "ignore" }).unref();
   } catch {
   }
 }
@@ -21638,7 +23087,7 @@ async function ensurePty() {
   if (isPtyAvailable()) return true;
   process.stdout.write("Preparing the dashboard \u2014 installing node-pty, this happens once.\n");
   const code = await new Promise((resolve) => {
-    const npm = spawn("npm", ["install", "--omit=dev", "--no-audit", "--no-fund", "--loglevel=error"], {
+    const npm = spawn2("npm", ["install", "--omit=dev", "--no-audit", "--no-fund", "--loglevel=error"], {
       cwd: ENGINE_DIR,
       stdio: ["ignore", "inherit", "inherit"],
       shell: process.platform === "win32"
@@ -21668,7 +23117,7 @@ ${USAGE}`);
     return 1;
   }
   try {
-    await fs26.stat(resolveLoopPaths(args.dir).root);
+    await fs30.stat(resolveLoopPaths(args.dir).root);
   } catch {
     process.stderr.write(`no .mjloop/ in ${args.dir} \u2014 run /mjloop:init there first.
 `);

@@ -78,7 +78,17 @@ export const AgentResultSchema = z.strictObject({
   skills_used: z.array(IdSchema).default([]),
 })
 
-/** The leader's declared cycle composition. */
+/**
+ * The leader's declared cycle composition.
+ *
+ * `selected`/`skipped` are the whole of what a leader declares and the whole
+ * of what `rosterSet` persists to `cycle-NN/roster.json` — the pinned
+ * quality policy's own dispatch plan (`ops/quality-roster.ts`'s
+ * `planQualityDispatches`) is not part of this shape and is never written
+ * here. `rosterSet` returns that plan alongside `waves` as
+ * `quality_dispatches`, computed fresh from the run's policy rather than
+ * declared by the leader, so this schema owns no field for it.
+ */
 export const RosterSchema = z.strictObject({
   cycle: z.number().int().positive(),
   selected: z.array(z.string().min(1)).min(1),

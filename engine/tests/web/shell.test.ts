@@ -384,6 +384,72 @@ describe('App', () => {
     wrapper.unmount()
   })
 
+  it('hosts the two quality dialogs outside the panels\' <KeepAlive>, so a tab switch cannot detach the one approving a destructive operation', async () => {
+    // The same regression the halt dialog's own test above describes, for the
+    // two dialogs it matters most for: these are the buttons that approve a
+    // `DROP TABLE` and raise a ceiling, and both are pressed from inside the
+    // kept-alive Run panel. Hosted there, a tab switch mid-decision would
+    // detach the `<dialog>` and leave the operator with no way to answer.
+    vi.resetModules()
+    const freshI18n = await import('../../src/web/app/lib/i18n.ts')
+    freshI18n.installForTest({ code: 'en', strings: english })
+    const store = await import('../../src/web/app/stores/session.ts')
+    const { default: App } = await import('../../src/web/app/App.vue')
+    const { useQualityDialogs } = await import('../../src/web/app/composables/useQualityDialogs.ts')
+
+    class FakeSocket {
+      static last: FakeSocket | null = null
+      readyState = 1
+      listeners = new Map<string, (event: unknown) => void>()
+      constructor(public url: string) {
+        FakeSocket.last = this
+      }
+      addEventListener(type: string, fn: (event: unknown) => void) {
+        this.listeners.set(type, fn)
+      }
+      send(): void {}
+      deliver(message: unknown): void {
+        this.listeners.get('message')?.({ data: JSON.stringify(message) })
+      }
+    }
+    store.connect({ token: 'tok', socketFactory: (url) => new FakeSocket(url) as unknown as WebSocket })
+    location.hash = '#run'
+    FakeSocket.last?.deliver({ type: 'snapshot', snapshot: emptySnapshot() })
+
+    const wrapper = mount(App, { attachTo: document.body })
+    useQualityDialogs().askDecision({
+      run: '2026-07-28-001',
+      fingerprint: 'b'.repeat(64),
+      kind: 'table_drop',
+      targets: ['db/migrations/003.sql'],
+      operation: 'DROP TABLE users',
+      rollback: null,
+      applied: true,
+    })
+    useQualityDialogs().askBudget({
+      run: '2026-07-28-001',
+      budget: { max_cycles: 5, max_dispatches: 20, max_context_tokens_per_dispatch: 8000, max_repair_attempts: 1, cost_estimate: null },
+    })
+    await nextTick()
+
+    const decision = document.getElementById('quality-decision-dialog') as HTMLDialogElement
+    const budget = document.getElementById('quality-budget-dialog') as HTMLDialogElement
+    expect(decision.open).toBe(true)
+    expect(budget.open).toBe(true)
+
+    location.hash = '#plans'
+    window.dispatchEvent(new Event('hashchange'))
+    await nextTick()
+    expect(wrapper.find('#panel-run').exists()).toBe(false)
+    // `isConnected`, for the reason the halt dialog's own test gives: `.open`
+    // stays true on a detached element under happy-dom.
+    expect(decision.isConnected).toBe(true)
+    expect(budget.isConnected).toBe(true)
+    expect(document.querySelector('#panel-run #quality-decision-dialog')).toBeNull()
+
+    wrapper.unmount()
+  })
+
   it('carries a write receipt through the one door — the toast and the notice log both show it, and the badge counts it while the panel is closed', async () => {
     // The foundation split what `ui/notifications.js:15` deliberately kept
     // together: a write receipt used to become a toast only. This is task

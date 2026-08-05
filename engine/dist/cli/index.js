@@ -114,17 +114,17 @@ var require_visit = __commonJS({
     visit.BREAK = BREAK;
     visit.SKIP = SKIP;
     visit.REMOVE = REMOVE;
-    function visit_(key, node, visitor, path13) {
-      const ctrl = callVisitor(key, node, visitor, path13);
+    function visit_(key, node, visitor, path19) {
+      const ctrl = callVisitor(key, node, visitor, path19);
       if (identity.isNode(ctrl) || identity.isPair(ctrl)) {
-        replaceNode(key, path13, ctrl);
-        return visit_(key, ctrl, visitor, path13);
+        replaceNode(key, path19, ctrl);
+        return visit_(key, ctrl, visitor, path19);
       }
       if (typeof ctrl !== "symbol") {
         if (identity.isCollection(node)) {
-          path13 = Object.freeze(path13.concat(node));
+          path19 = Object.freeze(path19.concat(node));
           for (let i = 0; i < node.items.length; ++i) {
-            const ci = visit_(i, node.items[i], visitor, path13);
+            const ci = visit_(i, node.items[i], visitor, path19);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -135,13 +135,13 @@ var require_visit = __commonJS({
             }
           }
         } else if (identity.isPair(node)) {
-          path13 = Object.freeze(path13.concat(node));
-          const ck = visit_("key", node.key, visitor, path13);
+          path19 = Object.freeze(path19.concat(node));
+          const ck = visit_("key", node.key, visitor, path19);
           if (ck === BREAK)
             return BREAK;
           else if (ck === REMOVE)
             node.key = null;
-          const cv = visit_("value", node.value, visitor, path13);
+          const cv = visit_("value", node.value, visitor, path19);
           if (cv === BREAK)
             return BREAK;
           else if (cv === REMOVE)
@@ -162,17 +162,17 @@ var require_visit = __commonJS({
     visitAsync.BREAK = BREAK;
     visitAsync.SKIP = SKIP;
     visitAsync.REMOVE = REMOVE;
-    async function visitAsync_(key, node, visitor, path13) {
-      const ctrl = await callVisitor(key, node, visitor, path13);
+    async function visitAsync_(key, node, visitor, path19) {
+      const ctrl = await callVisitor(key, node, visitor, path19);
       if (identity.isNode(ctrl) || identity.isPair(ctrl)) {
-        replaceNode(key, path13, ctrl);
-        return visitAsync_(key, ctrl, visitor, path13);
+        replaceNode(key, path19, ctrl);
+        return visitAsync_(key, ctrl, visitor, path19);
       }
       if (typeof ctrl !== "symbol") {
         if (identity.isCollection(node)) {
-          path13 = Object.freeze(path13.concat(node));
+          path19 = Object.freeze(path19.concat(node));
           for (let i = 0; i < node.items.length; ++i) {
-            const ci = await visitAsync_(i, node.items[i], visitor, path13);
+            const ci = await visitAsync_(i, node.items[i], visitor, path19);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -183,13 +183,13 @@ var require_visit = __commonJS({
             }
           }
         } else if (identity.isPair(node)) {
-          path13 = Object.freeze(path13.concat(node));
-          const ck = await visitAsync_("key", node.key, visitor, path13);
+          path19 = Object.freeze(path19.concat(node));
+          const ck = await visitAsync_("key", node.key, visitor, path19);
           if (ck === BREAK)
             return BREAK;
           else if (ck === REMOVE)
             node.key = null;
-          const cv = await visitAsync_("value", node.value, visitor, path13);
+          const cv = await visitAsync_("value", node.value, visitor, path19);
           if (cv === BREAK)
             return BREAK;
           else if (cv === REMOVE)
@@ -216,23 +216,23 @@ var require_visit = __commonJS({
       }
       return visitor;
     }
-    function callVisitor(key, node, visitor, path13) {
+    function callVisitor(key, node, visitor, path19) {
       if (typeof visitor === "function")
-        return visitor(key, node, path13);
+        return visitor(key, node, path19);
       if (identity.isMap(node))
-        return visitor.Map?.(key, node, path13);
+        return visitor.Map?.(key, node, path19);
       if (identity.isSeq(node))
-        return visitor.Seq?.(key, node, path13);
+        return visitor.Seq?.(key, node, path19);
       if (identity.isPair(node))
-        return visitor.Pair?.(key, node, path13);
+        return visitor.Pair?.(key, node, path19);
       if (identity.isScalar(node))
-        return visitor.Scalar?.(key, node, path13);
+        return visitor.Scalar?.(key, node, path19);
       if (identity.isAlias(node))
-        return visitor.Alias?.(key, node, path13);
+        return visitor.Alias?.(key, node, path19);
       return void 0;
     }
-    function replaceNode(key, path13, node) {
-      const parent = path13[path13.length - 1];
+    function replaceNode(key, path19, node) {
+      const parent = path19[path19.length - 1];
       if (identity.isCollection(parent)) {
         parent.items[key] = node;
       } else if (identity.isPair(parent)) {
@@ -842,10 +842,10 @@ var require_Collection = __commonJS({
     var createNode = require_createNode();
     var identity = require_identity();
     var Node = require_Node();
-    function collectionFromPath(schema, path13, value) {
+    function collectionFromPath(schema, path19, value) {
       let v = value;
-      for (let i = path13.length - 1; i >= 0; --i) {
-        const k = path13[i];
+      for (let i = path19.length - 1; i >= 0; --i) {
+        const k = path19[i];
         if (typeof k === "number" && Number.isInteger(k) && k >= 0) {
           const a = [];
           a[k] = v;
@@ -864,7 +864,7 @@ var require_Collection = __commonJS({
         sourceObjects: /* @__PURE__ */ new Map()
       });
     }
-    var isEmptyPath = (path13) => path13 == null || typeof path13 === "object" && !!path13[Symbol.iterator]().next().done;
+    var isEmptyPath = (path19) => path19 == null || typeof path19 === "object" && !!path19[Symbol.iterator]().next().done;
     var Collection = class extends Node.NodeBase {
       constructor(type, schema) {
         super(type);
@@ -894,11 +894,11 @@ var require_Collection = __commonJS({
        * be a Pair instance or a `{ key, value }` object, which may not have a key
        * that already exists in the map.
        */
-      addIn(path13, value) {
-        if (isEmptyPath(path13))
+      addIn(path19, value) {
+        if (isEmptyPath(path19))
           this.add(value);
         else {
-          const [key, ...rest] = path13;
+          const [key, ...rest] = path19;
           const node = this.get(key, true);
           if (identity.isCollection(node))
             node.addIn(rest, value);
@@ -912,8 +912,8 @@ var require_Collection = __commonJS({
        * Removes a value from the collection.
        * @returns `true` if the item was found and removed.
        */
-      deleteIn(path13) {
-        const [key, ...rest] = path13;
+      deleteIn(path19) {
+        const [key, ...rest] = path19;
         if (rest.length === 0)
           return this.delete(key);
         const node = this.get(key, true);
@@ -927,8 +927,8 @@ var require_Collection = __commonJS({
        * scalar values from their surrounding node; to disable set `keepScalar` to
        * `true` (collections are always returned intact).
        */
-      getIn(path13, keepScalar) {
-        const [key, ...rest] = path13;
+      getIn(path19, keepScalar) {
+        const [key, ...rest] = path19;
         const node = this.get(key, true);
         if (rest.length === 0)
           return !keepScalar && identity.isScalar(node) ? node.value : node;
@@ -946,8 +946,8 @@ var require_Collection = __commonJS({
       /**
        * Checks if the collection includes a value with the key `key`.
        */
-      hasIn(path13) {
-        const [key, ...rest] = path13;
+      hasIn(path19) {
+        const [key, ...rest] = path19;
         if (rest.length === 0)
           return this.has(key);
         const node = this.get(key, true);
@@ -957,8 +957,8 @@ var require_Collection = __commonJS({
        * Sets a value in this collection. For `!!set`, `value` needs to be a
        * boolean to add/remove the item from the set.
        */
-      setIn(path13, value) {
-        const [key, ...rest] = path13;
+      setIn(path19, value) {
+        const [key, ...rest] = path19;
         if (rest.length === 0) {
           this.set(key, value);
         } else {
@@ -3473,9 +3473,9 @@ var require_Document = __commonJS({
           this.contents.add(value);
       }
       /** Adds a value to the document. */
-      addIn(path13, value) {
+      addIn(path19, value) {
         if (assertCollection(this.contents))
-          this.contents.addIn(path13, value);
+          this.contents.addIn(path19, value);
       }
       /**
        * Create a new `Alias` node, ensuring that the target `node` has the required anchor.
@@ -3550,14 +3550,14 @@ var require_Document = __commonJS({
        * Removes a value from the document.
        * @returns `true` if the item was found and removed.
        */
-      deleteIn(path13) {
-        if (Collection.isEmptyPath(path13)) {
+      deleteIn(path19) {
+        if (Collection.isEmptyPath(path19)) {
           if (this.contents == null)
             return false;
           this.contents = null;
           return true;
         }
-        return assertCollection(this.contents) ? this.contents.deleteIn(path13) : false;
+        return assertCollection(this.contents) ? this.contents.deleteIn(path19) : false;
       }
       /**
        * Returns item at `key`, or `undefined` if not found. By default unwraps
@@ -3572,10 +3572,10 @@ var require_Document = __commonJS({
        * scalar values from their surrounding node; to disable set `keepScalar` to
        * `true` (collections are always returned intact).
        */
-      getIn(path13, keepScalar) {
-        if (Collection.isEmptyPath(path13))
+      getIn(path19, keepScalar) {
+        if (Collection.isEmptyPath(path19))
           return !keepScalar && identity.isScalar(this.contents) ? this.contents.value : this.contents;
-        return identity.isCollection(this.contents) ? this.contents.getIn(path13, keepScalar) : void 0;
+        return identity.isCollection(this.contents) ? this.contents.getIn(path19, keepScalar) : void 0;
       }
       /**
        * Checks if the document includes a value with the key `key`.
@@ -3586,10 +3586,10 @@ var require_Document = __commonJS({
       /**
        * Checks if the document includes a value at `path`.
        */
-      hasIn(path13) {
-        if (Collection.isEmptyPath(path13))
+      hasIn(path19) {
+        if (Collection.isEmptyPath(path19))
           return this.contents !== void 0;
-        return identity.isCollection(this.contents) ? this.contents.hasIn(path13) : false;
+        return identity.isCollection(this.contents) ? this.contents.hasIn(path19) : false;
       }
       /**
        * Sets a value in this document. For `!!set`, `value` needs to be a
@@ -3606,13 +3606,13 @@ var require_Document = __commonJS({
        * Sets a value in this document. For `!!set`, `value` needs to be a
        * boolean to add/remove the item from the set.
        */
-      setIn(path13, value) {
-        if (Collection.isEmptyPath(path13)) {
+      setIn(path19, value) {
+        if (Collection.isEmptyPath(path19)) {
           this.contents = value;
         } else if (this.contents == null) {
-          this.contents = Collection.collectionFromPath(this.schema, Array.from(path13), value);
+          this.contents = Collection.collectionFromPath(this.schema, Array.from(path19), value);
         } else if (assertCollection(this.contents)) {
-          this.contents.setIn(path13, value);
+          this.contents.setIn(path19, value);
         }
       }
       /**
@@ -5572,9 +5572,9 @@ var require_cst_visit = __commonJS({
     visit.BREAK = BREAK;
     visit.SKIP = SKIP;
     visit.REMOVE = REMOVE;
-    visit.itemAtPath = (cst, path13) => {
+    visit.itemAtPath = (cst, path19) => {
       let item = cst;
-      for (const [field, index] of path13) {
+      for (const [field, index] of path19) {
         const tok = item?.[field];
         if (tok && "items" in tok) {
           item = tok.items[index];
@@ -5583,23 +5583,23 @@ var require_cst_visit = __commonJS({
       }
       return item;
     };
-    visit.parentCollection = (cst, path13) => {
-      const parent = visit.itemAtPath(cst, path13.slice(0, -1));
-      const field = path13[path13.length - 1][0];
+    visit.parentCollection = (cst, path19) => {
+      const parent = visit.itemAtPath(cst, path19.slice(0, -1));
+      const field = path19[path19.length - 1][0];
       const coll = parent?.[field];
       if (coll && "items" in coll)
         return coll;
       throw new Error("Parent collection not found");
     };
-    function _visit(path13, item, visitor) {
-      let ctrl = visitor(item, path13);
+    function _visit(path19, item, visitor) {
+      let ctrl = visitor(item, path19);
       if (typeof ctrl === "symbol")
         return ctrl;
       for (const field of ["key", "value"]) {
         const token = item[field];
         if (token && "items" in token) {
           for (let i = 0; i < token.items.length; ++i) {
-            const ci = _visit(Object.freeze(path13.concat([[field, i]])), token.items[i], visitor);
+            const ci = _visit(Object.freeze(path19.concat([[field, i]])), token.items[i], visitor);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -5610,10 +5610,10 @@ var require_cst_visit = __commonJS({
             }
           }
           if (typeof ctrl === "function" && field === "key")
-            ctrl = ctrl(item, path13);
+            ctrl = ctrl(item, path19);
         }
       }
-      return typeof ctrl === "function" ? ctrl(item, path13) : ctrl;
+      return typeof ctrl === "function" ? ctrl(item, path19) : ctrl;
     }
     exports.visit = visit;
   }
@@ -6915,14 +6915,14 @@ var require_parser = __commonJS({
             case "scalar":
             case "single-quoted-scalar":
             case "double-quoted-scalar": {
-              const fs14 = this.flowScalar(this.type);
+              const fs20 = this.flowScalar(this.type);
               if (atNextItem || it.value) {
-                map.items.push({ start, key: fs14, sep: [] });
+                map.items.push({ start, key: fs20, sep: [] });
                 this.onKeyLine = true;
               } else if (it.sep) {
-                this.stack.push(fs14);
+                this.stack.push(fs20);
               } else {
-                Object.assign(it, { key: fs14, sep: [] });
+                Object.assign(it, { key: fs20, sep: [] });
                 this.onKeyLine = true;
               }
               return;
@@ -7050,13 +7050,13 @@ var require_parser = __commonJS({
             case "scalar":
             case "single-quoted-scalar":
             case "double-quoted-scalar": {
-              const fs14 = this.flowScalar(this.type);
+              const fs20 = this.flowScalar(this.type);
               if (!it || it.value)
-                fc.items.push({ start: [], key: fs14, sep: [] });
+                fc.items.push({ start: [], key: fs20, sep: [] });
               else if (it.sep)
-                this.stack.push(fs14);
+                this.stack.push(fs20);
               else
-                Object.assign(it, { key: fs14, sep: [] });
+                Object.assign(it, { key: fs20, sep: [] });
               return;
             }
             case "flow-map-end":
@@ -7367,9 +7367,9 @@ var require_dist = __commonJS({
 // src/cli/index.ts
 import { spawn as nodeSpawn2 } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import fs13 from "node:fs/promises";
+import fs19 from "node:fs/promises";
 import os3 from "node:os";
-import path12 from "node:path";
+import path18 from "node:path";
 
 // node_modules/zod/v4/core/core.js
 var _a;
@@ -7612,10 +7612,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj, path13) {
-  if (!path13)
+function getElementAtPath(obj, path19) {
+  if (!path19)
     return obj;
-  return path13.reduce((acc, key) => acc?.[key], obj);
+  return path19.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -8024,11 +8024,11 @@ function explicitlyAborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path13, issues) {
+function prefixIssues(path19, issues) {
   return issues.map((iss) => {
     var _a3;
     (_a3 = iss).path ?? (_a3.path = []);
-    iss.path.unshift(path13);
+    iss.path.unshift(path19);
     return iss;
   });
 }
@@ -8175,16 +8175,16 @@ function flattenError(error2, mapper = (issue2) => issue2.message) {
 }
 function formatError(error2, mapper = (issue2) => issue2.message) {
   const fieldErrors = { _errors: [] };
-  const processError = (error3, path13 = []) => {
+  const processError = (error3, path19 = []) => {
     for (const issue2 of error3.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path13, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path19, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path13, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path19, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path13, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path19, ...issue2.path]);
       } else {
-        const fullpath = [...path13, ...issue2.path];
+        const fullpath = [...path19, ...issue2.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue2));
         } else {
@@ -8211,8 +8211,8 @@ function formatError(error2, mapper = (issue2) => issue2.message) {
 }
 function toDotPath(_path) {
   const segs = [];
-  const path13 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
-  for (const seg of path13) {
+  const path19 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
+  for (const seg of path19) {
     if (typeof seg === "number")
       segs.push(`[${seg}]`);
     else if (typeof seg === "symbol")
@@ -12530,13 +12530,351 @@ function superRefine(fn, params) {
 // node_modules/zod/v4/classic/external.js
 config(en_default());
 
-// src/ops/summary.ts
-import fs8 from "node:fs/promises";
-import path8 from "node:path";
+// src/ops/destructive-risk.ts
+import crypto3 from "node:crypto";
+import fs13 from "node:fs/promises";
+import path13 from "node:path";
+
+// src/store/atomic.ts
+import { randomUUID } from "node:crypto";
+import fs from "node:fs/promises";
+import path from "node:path";
+var StateCorruptedError = class extends Error {
+  constructor(message) {
+    super(message);
+    this.name = "StateCorruptedError";
+  }
+};
+async function writeTextAtomic(file, text, options = {}) {
+  const { backup = true, stagingDir } = options;
+  await fs.mkdir(path.dirname(file), { recursive: true });
+  const stage = stagingDir ?? path.dirname(file);
+  const nonce = `${process.pid}.${randomUUID()}`;
+  const temp = path.join(stage, `${path.basename(file)}.${nonce}.tmp`);
+  const backupTemp = path.join(stage, `${path.basename(file)}.${nonce}.bak.tmp`);
+  let hasBackup = false;
+  if (backup) {
+    try {
+      await fs.copyFile(file, backupTemp);
+      hasBackup = true;
+    } catch (error2) {
+      if (error2.code !== "ENOENT") throw error2;
+    }
+  }
+  try {
+    await fs.writeFile(temp, text, "utf8");
+    if (hasBackup) await fs.rename(backupTemp, `${file}.bak`);
+    await fs.rename(temp, file);
+  } catch (error2) {
+    await fs.rm(temp, { force: true }).catch(() => void 0);
+    await fs.rm(backupTemp, { force: true }).catch(() => void 0);
+    throw error2;
+  }
+}
+async function writeJsonAtomic(file, data, options = {}) {
+  const { backup = true, stagingDir } = options;
+  await fs.mkdir(path.dirname(file), { recursive: true });
+  const stage = stagingDir ?? path.dirname(file);
+  const nonce = `${process.pid}.${randomUUID()}`;
+  const temp = path.join(stage, `${path.basename(file)}.${nonce}.tmp`);
+  const backupTemp = path.join(stage, `${path.basename(file)}.${nonce}.bak.tmp`);
+  let hasBackup = false;
+  if (backup) {
+    try {
+      await fs.copyFile(file, backupTemp);
+      hasBackup = true;
+    } catch (error2) {
+      if (error2.code !== "ENOENT") throw error2;
+    }
+  }
+  try {
+    await fs.writeFile(temp, `${JSON.stringify(data, null, 2)}
+`, "utf8");
+    if (hasBackup) await fs.rename(backupTemp, `${file}.bak`);
+    await fs.rename(temp, file);
+  } catch (error2) {
+    await fs.rm(temp, { force: true }).catch(() => void 0);
+    await fs.rm(backupTemp, { force: true }).catch(() => void 0);
+    throw error2;
+  }
+}
+async function readJsonValidated(file, schema) {
+  try {
+    return { value: await parseFile(file, schema), recovered: false };
+  } catch (primaryError) {
+    let value;
+    try {
+      value = await parseFile(`${file}.bak`, schema);
+    } catch {
+      throw new StateCorruptedError(
+        `${file} is unusable and no valid backup exists: ${primaryError.message}`
+      );
+    }
+    return { value, recovered: true };
+  }
+}
+async function parseFile(file, schema) {
+  const raw = await fs.readFile(file, "utf8");
+  const parsed = schema.safeParse(JSON.parse(raw));
+  if (!parsed.success) throw new Error(prettifyError(parsed.error));
+  return parsed.data;
+}
+
+// src/store/lock.ts
+import fs2 from "node:fs/promises";
+var LockTimeoutError = class extends Error {
+  constructor(message) {
+    super(message);
+    this.name = "LockTimeoutError";
+  }
+};
+var LockOwnershipLostError = class extends Error {
+  constructor(lockDir) {
+    super(`lost ownership of ${lockDir} before guarded publish`);
+    this.name = "LockOwnershipLostError";
+  }
+};
+async function withLock(lockDir, fn, options = {}) {
+  const { timeoutMs = 5e3, staleMs = 3e4, pollMs = 25, onWait } = options;
+  const deadline = Date.now() + timeoutMs;
+  let announced = false;
+  let ownedSnapshot = null;
+  while (ownedSnapshot === null) {
+    try {
+      await fs2.mkdir(lockDir, { recursive: false });
+      ownedSnapshot = await statSnapshot(lockDir);
+    } catch (error2) {
+      if (error2.code !== "EEXIST") throw error2;
+      if (!announced) {
+        announced = true;
+        onWait?.();
+      }
+      if (Date.now() >= deadline) {
+        throw new LockTimeoutError(`could not acquire ${lockDir} within ${timeoutMs}ms`);
+      }
+      const observed = await statSnapshot(lockDir);
+      if (observed !== null && observed.ageMs >= staleMs) {
+        await reclaimIfSameInstance(lockDir, observed, pollMs, staleMs);
+        continue;
+      }
+      await new Promise((resolve) => setTimeout(resolve, pollMs));
+    }
+  }
+  try {
+    return await fn(createOwnership(lockDir, ownedSnapshot, { timeoutMs, staleMs, pollMs }));
+  } finally {
+    const current = await statSnapshot(lockDir);
+    if (current !== null && isSameInstance(current, ownedSnapshot)) {
+      await fs2.rm(lockDir, { recursive: true, force: true });
+    }
+  }
+}
+function createOwnership(lockDir, ownedSnapshot, options) {
+  const assertOwned = async () => {
+    const current = await statSnapshot(lockDir);
+    if (current === null || !isSameInstance(current, ownedSnapshot)) throw new LockOwnershipLostError(lockDir);
+  };
+  return {
+    assertOwned,
+    async runIfOwned(publish) {
+      const markerDir = `${lockDir}.reclaiming`;
+      const markerSnapshot = await acquireMarker(
+        markerDir,
+        options.pollMs,
+        options.staleMs,
+        Date.now() + options.timeoutMs
+      );
+      try {
+        await assertOwned();
+        try {
+          return await publish(lockDir);
+        } catch (error2) {
+          await assertOwned();
+          throw error2;
+        }
+      } finally {
+        await removeIfSameInstance(markerDir, markerSnapshot);
+      }
+    }
+  };
+}
+async function acquireMarker(markerDir, pollMs, staleMs, deadline) {
+  while (true) {
+    try {
+      await fs2.mkdir(markerDir);
+      const snapshot = await statSnapshot(markerDir);
+      if (snapshot !== null) return snapshot;
+    } catch (error2) {
+      if (error2.code !== "EEXIST") throw error2;
+      if (Date.now() >= deadline) {
+        throw new LockTimeoutError(`could not acquire ${markerDir} within the lock timeout`);
+      }
+      const marker = await statSnapshot(markerDir);
+      if (marker !== null && marker.ageMs >= staleMs) await removeIfSameInstance(markerDir, marker);
+      else await new Promise((resolve) => setTimeout(resolve, pollMs));
+    }
+  }
+}
+async function reclaimIfSameInstance(lockDir, observed, pollMs, staleMs) {
+  const reclaimMarker = `${lockDir}.reclaiming`;
+  let markerSnapshot = null;
+  try {
+    await fs2.mkdir(reclaimMarker);
+    markerSnapshot = await statSnapshot(reclaimMarker);
+    if (markerSnapshot === null) return;
+  } catch (error2) {
+    if (error2.code === "EEXIST") {
+      const marker = await statSnapshot(reclaimMarker);
+      if (marker !== null && marker.ageMs >= staleMs) {
+        await removeIfSameInstance(reclaimMarker, marker);
+      } else {
+        await new Promise((resolve) => setTimeout(resolve, pollMs));
+      }
+      return;
+    }
+    throw error2;
+  }
+  try {
+    const current = await statSnapshot(lockDir);
+    if (current === null || !isSameInstance(current, observed)) return;
+    await fs2.rm(lockDir, { recursive: true, force: true });
+  } finally {
+    await removeIfSameInstance(reclaimMarker, markerSnapshot);
+  }
+}
+async function removeIfSameInstance(path19, ownedSnapshot) {
+  const current = await statSnapshot(path19);
+  if (current !== null && isSameInstance(current, ownedSnapshot)) {
+    await fs2.rm(path19, { recursive: true, force: true });
+  }
+}
+function isSameInstance(a, b) {
+  return a.dev === b.dev && a.ino === b.ino && a.birthtimeMs === b.birthtimeMs;
+}
+async function statSnapshot(lockDir) {
+  try {
+    const stats = await fs2.stat(lockDir);
+    return { dev: stats.dev, ino: stats.ino, birthtimeMs: stats.birthtimeMs, ageMs: Date.now() - stats.mtimeMs };
+  } catch {
+    return null;
+  }
+}
+
+// src/store/paths.ts
+import path2 from "node:path";
+function resolveLoopPaths(projectDir) {
+  const root = path2.join(projectDir, ".mjloop");
+  return {
+    root,
+    config: path2.join(root, "config.yaml"),
+    state: path2.join(root, "state.json"),
+    index: path2.join(root, "INDEX.md"),
+    designSystem: path2.join(root, "design-system.md"),
+    plans: path2.join(root, "plans"),
+    runs: path2.join(root, "runs"),
+    memory: path2.join(root, "memory"),
+    /**
+     * The project's component map: a mutable `proposed.json` a scan overwrites,
+     * and an `accepted/` directory of immutable numbered revisions.
+     *
+     * Only the directory is named here. What a revision file is called, and the
+     * fact that the accepted profile is simply the highest-numbered one rather
+     * than whatever a mutable pointer says, belong to
+     * `project-profile-store.ts` — this map is the place every path in
+     * `.mjloop/` is *rooted*, not the place any of them are interpreted.
+     */
+    profile: path2.join(root, "profile"),
+    /**
+     * The feature briefs: one directory per feature, `F001-<slug>/`, holding
+     * immutable numbered revisions of what a discovery interview decided.
+     *
+     * Named here and interpreted in `feature-store.ts`, for the reason the
+     * profile above is: this map is where every path in `.mjloop/` is *rooted*,
+     * not where any of them is given meaning. Which revision is current, and
+     * the fact that it is simply the highest-numbered one rather than whatever
+     * a mutable pointer claims, belong to the store.
+     */
+    features: path2.join(root, "features"),
+    /**
+     * This project's acceptances of packages from the shared, user-local
+     * skill library: one `<skillId>.json` per accepted skill, holding which
+     * digest this project pinned and never a path into the library itself —
+     * see `schemas/skill-acceptance.ts`. The library the digest resolves
+     * against lives under `resolveLibraryRoot` (`library-paths.ts`), which is
+     * deliberately *not* under `.mjloop/`: it is shared by every project on
+     * this machine, where this directory is this one project's own decision.
+     *
+     * Added to `PROTECTED_DIRECTORIES` below now that `mjloop-cli skills
+     * accept|disable|enable|remove` exists: that is the route back in the
+     * denial below names, and the reason the `satisfies` check on
+     * `PROTECTED_DIRECTORY_REASONS` in `cli/index.ts` was written to demand.
+     */
+    skills: path2.join(root, "skills"),
+    /**
+     * Durable job transcripts: `web/transcripts/<jobId>.log`, raw pty bytes,
+     * append-only, written by `JobQueue` and read by `readTranscript`.
+     *
+     * Named here rather than left as a literal join in `queue.ts` and `read.ts`
+     * for the reason every other entry in this map is: one place decides where
+     * a `.mjloop/` path is rooted. It carries no key in `revision.ts` — job ids
+     * are unique across restarts (`Job.id`'s own doc says why), so a tab that
+     * wants one fetches it once, by id, rather than polling for a change.
+     */
+    webTranscripts: path2.join(root, "web", "transcripts"),
+    /**
+     * What a running cockpit leaves behind so a second session can find it:
+     * its port, its token and its pid. Written when the server starts
+     * listening and removed when it stops, so a stale file means a crash and
+     * is treated as one — the pid is probed before the file is believed.
+     *
+     * Under `web/` rather than at the root because it is the same kind of
+     * thing as `web/transcripts/`: server runtime, not project state, stamped
+     * by no revision key and read by no poller.
+     */
+    webServer: path2.join(root, "web", "server.json"),
+    lock: path2.join(root, ".lock"),
+    /**
+     * Mutual exclusion for verify *execution*, and never the same directory as
+     * `lock`.
+     *
+     * The two answer different questions and must not share a directory. The
+     * state lock is held for a read-modify-write measured in milliseconds; this
+     * one is held for as long as a test suite runs. A subprocess held inside
+     * `.lock` would starve every other tool in the session, since `withLock`'s
+     * default acquire timeout is 5 000 ms.
+     *
+     * Keyed on the project rather than the slot, because the contended resource
+     * is the machine — a port, a fixture database, a build output directory —
+     * and the engine cannot know which two commands share one. Two suites on
+     * one port both go red, and a red digest arms the repeated-error guard, so
+     * a run making progress can halt over a port nobody was fighting for.
+     */
+    verifyLock: path2.join(root, ".verify-lock")
+  };
+}
+var PROTECTED_BASENAMES = [
+  "state.json",
+  "manifest.json",
+  "verify-pinned.json",
+  "skill-selection.json",
+  "quality-policy.json",
+  "quality-ledger.json",
+  "quality-amendments.jsonl",
+  // What a run has spent against those ceilings. It belongs here for the same
+  // reason the amendments journal does: an edit to either raises a budget
+  // without the explicit, recorded decision that is the only way a suspended
+  // run is meant to continue.
+  "quality-usage.json"
+];
+var PROTECTED_DIRECTORIES = ["profile", "features", "skills"];
+
+// src/store/quality-store.ts
+import fs12 from "node:fs/promises";
+import path12 from "node:path";
 
 // src/schemas/state.ts
 var IdSchema = string2().regex(/^[A-Za-z0-9_-]+$/, 'only letters, digits, "-" and "_" are allowed');
-var StatusSchema = _enum(["idle", "running", "paused", "halted", "done", "failed"]);
+var StatusSchema = _enum(["idle", "running", "paused", "waiting_for_user", "budget_exhausted", "halted", "done", "failed"]);
 var StageSchema = _enum(["idle", "compose", "execute", "judge", "halted", "done"]);
 var SeveritySchema = _enum(["high", "medium", "low"]);
 var ResultSchema = _enum(["pass", "fail", "blocked"]);
@@ -12596,6 +12934,11 @@ var StateSchema = strictObject({
    * exists to prevent.
    */
   started_at: iso_exports.datetime().nullable().default(null),
+  /**
+   * Marks a run that has an immutable quality policy pin. It defaults to null
+   * so state files written before quality policies existed remain readable.
+   */
+  quality_policy_version: literal(1).nullable().default(null),
   current: strictObject({
     plan: IdSchema.nullable(),
     story: IdSchema.nullable(),
@@ -12842,15 +13185,15 @@ function findOrderCycle(order) {
   const GRAY = 1;
   const BLACK = 2;
   const color = /* @__PURE__ */ new Map();
-  const path13 = [];
+  const path19 = [];
   function visit(node) {
     color.set(node, GRAY);
-    path13.push(node);
+    path19.push(node);
     for (const next of successors.get(node) ?? []) {
       const state = color.get(next) ?? WHITE;
       if (state === GRAY) {
-        const start = path13.indexOf(next);
-        return [...path13.slice(start), next];
+        const start = path19.indexOf(next);
+        return [...path19.slice(start), next];
       }
       if (state === WHITE) {
         const found = visit(next);
@@ -12858,7 +13201,7 @@ function findOrderCycle(order) {
       }
     }
     color.set(node, BLACK);
-    path13.pop();
+    path19.pop();
     return null;
   }
   for (const node of nodes) {
@@ -12901,6 +13244,17 @@ var UncertainConcurrencySchema = _enum(["sequential", "ask", "parallel"]);
 var AfterPlanApprovalSchema = _enum(["auto", "manual"]);
 var SkillSourceSchema = _enum(["github", "registry", "web", "skills-sh"]);
 var SkillUpdateModeSchema = _enum(["auto", "review", "pinned"]);
+var QualityModeSchema = _enum(["economy", "adaptive", "strict"]);
+var ExplicitQualitySchema = strictObject({ mode: QualityModeSchema });
+var LegacyQualitySchema = strictObject({
+  independent_plan_review: boolean2().default(false),
+  independent_verification: boolean2().default(false)
+});
+var QualityConfigSchema = union([ExplicitQualitySchema, LegacyQualitySchema]).transform((quality) => {
+  if ("mode" in quality) return quality;
+  const count = Number(quality.independent_plan_review) + Number(quality.independent_verification);
+  return { mode: count === 0 ? "economy" : count === 2 ? "strict" : "adaptive" };
+}).prefault({});
 var OrchestrationSchema = strictObject({
   profile: strictObject({
     /**
@@ -12943,10 +13297,7 @@ var OrchestrationSchema = strictObject({
      */
     repair_attempts: number2().int().min(0).max(5).default(1)
   }).prefault({}),
-  quality: strictObject({
-    independent_plan_review: boolean2().default(false),
-    independent_verification: boolean2().default(false)
-  }).prefault({}),
+  quality: QualityConfigSchema,
   skills: strictObject({
     /**
      * An empty list is meaningful and permitted: it is how a project says no
@@ -13094,326 +13445,177 @@ function findTrack(config2, track) {
   return Object.hasOwn(config2.tracks, track) ? config2.tracks[track] : void 0;
 }
 
-// src/store/config-store.ts
-import fs from "node:fs/promises";
-var YAML = __toESM(require_dist(), 1);
-
-// src/store/paths.ts
-import path from "node:path";
-function resolveLoopPaths(projectDir) {
-  const root = path.join(projectDir, ".mjloop");
-  return {
-    root,
-    config: path.join(root, "config.yaml"),
-    state: path.join(root, "state.json"),
-    index: path.join(root, "INDEX.md"),
-    designSystem: path.join(root, "design-system.md"),
-    plans: path.join(root, "plans"),
-    runs: path.join(root, "runs"),
-    memory: path.join(root, "memory"),
-    /**
-     * The project's component map: a mutable `proposed.json` a scan overwrites,
-     * and an `accepted/` directory of immutable numbered revisions.
-     *
-     * Only the directory is named here. What a revision file is called, and the
-     * fact that the accepted profile is simply the highest-numbered one rather
-     * than whatever a mutable pointer says, belong to
-     * `project-profile-store.ts` — this map is the place every path in
-     * `.mjloop/` is *rooted*, not the place any of them are interpreted.
-     */
-    profile: path.join(root, "profile"),
-    /**
-     * The feature briefs: one directory per feature, `F001-<slug>/`, holding
-     * immutable numbered revisions of what a discovery interview decided.
-     *
-     * Named here and interpreted in `feature-store.ts`, for the reason the
-     * profile above is: this map is where every path in `.mjloop/` is *rooted*,
-     * not where any of them is given meaning. Which revision is current, and
-     * the fact that it is simply the highest-numbered one rather than whatever
-     * a mutable pointer claims, belong to the store.
-     */
-    features: path.join(root, "features"),
-    /**
-     * This project's acceptances of packages from the shared, user-local
-     * skill library: one `<skillId>.json` per accepted skill, holding which
-     * digest this project pinned and never a path into the library itself —
-     * see `schemas/skill-acceptance.ts`. The library the digest resolves
-     * against lives under `resolveLibraryRoot` (`library-paths.ts`), which is
-     * deliberately *not* under `.mjloop/`: it is shared by every project on
-     * this machine, where this directory is this one project's own decision.
-     *
-     * Added to `PROTECTED_DIRECTORIES` below now that `mjloop-cli skills
-     * accept|disable|enable|remove` exists: that is the route back in the
-     * denial below names, and the reason the `satisfies` check on
-     * `PROTECTED_DIRECTORY_REASONS` in `cli/index.ts` was written to demand.
-     */
-    skills: path.join(root, "skills"),
-    /**
-     * Durable job transcripts: `web/transcripts/<jobId>.log`, raw pty bytes,
-     * append-only, written by `JobQueue` and read by `readTranscript`.
-     *
-     * Named here rather than left as a literal join in `queue.ts` and `read.ts`
-     * for the reason every other entry in this map is: one place decides where
-     * a `.mjloop/` path is rooted. It carries no key in `revision.ts` — job ids
-     * are unique across restarts (`Job.id`'s own doc says why), so a tab that
-     * wants one fetches it once, by id, rather than polling for a change.
-     */
-    webTranscripts: path.join(root, "web", "transcripts"),
-    /**
-     * What a running cockpit leaves behind so a second session can find it:
-     * its port, its token and its pid. Written when the server starts
-     * listening and removed when it stops, so a stale file means a crash and
-     * is treated as one — the pid is probed before the file is believed.
-     *
-     * Under `web/` rather than at the root because it is the same kind of
-     * thing as `web/transcripts/`: server runtime, not project state, stamped
-     * by no revision key and read by no poller.
-     */
-    webServer: path.join(root, "web", "server.json"),
-    lock: path.join(root, ".lock"),
-    /**
-     * Mutual exclusion for verify *execution*, and never the same directory as
-     * `lock`.
-     *
-     * The two answer different questions and must not share a directory. The
-     * state lock is held for a read-modify-write measured in milliseconds; this
-     * one is held for as long as a test suite runs. A subprocess held inside
-     * `.lock` would starve every other tool in the session, since `withLock`'s
-     * default acquire timeout is 5 000 ms.
-     *
-     * Keyed on the project rather than the slot, because the contended resource
-     * is the machine — a port, a fixture database, a build output directory —
-     * and the engine cannot know which two commands share one. Two suites on
-     * one port both go red, and a red digest arms the repeated-error guard, so
-     * a run making progress can halt over a port nobody was fighting for.
-     */
-    verifyLock: path.join(root, ".verify-lock")
-  };
+// src/schemas/quality.ts
+var SHA256_SCHEMA = string2().regex(/^[a-f0-9]{64}$/, "must be a lowercase SHA-256 hex digest");
+var RunIdSchema = string2().regex(/^\d{4}-\d{2}-\d{2}-\d{3}$/, "a run id looks like 2026-08-04-001");
+var ProseSchema = string2().trim().min(1).max(4e3);
+var ReferenceSchema = string2().trim().min(1).max(1e3);
+var DecisionBySchema = string2().trim().min(1).max(200);
+function distinctStrings(values, ctx, field) {
+  if (new Set(values).size !== values.length) ctx.addIssue({ code: "custom", path: [field], message: `${field} must not contain duplicates` });
 }
-var PROTECTED_BASENAMES = ["state.json", "manifest.json", "verify-pinned.json", "skill-selection.json"];
-var PROTECTED_DIRECTORIES = ["profile", "features", "skills"];
-
-// src/store/config-store.ts
-var ConfigMissingError = class extends Error {
-  constructor(file) {
-    super(`${file} not found \u2014 run /mjloop:init first`);
-    this.name = "ConfigMissingError";
+var QualityDimensionSchema = _enum(["correctness", "security", "alignment", "regression", "ui"]);
+var QualityVerdictSchema = _enum(["pending", "pass", "fail", "blocked", "not_applicable"]);
+var QualityEvidenceKindSchema = _enum(["command", "test", "agent", "human"]);
+var SupervisionSchema = _enum(["supervised", "unattended"]);
+var QualityEnforcementSchema = _enum(["shadow", "active"]);
+var MeasurementKindSchema = _enum(["measured", "estimated", "unavailable"]);
+var RiskLevelSchema = _enum(["low", "medium", "high"]);
+var QualityRiskCodeSchema = _enum([
+  "alignment.ambiguous",
+  "api.boundary",
+  "build.configuration",
+  "data.destructive",
+  "data.schema",
+  "regression.repeated_failure",
+  "security.authorization",
+  "ui.surface"
+]);
+var QualityApplicabilitySchema = _enum(["required", "not_applicable"]);
+var QualityConfigSourceSchema = _enum(["explicit", "legacy"]);
+var QualityBudgetFieldSchema = _enum([
+  "max_cycles",
+  "max_dispatches",
+  "max_context_tokens_per_dispatch",
+  "max_repair_attempts"
+]);
+var CostEstimateSchema = strictObject({
+  model_id: string2().trim().min(1).max(200),
+  input_tokens: number2().int().nonnegative(),
+  output_tokens: number2().int().nonnegative(),
+  currency: string2().trim().length(3),
+  input_unit_price: number2().nonnegative(),
+  output_unit_price: number2().nonnegative(),
+  pricing_table_version: string2().trim().min(1).max(200),
+  total: number2().nonnegative()
+});
+var QualityBudgetSchema = strictObject({
+  max_cycles: number2().int().positive(),
+  max_dispatches: number2().int().positive(),
+  max_context_tokens_per_dispatch: number2().int().positive(),
+  max_repair_attempts: number2().int().nonnegative(),
+  cost_estimate: CostEstimateSchema.nullable()
+});
+var QualityRiskSignalSchema = strictObject({
+  code: QualityRiskCodeSchema,
+  level: RiskLevelSchema,
+  evidence: array(ReferenceSchema).max(100)
+});
+var QualityRiskSchema = strictObject({
+  level: RiskLevelSchema,
+  signals: array(QualityRiskSignalSchema).max(100)
+});
+var QualityDispatchSchema = strictObject({
+  agent: IdSchema,
+  instance: IdSchema.nullable(),
+  dimensions: array(QualityDimensionSchema).min(1).max(5),
+  reason: ProseSchema
+});
+var QualityApplicabilityRecordSchema = strictObject({
+  value: QualityApplicabilitySchema,
+  reason: ProseSchema
+});
+var InitialQualityPlanSchema = strictObject({
+  correctness: QualityApplicabilityRecordSchema,
+  security: QualityApplicabilityRecordSchema,
+  alignment: QualityApplicabilityRecordSchema,
+  regression: QualityApplicabilityRecordSchema,
+  ui: QualityApplicabilityRecordSchema
+});
+var QualityPolicySchema = strictObject({
+  version: literal(1),
+  pinned_at: iso_exports.datetime(),
+  mode: QualityModeSchema,
+  supervision: SupervisionSchema,
+  enforcement: QualityEnforcementSchema,
+  source: QualityConfigSourceSchema,
+  risk: QualityRiskSchema,
+  budget: QualityBudgetSchema,
+  initial_quality_plan: InitialQualityPlanSchema,
+  dispatches: array(QualityDispatchSchema).max(100)
+}).superRefine((policy, ctx) => {
+  if (policy.enforcement === "active" && policy.source !== "explicit") {
+    ctx.addIssue({ code: "custom", path: ["enforcement"], message: "active enforcement requires an explicit quality mode" });
   }
-};
-async function loadConfig(projectDir) {
-  const file = resolveLoopPaths(projectDir).config;
-  let raw;
-  try {
-    raw = await fs.readFile(file, "utf8");
-  } catch (error2) {
-    if (error2.code === "ENOENT") throw new ConfigMissingError(file);
-    throw error2;
+});
+var QualityLedgerEntrySchema = strictObject({
+  applicability: QualityApplicabilitySchema,
+  status: QualityVerdictSchema,
+  required_evidence: array(QualityEvidenceKindSchema).max(4),
+  evidence_refs: array(ReferenceSchema).max(100),
+  reason: ProseSchema,
+  inputs_fingerprint: SHA256_SCHEMA,
+  /** The engine-sampled tree identity; null is cycle-scoped and never reusable. */
+  worktree_digest: SHA256_SCHEMA.nullable(),
+  /** Cycle that recorded the evidence, not an agent supplied claim. */
+  recorded_cycle: number2().int().positive().nullable(),
+  checked_at: iso_exports.datetime().nullable(),
+  invalidated_at: iso_exports.datetime().nullable()
+}).superRefine((entry, ctx) => {
+  if (entry.applicability === "required" && entry.status === "not_applicable") {
+    ctx.addIssue({ code: "custom", path: ["status"], message: "a required dimension cannot be not_applicable" });
   }
-  let document;
-  try {
-    document = YAML.parse(raw);
-  } catch (error2) {
-    throw new Error(`${file} is not valid YAML:
-${error2.message}`);
+  if (entry.applicability === "not_applicable" && entry.status !== "not_applicable") {
+    ctx.addIssue({ code: "custom", path: ["status"], message: "a non-applicable dimension must be not_applicable" });
   }
-  const stripped = typeof document === "object" && document !== null && !Array.isArray(document) ? Object.fromEntries(
-    Object.entries(document).filter(
-      ([key]) => !LEGACY_CONFIG_KEYS.includes(key)
-    )
-  ) : document;
-  const parsed = ConfigSchema.safeParse(stripped);
-  if (!parsed.success) throw new Error(`${file} is invalid:
-${prettifyError(parsed.error)}`);
-  return parsed.data;
-}
-
-// src/store/atomic.ts
-import { randomUUID } from "node:crypto";
-import fs2 from "node:fs/promises";
-import path2 from "node:path";
-var StateCorruptedError = class extends Error {
-  constructor(message) {
-    super(message);
-    this.name = "StateCorruptedError";
+});
+var QualityLedgerSchema = strictObject({
+  version: literal(1),
+  /** Advanced only by the engine's cycle transition seam. */
+  cycle: number2().int().positive(),
+  dimensions: strictObject({
+    correctness: QualityLedgerEntrySchema,
+    security: QualityLedgerEntrySchema,
+    alignment: QualityLedgerEntrySchema,
+    regression: QualityLedgerEntrySchema,
+    ui: QualityLedgerEntrySchema
+  })
+});
+var QualityAmendmentSchema = strictObject({
+  version: literal(1),
+  run: RunIdSchema,
+  field: QualityBudgetFieldSchema,
+  from: number2().int().nonnegative(),
+  to: number2().int().nonnegative(),
+  reason: ProseSchema,
+  decided_at: iso_exports.datetime(),
+  decided_by: DecisionBySchema
+}).superRefine((amendment, ctx) => {
+  if (amendment.to <= amendment.from) {
+    ctx.addIssue({ code: "custom", path: ["to"], message: "an amendment must increase its budget field" });
   }
-};
-async function writeTextAtomic(file, text, options = {}) {
-  const { backup = true } = options;
-  await fs2.mkdir(path2.dirname(file), { recursive: true });
-  if (backup) {
-    try {
-      await fs2.copyFile(file, `${file}.bak`);
-    } catch (error2) {
-      if (error2.code !== "ENOENT") throw error2;
-    }
-  }
-  const temp = `${file}.${process.pid}.${randomUUID()}.tmp`;
-  try {
-    await fs2.writeFile(temp, text, "utf8");
-    await fs2.rename(temp, file);
-  } catch (error2) {
-    await fs2.rm(temp, { force: true }).catch(() => void 0);
-    throw error2;
-  }
-}
-async function writeJsonAtomic(file, data, options = {}) {
-  const { backup = true } = options;
-  await fs2.mkdir(path2.dirname(file), { recursive: true });
-  if (backup) {
-    try {
-      await fs2.copyFile(file, `${file}.bak`);
-    } catch (error2) {
-      if (error2.code !== "ENOENT") throw error2;
-    }
-  }
-  const temp = `${file}.${process.pid}.${randomUUID()}.tmp`;
-  await fs2.writeFile(temp, `${JSON.stringify(data, null, 2)}
-`, "utf8");
-  await fs2.rename(temp, file);
-}
-async function readJsonValidated(file, schema) {
-  try {
-    return { value: await parseFile(file, schema), recovered: false };
-  } catch (primaryError) {
-    let value;
-    try {
-      value = await parseFile(`${file}.bak`, schema);
-    } catch {
-      throw new StateCorruptedError(
-        `${file} is unusable and no valid backup exists: ${primaryError.message}`
-      );
-    }
-    return { value, recovered: true };
-  }
-}
-async function parseFile(file, schema) {
-  const raw = await fs2.readFile(file, "utf8");
-  const parsed = schema.safeParse(JSON.parse(raw));
-  if (!parsed.success) throw new Error(prettifyError(parsed.error));
-  return parsed.data;
-}
-
-// src/store/lock.ts
-import fs3 from "node:fs/promises";
-var LockTimeoutError = class extends Error {
-  constructor(message) {
-    super(message);
-    this.name = "LockTimeoutError";
-  }
-};
-async function withLock(lockDir, fn, options = {}) {
-  const { timeoutMs = 5e3, staleMs = 3e4, pollMs = 25, onWait } = options;
-  const deadline = Date.now() + timeoutMs;
-  let announced = false;
-  let ownedSnapshot = null;
-  while (ownedSnapshot === null) {
-    try {
-      await fs3.mkdir(lockDir, { recursive: false });
-      ownedSnapshot = await statSnapshot(lockDir);
-    } catch (error2) {
-      if (error2.code !== "EEXIST") throw error2;
-      if (!announced) {
-        announced = true;
-        onWait?.();
-      }
-      if (Date.now() >= deadline) {
-        throw new LockTimeoutError(`could not acquire ${lockDir} within ${timeoutMs}ms`);
-      }
-      const observed = await statSnapshot(lockDir);
-      if (observed !== null && observed.ageMs >= staleMs) {
-        await reclaimIfSameInstance(lockDir, observed, pollMs, staleMs);
-        continue;
-      }
-      await new Promise((resolve) => setTimeout(resolve, pollMs));
-    }
-  }
-  try {
-    return await fn();
-  } finally {
-    const current = await statSnapshot(lockDir);
-    if (current !== null && isSameInstance(current, ownedSnapshot)) {
-      await fs3.rm(lockDir, { recursive: true, force: true });
-    }
-  }
-}
-async function reclaimIfSameInstance(lockDir, observed, pollMs, staleMs) {
-  const reclaimMarker = `${lockDir}.reclaiming`;
-  try {
-    await fs3.mkdir(reclaimMarker);
-  } catch (error2) {
-    if (error2.code === "EEXIST") {
-      const marker = await statSnapshot(reclaimMarker);
-      if (marker !== null && marker.ageMs >= staleMs) {
-        await fs3.rm(reclaimMarker, { recursive: true, force: true });
-      } else {
-        await new Promise((resolve) => setTimeout(resolve, pollMs));
-      }
-      return;
-    }
-    throw error2;
-  }
-  try {
-    const current = await statSnapshot(lockDir);
-    if (current === null || !isSameInstance(current, observed)) return;
-    await fs3.rm(lockDir, { recursive: true, force: true });
-  } finally {
-    await fs3.rm(reclaimMarker, { recursive: true, force: true });
-  }
-}
-function isSameInstance(a, b) {
-  return a.dev === b.dev && a.ino === b.ino && a.birthtimeMs === b.birthtimeMs;
-}
-async function statSnapshot(lockDir) {
-  try {
-    const stats = await fs3.stat(lockDir);
-    return { dev: stats.dev, ino: stats.ino, birthtimeMs: stats.birthtimeMs, ageMs: Date.now() - stats.mtimeMs };
-  } catch {
-    return null;
-  }
-}
-
-// src/store/state-store.ts
-var InvalidStateError = class extends Error {
-  constructor(message) {
-    super(message);
-    this.name = "InvalidStateError";
-  }
-};
-var StateStore = class {
-  constructor(projectDir, now = () => /* @__PURE__ */ new Date()) {
-    this.now = now;
-    this.paths = resolveLoopPaths(projectDir);
-  }
-  paths;
-  async get() {
-    return (await this.read()).state;
-  }
-  /**
-   * The state plus whether it came from `.bak`. Most callers want `get`; a
-   * caller that acts on the state rather than reporting it needs to know the
-   * primary was unreadable, because a recovered value is by definition the
-   * *previous* write — stale by exactly one update.
-   */
-  async read() {
-    const { value, recovered } = await readJsonValidated(this.paths.state, StateSchema);
-    return { state: value, recovered };
-  }
-  async update(mutate) {
-    return withLock(this.paths.lock, async () => {
-      const { value, recovered } = await readJsonValidated(this.paths.state, StateSchema);
-      const draft = structuredClone(value);
-      await mutate(draft);
-      draft.updated_at = this.now().toISOString();
-      const parsed = StateSchema.safeParse(draft);
-      if (!parsed.success) throw new InvalidStateError(prettifyError(parsed.error));
-      await writeJsonAtomic(this.paths.state, parsed.data, { backup: !recovered });
-      return parsed.data;
-    });
-  }
-};
+});
+var DestructiveDecisionSchema = strictObject({
+  decision: _enum(["approve", "reject"]),
+  decided_at: iso_exports.datetime(),
+  decided_by: DecisionBySchema,
+  note: ProseSchema.nullable(),
+  used_at: iso_exports.datetime().nullable()
+});
+var DestructiveRequestSchema = strictObject({
+  version: literal(1),
+  run: RunIdSchema,
+  operation_fingerprint: SHA256_SCHEMA,
+  kind: _enum(["feature_delete", "table_drop", "table_truncate", "bulk_data_delete", "irreversible_migration", "project_wide"]),
+  targets: array(ReferenceSchema).min(1).max(100),
+  operation: ProseSchema,
+  reason: ProseSchema,
+  approval_impact: ProseSchema,
+  rejection_impact: ProseSchema,
+  rollback: ProseSchema.nullable(),
+  completed_work: array(ReferenceSchema).max(100),
+  evidence_refs: array(ReferenceSchema).max(100),
+  requested_at: iso_exports.datetime(),
+  capability_hash: SHA256_SCHEMA,
+  decision: DestructiveDecisionSchema.nullable()
+}).superRefine((request, ctx) => {
+  distinctStrings(request.targets, ctx, "targets");
+  distinctStrings(request.completed_work, ctx, "completed_work");
+  distinctStrings(request.evidence_refs, ctx, "evidence_refs");
+});
 
 // src/ops/run.ts
-import path7 from "node:path";
+import path11 from "node:path";
 
 // src/schemas/skill-library.ts
 var DigestSchema = string2().regex(/^[a-f0-9]{64}$/, "a digest is 64 lower-case hex characters");
@@ -13797,6 +13999,68 @@ var PinnedVerifySchema = strictObject({
   verify: VerifySchema
 });
 
+// src/store/config-store.ts
+import fs3 from "node:fs/promises";
+var YAML = __toESM(require_dist(), 1);
+var ConfigMissingError = class extends Error {
+  constructor(file) {
+    super(`${file} not found \u2014 run /mjloop:init first`);
+    this.name = "ConfigMissingError";
+  }
+};
+function hasOwn(record2, key) {
+  return Object.prototype.hasOwnProperty.call(record2, key);
+}
+function qualityConfigSource(document) {
+  if (typeof document !== "object" || document === null || Array.isArray(document)) return "default-existing";
+  if (!hasOwn(document, "orchestration")) return "default-existing";
+  const orchestration = document.orchestration;
+  if (typeof orchestration !== "object" || orchestration === null || Array.isArray(orchestration)) {
+    return "default-existing";
+  }
+  if (!hasOwn(orchestration, "quality")) return "default-existing";
+  const quality = orchestration.quality;
+  if (typeof quality !== "object" || quality === null || Array.isArray(quality)) return "default-existing";
+  if (hasOwn(quality, "mode")) return "explicit";
+  if (hasOwn(quality, "independent_plan_review") || hasOwn(quality, "independent_verification")) return "legacy";
+  return "default-existing";
+}
+async function loadConfigRecord(projectDir) {
+  const file = resolveLoopPaths(projectDir).config;
+  let raw;
+  try {
+    raw = await fs3.readFile(file, "utf8");
+  } catch (error2) {
+    if (error2.code === "ENOENT") throw new ConfigMissingError(file);
+    throw error2;
+  }
+  let document;
+  try {
+    document = YAML.parse(raw);
+  } catch (error2) {
+    throw new Error(`${file} is not valid YAML:
+${error2.message}`);
+  }
+  const qualitySource = qualityConfigSource(document);
+  const stripped = typeof document === "object" && document !== null && !Array.isArray(document) ? Object.fromEntries(
+    Object.entries(document).filter(
+      ([key]) => !LEGACY_CONFIG_KEYS.includes(key)
+    )
+  ) : document;
+  const parsed = ConfigSchema.safeParse(stripped);
+  if (!parsed.success) throw new Error(`${file} is invalid:
+${prettifyError(parsed.error)}`);
+  return { config: parsed.data, qualitySource };
+}
+async function loadConfig(projectDir) {
+  return (await loadConfigRecord(projectDir)).config;
+}
+
+// src/store/feature-store.ts
+import crypto from "node:crypto";
+import fs5 from "node:fs/promises";
+import path4 from "node:path";
+
 // src/store/precondition.ts
 var StalePreconditionError = class extends Error {
   constructor(subject, id, actual) {
@@ -13928,10 +14192,10 @@ function acceptedRevisionFile(projectDir, revision) {
 }
 async function readProposedProfile(projectDir) {
   const file = proposedProfileFile(projectDir);
-  for (const candidate of [file, `${file}.bak`]) {
+  for (const candidate2 of [file, `${file}.bak`]) {
     let raw;
     try {
-      raw = await fs4.readFile(candidate, "utf8");
+      raw = await fs4.readFile(candidate2, "utf8");
     } catch {
       continue;
     }
@@ -14020,7 +14284,88 @@ async function exists(file) {
 }
 
 // src/store/feature-store.ts
+var InvalidFeatureRecordError = class extends Error {
+  constructor(file, detail) {
+    super(`${file} is not a valid feature brief:
+${detail}`);
+    this.name = "InvalidFeatureRecordError";
+  }
+};
 var RevisionSchema2 = number2().int().positive();
+function briefDigest(brief) {
+  return crypto.createHash("sha256").update(JSON.stringify(brief)).digest("hex");
+}
+function featureRevisionFile(featureDir, revision) {
+  return path4.join(featureDir, `rev-${String(RevisionSchema2.parse(revision)).padStart(3, "0")}.json`);
+}
+async function listFeatureDirs(featuresDir) {
+  let entries;
+  try {
+    entries = await fs5.readdir(featuresDir, { withFileTypes: true });
+  } catch (error2) {
+    if (error2.code !== "ENOENT") throw error2;
+    return [];
+  }
+  return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort();
+}
+async function locateFeatureDir(projectDir, featureId) {
+  const featuresDir = resolveLoopPaths(projectDir).features;
+  const id = FeatureIdSchema.parse(featureId);
+  const match = (await listFeatureDirs(featuresDir)).find((entry) => entry.startsWith(`${id}-`));
+  return match === void 0 ? null : path4.join(featuresDir, match);
+}
+async function listRevisionsIn(featureDir) {
+  let entries;
+  try {
+    entries = await fs5.readdir(featureDir, { withFileTypes: true });
+  } catch (error2) {
+    if (error2.code !== "ENOENT") throw error2;
+    return [];
+  }
+  const revisions = [];
+  for (const entry of entries) {
+    if (!entry.isFile()) continue;
+    const match = /^rev-(\d+)\.json$/.exec(entry.name);
+    if (match?.[1] === void 0) continue;
+    const revision = Number(match[1]);
+    if (!RevisionSchema2.safeParse(revision).success) continue;
+    if (path4.basename(featureRevisionFile(featureDir, revision)) !== entry.name) continue;
+    revisions.push(revision);
+  }
+  return revisions.sort((a, b) => a - b);
+}
+async function readRevisionFile(file) {
+  let raw;
+  try {
+    raw = await fs5.readFile(file, "utf8");
+  } catch (error2) {
+    if (error2.code === "ENOENT") return null;
+    throw error2;
+  }
+  let data;
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    data = void 0;
+  }
+  const parsed = FeatureBriefSchema.safeParse(data);
+  if (!parsed.success) throw new InvalidFeatureRecordError(file, prettifyError(parsed.error));
+  return parsed.data;
+}
+async function readFeatureBrief(projectDir, featureId) {
+  const dir = await locateFeatureDir(projectDir, featureId);
+  if (dir === null) return null;
+  const latest = (await listRevisionsIn(dir)).at(-1);
+  if (latest === void 0) return null;
+  const file = featureRevisionFile(dir, latest);
+  const brief = await readRevisionFile(file);
+  if (brief === null) return null;
+  return { brief, status: brief.status, file, digest: briefDigest(brief) };
+}
+
+// src/store/plan-store.ts
+import fs6 from "node:fs/promises";
+import path5 from "node:path";
 
 // src/schemas/plan.ts
 var StoryStatusSchema = _enum(["todo", "doing", "done", "blocked"]);
@@ -14115,17 +14460,120 @@ function parseFrontmatter(raw) {
   return { data, body: split.body };
 }
 
+// src/store/plan-store.ts
+var PlanNotFoundError = class extends Error {
+  constructor(planId, dir) {
+    super(`no plan "${planId}" under ${dir}`);
+    this.name = "PlanNotFoundError";
+  }
+};
+var StoryNotFoundError = class extends Error {
+  constructor(storyId, dir) {
+    super(`no story "${storyId}" under ${dir}`);
+    this.name = "StoryNotFoundError";
+  }
+};
+async function listPlanDirs(plansDir) {
+  try {
+    const entries = await fs6.readdir(plansDir, { withFileTypes: true });
+    return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
+  } catch (error2) {
+    if (error2.code !== "ENOENT") throw error2;
+    return [];
+  }
+}
+async function findPlanDir(projectDir, planId) {
+  const plansDir = resolveLoopPaths(projectDir).plans;
+  const entries = await listPlanDirs(plansDir);
+  const match = entries.find((entry) => entry.startsWith(`${planId}-`));
+  if (match === void 0) throw new PlanNotFoundError(planId, plansDir);
+  return path5.join(plansDir, match);
+}
+async function listStories(projectDir, planId) {
+  const dir = path5.join(await findPlanDir(projectDir, planId), "stories");
+  let entries = [];
+  try {
+    entries = await fs6.readdir(dir);
+  } catch (error2) {
+    if (error2.code !== "ENOENT") throw error2;
+  }
+  const stories = [];
+  for (const entry of entries.filter((name) => name.endsWith(".md"))) {
+    const file = path5.join(dir, entry);
+    try {
+      const { data, body } = parseFrontmatter(await fs6.readFile(file, "utf8"));
+      const parsed = StoryFrontmatterSchema.safeParse(data);
+      if (!parsed.success) continue;
+      stories.push({ frontmatter: parsed.data, body, file });
+    } catch {
+      continue;
+    }
+  }
+  return stories.sort((a, b) => a.frontmatter.id.localeCompare(b.frontmatter.id));
+}
+async function readStory(projectDir, storyId) {
+  const planId = storyId.slice(0, 4);
+  const stories = await listStories(projectDir, planId);
+  const found = stories.find((story) => story.frontmatter.id === storyId);
+  if (found === void 0) {
+    throw new StoryNotFoundError(storyId, path5.join(await findPlanDir(projectDir, planId), "stories"));
+  }
+  return found;
+}
+
+// src/store/state-store.ts
+var InvalidStateError = class extends Error {
+  constructor(message) {
+    super(message);
+    this.name = "InvalidStateError";
+  }
+};
+var StateStore = class {
+  constructor(projectDir, now = () => /* @__PURE__ */ new Date()) {
+    this.now = now;
+    this.paths = resolveLoopPaths(projectDir);
+  }
+  paths;
+  async get() {
+    return (await this.read()).state;
+  }
+  /**
+   * The state plus whether it came from `.bak`. Most callers want `get`; a
+   * caller that acts on the state rather than reporting it needs to know the
+   * primary was unreadable, because a recovered value is by definition the
+   * *previous* write — stale by exactly one update.
+   */
+  async read() {
+    const { value, recovered } = await readJsonValidated(this.paths.state, StateSchema);
+    return { state: value, recovered };
+  }
+  async update(mutate) {
+    return withLock(this.paths.lock, async (ownership) => {
+      const { value, recovered } = await readJsonValidated(this.paths.state, StateSchema);
+      const draft = structuredClone(value);
+      await mutate(draft);
+      draft.updated_at = this.now().toISOString();
+      const parsed = StateSchema.safeParse(draft);
+      if (!parsed.success) throw new InvalidStateError(prettifyError(parsed.error));
+      await ownership.runIfOwned(async (stagingDir) => {
+        await writeJsonAtomic(this.paths.state, parsed.data, { backup: !recovered, stagingDir });
+      });
+      return parsed.data;
+    });
+  }
+};
+
 // src/store/skill-acceptance-store.ts
-import fs7 from "node:fs/promises";
-import path6 from "node:path";
+import fs9 from "node:fs/promises";
+import path8 from "node:path";
 
 // src/store/skill-library-store.ts
-import fs6 from "node:fs/promises";
-import path5 from "node:path";
+import fs8 from "node:fs/promises";
+import path7 from "node:path";
 
 // src/store/library-paths.ts
-import fs5 from "node:fs";
-import path4 from "node:path";
+import fs7 from "node:fs";
+import path6 from "node:path";
 import os from "node:os";
 var LibraryRootCollisionError = class extends Error {
   constructor(root, projectDir) {
@@ -14137,12 +14585,12 @@ var LibraryRootCollisionError = class extends Error {
 };
 function resolveLibraryRoot(projectDir) {
   const root = pickRoot();
-  const resolvedRoot = path4.resolve(root);
-  const resolvedProject = path4.resolve(projectDir);
+  const resolvedRoot = path6.resolve(root);
+  const resolvedProject = path6.resolve(projectDir);
   const canonicalRoot = canonicalize(resolvedRoot);
   const canonicalProject = canonicalize(resolvedProject);
-  const insideProject = canonicalRoot === canonicalProject || canonicalRoot.startsWith(canonicalProject + path4.sep);
-  const insideDotMjloop = canonicalRoot.split(path4.sep).some((segment) => segment === ".mjloop");
+  const insideProject = canonicalRoot === canonicalProject || canonicalRoot.startsWith(canonicalProject + path6.sep);
+  const insideDotMjloop = canonicalRoot.split(path6.sep).some((segment) => segment === ".mjloop");
   if (insideProject || insideDotMjloop) throw new LibraryRootCollisionError(resolvedRoot, resolvedProject);
   return resolvedRoot;
 }
@@ -14151,26 +14599,26 @@ function canonicalize(target) {
   let existing = target;
   for (; ; ) {
     try {
-      return path4.join(fs5.realpathSync(existing), ...trailing);
+      return path6.join(fs7.realpathSync(existing), ...trailing);
     } catch {
-      const parent = path4.dirname(existing);
+      const parent = path6.dirname(existing);
       if (parent === existing) return target;
-      trailing.unshift(path4.basename(existing));
+      trailing.unshift(path6.basename(existing));
       existing = parent;
     }
   }
 }
 function pickRoot() {
   const dataHome = process.env.MJLOOP_DATA_HOME;
-  if (dataHome !== void 0 && dataHome !== "" && path4.isAbsolute(dataHome)) return dataHome;
+  if (dataHome !== void 0 && dataHome !== "" && path6.isAbsolute(dataHome)) return dataHome;
   const xdgDataHome = process.env.XDG_DATA_HOME;
-  if (xdgDataHome !== void 0 && xdgDataHome !== "" && path4.isAbsolute(xdgDataHome)) {
-    return path4.join(xdgDataHome, "mjloop");
+  if (xdgDataHome !== void 0 && xdgDataHome !== "" && path6.isAbsolute(xdgDataHome)) {
+    return path6.join(xdgDataHome, "mjloop");
   }
-  return path4.join(os.homedir(), ".local", "share", "mjloop");
+  return path6.join(os.homedir(), ".local", "share", "mjloop");
 }
 function packagesDir(projectDir) {
-  return path4.join(resolveLibraryRoot(projectDir), "packages");
+  return path6.join(resolveLibraryRoot(projectDir), "packages");
 }
 
 // src/store/skill-library-store.ts
@@ -14209,37 +14657,37 @@ function validateDigest(digest) {
   return parsed.data;
 }
 function packageDirFor(projectDir, digest) {
-  return path5.join(packagesDir(projectDir), validateDigest(digest));
+  return path7.join(packagesDir(projectDir), validateDigest(digest));
 }
 function packageRecordFileFor(projectDir, digest) {
-  return path5.join(packageDirFor(projectDir, digest), "package.json");
+  return path7.join(packageDirFor(projectDir, digest), "package.json");
 }
 async function listPackages(projectDir) {
   let entries;
   try {
-    entries = await fs6.readdir(packagesDir(projectDir));
+    entries = await fs8.readdir(packagesDir(projectDir));
   } catch (error2) {
     if (error2.code !== "ENOENT") throw error2;
     return { packages: [], unreadable: [] };
   }
   const packages = [];
-  const unreadable = [];
+  const unreadable2 = [];
   for (const entry of entries.sort()) {
     if (!DigestSchema.safeParse(entry).success) continue;
     try {
       const record2 = await readPackage(projectDir, entry);
       if (record2 !== null) packages.push(record2);
     } catch (error2) {
-      unreadable.push({ digest: entry, reason: error2 instanceof Error ? error2.message : String(error2) });
+      unreadable2.push({ digest: entry, reason: error2 instanceof Error ? error2.message : String(error2) });
     }
   }
-  return { packages, unreadable };
+  return { packages, unreadable: unreadable2 };
 }
 async function readPackage(projectDir, digest) {
   const file = packageRecordFileFor(projectDir, digest);
   let raw;
   try {
-    raw = await fs6.readFile(file, "utf8");
+    raw = await fs8.readFile(file, "utf8");
   } catch (error2) {
     const code = error2.code;
     if (code === "ENOENT" || code === "ENOTDIR") return null;
@@ -14255,18 +14703,18 @@ async function writePackage(projectDir, record2, contentDir) {
   const dir = packageDirFor(projectDir, digest);
   if (await exists2(dir)) throw new PackageAlreadyExistsError(digest);
   await assertNoSymlinks(contentDir);
-  await fs6.mkdir(dir, { recursive: true });
-  await fs6.cp(contentDir, path5.join(dir, "content"), { recursive: true, verbatimSymlinks: true });
-  await writeJsonAtomic(path5.join(dir, "package.json"), parsed, { backup: false });
+  await fs8.mkdir(dir, { recursive: true });
+  await fs8.cp(contentDir, path7.join(dir, "content"), { recursive: true, verbatimSymlinks: true });
+  await writeJsonAtomic(path7.join(dir, "package.json"), parsed, { backup: false });
 }
 async function assertNoSymlinks(contentDir, relative = "") {
-  const stats = await fs6.lstat(contentDir);
+  const stats = await fs8.lstat(contentDir);
   if (stats.isSymbolicLink()) throw new InvalidPackageContentError(relative === "" ? contentDir : relative);
   if (!stats.isDirectory()) return;
-  for (const entry of await fs6.readdir(contentDir, { withFileTypes: true })) {
-    const child = path5.join(relative, entry.name);
+  for (const entry of await fs8.readdir(contentDir, { withFileTypes: true })) {
+    const child = path7.join(relative, entry.name);
     if (entry.isSymbolicLink()) throw new InvalidPackageContentError(child);
-    if (entry.isDirectory()) await assertNoSymlinks(path5.join(contentDir, entry.name), child);
+    if (entry.isDirectory()) await assertNoSymlinks(path7.join(contentDir, entry.name), child);
   }
 }
 function parseJson2(raw) {
@@ -14278,7 +14726,7 @@ function parseJson2(raw) {
 }
 async function exists2(file) {
   try {
-    await fs6.lstat(file);
+    await fs8.lstat(file);
     return true;
   } catch {
     return false;
@@ -14363,12 +14811,12 @@ function validateSkillId(skillId) {
   return parsed.data;
 }
 function acceptanceFile(projectDir, skillId) {
-  return path6.join(resolveLoopPaths(projectDir).skills, `${validateSkillId(skillId)}.json`);
+  return path8.join(resolveLoopPaths(projectDir).skills, `${validateSkillId(skillId)}.json`);
 }
 async function listAcceptances(projectDir) {
   let entries;
   try {
-    entries = await fs7.readdir(resolveLoopPaths(projectDir).skills, { withFileTypes: true });
+    entries = await fs9.readdir(resolveLoopPaths(projectDir).skills, { withFileTypes: true });
   } catch (error2) {
     if (error2.code !== "ENOENT") throw error2;
     return [];
@@ -14387,7 +14835,7 @@ async function readAcceptance(projectDir, skillId) {
   const file = acceptanceFile(projectDir, skillId);
   let raw;
   try {
-    raw = await fs7.readFile(file, "utf8");
+    raw = await fs9.readFile(file, "utf8");
   } catch (error2) {
     if (error2.code === "ENOENT") return null;
     throw error2;
@@ -14439,7 +14887,7 @@ async function setAcceptanceStatus(projectDir, skillId, status) {
 }
 async function removeAcceptance(projectDir, skillId) {
   await locked(projectDir, async () => {
-    await fs7.rm(acceptanceFile(projectDir, skillId), { force: true });
+    await fs9.rm(acceptanceFile(projectDir, skillId), { force: true });
   });
 }
 async function assertKnownComponents(projectDir, ids) {
@@ -14451,7 +14899,7 @@ async function assertKnownComponents(projectDir, ids) {
 }
 async function locked(projectDir, fn) {
   const paths = resolveLoopPaths(projectDir);
-  await fs7.mkdir(paths.root, { recursive: true });
+  await fs9.mkdir(paths.root, { recursive: true });
   return withLock(paths.lock, fn);
 }
 function parseJson3(raw) {
@@ -14465,6 +14913,573 @@ function quoted(ids) {
   return ids.map((id) => `"${id}"`).join(", ");
 }
 
+// src/ops/quality-policy.ts
+import crypto2 from "node:crypto";
+import fs10 from "node:fs/promises";
+import path9 from "node:path";
+
+// src/store/git.ts
+import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
+var UNTRACKED_MAX = 5e3;
+var EXCLUDE_LOOP = ":(exclude).mjloop/";
+async function worktreeDigest(projectDir, signal) {
+  const hash = createHash("sha256");
+  const head = await capture(["rev-parse", "HEAD"], projectDir, signal);
+  if (head === null) return null;
+  hash.update("head\0").update(head.trim()).update("\0");
+  hash.update("diff\0");
+  const diffed = await stream(
+    [
+      "diff",
+      "HEAD",
+      "--binary",
+      "--no-textconv",
+      "--ignore-submodules=none",
+      "--submodule=diff",
+      "--",
+      ".",
+      EXCLUDE_LOOP
+    ],
+    projectDir,
+    hash,
+    signal
+  );
+  if (!diffed) return null;
+  hash.update("\0");
+  const listed = await capture(["ls-files", "--others", "--exclude-standard", "-z", "--", ".", EXCLUDE_LOOP], projectDir, signal);
+  if (listed === null) return null;
+  const untracked = listed.split("\0").filter((entry) => entry.length > 0).sort();
+  if (untracked.length > UNTRACKED_MAX) return null;
+  hash.update("untracked\0");
+  for (const file of untracked) hash.update(file).update("\0");
+  if (untracked.length > 0) {
+    if (untracked.some((file) => file.includes("\n"))) return null;
+    const hashed = await stream(["hash-object", "--stdin-paths"], projectDir, hash, signal, `${untracked.join("\n")}
+`);
+    if (!hashed) return null;
+  }
+  return hash.digest("hex");
+}
+async function run(args, cwd, sink, signal, stdin) {
+  return await new Promise((resolve) => {
+    let child;
+    try {
+      child = spawn("git", args, { cwd, signal, stdio: [stdin === void 0 ? "ignore" : "pipe", "pipe", "ignore"] });
+    } catch {
+      return resolve(false);
+    }
+    child.stdout?.on("data", sink);
+    child.on("error", () => resolve(false));
+    child.on("close", (code) => resolve(code === 0));
+    if (stdin !== void 0) {
+      child.stdin?.on("error", () => {
+      });
+      child.stdin?.end(stdin);
+    }
+  });
+}
+async function stream(args, cwd, hash, signal, stdin) {
+  return await run(args, cwd, (chunk) => hash.update(chunk), signal, stdin);
+}
+async function capture(args, cwd, signal) {
+  const chunks = [];
+  const ok = await run(args, cwd, (chunk) => chunks.push(chunk), signal);
+  return ok ? Buffer.concat(chunks).toString("utf8") : null;
+}
+
+// src/ops/quality-budget.ts
+var CONTEXT_CEILINGS = {
+  economy: 8e3,
+  adaptive: 12e3,
+  strict: 16e3
+};
+function contextCeiling(mode, hostSafeInput) {
+  const profile = CONTEXT_CEILINGS[mode];
+  if (hostSafeInput !== void 0) assertPositiveInteger(hostSafeInput, "host-safe input ceiling");
+  return hostSafeInput === void 0 ? profile : Math.min(profile, hostSafeInput);
+}
+function deriveQualityBudget(input) {
+  assertPositiveInteger(input.track.max_cycles, "track max cycles");
+  assertNonNegativeInteger(input.repairAttempts, "repair attempts");
+  const closingAgents = new Set(input.track.closing ?? []);
+  const targetedRepairs = input.targetedRepairs.slice(0, input.repairAttempts);
+  const maxDispatches = input.dispatches.length + strictSpecialists(input) + targetedRepairs.length + closingAgents.size;
+  assertPositiveInteger(maxDispatches, "maximum dispatches");
+  return {
+    max_cycles: input.track.max_cycles,
+    max_dispatches: maxDispatches,
+    max_context_tokens_per_dispatch: contextCeiling(input.mode, input.hostSafeInput),
+    max_repair_attempts: input.repairAttempts,
+    cost_estimate: costEstimate(input.cost)
+  };
+}
+function strictSpecialists(input) {
+  return input.mode === "strict" ? input.dispatches[0]?.dimensions.length ?? 0 : 0;
+}
+function effectiveBudget(policy, amendments) {
+  const budget = {
+    ...policy.budget,
+    cost_estimate: policy.budget.cost_estimate === null ? null : { ...policy.budget.cost_estimate }
+  };
+  for (const amendment of amendments) {
+    switch (amendment.field) {
+      case "max_cycles":
+        budget.max_cycles = amendment.to;
+        break;
+      case "max_dispatches":
+        budget.max_dispatches = amendment.to;
+        break;
+      case "max_context_tokens_per_dispatch":
+        budget.max_context_tokens_per_dispatch = amendment.to;
+        break;
+      case "max_repair_attempts":
+        budget.max_repair_attempts = amendment.to;
+        break;
+    }
+  }
+  return budget;
+}
+function costEstimate(cost) {
+  if (cost?.modelId === void 0 || cost.modelId.length === 0 || !isMeasuredTokenCount(cost.inputTokens) || !isMeasuredTokenCount(cost.outputTokens) || cost.currency === void 0 || cost.currency.length !== 3 || !isFiniteNonNegative(cost.inputUnitPrice) || !isFiniteNonNegative(cost.outputUnitPrice) || cost.pricingTableVersion === void 0 || cost.pricingTableVersion.length === 0) return null;
+  const total = cost.inputTokens.value * cost.inputUnitPrice + cost.outputTokens.value * cost.outputUnitPrice;
+  if (!isFiniteNonNegative(total)) return null;
+  return {
+    model_id: cost.modelId,
+    input_tokens: cost.inputTokens.value,
+    output_tokens: cost.outputTokens.value,
+    currency: cost.currency,
+    input_unit_price: cost.inputUnitPrice,
+    output_unit_price: cost.outputUnitPrice,
+    pricing_table_version: cost.pricingTableVersion,
+    total
+  };
+}
+function isMeasuredTokenCount(measurement) {
+  return measurement?.kind === "measured" && isNonNegativeInteger(measurement.value);
+}
+function isFiniteNonNegative(value) {
+  return value !== void 0 && Number.isFinite(value) && value >= 0;
+}
+function isNonNegativeInteger(value) {
+  return value !== null && value !== void 0 && Number.isFinite(value) && Number.isInteger(value) && value >= 0;
+}
+function assertNonNegativeInteger(value, name) {
+  if (!isNonNegativeInteger(value)) throw new RangeError(`${name} must be a finite nonnegative integer`);
+}
+function assertPositiveInteger(value, name) {
+  if (!Number.isFinite(value) || !Number.isInteger(value) || value < 1) {
+    throw new RangeError(`${name} must be a finite positive integer`);
+  }
+}
+
+// src/ops/quality-risk.ts
+var UI_SURFACE_PATH = /\.(vue|tsx|jsx|css|scss|dart|svelte|html|swift|kt)$/i;
+var SIGNALS = [
+  { code: "security.authorization", level: "high", path: /(^|\/)(auth|permissions?|polic(?:y|ies))(\/|\.|$)/i },
+  { code: "data.schema", level: "medium", path: /(^|\/)(migrations?|schema|database)(\/|\.|$)/i },
+  { code: "ui.surface", level: "medium", path: UI_SURFACE_PATH },
+  { code: "build.configuration", level: "medium", path: /(^|\/)(package\.json|tsconfig.*\.json|vite\.config\.)/i }
+];
+var RANK = { low: 0, medium: 1, high: 2 };
+var API_BOUNDARY_PATH = /(^|\/)(api|routes?|controllers?)(\/|\.|$)/i;
+var DESTRUCTIVE_WORDING = /\b(?:delet\w*|remov\w*|drop\w*|truncat\w*|purg\w*)\b/i;
+var AMBIGUOUS_ACCEPTANCE = /\b(as appropriate|as needed|tbd|todo|etc\.?)\b/i;
+var USER_VISIBLE_WORDING = /\b(ui|user interface|screen|page|view|dashboard|form|button|layout|rtl|right[- ]to[- ]left|display|visible)\b/i;
+var USER_VISIBLE_COMPONENT = /(^|[\s_-])(ui|view|page|screen|widget|form|modal|dialog|layout|card|rtl)([\s_-]|$)/i;
+function analyzeQualityRisk(input) {
+  const paths = distinct(input.intendedFiles.concat(input.changedFiles), normalizePath);
+  const acceptance = distinct(input.acceptance, normalizeText);
+  const goal = normalizeText(input.goal);
+  const text = distinct([goal].concat(acceptance), normalizeText);
+  const components = distinct(input.componentKinds, normalizeText);
+  const signals = /* @__PURE__ */ new Map();
+  for (const rule of SIGNALS) {
+    addSignal(signals, rule.code, rule.level, paths.filter((path19) => rule.path.test(path19)));
+  }
+  addSignal(signals, "api.boundary", "medium", paths.filter((path19) => API_BOUNDARY_PATH.test(path19)));
+  addSignal(signals, "data.destructive", "high", text.filter((value) => DESTRUCTIVE_WORDING.test(value)));
+  addSignal(signals, "alignment.ambiguous", "medium", acceptance.filter((value) => AMBIGUOUS_ACCEPTANCE.test(value)));
+  addSignal(signals, "regression.repeated_failure", "medium", repeatedValues(input.priorFailures));
+  const uiEvidence = distinct(
+    paths.filter((path19) => SIGNALS[2].path.test(path19)).concat(components.filter((component) => USER_VISIBLE_COMPONENT.test(component))).concat(text.filter((value) => USER_VISIBLE_WORDING.test(value))),
+    normalizeText
+  );
+  const orderedSignals = [...signals.values()].map((signal) => ({ ...signal, evidence: distinct(signal.evidence, normalizeText) })).sort((left, right) => compareCodeUnits(left.code, right.code));
+  const highestRank = Math.max(RANK.low, ...orderedSignals.map((signal) => RANK[signal.level]));
+  const level = highestRank === RANK.high ? "high" : highestRank === RANK.medium ? "medium" : "low";
+  return {
+    level,
+    signals: orderedSignals,
+    applicability: {
+      correctness: { value: "required", reason: "Every change requires correctness verification." },
+      security: { value: "required", reason: "Every change requires security review." },
+      alignment: { value: "required", reason: "Every change requires acceptance alignment." },
+      regression: { value: "required", reason: "Every change requires regression coverage." },
+      ui: uiEvidence.length > 0 ? { value: "required", reason: `User-visible surface indicated by: ${uiEvidence.join(", ")}.` } : { value: "not_applicable", reason: "No path, component, goal, or acceptance signal indicates a user-visible surface." }
+    }
+  };
+}
+function addSignal(signals, code, level, evidence) {
+  if (evidence.length === 0) return;
+  const existing = signals.get(code);
+  if (existing === void 0) {
+    signals.set(code, { code, level, evidence: distinct(evidence, normalizeText) });
+    return;
+  }
+  existing.evidence = distinct(existing.evidence.concat(evidence), normalizeText);
+}
+function repeatedValues(values) {
+  const seen = /* @__PURE__ */ new Map();
+  for (const raw of values) {
+    const value = normalizeText(raw);
+    if (value.length === 0) continue;
+    const key = value.toLowerCase();
+    const prior = seen.get(key);
+    if (prior === void 0) seen.set(key, { value, count: 1 });
+    else {
+      prior.count += 1;
+      if (compareCodeUnits(value, prior.value) < 0) prior.value = value;
+    }
+  }
+  return [...seen.values()].filter((entry) => entry.count > 1).map((entry) => entry.value).sort(compareCodeUnits);
+}
+function distinct(values, normalize) {
+  const byKey = /* @__PURE__ */ new Map();
+  for (const raw of values) {
+    const value = normalize(raw);
+    if (value.length === 0) continue;
+    const key = value.toLowerCase();
+    const prior = byKey.get(key);
+    if (prior === void 0 || compareCodeUnits(value, prior) < 0) byKey.set(key, value);
+  }
+  return [...byKey.values()].sort(compareCodeUnits);
+}
+function compareCodeUnits(left, right) {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+function normalizePath(value) {
+  return value.trim().replaceAll("\\", "/").replace(/^\.\//, "").replace(/\/{2,}/g, "/");
+}
+function normalizeText(value) {
+  return value.trim().replace(/\s+/g, " ");
+}
+
+// src/ops/quality-policy.ts
+var DIMENSIONS = ["correctness", "security", "alignment", "regression", "ui"];
+var REQUIRED_EVIDENCE = {
+  correctness: ["test"],
+  security: ["command"],
+  alignment: ["agent"],
+  regression: ["test"],
+  ui: ["agent"]
+};
+var QualityPolicyIntegrityError = class extends Error {
+  constructor(detail) {
+    super(`quality policy integrity failure: ${detail}`);
+    this.name = "QualityPolicyIntegrityError";
+  }
+};
+async function buildQualityPolicy(input, now) {
+  const analysis = analyzeQualityRisk(riskInput(input));
+  const dispatches = qualityDispatchCandidates(input, analysis.applicability, analysis.level);
+  const repairAttempts = input.config.orchestration.execution.repair_attempts;
+  const targetedRepairs = Array.from({ length: repairAttempts }, (_, index) => ({
+    agent: dispatches[0].agent,
+    instance: `repair-${index + 1}`,
+    dimensions: dispatches[0].dimensions,
+    reason: `Targeted repair attempt ${index + 1} for the pinned quality plan.`
+  }));
+  const budget = deriveQualityBudget({
+    mode: input.config.orchestration.quality.mode,
+    track: input.track,
+    repairAttempts,
+    dispatches,
+    targetedRepairs
+  });
+  const explicit = input.qualitySource === "explicit";
+  return QualityPolicySchema.parse({
+    version: 1,
+    pinned_at: now().toISOString(),
+    mode: input.config.orchestration.quality.mode,
+    supervision: input.supervision,
+    source: explicit ? "explicit" : "legacy",
+    enforcement: explicit ? "active" : "shadow",
+    risk: { level: analysis.level, signals: analysis.signals },
+    budget,
+    initial_quality_plan: analysis.applicability,
+    dispatches
+  });
+}
+async function ensureRunQualityPolicy(projectDir, now = () => /* @__PURE__ */ new Date()) {
+  let result = null;
+  let integrityError = null;
+  await new StateStore(projectDir, now).update(async (draft) => {
+    if (draft.run_id === null || draft.track === null || draft.status === "idle") throw new NoActiveRunError();
+    const files = qualityFiles(projectDir, draft);
+    const [policyStatus, ledgerStatus] = await Promise.all([
+      inspectRecord(files.policy, QualityPolicySchema, false),
+      inspectRecord(files.ledger, QualityLedgerSchema, true)
+    ]);
+    const classification = classifyPolicyIntegrity({
+      marker: draft.quality_policy_version,
+      policy: policyStatus,
+      ledger: ledgerStatus
+    });
+    if (classification === "halt") {
+      integrityError = new QualityPolicyIntegrityError(
+        `marker=${String(draft.quality_policy_version)}, policy=${policyStatus}, ledger=${ledgerStatus}`
+      );
+      haltDraft(draft, integrityError.message);
+      return;
+    }
+    if (classification === "ready" || classification === "recover-marker") {
+      result = await readPolicy(projectDir, draft);
+      await readLedger(projectDir, draft);
+      draft.quality_policy_version = 1;
+      return;
+    }
+    try {
+      const { config: config2 } = await loadConfigRecord(projectDir);
+      const track = findTrack(config2, draft.track);
+      if (track === void 0) throw new Error(`active run track "${draft.track}" is no longer configured`);
+      result = await buildProjectQualityPolicy(projectDir, {
+        config: config2,
+        qualitySource: "legacy",
+        track,
+        goal: draft.goal ?? "Legacy run",
+        story: draft.current.story,
+        supervision: "supervised"
+      }, now);
+      await writePolicyOnce(projectDir, draft, result);
+      await writeLedger(projectDir, draft, createInitialQualityLedger(result, now));
+      draft.quality_policy_version = 1;
+    } catch (error2) {
+      integrityError = new QualityPolicyIntegrityError(`legacy bootstrap could not write both records: ${messageOf(error2)}`);
+      haltDraft(draft, integrityError.message);
+    }
+  });
+  if (integrityError !== null) throw integrityError;
+  if (result === null) throw new QualityPolicyIntegrityError("policy bootstrap completed without a readable policy");
+  return result;
+}
+function createInitialQualityLedger(policy, now) {
+  const stampedAt = now().toISOString();
+  const dimensions = Object.fromEntries(DIMENSIONS.map((dimension) => {
+    const applicability = policy.initial_quality_plan[dimension];
+    return [dimension, {
+      applicability: applicability.value,
+      status: applicability.value === "required" ? "pending" : "not_applicable",
+      required_evidence: applicability.value === "required" ? REQUIRED_EVIDENCE[dimension] : [],
+      evidence_refs: [],
+      reason: applicability.reason,
+      inputs_fingerprint: sha256(canonicalJson({
+        version: policy.version,
+        pinned_at: policy.pinned_at,
+        initialized_at: stampedAt,
+        dimension,
+        applicability
+      })),
+      worktree_digest: null,
+      recorded_cycle: null,
+      checked_at: null,
+      invalidated_at: null
+    }];
+  }));
+  return QualityLedgerSchema.parse({ version: 1, cycle: 1, dimensions });
+}
+function classifyPolicyIntegrity(input) {
+  if (input.marker === 1) {
+    return input.policy === "valid" && input.ledger === "valid" ? "ready" : "halt";
+  }
+  if (input.policy === "missing" && input.ledger === "missing") return "legacy-bootstrap";
+  if (input.policy === "valid" && input.ledger === "valid") return "recover-marker";
+  return "halt";
+}
+async function buildProjectQualityPolicy(projectDir, input, now) {
+  return buildQualityPolicy(await projectRiskInput(projectDir, input), now);
+}
+async function resolveQualityContextEvidence(projectDir, input) {
+  const [story, feature, profile] = await Promise.all([
+    input.story === void 0 || input.story === null ? null : input.allowMissingStory === true ? readStory(projectDir, input.story).catch(() => null) : readStory(projectDir, input.story),
+    input.feature === void 0 || input.feature === null ? null : readFeatureBrief(projectDir, input.feature),
+    readAcceptedProfile(projectDir)
+  ]);
+  const componentById = new Map((profile?.components ?? []).map((component) => [component.id, component]));
+  const affected = feature?.brief.affectedComponents.map((id) => componentById.get(id)).filter((component) => component !== void 0) ?? [];
+  const componentKinds = affected.map((component) => component.technology);
+  if (story?.frontmatter.ui === true) componentKinds.push("ui");
+  return {
+    acceptance: distinct2([...story?.frontmatter.acceptance ?? [], ...feature?.brief.acceptance ?? []]),
+    intendedFiles: distinct2([
+      ...affected.map((component) => component.root),
+      ...story === null ? [] : [path9.relative(projectDir, story.file)]
+    ]),
+    componentKinds: distinct2(componentKinds)
+  };
+}
+async function projectRiskInput(projectDir, input) {
+  const [evidence, digest] = await Promise.all([
+    resolveQualityContextEvidence(projectDir, {
+      story: input.story,
+      feature: input.feature,
+      allowMissingStory: input.allowMissingStory
+    }),
+    input.includeWorktreeDigest === true ? worktreeDigest(projectDir) : Promise.resolve(null)
+  ]);
+  return {
+    ...input,
+    ...evidence,
+    // A digest is deliberately not decoded into invented paths. Carrying it as
+    // a non-matching provenance token lets the deterministic input change when
+    // the tree changes without claiming the engine knows which path caused it.
+    changedFiles: digest === null ? [] : [`worktree-digest:${digest}`],
+    priorFailures: []
+  };
+}
+function qualityDispatchCandidates(input, applicability, risk) {
+  const required2 = DIMENSIONS.filter((dimension) => applicability[dimension].value === "required");
+  const permitted = [...input.track.required, ...input.track.available];
+  const agent = permitted.includes("verifier") ? "verifier" : permitted[0];
+  if (agent === void 0) throw new Error("quality policy needs at least one track agent");
+  const base = {
+    agent,
+    instance: null,
+    dimensions: required2,
+    reason: "Collect the deterministic evidence required by the pinned quality plan."
+  };
+  if (input.config.orchestration.quality.mode === "economy") return [base];
+  if (input.config.orchestration.quality.mode === "adaptive" && risk === "low") return [base];
+  return [base, {
+    agent,
+    instance: "independent",
+    dimensions: required2,
+    reason: "Independently review the evidence required by the pinned quality plan."
+  }];
+}
+async function inspectRecord(file, schema, allowBackup) {
+  const primary = await parseRecord(file, schema);
+  if (primary === "valid" || primary === "missing" && !allowBackup) return primary;
+  if (!allowBackup) return "invalid";
+  const backup = await parseRecord(`${file}.bak`, schema);
+  if (backup === "valid") return "valid";
+  return primary === "missing" && backup === "missing" ? "missing" : "invalid";
+}
+async function parseRecord(file, schema) {
+  try {
+    const value = JSON.parse(await fs10.readFile(file, "utf8"));
+    return schema.safeParse(value).success ? "valid" : "invalid";
+  } catch (error2) {
+    return error2.code === "ENOENT" ? "missing" : "invalid";
+  }
+}
+function haltDraft(draft, reason) {
+  draft.status = "halted";
+  draft.current.stage = "halted";
+  draft.halt_reason = reason;
+}
+function distinct2(values) {
+  return [...new Set(values.map((value) => value.trim()).filter((value) => value.length > 0))].sort();
+}
+function riskInput(input) {
+  return {
+    track: input.track.required.join(","),
+    goal: input.goal,
+    acceptance: input.acceptance,
+    intendedFiles: input.intendedFiles,
+    changedFiles: input.changedFiles,
+    componentKinds: input.componentKinds,
+    priorFailures: input.priorFailures
+  };
+}
+function canonicalJson(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (typeof value === "object" && value !== null) {
+    return `{${Object.entries(value).sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0).map(([key, entry]) => `${JSON.stringify(key)}:${canonicalJson(entry)}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+function sha256(value) {
+  return crypto2.createHash("sha256").update(value).digest("hex");
+}
+function messageOf(error2) {
+  return error2 instanceof Error ? error2.message : String(error2);
+}
+
+// src/ops/quality-capability.ts
+function qualityRuntimeEnabled() {
+  return true;
+}
+
+// src/ops/quality-control.ts
+import fs11 from "node:fs/promises";
+import path10 from "node:path";
+var QUALITY_USAGE_FILE = "quality-usage.json";
+var QualityUsageSchema = strictObject({
+  version: literal(1),
+  reservations: array(string2().min(1)).max(1e4)
+});
+async function qualityStateSummary(projectDir, state) {
+  const pinned = await pinnedBudget(projectDir, state);
+  if (pinned === null) return null;
+  const usage = await readQualityUsage(path10.join(runDirPath(projectDir, state), QUALITY_USAGE_FILE));
+  return {
+    mode: pinned.policy.mode,
+    supervision: pinned.policy.supervision,
+    enforcement: pinned.policy.enforcement,
+    dispatches: { used: usage.reservations.length, max: pinned.budget.max_dispatches },
+    waiting: waitingOn(state)
+  };
+}
+function waitingOn(state) {
+  if (state.status === "budget_exhausted") return { kind: "budget", reason: state.halt_reason ?? "" };
+  if (state.status === "waiting_for_user") return { kind: "decision", reason: state.halt_reason ?? "" };
+  return null;
+}
+async function pinnedBudget(projectDir, state) {
+  if (state.run_id === null || state.track === null || state.quality_policy_version !== 1) return null;
+  const policy = await readPolicy(projectDir, state);
+  return { policy, budget: effectiveBudget(policy, await readAmendments(projectDir, state)) };
+}
+async function readQualityUsage(file) {
+  let raw;
+  try {
+    raw = await fs11.readFile(file, "utf8");
+  } catch (error2) {
+    if (error2.code === "ENOENT") return { version: 1, reservations: [] };
+    throw error2;
+  }
+  const parsed = QualityUsageSchema.safeParse(JSON.parse(raw));
+  if (!parsed.success) throw new Error(`${file} is not a readable quality usage record: ${prettifyError(parsed.error)}`);
+  return parsed.data;
+}
+
+// src/ops/verify.ts
+var CacheEntrySchema = strictObject({
+  fingerprint: string2().min(1),
+  slot: VerifySlotSchema,
+  command: string2().min(1),
+  cycle: number2().int().positive(),
+  /** Run-relative, e.g. `cycle-02/verify/test.log`. */
+  log: string2().min(1),
+  /**
+   * The identity of the log **as it was when the entry was green**, checked
+   * again on every hit.
+   *
+   * The entry stores a path, and that path is not immutable: a second
+   * invocation of the same slot in the same cycle opens the very same file with
+   * flag `'w'`. So a green run, a red re-run and a revert put the green entry's
+   * fingerprint back in reach while the file it names holds the red output — and
+   * a hit would then return `exit_code: 0` beside a headline and failures
+   * extracted from a failing run. Existence is not identity; these two fields
+   * are. A mismatch is a miss, which costs one re-run and can never be wrong.
+   */
+  bytes: number2().int().nonnegative(),
+  sha256: string2().length(64),
+  at: iso_exports.datetime()
+});
+var CacheSchema = array(CacheEntrySchema);
+
 // src/ops/run.ts
 var NoActiveRunError = class extends Error {
   constructor() {
@@ -14477,15 +15492,430 @@ function runDirName(state) {
   return `${state.run_id}--${state.current.story ?? "adhoc"}--${state.track}`;
 }
 function runDirPath(projectDir, state) {
-  return path7.join(resolveLoopPaths(projectDir).runs, runDirName(state));
+  return path11.join(resolveLoopPaths(projectDir).runs, runDirName(state));
+}
+
+// src/store/quality-store.ts
+var QUALITY_POLICY_FILE = "quality-policy.json";
+var QUALITY_LEDGER_FILE = "quality-ledger.json";
+var QUALITY_AMENDMENTS_FILE = "quality-amendments.jsonl";
+function qualityFiles(projectDir, state) {
+  const runDir = runDirPath(projectDir, state);
+  return {
+    policy: path12.join(runDir, QUALITY_POLICY_FILE),
+    ledger: path12.join(runDir, QUALITY_LEDGER_FILE),
+    amendments: path12.join(runDir, QUALITY_AMENDMENTS_FILE)
+  };
+}
+var QualityPolicyExistsError = class extends Error {
+  constructor(file) {
+    super(`${file} already exists \u2014 a run quality policy is never rewritten`);
+    this.name = "QualityPolicyExistsError";
+  }
+};
+async function writePolicyOnce(projectDir, state, policy) {
+  const file = qualityFiles(projectDir, state).policy;
+  const parsed = QualityPolicySchema.parse(policy);
+  await fs12.mkdir(path12.dirname(file), { recursive: true });
+  try {
+    await fs12.writeFile(file, `${JSON.stringify(parsed, null, 2)}
+`, { encoding: "utf8", flag: "wx" });
+  } catch (error2) {
+    if (error2.code === "EEXIST") throw new QualityPolicyExistsError(file);
+    throw error2;
+  }
+}
+async function readPolicy(projectDir, state) {
+  const { value } = await readJsonValidated(qualityFiles(projectDir, state).policy, QualityPolicySchema);
+  return value;
+}
+async function writeLedger(projectDir, state, ledger) {
+  const file = qualityFiles(projectDir, state).ledger;
+  await writeJsonAtomic(file, QualityLedgerSchema.parse(ledger));
+}
+async function readLedger(projectDir, state) {
+  const { value } = await readJsonValidated(qualityFiles(projectDir, state).ledger, QualityLedgerSchema);
+  return value;
+}
+async function readAmendments(projectDir, state) {
+  return readAmendmentsAt(qualityFiles(projectDir, state).amendments);
+}
+async function readAmendmentsAt(file) {
+  return (await readAmendmentFile(file)).amendments;
+}
+async function readAmendmentFile(file) {
+  let raw;
+  try {
+    raw = await fs12.readFile(file, "utf8");
+  } catch (error2) {
+    if (error2.code === "ENOENT") return { raw: "", amendments: [] };
+    throw error2;
+  }
+  const lines = raw.split("\n");
+  if (lines.at(-1) === "") lines.pop();
+  const amendments = lines.map((line, index) => parseAmendmentLine(file, line, index + 1));
+  return { raw, amendments };
+}
+function parseAmendmentLine(file, line, lineNumber) {
+  let value;
+  try {
+    value = JSON.parse(line);
+  } catch (error2) {
+    throw new StateCorruptedError(`${file} has an invalid quality amendment on line ${lineNumber}: ${error2.message}`);
+  }
+  const parsed = QualityAmendmentSchema.safeParse(value);
+  if (!parsed.success) {
+    throw new StateCorruptedError(`${file} has an invalid quality amendment on line ${lineNumber}: ${parsed.error.message}`);
+  }
+  return parsed.data;
+}
+
+// src/ops/destructive-risk.ts
+var DESTRUCTIVE_REQUESTS_FILE = "destructive-requests.json";
+var DestructiveCandidateSchema = strictObject({
+  kind: _enum(["feature_delete", "table_drop", "table_truncate", "bulk_data_delete", "irreversible_migration", "project_wide"]),
+  targets: array(string2().min(1)).max(200),
+  operation: string2().min(1),
+  rollback: string2().nullable()
+});
+var DestructiveRequestSchema2 = strictObject({
+  run: string2().min(1),
+  fingerprint: string2().min(1),
+  candidate: DestructiveCandidateSchema,
+  status: _enum(["pending", "approved", "rejected", "used"]),
+  /**
+   * Whether the operation had already touched the worktree when it was caught.
+   *
+   * The two guards catch an operation at opposite ends of it: a command stopped
+   * at the tool boundary has done nothing, while a feature deleted through edits
+   * is already gone from disk by the time the result names it. Nothing about the
+   * operation itself says which, and the difference decides what a *rejection*
+   * means — nothing to undo, or a revert somebody has to perform and prove — so
+   * it is recorded when the request is written rather than guessed at later.
+   *
+   * A record without the field defaults to `true`, which is the direction every
+   * other unreadable-record rule here fails in: over-suspending costs an
+   * operator one more step, while defaulting to `false` would resume a run whose
+   * destructive action had already happened.
+   */
+  applied: boolean2().default(true),
+  requested_at: string2().min(1),
+  decided_at: string2().nullable(),
+  decided_by: string2().nullable(),
+  /** The operator's own words for the decision, once there is one. */
+  note: string2().max(2e3).nullable().default(null)
+});
+var DestructiveRequestsSchema = strictObject({
+  version: literal(1),
+  requests: array(DestructiveRequestSchema2).max(1e3)
+});
+var REASON_MAX = 400;
+var EPHEMERAL_DIRECTORIES = /* @__PURE__ */ new Set([
+  ".cache",
+  ".next",
+  ".nuxt",
+  ".turbo",
+  ".venv",
+  "build",
+  "coverage",
+  "dist",
+  "node_modules",
+  "out",
+  "target",
+  "tmp",
+  "venv"
+]);
+var UNKNOWN_TARGET = "<paths this command is given at run time>";
+var PROJECT_WIDE_TARGETS = /* @__PURE__ */ new Set([".", "./", "..", "../", "/", "~", "~/", "*", "./*", "/*"]);
+var NOT_A_TABLE = /* @__PURE__ */ new Set([
+  "a",
+  "all",
+  "an",
+  "and",
+  "any",
+  "every",
+  "for",
+  "from",
+  "in",
+  "into",
+  "it",
+  "its",
+  "my",
+  "of",
+  "on",
+  "or",
+  "our",
+  "that",
+  "the",
+  "their",
+  "these",
+  "this",
+  "those",
+  "to",
+  "your"
+]);
+var DROP_TABLE = /\bdrop\s+table\s+(?:if\s+exists\s+)?([\w.$-]+)/gi;
+var DROP_STORE = /\bdrop\s+(?:database|schema)\s+(?:if\s+exists\s+)?([\w.$-]+)/gi;
+var TRUNCATE = /\btruncate\s+(?:table\s+)?([\w.$-]+)/gi;
+var DELETE_FROM = /\bdelete\s+from\s+([\w.$-]+)([^;]*)/gi;
+var TRIVIAL_WHERE = /^(?:1\s*=\s*1|true)\s*;?\s*$/i;
+var GIT_CLEAN = /\bgit\s+clean\b/i;
+var GIT_CLEAN_FORCE = /(?:^|\s)(?:--force|--recurse[a-z-]*|-[a-z]*[fd][a-z]*)(?=\s|$)/i;
+var GIT_RESET_HARD = /\bgit\s+reset\s+--hard\b/i;
+var FIND_DELETE = /\bfind\b/i;
+var FIND_REMOVAL = /(?:^|\s)-delete(?=\s|$)|(?:^|\s)-exec[a-z]*\s+rm\b/i;
+var FIND_PATH = /\bfind\s+((?:[^\s-][^\s]*\s+)*)/i;
+var IRREVERSIBLE_MIGRATION = /--accept-data-loss|--no-rollback|--irreversible|--force-reset|\bmigrate:fresh\b|\bdb:migrate:reset\b|\bdb:reset\b|\bmigrate\s+reset\b/i;
+var PATCH_DELETE = /^\s*\*\*\*\s*Delete File:\s*(.+?)\s*$/gim;
+var FEATURE_DELETE_FILES = 3;
+function classifyDestructiveTool(input) {
+  if (typeof input !== "object" || input === null) return null;
+  const { tool_name: toolName, tool_input: toolInput } = input;
+  if (typeof toolName !== "string" || typeof toolInput !== "object" || toolInput === null) return null;
+  if (toolName.toLowerCase() === "bash") {
+    const command = toolInput.command;
+    return typeof command === "string" ? classifyCommand(command) : null;
+  }
+  if (/apply_?patch/i.test(toolName)) return classifyPatch(toolInput);
+  return null;
+}
+function operationFingerprint(runId, candidate2) {
+  const canonical = JSON.stringify({
+    run: runId,
+    kind: candidate2.kind,
+    targets: normaliseTargets(candidate2.targets),
+    operation: candidate2.operation
+  });
+  return crypto3.createHash("sha256").update(canonical).digest("hex");
+}
+function destructiveRequestsFile(projectDir, state) {
+  return path13.join(runDirPath(projectDir, state), DESTRUCTIVE_REQUESTS_FILE);
+}
+async function guardDestructiveOperation(projectDir, state, candidate2, now = () => /* @__PURE__ */ new Date(), options = {}) {
+  if (!await enforcementActive(projectDir, state) || state.run_id === null) return { allowed: true, reason: "" };
+  const fingerprint = operationFingerprint(state.run_id, candidate2);
+  if (await consumeApproval(projectDir, state, fingerprint, now)) return { allowed: true, reason: "" };
+  return {
+    allowed: false,
+    reason: await requestDestructiveDecision(projectDir, state, candidate2, fingerprint, now, options.applied === true)
+  };
+}
+async function guardDestructiveCommand(projectDir, candidate2, now = () => /* @__PURE__ */ new Date()) {
+  const root = await loopProjectRoot(projectDir);
+  if (root === null) return { allowed: true, reason: "" };
+  try {
+    const state = await new StateStore(root, now).get();
+    return await guardDestructiveOperation(root, state, candidate2, now);
+  } catch (error2) {
+    return { allowed: false, reason: unreadable(candidate2, error2) };
+  }
+}
+async function loopProjectRoot(from) {
+  let directory = path13.resolve(from);
+  for (; ; ) {
+    const exists3 = await fs13.stat(resolveLoopPaths(directory).state).then(() => true, () => false);
+    if (exists3) return directory;
+    const parent = path13.dirname(directory);
+    if (parent === directory) return null;
+    directory = parent;
+  }
+}
+function unreadable(candidate2, error2) {
+  return bounded(
+    `${candidate2.operation} could not be checked against this run's state and quality policy (${error2 instanceof Error ? error2.message : String(error2)}). A protected operation is never allowed on a record the engine cannot read.`
+  );
+}
+async function requestDestructiveDecision(projectDir, state, candidate2, fingerprint, now, applied) {
+  const file = destructiveRequestsFile(projectDir, state);
+  await withLock(resolveLoopPaths(projectDir).lock, async (ownership) => {
+    const current = await readDestructiveRequestsAt(file);
+    if (latestFor(current, fingerprint)?.status === "pending") return;
+    const next = {
+      version: 1,
+      requests: [...current.requests, {
+        run: state.run_id,
+        fingerprint,
+        candidate: { ...candidate2, targets: normaliseTargets(candidate2.targets) },
+        status: "pending",
+        applied,
+        requested_at: now().toISOString(),
+        decided_at: null,
+        decided_by: null,
+        note: null
+      }]
+    };
+    await ownership.runIfOwned(async (stagingDir) => {
+      await writeJsonAtomic(file, next, { stagingDir });
+    });
+  });
+  const reason = bounded(
+    `destructive operation waiting for a human decision (${candidate2.kind}): ${candidate2.operation}. Targets: ${normaliseTargets(candidate2.targets).join(", ")}. Rollback: ${candidate2.rollback ?? "none"}. Approve or reject operation ${fingerprint.slice(0, 12)}\u2026 to resume.`
+  );
+  await new StateStore(projectDir, now).update((draft) => {
+    if (draft.status !== "running") return;
+    draft.status = "waiting_for_user";
+    draft.halt_reason = reason;
+  });
+  return reason;
+}
+async function consumeApproval(projectDir, state, fingerprint, now) {
+  const file = destructiveRequestsFile(projectDir, state);
+  let spent = false;
+  await withLock(resolveLoopPaths(projectDir).lock, async (ownership) => {
+    const current = await readDestructiveRequestsAt(file);
+    const approved = latestFor(current, fingerprint);
+    if (approved === void 0 || approved.status !== "approved") return;
+    const next = {
+      version: 1,
+      requests: current.requests.map(
+        (request) => request === approved ? { ...request, status: "used", decided_at: request.decided_at ?? now().toISOString() } : request
+      )
+    };
+    await ownership.runIfOwned(async (stagingDir) => {
+      await writeJsonAtomic(file, next, { stagingDir });
+    });
+    spent = true;
+  });
+  return spent;
+}
+function latestFor(requests, fingerprint) {
+  return requests.requests.filter((request) => request.fingerprint === fingerprint).at(-1);
+}
+async function enforcementActive(projectDir, state) {
+  if (!qualityRuntimeEnabled()) return false;
+  if (state.run_id === null || state.track === null || state.quality_policy_version !== 1) return false;
+  return (await readPolicy(projectDir, state)).enforcement === "active";
+}
+async function readDestructiveRequestsAt(file) {
+  let raw;
+  try {
+    raw = await fs13.readFile(file, "utf8");
+  } catch (error2) {
+    if (error2.code === "ENOENT") return { version: 1, requests: [] };
+    throw error2;
+  }
+  const parsed = DestructiveRequestsSchema.safeParse(JSON.parse(raw));
+  if (!parsed.success) throw new Error(`${file} is not a readable destructive decision record: ${prettifyError(parsed.error)}`);
+  return parsed.data;
+}
+function classifyCommand(command) {
+  const text = command.replace(/['"`]/g, " ");
+  if (GIT_RESET_HARD.test(text) || segments(text).some((segment) => GIT_CLEAN.test(segment) && GIT_CLEAN_FORCE.test(segment))) {
+    return candidate("project_wide", ["the working tree"], command, "none \u2014 the discarded work is not in any commit");
+  }
+  const stores = matches(DROP_STORE, text);
+  if (stores.length > 0) return candidate("project_wide", stores, command, null);
+  const dropped = matches(DROP_TABLE, text);
+  if (dropped.length > 0) return candidate("table_drop", dropped, command, null);
+  const truncated = matches(TRUNCATE, text);
+  if (truncated.length > 0) return candidate("table_truncate", truncated, command, null);
+  const bulk = unboundedDeletes(text);
+  if (bulk.length > 0) return candidate("bulk_data_delete", bulk, command, null);
+  if (IRREVERSIBLE_MIGRATION.test(text)) return candidate("irreversible_migration", ["the project database"], command, null);
+  return recursiveRemoval(text, command) ?? findRemoval(text, command);
+}
+function segments(text) {
+  return text.split(/[;&|\n]+/);
+}
+function findRemoval(text, command) {
+  for (const segment of segments(text)) {
+    if (!FIND_DELETE.test(segment) || !FIND_REMOVAL.test(segment)) continue;
+    const roots = (FIND_PATH.exec(segment)?.[1] ?? "").split(/\s+/).filter((root) => root.length > 0);
+    const kept = roots.filter((root) => !isEphemeral(root));
+    if (roots.length > 0 && kept.length === 0) continue;
+    return candidate(
+      "feature_delete",
+      kept.length > 0 ? kept : [UNKNOWN_TARGET],
+      command,
+      "the files are recoverable from git only if they were committed"
+    );
+  }
+  return null;
+}
+function unboundedDeletes(text) {
+  const targets = [];
+  for (const match of text.matchAll(DELETE_FROM)) {
+    const where = /\bwhere\b([\s\S]*)/i.exec(match[2] ?? "");
+    if (!isTableName(match[1])) continue;
+    if (where === null || TRIVIAL_WHERE.test((where[1] ?? "").trim())) targets.push(match[1]);
+  }
+  return targets;
+}
+function recursiveRemoval(text, command) {
+  for (const segment of segments(text)) {
+    const tokens = segment.trim().split(/\s+/);
+    const start = tokens.indexOf("rm");
+    if (start === -1) continue;
+    const rest = tokens.slice(start + 1);
+    const recursive = rest.some((token) => /^-[a-z]*r[a-z]*$/i.test(token) || token === "--recursive");
+    if (!recursive) continue;
+    const operands = rest.filter((token) => !token.startsWith("-"));
+    if (operands.some((operand) => PROJECT_WIDE_TARGETS.has(operand))) {
+      return candidate("project_wide", operands, command, null);
+    }
+    if (operands.length === 0) {
+      return candidate("feature_delete", [UNKNOWN_TARGET], command, "unknown until the piped command that names the paths has run");
+    }
+    const kept = operands.filter((operand) => !isEphemeral(operand));
+    if (kept.length > 0) {
+      return candidate("feature_delete", kept, command, "the files are recoverable from git only if they were committed");
+    }
+  }
+  return null;
+}
+function classifyPatch(toolInput) {
+  const deleted = [];
+  for (const value of Object.values(toolInput)) {
+    if (typeof value !== "string") continue;
+    for (const match of value.matchAll(PATCH_DELETE)) deleted.push(match[1]);
+  }
+  const directory = featureDirectory(deleted);
+  if (directory === null) return null;
+  return candidate("feature_delete", [directory], `delete ${deleted.length} files under ${directory}`, null);
+}
+function featureDirectory(files) {
+  const counts = /* @__PURE__ */ new Map();
+  for (const file of files) {
+    const normalised = file.split(path13.sep).join("/");
+    if (isEphemeral(normalised)) continue;
+    for (let directory = path13.posix.dirname(normalised); ancestorWorthCounting(directory); directory = path13.posix.dirname(directory)) {
+      counts.set(directory, (counts.get(directory) ?? 0) + 1);
+    }
+  }
+  const reached = [...counts.entries()].filter(([, count]) => count >= FEATURE_DELETE_FILES);
+  return reached.map(([directory]) => directory).sort().sort((left, right) => right.split("/").length - left.split("/").length)[0] ?? null;
+}
+function ancestorWorthCounting(directory) {
+  return directory !== "." && directory !== "/" && !isEphemeral(directory);
+}
+function isEphemeral(target) {
+  const segments2 = target.split(/[\\/]+/);
+  return segments2.some((segment) => EPHEMERAL_DIRECTORIES.has(segment));
+}
+function candidate(kind, targets, operation, rollback) {
+  return { kind, targets: normaliseTargets(targets), operation: bounded(operation), rollback };
+}
+function matches(pattern, text) {
+  return [...text.matchAll(pattern)].map((match) => match[1]).filter(isTableName);
+}
+function isTableName(target) {
+  return !NOT_A_TABLE.has(target.toLowerCase());
+}
+function normaliseTargets(targets) {
+  return [...new Set(targets.map((target) => target.trim()).filter((target) => target.length > 0))].sort();
+}
+function bounded(text) {
+  return text.length > REASON_MAX ? `${text.slice(0, REASON_MAX)}\u2026` : text;
 }
 
 // src/ops/summary.ts
+import fs14 from "node:fs/promises";
+import path14 from "node:path";
 var NO_FINDINGS = { high: 0, medium: 0, low: 0 };
 var MAP_FILE = "map.md";
 async function hasDesignSystem(projectDir) {
   try {
-    return (await fs8.stat(resolveLoopPaths(projectDir).designSystem)).isFile();
+    return (await fs14.stat(resolveLoopPaths(projectDir).designSystem)).isFile();
   } catch {
     return false;
   }
@@ -14493,11 +15923,11 @@ async function hasDesignSystem(projectDir) {
 async function runMap(projectDir, state) {
   if (state.run_id === null || state.track === null) return null;
   try {
-    if (!(await fs8.stat(path8.join(runDirPath(projectDir, state), MAP_FILE))).isFile()) return null;
+    if (!(await fs14.stat(path14.join(runDirPath(projectDir, state), MAP_FILE))).isFile()) return null;
   } catch {
     return null;
   }
-  return path8.join(".mjloop", "runs", runDirName(state), MAP_FILE);
+  return path14.join(".mjloop", "runs", runDirName(state), MAP_FILE);
 }
 async function stateSummary(projectDir) {
   let config2 = null;
@@ -14531,7 +15961,8 @@ async function stateSummary(projectDir) {
       reproduction: null,
       design_system: false,
       map: null,
-      config_error: configError
+      config_error: configError,
+      quality: null
     };
   }
   let maxCycles = null;
@@ -14564,7 +15995,11 @@ async function stateSummary(projectDir) {
     reproduction,
     design_system: await hasDesignSystem(projectDir),
     map: await runMap(projectDir, state),
-    config_error: configError
+    config_error: configError,
+    // Degrades rather than fails, exactly as `config_error` does: this line is
+    // rendered on every session start, and an unreadable run record must not
+    // turn it into a stack trace.
+    quality: await qualityStateSummary(projectDir, state).catch(() => null)
   };
 }
 var CONFIG_ERROR_MAX = 200;
@@ -14865,8 +16300,8 @@ async function discoverCandidates(projectDir, options, deps = defaultDeps) {
 }
 
 // src/ops/skill-import.ts
-import path9 from "node:path";
-import { createHash } from "node:crypto";
+import path15 from "node:path";
+import { createHash as createHash2 } from "node:crypto";
 var defaultDeps2 = { fetch: globalThis.fetch };
 var UnsupportedInspectionSourceError = class extends Error {
   constructor(source) {
@@ -14958,31 +16393,31 @@ async function fetchApiJson(url, deps, init) {
   }
 }
 var GITHUB_HEADERS = { Accept: "application/vnd.github+json", "User-Agent": "mjloop-skill-import" };
-async function pinRevision(candidate, deps) {
-  const url = `https://api.github.com/repos/${candidate.repository}/commits/${encodeURIComponent(candidate.ref)}`;
+async function pinRevision(candidate2, deps) {
+  const url = `https://api.github.com/repos/${candidate2.repository}/commits/${encodeURIComponent(candidate2.ref)}`;
   let body;
   try {
     body = await fetchApiJson(url, deps, { headers: GITHUB_HEADERS });
   } catch (error2) {
     if (error2 instanceof CrossHostRedirectError2) throw error2;
-    throw new RevisionPinFailedError(candidate.ref, error2 instanceof Error ? error2.message : String(error2));
+    throw new RevisionPinFailedError(candidate2.ref, error2 instanceof Error ? error2.message : String(error2));
   }
   const sha = isRecord2(body) && typeof body.sha === "string" ? body.sha : null;
-  if (sha === null) throw new RevisionPinFailedError(candidate.ref, "the commits API returned no sha for this ref");
+  if (sha === null) throw new RevisionPinFailedError(candidate2.ref, "the commits API returned no sha for this ref");
   if (!COMMIT_SHA.test(sha)) {
-    throw new RevisionPinFailedError(candidate.ref, `the commits API returned "${sha}", which is not a 40- or 64-character hex commit sha`);
+    throw new RevisionPinFailedError(candidate2.ref, `the commits API returned "${sha}", which is not a 40- or 64-character hex commit sha`);
   }
   return sha;
 }
 function validateEntryPath(entryPath) {
-  if (path9.isAbsolute(entryPath) || entryPath.startsWith("/") || entryPath.startsWith("\\")) {
+  if (path15.isAbsolute(entryPath) || entryPath.startsWith("/") || entryPath.startsWith("\\")) {
     throw new HostilePathError(entryPath, "an absolute path is never a legitimate entry in a package tree");
   }
-  const segments = entryPath.split("/");
-  if (segments.some((segment) => segment === "..")) {
+  const segments2 = entryPath.split("/");
+  if (segments2.some((segment) => segment === "..")) {
     throw new HostilePathError(entryPath, 'a ".." segment escapes the package root and is always refused');
   }
-  if (segments.length > MAX_PATH_DEPTH) throw new PathDepthExceededError(entryPath, MAX_PATH_DEPTH);
+  if (segments2.length > MAX_PATH_DEPTH) throw new PathDepthExceededError(entryPath, MAX_PATH_DEPTH);
 }
 async function fetchTree(repository, sha, deps) {
   const url = `https://api.github.com/repos/${repository}/git/trees/${sha}?recursive=1`;
@@ -15025,7 +16460,7 @@ async function fetchBlobs(repository, entries, deps) {
 }
 function computePackageDigest(files) {
   const sorted = [...files].sort((a, b) => a.path.localeCompare(b.path));
-  const hash = createHash("sha256");
+  const hash = createHash2("sha256");
   for (const file of sorted) {
     hash.update(file.path);
     hash.update("\0");
@@ -15037,11 +16472,11 @@ function computePackageDigest(files) {
 function classifyFile(file) {
   const shebangMatch = SHEBANG.exec(file.text);
   if (shebangMatch !== null && shebangMatch[1] !== void 0) {
-    return { executable: true, interpreter: path9.basename(shebangMatch[1]) };
+    return { executable: true, interpreter: path15.basename(shebangMatch[1]) };
   }
   if (file.mode === EXECUTABLE_MODE) return { executable: true, interpreter: null };
   if (BINARY_MAGICS.includes(file.buffer.subarray(0, 4).toString("hex"))) return { executable: true, interpreter: null };
-  if (EXECUTABLE_EXTENSIONS.has(path9.extname(file.path))) return { executable: true, interpreter: null };
+  if (EXECUTABLE_EXTENSIONS.has(path15.extname(file.path))) return { executable: true, interpreter: null };
   return { executable: false, interpreter: null };
 }
 function parsePackageJson(text) {
@@ -15062,11 +16497,11 @@ function parseRequirementsTxt(text) {
   }
   return names;
 }
-async function inspectCandidate(_projectDir, candidate, deps = defaultDeps2) {
-  if (candidate.source !== "github") throw new UnsupportedInspectionSourceError(candidate.source);
-  const revision = await pinRevision(candidate, deps);
-  const entries = await fetchTree(candidate.repository, revision, deps);
-  const files = await fetchBlobs(candidate.repository, entries, deps);
+async function inspectCandidate(_projectDir, candidate2, deps = defaultDeps2) {
+  if (candidate2.source !== "github") throw new UnsupportedInspectionSourceError(candidate2.source);
+  const revision = await pinRevision(candidate2, deps);
+  const entries = await fetchTree(candidate2.repository, revision, deps);
+  const files = await fetchBlobs(candidate2.repository, entries, deps);
   const findings = [];
   let blocking = false;
   let skillName = null;
@@ -15137,10 +16572,10 @@ async function inspectCandidate(_projectDir, candidate, deps = defaultDeps2) {
   }
   const digest = computePackageDigest(files);
   const auditState = blocking ? "failed" : "pending";
-  const nextAction = blocking ? { action: "search-alternative", query: candidate.skillName } : null;
+  const nextAction = blocking ? { action: "search-alternative", query: candidate2.skillName } : null;
   return ImportReportSchema.parse({
     schema: 1,
-    candidate,
+    candidate: candidate2,
     revision,
     digest,
     skillName,
@@ -15159,21 +16594,21 @@ async function inspectCandidate(_projectDir, candidate, deps = defaultDeps2) {
 // src/ops/skill-sandbox.ts
 import { spawn as nodeSpawn } from "node:child_process";
 import { existsSync, accessSync, constants as fsConstants } from "node:fs";
-import fs9 from "node:fs/promises";
+import fs15 from "node:fs/promises";
 import os2 from "node:os";
-import path10 from "node:path";
+import path16 from "node:path";
 var SMOKE_CHECK_TIMEOUT_MS = 3e4;
 var SANDBOX_TOTAL_TIMEOUT_MS = 12e4;
 var STDIO_FLUSH_GRACE_MS = 200;
 var KILL_SETTLE_MS = 500;
 var SANDBOX_EXEC_BIN = "/usr/bin/sandbox-exec";
 function which(bin) {
-  const dirs = (process.env.PATH ?? "").split(path10.delimiter).filter((dir) => dir.length > 0);
+  const dirs = (process.env.PATH ?? "").split(path16.delimiter).filter((dir) => dir.length > 0);
   for (const dir of dirs) {
-    const candidate = path10.join(dir, bin);
+    const candidate2 = path16.join(dir, bin);
     try {
-      accessSync(candidate, fsConstants.X_OK);
-      return candidate;
+      accessSync(candidate2, fsConstants.X_OK);
+      return candidate2;
     } catch {
       continue;
     }
@@ -15342,16 +16777,16 @@ async function runSkillSandbox(input, deps = defaultDeps3) {
       }
     });
   }
-  const tempRoot = await fs9.realpath(await fs9.mkdtemp(path10.join(os2.tmpdir(), "mjloop-skill-sandbox-")));
+  const tempRoot = await fs15.realpath(await fs15.mkdtemp(path16.join(os2.tmpdir(), "mjloop-skill-sandbox-")));
   try {
-    const packageDir = path10.join(tempRoot, "pkg");
-    const homeDir = path10.join(tempRoot, "home");
-    await fs9.mkdir(packageDir, { recursive: true });
-    await fs9.mkdir(homeDir, { recursive: true });
+    const packageDir = path16.join(tempRoot, "pkg");
+    const homeDir = path16.join(tempRoot, "home");
+    await fs15.mkdir(packageDir, { recursive: true });
+    await fs15.mkdir(homeDir, { recursive: true });
     for (const file of input.files) {
-      const dest = path10.join(packageDir, file.path);
-      await fs9.mkdir(path10.dirname(dest), { recursive: true });
-      await fs9.writeFile(dest, file.content);
+      const dest = path16.join(packageDir, file.path);
+      await fs15.mkdir(path16.dirname(dest), { recursive: true });
+      await fs15.writeFile(dest, file.content);
     }
     const env = {
       PATH: process.env.PATH ?? "/usr/bin:/bin",
@@ -15384,14 +16819,14 @@ ${outcome.stdout}${outcome.stderr}
     }
     return SandboxResultSchema.parse({ state: allPassed ? "passed" : "failed", checks: results, output });
   } finally {
-    await fs9.rm(tempRoot, { recursive: true, force: true });
+    await fs15.rm(tempRoot, { recursive: true, force: true });
   }
 }
 
 // src/store/config-mutation.ts
 var YAML3 = __toESM(require_dist(), 1);
-import crypto from "node:crypto";
-import fs10 from "node:fs/promises";
+import crypto4 from "node:crypto";
+import fs16 from "node:fs/promises";
 var VerifySlotSchema2 = _enum(["test", "lint", "build"]);
 var ConfigChangeSchema = discriminatedUnion("kind", [
   strictObject({
@@ -15470,12 +16905,9 @@ var ConfigChangeSchema = discriminatedUnion("kind", [
     kind: literal("orchestration.execution.repair_attempts"),
     value: number2().int().min(0).max(5)
   }),
-  // The one section whose leaves share a type, so one kind with a `key` costs
-  // nothing in strictness — the same shape `gate` and `limit` already use.
   strictObject({
-    kind: literal("orchestration.quality"),
-    key: _enum(["independent_plan_review", "independent_verification"]),
-    value: boolean2()
+    kind: literal("orchestration.quality.mode"),
+    value: QualityModeSchema
   }),
   strictObject({
     kind: literal("orchestration.skills.sources"),
@@ -15497,23 +16929,42 @@ var ConfigPatchSchema = strictObject({
 var ConfigMutationError = class extends Error {
   kind;
   path;
-  constructor(kind, path13 = []) {
+  constructor(kind, path19 = []) {
     super(kind);
     this.name = "ConfigMutationError";
     this.kind = kind;
-    this.path = path13;
+    this.path = path19;
   }
 };
 function configRevision(raw) {
-  return crypto.createHash("sha256").update(raw).digest("hex");
+  return crypto4.createHash("sha256").update(raw).digest("hex");
 }
 async function mutateConfig(projectDir, patch) {
   const parsedPatch = ConfigPatchSchema.parse(patch);
   const paths = resolveLoopPaths(projectDir);
-  return withLock(paths.lock, async () => {
+  if (parsedPatch.changes.some((change) => change.kind === "orchestration.quality.mode")) {
+    try {
+      const state = await new StateStore(projectDir).get();
+      const active = ["running", "paused", "waiting_for_user", "budget_exhausted"].includes(state.status);
+      if (state.run_id !== null && state.track !== null && active) {
+        await ensureRunQualityPolicy(projectDir);
+      }
+    } catch (error2) {
+      try {
+        await fs16.access(paths.state);
+      } catch {
+        return mutateConfigWithoutBootstrap(projectDir, parsedPatch, paths);
+      }
+      throw error2;
+    }
+  }
+  return mutateConfigWithoutBootstrap(projectDir, parsedPatch, paths);
+}
+async function mutateConfigWithoutBootstrap(projectDir, parsedPatch, paths) {
+  return withLock(paths.lock, async (ownership) => {
     let raw;
     try {
-      raw = await fs10.readFile(paths.config, "utf8");
+      raw = await fs16.readFile(paths.config, "utf8");
     } catch (error2) {
       if (error2.code === "ENOENT") throw new ConfigMutationError("missing");
       throw error2;
@@ -15522,20 +16973,22 @@ async function mutateConfig(projectDir, patch) {
     const document = YAML3.parseDocument(raw, { keepSourceTokens: true });
     if (document.errors.length > 0) throw new ConfigMutationError("invalid");
     for (const change of parsedPatch.changes) applyChange(document, change);
-    let candidate;
+    let candidate2;
     try {
-      candidate = document.toJS();
+      candidate2 = document.toJS();
     } catch {
       throw new ConfigMutationError("invalid");
     }
-    const parsed = ConfigSchema.safeParse(stripLegacy(candidate));
+    const parsed = ConfigSchema.safeParse(stripLegacy(candidate2));
     if (!parsed.success) {
       const issue2 = parsed.error.issues[0];
       const issuePath = issue2?.path.filter((part) => typeof part === "string" || typeof part === "number") ?? [];
       throw new ConfigMutationError("invalid", issuePath);
     }
     const next = document.toString({ lineWidth: 100 });
-    await writeTextAtomic(paths.config, next);
+    await ownership.runIfOwned(async (stagingDir) => {
+      await writeTextAtomic(paths.config, next, { stagingDir });
+    });
     return { revision: configRevision(next) };
   });
 }
@@ -15600,8 +17053,14 @@ function applyChange(document, change) {
     case "orchestration.execution.repair_attempts":
       document.setIn(["orchestration", "execution", "repair_attempts"], change.value);
       return;
-    case "orchestration.quality":
-      document.setIn(["orchestration", "quality", change.key], change.value);
+    case "orchestration.quality.mode":
+      if (document.hasIn(["orchestration", "quality", "independent_plan_review"])) {
+        document.deleteIn(["orchestration", "quality", "independent_plan_review"]);
+      }
+      if (document.hasIn(["orchestration", "quality", "independent_verification"])) {
+        document.deleteIn(["orchestration", "quality", "independent_verification"]);
+      }
+      document.setIn(["orchestration", "quality", "mode"], change.value);
       return;
     case "orchestration.skills.sources":
       document.setIn(["orchestration", "skills", "sources"], change.value);
@@ -15615,7 +17074,7 @@ function applyChange(document, change) {
 }
 
 // src/web/marker.ts
-import fs11 from "node:fs/promises";
+import fs17 from "node:fs/promises";
 var ServerMarkerSchema = strictObject({
   port: number2().int().positive().max(65535),
   /**
@@ -15636,7 +17095,7 @@ var ServerMarkerSchema = strictObject({
 async function readServerMarker(projectDir) {
   let raw;
   try {
-    raw = await fs11.readFile(resolveLoopPaths(projectDir).webServer, "utf8");
+    raw = await fs17.readFile(resolveLoopPaths(projectDir).webServer, "utf8");
   } catch {
     return null;
   }
@@ -15689,15 +17148,15 @@ function isPtyAvailable() {
 }
 
 // src/util/entrypoint.ts
-import fs12 from "node:fs/promises";
-import path11 from "node:path";
+import fs18 from "node:fs/promises";
+import path17 from "node:path";
 import { pathToFileURL } from "node:url";
 async function isEntrypoint(moduleUrl) {
   const argv1 = process.argv[1];
   if (argv1 === void 0) return false;
-  let resolved = path11.resolve(argv1);
+  let resolved = path17.resolve(argv1);
   try {
-    resolved = await fs12.realpath(resolved);
+    resolved = await fs18.realpath(resolved);
   } catch {
   }
   return moduleUrl === pathToFileURL(resolved).href;
@@ -15830,15 +17289,10 @@ var SETTINGS = {
     parse: asInteger,
     change: (value) => ({ kind: "orchestration.execution.repair_attempts", value })
   },
-  "orchestration.quality.independent_plan_review": {
-    read: (orchestration) => orchestration.quality.independent_plan_review,
-    parse: asBoolean,
-    change: (value) => ({ kind: "orchestration.quality", key: "independent_plan_review", value })
-  },
-  "orchestration.quality.independent_verification": {
-    read: (orchestration) => orchestration.quality.independent_verification,
-    parse: asBoolean,
-    change: (value) => ({ kind: "orchestration.quality", key: "independent_verification", value })
+  "orchestration.quality.mode": {
+    read: (orchestration) => orchestration.quality.mode,
+    parse: asWord,
+    change: (value) => ({ kind: "orchestration.quality.mode", value })
   },
   "orchestration.skills.sources": {
     read: (orchestration) => orchestration.skills.sources,
@@ -15869,7 +17323,7 @@ async function configGetCommand(args) {
   const file = resolveLoopPaths(dir).config;
   let raw;
   try {
-    raw = await fs13.readFile(file, "utf8");
+    raw = await fs19.readFile(file, "utf8");
   } catch {
     return fail(`${file} not found \u2014 run /mjloop:init first`);
   }
@@ -15903,7 +17357,7 @@ ${prettifyError(change.error)}`);
   const file = resolveLoopPaths(dir).config;
   let current;
   try {
-    current = await fs13.readFile(file, "utf8");
+    current = await fs19.readFile(file, "utf8");
   } catch {
     return fail(`${file} not found \u2014 run /mjloop:init first`);
   }
@@ -16135,8 +17589,8 @@ async function profileRejectCommand(args) {
   }
   const active = (await listAcceptedRevisions(dir)).at(-1) ?? null;
   const file = proposedProfileFile(dir);
-  await fs13.rm(file, { force: true });
-  await fs13.rm(`${file}.bak`, { force: true });
+  await fs19.rm(file, { force: true });
+  await fs19.rm(`${file}.bak`, { force: true });
   const remains = active === null ? "No component map is accepted." : `Revision ${active} is still the accepted component map.`;
   return { stdout: `proposal discarded. ${remains}
 `, exitCode: 0 };
@@ -16233,7 +17687,7 @@ async function skillsListCommand(args) {
   return { stdout: renderSkills(library, acceptances), exitCode: 0 };
 }
 function renderSkills(library, acceptances) {
-  const { packages, unreadable } = library;
+  const { packages, unreadable: unreadable2 } = library;
   const lines = ["this machine's skill library:"];
   if (packages.length === 0) {
     lines.push("  (none) \u2014 nothing has been imported into this machine's skill library yet");
@@ -16244,7 +17698,7 @@ function renderSkills(library, acceptances) {
       lines.push(`    license ${pkg.license.spdx ?? "(none)"}  audit ${pkg.audit.state}`);
     }
   }
-  for (const entry of unreadable) {
+  for (const entry of unreadable2) {
     lines.push(`  ${entry.digest}  (unreadable) ${entry.reason.split("\n")[0] ?? ""}`);
   }
   lines.push("");
@@ -16406,7 +17860,7 @@ async function fetchGithubPackageFiles(repository, sha, deps) {
     const type = typeof raw.type === "string" ? raw.type : null;
     const entrySha = typeof raw.sha === "string" ? raw.sha : null;
     if (entryPath === null || type === null || entrySha === null || type !== "blob") continue;
-    if (path12.isAbsolute(entryPath) || entryPath.split("/").includes("..")) {
+    if (path18.isAbsolute(entryPath) || entryPath.split("/").includes("..")) {
       throw new Error(`refused entry "${entryPath}" while staging package content: an absolute or traversing path is never legitimate`);
     }
     if (files.length >= STAGING_TREE_ENTRY_CAP) throw new Error(`the package tree exceeded the ${STAGING_TREE_ENTRY_CAP}-entry staging cap`);
@@ -16461,12 +17915,12 @@ async function refuseDisabledSource(dir, source) {
   const config2 = await loadConfig(dir);
   if (!config2.orchestration.skills.sources.includes(source)) throw new SkillSourceDisabledError(source);
 }
-async function runInspectionPipeline(dir, candidate, deps) {
-  await refuseDisabledSource(dir, candidate.source);
-  const report = await inspectCandidate(dir, candidate, { fetch: deps.fetch });
+async function runInspectionPipeline(dir, candidate2, deps) {
+  await refuseDisabledSource(dir, candidate2.source);
+  const report = await inspectCandidate(dir, candidate2, { fetch: deps.fetch });
   if (report.blocking) return { report, files: [] };
   if (report.revision === null) throw new Error("inspection produced no blocking finding but also no pinned revision \u2014 refusing to stage unpinned content");
-  const files = await fetchGithubPackageFiles(candidate.repository, report.revision, deps);
+  const files = await fetchGithubPackageFiles(candidate2.repository, report.revision, deps);
   const stagedDigest = computePackageDigest(files);
   if (stagedDigest !== report.digest) {
     throw new Error(
@@ -16520,8 +17974,8 @@ async function skillsSearchCommand(args, deps) {
     if (candidates.length === 0) return { stdout: `no candidates found for "${query}" on source "${parsedSource}"
 `, exitCode: 0 };
     const lines = candidates.map(
-      (candidate) => `  ${candidate.repository}  ref ${candidate.ref}  ${candidate.url}${candidate.stars !== void 0 ? `  stars ${candidate.stars}` : ""}
-    ${candidate.description}`
+      (candidate2) => `  ${candidate2.repository}  ref ${candidate2.ref}  ${candidate2.url}${candidate2.stars !== void 0 ? `  stars ${candidate2.stars}` : ""}
+    ${candidate2.description}`
     );
     return {
       stdout: `candidates for "${query}" (${parsedSource}) \u2014 metadata only; nothing is written and none of these is active:
@@ -16542,12 +17996,12 @@ async function skillsInspectCommand(args, deps) {
   if (url === void 0) {
     return fail("skills inspect needs a candidate url: mjloop-cli skills inspect <url> [--ref <ref>] [--dir <path>]");
   }
-  const candidate = candidateFromUrl(url, ref ?? "HEAD");
-  if (candidate === null) {
+  const candidate2 = candidateFromUrl(url, ref ?? "HEAD");
+  if (candidate2 === null) {
     return fail(`"${url}" is not a github.com repository url this command can parse \u2014 expected https://github.com/<owner>/<repo>`);
   }
   try {
-    const { report } = await runInspectionPipeline(dir, candidate, deps);
+    const { report } = await runInspectionPipeline(dir, candidate2, deps);
     if (json) return { stdout: `${JSON.stringify(report, null, 2)}
 `, exitCode: 0 };
     return { stdout: renderReport(report), exitCode: report.auditState === "passed" ? 0 : 1 };
@@ -16563,26 +18017,26 @@ async function skillsImportCommand(args, deps) {
   if (url === void 0) {
     return fail("skills import needs a candidate url: mjloop-cli skills import <url> [--ref <ref>] [--dir <path>]");
   }
-  const candidate = candidateFromUrl(url, ref ?? "HEAD");
-  if (candidate === null) {
+  const candidate2 = candidateFromUrl(url, ref ?? "HEAD");
+  if (candidate2 === null) {
     return fail(`"${url}" is not a github.com repository url this command can parse \u2014 expected https://github.com/<owner>/<repo>`);
   }
   try {
-    const { report, files } = await runInspectionPipeline(dir, candidate, deps);
+    const { report, files } = await runInspectionPipeline(dir, candidate2, deps);
     if (report.auditState !== "passed") {
       return { stdout: renderReport(report), exitCode: 1 };
     }
     const pkg = buildSkillPackage(report);
-    const stageDir = await fs13.mkdtemp(path12.join(os3.tmpdir(), "mjloop-skill-import-"));
+    const stageDir = await fs19.mkdtemp(path18.join(os3.tmpdir(), "mjloop-skill-import-"));
     try {
       for (const file of files) {
-        const dest = path12.join(stageDir, file.path);
-        await fs13.mkdir(path12.dirname(dest), { recursive: true });
-        await fs13.writeFile(dest, file.buffer);
+        const dest = path18.join(stageDir, file.path);
+        await fs19.mkdir(path18.dirname(dest), { recursive: true });
+        await fs19.writeFile(dest, file.buffer);
       }
       await writePackage(dir, pkg, stageDir);
     } finally {
-      await fs13.rm(stageDir, { recursive: true, force: true });
+      await fs19.rm(stageDir, { recursive: true, force: true });
     }
     return {
       stdout: `imported "${pkg.skillName}" at digest ${pkg.digest}
@@ -16596,9 +18050,9 @@ accept it with: mjloop-cli skills accept ${pkg.digest}
     return fail(describe2(error2));
   }
 }
-function derivePackageId(candidate) {
-  const sanitized = candidate.repository.replace(/[^A-Za-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "");
-  return `${candidate.source}-${sanitized}`;
+function derivePackageId(candidate2) {
+  const sanitized = candidate2.repository.replace(/[^A-Za-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "");
+  return `${candidate2.source}-${sanitized}`;
 }
 function buildSkillPackage(report, now = () => /* @__PURE__ */ new Date()) {
   const skillName = report.skillName ?? report.candidate.skillName;
@@ -16736,7 +18190,7 @@ async function autostartCockpit(cwd, source) {
   return "Starting the cockpit \u2014 it opens in your browser in a moment.";
 }
 function webCliPath() {
-  return path12.join(fileURLToPath(new URL("../../", import.meta.url)), "dist", "web", "cli.js");
+  return path18.join(fileURLToPath(new URL("../../", import.meta.url)), "dist", "web", "cli.js");
 }
 function openUrl(url) {
   const [command, args] = process.platform === "darwin" ? ["open", [url]] : process.platform === "win32" ? ["cmd.exe", ["/d", "/s", "/c", "start", "", url]] : ["xdg-open", [url]];
@@ -16760,13 +18214,22 @@ async function stateGuardCommand(stdin) {
   } catch {
     return { stdout: "", exitCode: 0 };
   }
+  return stateGuardCommandForTest(readCwd(stdin), input);
+}
+async function stateGuardCommandForTest(projectDir, input) {
   const verdict = evaluateStateGuard(input);
-  if (!verdict.deny) return { stdout: "", exitCode: 0 };
+  if (verdict.deny) return denial(verdict.reason);
+  const candidate2 = classifyDestructiveTool(input);
+  if (candidate2 === null) return { stdout: "", exitCode: 0 };
+  const outcome = await guardDestructiveCommand(projectDir, candidate2);
+  return outcome.allowed ? { stdout: "", exitCode: 0 } : denial(outcome.reason);
+}
+function denial(reason) {
   const payload = {
     hookSpecificOutput: {
       hookEventName: "PreToolUse",
       permissionDecision: "deny",
-      permissionDecisionReason: verdict.reason
+      permissionDecisionReason: reason
     }
   };
   return { stdout: `${JSON.stringify(payload)}
@@ -16775,17 +18238,17 @@ async function stateGuardCommand(stdin) {
 function evaluateStateGuard(input) {
   const filePath = extractFilePath(input);
   if (filePath === null) return { deny: false, reason: "" };
-  const normalised = path12.normalize(filePath);
-  const segments = normalised.split(path12.sep).map((segment) => segment.toLowerCase());
-  if (!segments.includes(".mjloop")) return { deny: false, reason: "" };
-  const basename = path12.basename(normalised).toLowerCase();
+  const normalised = path18.normalize(filePath);
+  const segments2 = normalised.split(path18.sep).map((segment) => segment.toLowerCase());
+  if (!segments2.includes(".mjloop")) return { deny: false, reason: "" };
+  const basename = path18.basename(normalised).toLowerCase();
   if (PROTECTED_BASENAMES.includes(basename)) {
     return {
       deny: true,
       reason: `${basename} is owned by the mjloop MCP server. Use the mjloop_* tools (mjloop_run_start, mjloop_cycle_advance, mjloop_run_log, ...) instead of editing it directly.`
     };
   }
-  const directory = protectedDirectory(segments);
+  const directory = protectedDirectory(segments2);
   if (directory !== null) return { deny: true, reason: PROTECTED_DIRECTORY_REASONS[directory] };
   return { deny: false, reason: "" };
 }
@@ -16794,10 +18257,10 @@ var PROTECTED_DIRECTORY_REASONS = {
   features: ".mjloop/features/ is owned by the mjloop engine: an approved feature brief is what a later plan is built on, and a revision is never rewritten once it is approved. Use the mjloop_feature_* tools (mjloop_feature_create, mjloop_feature_update, mjloop_feature_approve) instead of editing these files directly.",
   skills: ".mjloop/skills/ is owned by the mjloop engine: an acceptance names the exact digest, components and agents this project pinned, and a hand edit could silently change what a run treats as accepted without anybody having decided so. Use mjloop-cli skills accept, mjloop-cli skills disable, mjloop-cli skills enable and mjloop-cli skills remove (mjloop-cli skills list first) instead of editing these files directly."
 };
-function protectedDirectory(segments) {
-  for (const [index, segment] of segments.entries()) {
+function protectedDirectory(segments2) {
+  for (const [index, segment] of segments2.entries()) {
     if (segment !== ".mjloop") continue;
-    const child = segments[index + 1];
+    const child = segments2[index + 1];
     if (child !== void 0 && PROTECTED_DIRECTORIES.includes(child)) return child;
   }
   return null;
@@ -16872,5 +18335,6 @@ async function readAll() {
 export {
   evaluateStateGuard,
   evaluateStopGuard,
-  runCli
+  runCli,
+  stateGuardCommandForTest
 };

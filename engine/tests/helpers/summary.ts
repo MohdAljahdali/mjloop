@@ -21,6 +21,7 @@ export function summary(overrides: Partial<StateSummary> = {}): StateSummary {
     design_system: false,
     map: null,
     config_error: null,
+    quality: null,
     ...overrides,
   }
 }

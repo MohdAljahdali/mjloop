@@ -66,6 +66,12 @@ export const WEB_CODES = [
   'roster.unknown',
   'roster.contradiction',
   'roster.unexplained',
+  /* the ninth: a planned quality dispatch (`ops/quality-roster.ts`) that the
+     selected base-agent set omits. Reachable only once `qualityRuntimeEnabled`
+     opens and a run's own policy is `enforcement: active` — until then this
+     code is declared but never thrown, the same way the eight above cannot
+     fire on a track that defines no rule for them. */
+  'roster.quality',
 
   /* discovery's three refusals. Each is a *policy* answer rather than a fault —
      the project has not allowed this source, this machine has no token for it,
@@ -93,6 +99,17 @@ export const WEB_CODES = [
      compare-and-swap write always needs: the digest moved, or it landed. */
   'write.stale.skill',
   'write.ok.skill',
+
+  /* the two operator quality doors. Both are compare-and-swap writes against a
+     suspended run, so both need the pair every such write needs — the screen
+     the decision was made from is out of date, or it landed. They are two
+     doors and not one because the next step differs: a decision that arrived
+     too late is re-read from the request the run is actually waiting on, and
+     an amendment that did is re-read from the ceiling now in force. */
+  'write.stale.qualityDecision',
+  'write.ok.qualityDecision',
+  'write.stale.qualityBudget',
+  'write.ok.qualityBudget',
 ] as const
 
 export type WebCode = (typeof WEB_CODES)[number]

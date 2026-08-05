@@ -16,6 +16,7 @@ describe('initialState', () => {
     expect(state.cycle_errors).toEqual([])
     expect(state.last_error_fingerprint).toBeNull()
     expect(state.started_at).toBeNull()
+    expect(state.quality_policy_version).toBeNull()
   })
 })
 
@@ -38,6 +39,19 @@ describe('StateSchema', () => {
   it('rejects a non-ISO updated_at', () => {
     const bad = { ...initialState(NOW), updated_at: 'yesterday' }
     expect(StateSchema.safeParse(bad).success).toBe(false)
+  })
+
+  it.each(['waiting_for_user', 'budget_exhausted'] as const)('accepts resumable status %s', (status) => {
+    expect(StateSchema.safeParse({ ...initialState(NOW), status }).success).toBe(true)
+  })
+
+  it('defaults a state written before the quality marker to null', () => {
+    const { quality_policy_version, ...withoutMarker } = initialState(NOW)
+    expect(StateSchema.parse(withoutMarker).quality_policy_version).toBeNull()
+  })
+
+  it('accepts the current quality policy marker', () => {
+    expect(StateSchema.safeParse({ ...initialState(NOW), quality_policy_version: 1 }).success).toBe(true)
   })
 
   it('accepts a populated running state', () => {

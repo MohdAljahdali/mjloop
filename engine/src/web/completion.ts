@@ -18,6 +18,8 @@ export type Verdict =
   | 'waiting'
   /** A run is under way. */
   | 'running'
+  /** A run is suspended waiting for a person: not over, and not to be prompted about. */
+  | 'suspended'
   /** The run this job started has reached a terminal status. */
   | 'complete'
 
@@ -26,9 +28,18 @@ export interface Tracker {
   started: boolean
   /** The run id observed when it started, kept so a later run cannot end this job. */
   runId: string | null
+  /**
+   * What was on record the first time this job looked, and `null` until it has.
+   *
+   * A suspension can outlast anything — it is waiting on a person — so a job
+   * queued while `state.json` already sits `waiting_for_user` would otherwise
+   * adopt somebody else's run, and tear its own session down the moment the run
+   * it actually started appeared under a different id.
+   */
+  prior: { runId: string | null } | null
 }
 
-export const NEW_TRACKER: Tracker = { started: false, runId: null }
+export const NEW_TRACKER: Tracker = { started: false, runId: null, prior: null }
 
 /**
  * `paused` is deliberately absent: a paused run is one somebody intends to
@@ -37,6 +48,18 @@ export const NEW_TRACKER: Tracker = { started: false, runId: null }
  * whatever reset the state, there is nothing left for this job to wait on.
  */
 const TERMINAL: ReadonlySet<StateSummary['status']> = new Set(['done', 'halted', 'failed', 'idle'])
+
+/**
+ * The two statuses a run waits on a person in, and the reason they get a verdict
+ * of their own rather than folding into `running`.
+ *
+ * Nonterminal, so the job keeps the terminal the operator will resume in — a
+ * completed job takes its session with it, and the whole point of a resumable
+ * suspension is that the same session picks the run back up. But not `running`
+ * either: a run waiting on a decision is silent on purpose, and the stall
+ * banner exists to say a *working* session has gone quiet.
+ */
+const SUSPENDED: ReadonlySet<StateSummary['status']> = new Set(['waiting_for_user', 'budget_exhausted'])
 
 export interface Observation {
   tracker: Tracker
@@ -54,8 +77,21 @@ export function observe(tracker: Tracker, summary: StateSummary): Observation {
   }
 
   if (!tracker.started) {
-    if (summary.status !== 'running') return { tracker, verdict: 'waiting' }
-    return { tracker: { started: true, runId: summary.run_id }, verdict: 'running' }
+    const prior = tracker.prior ?? { runId: summary.run_id }
+    // A suspended run counts as started, but only once it is a *different* run
+    // from the one this job found on record: a run reaches one of those statuses
+    // only by having run, so a job that never attached would still be `waiting`
+    // when its own run finished, holding the session open forever — while a
+    // suspension already there when the job was queued belongs to somebody else,
+    // and adopting it would end this job the moment its own run appeared.
+    const suspended = SUSPENDED.has(summary.status)
+    if (summary.status !== 'running' && !(suspended && summary.run_id !== prior.runId)) {
+      return { tracker: { ...tracker, prior }, verdict: 'waiting' }
+    }
+    return {
+      tracker: { started: true, runId: summary.run_id, prior },
+      verdict: suspended ? 'suspended' : 'running',
+    }
   }
 
   // A different run id means this job's run ended and another began between two
@@ -63,6 +99,7 @@ export function observe(tracker: Tracker, summary: StateSummary): Observation {
   // in their own terminal. Either way this job's run is over.
   if (summary.run_id !== tracker.runId) return { tracker, verdict: 'complete' }
 
+  if (SUSPENDED.has(summary.status)) return { tracker, verdict: 'suspended' }
   return { tracker, verdict: TERMINAL.has(summary.status) ? 'complete' : 'running' }
 }
 

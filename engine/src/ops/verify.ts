@@ -410,6 +410,61 @@ export async function readVerifyLedger(cycleDir: string): Promise<LedgerEntry[]>
   }
 }
 
+/** One engine verify receipt a quality dimension may cite, named the way the ledger's readers name it. */
+export interface CompletedVerifyReceipt {
+  /** Run-relative: `cycle-NN/verify/<name>.log`, the same spelling `quality-evidence.ts` resolves. */
+  ref: string
+  /** The evidence vocabulary's own split: the `test` slot is `test`, `lint` and `build` are `command`. */
+  kind: 'command' | 'test'
+  /** With `command`, the identity `quality-evidence.ts` supersedes a receipt by. */
+  slot: VerifySlot
+  /** What was executed — how an agent's own evidence entry names the run it is citing. */
+  command: string
+  /** Whether the engine saw it exit 0 without being killed at the ceiling. */
+  passed: boolean
+}
+
+/**
+ * The receipts of one cycle that are *finished* — which is the only kind a
+ * quality dimension may rest on.
+ *
+ * `queued` and `running` entries are absent by construction rather than by a
+ * caller remembering to filter them: a command still waiting for the project
+ * verify lock never started, and one still running has not finished, so
+ * neither is evidence of anything. They are not silently equivalent to a
+ * failure either — a caller that needs to know a required tool never produced
+ * a result reads the ledger itself and records `blocked`/`pending`, which is
+ * exactly what a dimension left without a receipt here ends up as.
+ *
+ * The ref spelling is the ledger's `log` normalised to the run-relative form
+ * `quality-evidence.ts` resolves, so a cache hit — whose log belongs to the
+ * earlier cycle that produced it — is cited under that cycle rather than this
+ * one.
+ */
+export async function completedVerifyReceipts(cycleDir: string, cycle: number): Promise<CompletedVerifyReceipt[]> {
+  const entries = await readVerifyLedger(cycleDir)
+  const receipts: CompletedVerifyReceipt[] = []
+  for (const entry of entries) {
+    if (entry.phase !== 'complete') continue
+    const ref = canonicalReceiptRef(cycle, entry.log)
+    if (ref === null) continue
+    receipts.push({
+      ref,
+      kind: entry.slot === 'test' ? 'test' : 'command',
+      slot: entry.slot,
+      command: entry.command,
+      passed: entry.exit_code === 0 && !entry.timed_out,
+    })
+  }
+  return receipts
+}
+
+/** A bare log name belongs to `cycle`; anything else must already be run-relative. */
+function canonicalReceiptRef(cycle: number, log: string): string | null {
+  if (/^[A-Za-z0-9_.-]+$/.test(log)) return `cycle-${String(cycle).padStart(2, '0')}/verify/${log}`
+  return /^cycle-\d{2}\/verify\/[A-Za-z0-9_.-]+$/.test(log) ? log : null
+}
+
 /**
  * One entry of `<run>/verify-cache.json`.
  *

@@ -20,6 +20,7 @@ export type {
   Message,
   ServerMessage,
   ClientMessage,
+  QualityRunView,
 } from '../../protocol.js'
 export type { Write } from '../../writes.js'
 export type { WebCode } from '../../codes.js'
@@ -55,4 +56,12 @@ export type { SkillCandidate } from '../../../schemas/skill-import.js'
 export type { UnreadablePackage } from '../../../store/skill-library-store.js'
 export type { Config, Track } from '../../../schemas/config.js'
 export type { ConfigChange } from '../../../store/config-mutation.js'
-export type { Telemetry, SpecialistRow } from '../../../ops/telemetry.js'
+export type { Telemetry, SpecialistRow, QualityTelemetry } from '../../../ops/telemetry.js'
+export type {
+  MeasurementKind,
+  QualityBudget,
+  QualityDimension,
+  QualityLedger,
+  QualityVerdict,
+} from '../../../schemas/quality.js'
+export type { QualityBudgetField } from '../../../ops/quality-control.js'

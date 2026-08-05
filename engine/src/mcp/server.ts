@@ -15,6 +15,7 @@ import { runLog } from '../ops/log.js'
 import { memoryAdd, memoryGet, memorySearch } from '../ops/memory.js'
 import { gateSet, planCreate, storyAdd, storyGet, storyNext, storyUpdate } from '../ops/plan.js'
 import { preflightEstimate } from '../ops/preflight.js'
+import type { PlannedQualityDispatch } from '../ops/quality-roster.js'
 import { rosterSet } from '../ops/roster.js'
 import { cycleAdvance, halt, runStart } from '../ops/run.js'
 import { stateSummary } from '../ops/summary.js'
@@ -55,6 +56,28 @@ type ToolResult = { content: Array<{ type: 'text'; text: string }>; isError?: bo
 function ok(payload: unknown): ToolResult {
   const text = typeof payload === 'string' ? payload : JSON.stringify(payload, null, 2)
   return { content: [{ type: 'text', text }] }
+}
+
+/**
+ * `rosterSet`'s `quality_dispatches` carries a bounded context packet per
+ * dispatch — up to the mode's own ceiling (16k estimated tokens in strict)
+ * *per entry* — for a caller that does not exist yet (`qualityRuntimeEnabled`
+ * is closed; nothing consumes the packet text today). Shipping that text over
+ * the wire would inject it into the leader's own context on every roster
+ * call for no present benefit, which is exactly what the packet's own token
+ * ceiling exists to prevent one step further up. The tool reply carries only
+ * what a leader can act on now: which dispatch is planned and how large it
+ * would be, never the packet text itself.
+ */
+function summarizeQualityDispatches(dispatches: readonly PlannedQualityDispatch[]) {
+  return dispatches.map(({ agent, instance, dimensions, reason, inputFingerprint, context }) => ({
+    agent,
+    instance,
+    dimensions,
+    reason,
+    inputFingerprint,
+    tokens: context.tokens,
+  }))
 }
 
 /** Operational failures are tool errors the leader can read and react to. */
@@ -104,6 +127,7 @@ export function buildServer(): McpServer {
         project_dir: projectDirArg,
         track: IdSchema.describe('Track name as defined in .mjloop/config.yaml'),
         goal: z.string().min(1).describe('What this run must achieve'),
+        supervision: z.enum(['supervised', 'unattended']).optional().default('supervised'),
         plan: IdSchema.nullish().describe('Plan id, e.g. P001'),
         story: IdSchema.nullish().describe('Story id, e.g. P001-S02'),
         feature: FeatureIdSchema.nullish().describe(
@@ -112,12 +136,13 @@ export function buildServer(): McpServer {
         ),
       },
     },
-    async ({ project_dir, track, goal, plan, story, feature }) =>
+    async ({ project_dir, track, goal, supervision, plan, story, feature }) =>
       guard(async () =>
         ok(
           await runStart(resolveProjectDir(project_dir), {
             track,
             goal,
+            supervision,
             plan: plan ?? null,
             story: story ?? null,
             // Validated by `FeatureIdSchema` on the way in rather than left to
@@ -161,7 +186,8 @@ export function buildServer(): McpServer {
           if (cycle === undefined) {
             throw new Error("give a cycle number, or set closing=true to declare the run's closing pass")
           }
-          return ok(await rosterSet(dir, { cycle, selected, skipped }))
+          const result = await rosterSet(dir, { cycle, selected, skipped })
+          return ok({ ...result, quality_dispatches: summarizeQualityDispatches(result.quality_dispatches) })
         }
         // Refused rather than ignored. A closing pass belongs to no cycle, and a
         // caller that names one is answering a question this call does not ask —
@@ -171,7 +197,8 @@ export function buildServer(): McpServer {
         if (cycle !== undefined) {
           throw new Error('a closing roster belongs to no cycle — it records the pass that ended the run; drop the cycle argument')
         }
-        return ok(await rosterSet(dir, { closing: true, selected, skipped }))
+        const result = await rosterSet(dir, { closing: true, selected, skipped })
+        return ok({ ...result, quality_dispatches: summarizeQualityDispatches(result.quality_dispatches) })
       }),
   )
 
@@ -796,7 +823,7 @@ export function buildServer(): McpServer {
     {
       title: 'Read a report over past runs',
       description:
-        'Three projections of one bounded read, each cheaper folded into this tool than declared beside it — see this file\'s header for what a fourth declaration costs on every turn. telemetry: what every specialist this project drafted actually returned, so a mode or an available list can be pruned on evidence — a report, never a rule. preflight: the shape of a run on a track before it starts — roster, dispatches per cycle, ceiling, and what comparable past runs took. skills: this machine\'s skill library (source, revision, license, audit) beside this project\'s acceptances of it (digest, components, agents, policy, status) — a read of what mjloop-cli skills already decided, never a way to decide it. None is folded into routine output; ask for it.',
+        'Three projections of one bounded read, each cheaper folded into this tool than declared beside it — see this file\'s header for what a fourth declaration costs on every turn. telemetry: what every specialist this project drafted actually returned, so a mode or an available list can be pruned on evidence — a report, never a rule. preflight: the shape of a run before it starts — roster, dispatch ceiling, comparable past runs, and selected plus all-mode quality-policy forecasts; it writes no run pin. skills: this machine\'s skill library (source, revision, license, audit) beside this project\'s acceptances of it (digest, components, agents, policy, status) — a read of what mjloop-cli skills already decided, never a way to decide it. None is folded into routine output; ask for it.',
       inputSchema: {
         project_dir: projectDirArg,
         report: z.enum(['telemetry', 'preflight', 'skills']),

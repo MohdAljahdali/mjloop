@@ -1,7 +1,9 @@
-import { pinnedAgents, type SpecialistMode } from '../schemas/config.js'
+import { pinnedAgents, type QualityMode, type SpecialistMode } from '../schemas/config.js'
+import type { MeasurementKind, QualityBudget } from '../schemas/quality.js'
 import type { Result, Severity } from '../schemas/state.js'
 import { loadConfig } from '../store/config-store.js'
 import { readRunHistory, type CycleRecord } from './history.js'
+import { measureTokens } from './quality-budget.js'
 
 /**
  * What every specialist this project has ever drafted actually returned.
@@ -78,6 +80,133 @@ export interface Telemetry {
    * status call is handed, in a milestone whose purpose is cutting context.
    */
   flagged: string[]
+}
+
+/**
+ * One human-wait interval, from the timestamps a record already carries.
+ *
+ * `decidedAt: null` is an interval nobody has closed yet. It stays open rather
+ * than being ended at the reader's clock, which is the whole discipline of this
+ * projection: the engine reports what was written down.
+ */
+export interface QualityWait {
+  requestedAt: string
+  decidedAt: string | null
+}
+
+export interface QualityTelemetryInput {
+  mode: QualityMode
+  /** The *effective* budget; its `cost_estimate` is the only price record this projection trusts. */
+  budget: QualityBudget
+  dispatches: { used: number; max: number }
+  /** Token counts a host adapter actually reported. Absent everywhere until one does. */
+  usage?: { inputTokens?: number | null; outputTokens?: number | null } | null
+  /** The bounded input packet this run fitted, when one was recorded. Estimated from bytes, never measured. */
+  inputPacket?: string | null
+  /** `state.started_at` — the run's own opening, persisted by `runStart`. */
+  startedAt: string | null
+  /** `state.updated_at` — the last state transition anybody wrote. Never a UI clock. */
+  lastTransitionAt: string | null
+  /** Human waits, from the destructive-request record's own timestamps. */
+  waits?: readonly QualityWait[]
+}
+
+/**
+ * What one run has actually cost, in the units the engine can honestly produce.
+ *
+ * Every field carries the kind of claim it is, and `unavailable` is a real
+ * answer rather than a gap to be filled: an invented price or an invented token
+ * count is worse than a blank, because a person budgets against it.
+ */
+export interface QualityTelemetry {
+  mode: QualityMode
+  inputTokens: { kind: MeasurementKind; value: number | null }
+  outputTokens: { kind: MeasurementKind; value: number | null }
+  estimatedCost: { kind: MeasurementKind; currency: string | null; value: number | null }
+  /** Time the run was working, waits excluded. */
+  activeElapsed: { kind: MeasurementKind; valueMs: number | null }
+  /** Time it was stopped waiting on a person. Separate, because one of them is the engine's fault and one is not. */
+  waitingElapsed: { kind: MeasurementKind; valueMs: number | null }
+  dispatches: { used: number; max: number }
+}
+
+const UNAVAILABLE_TOKENS = { kind: 'unavailable' as const, value: null }
+const UNAVAILABLE_ELAPSED = { kind: 'unavailable' as const, valueMs: null }
+
+/**
+ * The run-scoped projection, computed from records and nothing else.
+ *
+ * Three refusals hold it together:
+ *
+ *  - **Cost** is `unavailable` unless `budget.cost_estimate` exists, and that
+ *    record is only ever written when a versioned pricing table *and* measured
+ *    usage on both sides were both present (`quality-budget.ts:costEstimate`).
+ *    There is no path here that multiplies a guess by a price.
+ *  - **Output tokens** are never estimated. Input can be estimated from the
+ *    packet the engine itself composed, because that text is a thing the engine
+ *    holds; what a model will say back is not.
+ *  - **Elapsed** comes from persisted transitions. The active clock stops at an
+ *    open decision rather than running to the reader's `Date.now()`, so a run
+ *    that has been waiting on a person overnight does not report a night's work.
+ */
+export function qualityTelemetry(input: QualityTelemetryInput): QualityTelemetry {
+  const priced = input.budget.cost_estimate
+  const waits = input.waits ?? []
+  const closed = waits.filter((wait) => wait.decidedAt !== null)
+  const waitingMs = sumMs(closed.map((wait) => span(wait.requestedAt, wait.decidedAt)))
+  const open = waits.find((wait) => wait.decidedAt === null)
+  // The active clock ends at an open decision: everything after it is time
+  // spent waiting, and its length is not yet a fact anybody has written down.
+  const total = span(input.startedAt, open?.requestedAt ?? input.lastTransitionAt)
+  const activeMs = total === null || waitingMs === null ? null : Math.max(total - waitingMs, 0)
+
+  return {
+    mode: input.mode,
+    inputTokens: priced !== null
+      ? { kind: 'measured', value: priced.input_tokens }
+      : hostTokens(input.usage?.inputTokens) ?? estimatedTokens(input.inputPacket),
+    outputTokens: priced !== null
+      ? { kind: 'measured', value: priced.output_tokens }
+      : hostTokens(input.usage?.outputTokens) ?? UNAVAILABLE_TOKENS,
+    estimatedCost: priced === null
+      ? { kind: 'unavailable', currency: null, value: null }
+      : { kind: 'measured', currency: priced.currency, value: priced.total },
+    activeElapsed: elapsed(activeMs),
+    waitingElapsed: closed.length === 0 ? UNAVAILABLE_ELAPSED : elapsed(waitingMs),
+    dispatches: input.dispatches,
+  }
+}
+
+function hostTokens(value: number | null | undefined): { kind: MeasurementKind; value: number } | null {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? { kind: 'measured', value } : null
+}
+
+/** Task 6's documented byte estimate, labelled as one. */
+function estimatedTokens(packet: string | null | undefined): { kind: MeasurementKind; value: number | null } {
+  if (packet === null || packet === undefined) return UNAVAILABLE_TOKENS
+  const measured = measureTokens(packet)
+  return { kind: measured.kind, value: measured.value }
+}
+
+function elapsed(valueMs: number | null): { kind: MeasurementKind; valueMs: number | null } {
+  return valueMs === null ? UNAVAILABLE_ELAPSED : { kind: 'measured', valueMs }
+}
+
+/** Milliseconds between two persisted timestamps, or `null` when either is missing or unusable. */
+function span(from: string | null | undefined, to: string | null | undefined): number | null {
+  if (from === null || from === undefined || to === null || to === undefined) return null
+  const value = Date.parse(to) - Date.parse(from)
+  return Number.isFinite(value) && value >= 0 ? value : null
+}
+
+/** `null` if any interval is unusable: a partial sum would understate the wait it claims to total. */
+function sumMs(values: readonly (number | null)[]): number | null {
+  let total = 0
+  for (const value of values) {
+    if (value === null) return null
+    total += value
+  }
+  return total
 }
 
 export async function readTelemetry(projectDir: string, options: { limit?: number } = {}): Promise<Telemetry> {

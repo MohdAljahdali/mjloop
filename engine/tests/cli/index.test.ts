@@ -1,8 +1,9 @@
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { evaluateStateGuard, evaluateStopGuard, runCli, type CliDeps } from '../../src/cli/index.js'
+import { evaluateStateGuard, evaluateStopGuard, runCli, stateGuardCommandForTest, type CliDeps } from '../../src/cli/index.js'
 import { initLoop } from '../../src/ops/init.js'
 import { cycleAdvance, runStart } from '../../src/ops/run.js'
 import type { ProjectComponent, ProposedProfile } from '../../src/schemas/project-profile.js'
@@ -19,6 +20,7 @@ import {
 } from '../../src/store/project-profile-store.js'
 import { listAcceptances, readAcceptance } from '../../src/store/skill-acceptance-store.js'
 import { listPackages, writePackage } from '../../src/store/skill-library-store.js'
+import { StateStore } from '../../src/store/state-store.js'
 import { makeTmpProject, type TmpProject } from '../helpers/tmp-project.js'
 
 /**
@@ -83,6 +85,12 @@ function githubImportFetch(): typeof globalThis.fetch {
     throw new Error(`unexpected url in test: ${url}`)
   })
 }
+
+// The rollout gate this milestone's runtime behaviour hangs off. `false` is
+// production until Task 17, so every test in this file sees the guard exactly
+// as a user does today, and the destructive-decision tests open it themselves.
+vi.mock('../../src/ops/quality-capability.js', () => ({ qualityRuntimeEnabled: vi.fn(() => false) }))
+import { qualityRuntimeEnabled } from '../../src/ops/quality-capability.js'
 
 const NOW = new Date('2026-07-26T10:36:00.000Z')
 const clock = () => NOW
@@ -266,6 +274,18 @@ describe('evaluateStateGuard', () => {
     expect(verdict.deny).toBe(true)
     expect(verdict.reason).toContain('skill-selection.json')
   })
+
+  it.each(['quality-policy.json', 'quality-ledger.json', 'quality-amendments.jsonl'])(
+    'denies a hand edit to a run directory\'s %s',
+    (name) => {
+      const verdict = evaluateStateGuard({
+        tool_name: 'Edit',
+        tool_input: { file_path: `/repo/.mjloop/runs/2026-08-04-001--adhoc--build/${name}` },
+      })
+      expect(verdict.deny).toBe(true)
+      expect(verdict.reason).toContain(name)
+    },
+  )
 
   it('allows a verify log, which the engine writes and a reader may open', () => {
     // Only the pin is protected. The logs and the ledger beside it are the
@@ -465,6 +485,51 @@ describe('runCli state-guard', () => {
   })
 })
 
+describe('runCli state-guard destructive operations', () => {
+  const bashInput = (command: string): unknown => ({ tool_name: 'Bash', tool_input: { command } })
+
+  beforeEach(async () => {
+    vi.mocked(qualityRuntimeEnabled).mockReturnValue(true)
+    await initLoop(project.dir, clock)
+    const config = await loadConfig(project.dir)
+    config.orchestration.quality.mode = 'economy'
+    await writeConfig(project.dir, config)
+    await runStart(project.dir, { track: 'edit', goal: 'Rename' }, clock)
+  })
+  afterEach(() => {
+    vi.mocked(qualityRuntimeEnabled).mockReturnValue(false)
+  })
+
+  it('moves an unattended run to waiting before the destructive shell command', async () => {
+    const result = await stateGuardCommandForTest(project.dir, bashInput('DROP TABLE users'))
+    expect(result.stdout).toContain('permissionDecision')
+    expect((await new StateStore(project.dir).get()).status).toBe('waiting_for_user')
+  })
+
+  it('leaves the same command alone while the rollout gate is closed', async () => {
+    vi.mocked(qualityRuntimeEnabled).mockReturnValue(false)
+    const result = await stateGuardCommandForTest(project.dir, bashInput('DROP TABLE users'))
+    expect(result.stdout).toBe('')
+    expect((await new StateStore(project.dir).get()).status).toBe('running')
+  })
+
+  it('is reached by the tools a destructive operation actually arrives through', async () => {
+    // The classifier below is only ever asked about a call the plugin's own
+    // matcher let through. Left at `Write|Edit`, every rule in this describe
+    // would be correct and unreachable: a `DROP TABLE` arrives as `Bash`.
+    const file = fileURLToPath(new URL('../../../hooks/hooks.json', import.meta.url))
+    const { hooks } = JSON.parse(await fs.readFile(file, 'utf8')) as { hooks: { PreToolUse: { matcher: string }[] } }
+    const matcher = new RegExp(`^(?:${hooks.PreToolUse[0]?.matcher ?? ''})$`)
+    expect(['Write', 'Edit', 'Bash'].every((tool) => matcher.test(tool))).toBe(true)
+  })
+
+  it('leaves an ordinary command alone', async () => {
+    const result = await stateGuardCommandForTest(project.dir, bashInput('rm src/unused.test.ts'))
+    expect(result.stdout).toBe('')
+    expect((await new StateStore(project.dir).get()).status).toBe('running')
+  })
+})
+
 describe('evaluateStopGuard', () => {
   const running = {
     initialised: true,
@@ -485,6 +550,7 @@ describe('evaluateStopGuard', () => {
     design_system: false,
     map: null,
     config_error: null,
+    quality: null,
   }
 
   const input = { hook_event_name: 'Stop', cwd: '/repo', stop_hook_active: false }
@@ -540,7 +606,11 @@ describe('evaluateStopGuard', () => {
   })
 
   it('allows the stop for every status that is not running', () => {
-    for (const status of ['idle', 'done', 'halted', 'paused', 'failed'] as const) {
+    // `waiting_for_user` and `budget_exhausted` are in the list for a reason of
+    // their own: a suspended run is waiting on a person, and a hook that blocked
+    // the turn would spend a model's attention once per turn on a decision no
+    // agent is allowed to make.
+    for (const status of ['idle', 'done', 'halted', 'paused', 'failed', 'waiting_for_user', 'budget_exhausted'] as const) {
       expect(evaluateStopGuard(input, { ...running, status }, true).block).toBe(false)
     }
   })
@@ -664,8 +734,7 @@ describe('runCli config get', () => {
       'orchestration.execution.after_plan_approval',
       'orchestration.execution.uncertain_concurrency',
       'orchestration.execution.repair_attempts',
-      'orchestration.quality.independent_plan_review',
-      'orchestration.quality.independent_verification',
+      'orchestration.quality.mode',
       'orchestration.skills.sources',
       'orchestration.skills.trusted_registries',
       'orchestration.skills.update_mode',
@@ -736,16 +805,37 @@ describe('runCli config set', () => {
     expect((await loadConfig(project.dir)).orchestration.skills.sources).toEqual([])
   })
 
-  it('sets the one key that carries a section key of its own', async () => {
+  it('sets the quality mode through the guarded mutation', async () => {
     await initLoop(project.dir, clock)
     const { exitCode } = await runCli(
-      ['config', 'set', 'orchestration.quality.independent_verification', 'true', '--dir', project.dir],
+      ['config', 'set', 'orchestration.quality.mode', 'strict', '--dir', project.dir],
       '',
     )
     expect(exitCode).toBe(0)
     const quality = (await loadConfig(project.dir)).orchestration.quality
-    expect(quality.independent_verification).toBe(true)
-    expect(quality.independent_plan_review).toBe(false)
+    expect(quality).toEqual({ mode: 'strict' })
+  })
+
+  it('refuses a quality mode outside the three values the schema admits', async () => {
+    await initLoop(project.dir, clock)
+    const { stdout, exitCode } = await runCli(
+      ['config', 'set', 'orchestration.quality.mode', 'fast', '--dir', project.dir],
+      '',
+    )
+    expect(exitCode).toBe(1)
+    expect(stdout).toContain('economy')
+    expect(stdout).toContain('adaptive')
+    expect(stdout).toContain('strict')
+  })
+
+  it.each([
+    'orchestration.quality.independent_plan_review',
+    'orchestration.quality.independent_verification',
+  ])('removes %s from the accepted key list', async (key) => {
+    await initLoop(project.dir, clock)
+    const { stdout, exitCode } = await runCli(['config', 'set', key, 'true', '--dir', project.dir], '')
+    expect(exitCode).toBe(1)
+    expect(stdout.split('The keys config set accepts:\n')[1]).not.toContain(key)
   })
 
   it('refuses an unknown key, names it, and writes nothing', async () => {

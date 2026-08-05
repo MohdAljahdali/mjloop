@@ -62,8 +62,7 @@ export interface ConfigFormValues {
   orchExecutionAfterPlanApproval: 'manual' | 'auto'
   orchExecutionUncertainConcurrency: 'sequential' | 'ask' | 'parallel'
   orchExecutionRepairAttempts: number
-  orchQualityIndependentPlanReview: boolean
-  orchQualityIndependentVerification: boolean
+  orchQualityMode: QualityMode
   orchSkillsSourceGithub: boolean
   orchSkillsSourceRegistry: boolean
   orchSkillsSourceWeb: boolean
@@ -78,8 +77,18 @@ export const VERIFY_COMMANDS = ['test', 'lint', 'build'] as const
 /** `orchestration.skills.sources`, in `SkillSourceSchema`'s own order. */
 export const SKILL_SOURCES = ['github', 'registry', 'web'] as const
 
-/** The two `orchestration.quality` leaves, which share a type and a change kind. */
-export const QUALITY_KEYS = ['independent_plan_review', 'independent_verification'] as const
+/** `orchestration.quality.mode`, in `QualityModeSchema`'s own order — least review first. */
+export const QUALITY_MODES = ['economy', 'adaptive', 'strict'] as const
+
+export type QualityMode = (typeof QUALITY_MODES)[number]
+
+/**
+ * The mode this page *labels* as recommended. Deliberately only a label:
+ * `/mjloop:init` is what picks `adaptive` for a new project, and a project
+ * that has already pinned a mode must see its own, so nothing here ever
+ * substitutes this value for what the document says.
+ */
+export const RECOMMENDED_QUALITY_MODE: QualityMode = 'adaptive'
 
 /** The label above each of a track's four agent lists. */
 export const LIST_LABEL: Record<'required' | 'available' | 'closing' | 'blocks', string> = {
@@ -125,8 +134,7 @@ export function seedFormValues(config: Config): ConfigFormValues {
     orchExecutionAfterPlanApproval: config.orchestration.execution.after_plan_approval,
     orchExecutionUncertainConcurrency: config.orchestration.execution.uncertain_concurrency,
     orchExecutionRepairAttempts: config.orchestration.execution.repair_attempts,
-    orchQualityIndependentPlanReview: config.orchestration.quality.independent_plan_review,
-    orchQualityIndependentVerification: config.orchestration.quality.independent_verification,
+    orchQualityMode: config.orchestration.quality.mode,
     orchSkillsSourceGithub: config.orchestration.skills.sources.includes('github'),
     orchSkillsSourceRegistry: config.orchestration.skills.sources.includes('registry'),
     orchSkillsSourceWeb: config.orchestration.skills.sources.includes('web'),
@@ -270,15 +278,15 @@ export function collectSettingsChanges(form: ConfigFormValues, baseline: Config)
     kind: 'orchestration.execution.repair_attempts',
     value: form.orchExecutionRepairAttempts,
   })
-  push(changes, orchestration.quality.independent_plan_review !== form.orchQualityIndependentPlanReview, {
-    kind: 'orchestration.quality',
-    key: 'independent_plan_review',
-    value: form.orchQualityIndependentPlanReview,
-  })
-  push(changes, orchestration.quality.independent_verification !== form.orchQualityIndependentVerification, {
-    kind: 'orchestration.quality',
-    key: 'independent_verification',
-    value: form.orchQualityIndependentVerification,
+  // The whole normalised `quality:` block against the whole block this form
+  // can express, rather than `mode` against `mode`. `QualityConfigSchema`
+  // folds a legacy two-boolean document into the same one-leaf shape, so both
+  // sides are already normalised here; comparing them whole is what makes a
+  // leaf this form does *not* hold visible as a difference rather than
+  // silently excluded from the diff.
+  push(changes, JSON.stringify(orchestration.quality) !== JSON.stringify({ mode: form.orchQualityMode }), {
+    kind: 'orchestration.quality.mode',
+    value: form.orchQualityMode,
   })
 
   const sources = SKILL_SOURCES.filter(

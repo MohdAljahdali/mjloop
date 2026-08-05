@@ -9,16 +9,25 @@ import { gateSet, planCreate, storyAdd } from '../../src/ops/plan.js'
 import { rosterSet } from '../../src/ops/roster.js'
 import { UnresolvedComponentError } from '../../src/ops/skill-selection.js'
 import type { ProjectComponent } from '../../src/schemas/project-profile.js'
+import type { QualityDimension, QualityLedger, QualityVerdict } from '../../src/schemas/quality.js'
+import type { State } from '../../src/schemas/state.js'
 import type { SkillPackage } from '../../src/schemas/skill-library.js'
 import { acceptSkill } from '../../src/store/skill-acceptance-store.js'
 import { writePackage } from '../../src/store/skill-library-store.js'
 import { SkillManifestSchema } from '../../src/schemas/skill-selection.js'
 import { InvalidStateError, StateStore } from '../../src/store/state-store.js'
+import { configRevision, mutateConfig } from '../../src/store/config-mutation.js'
 import { loadConfig, writeConfig } from '../../src/store/config-store.js'
+import { readLedger, writeLedger } from '../../src/store/quality-store.js'
 import { approveFeatureBrief, createFeatureBrief, updateFeatureDraft } from '../../src/store/feature-store.js'
 import { resolveLoopPaths } from '../../src/store/paths.js'
 import { acceptProfile } from '../../src/store/project-profile-store.js'
 import { makeTmpProject, type TmpProject } from '../helpers/tmp-project.js'
+
+// The rollout gate quality closure hangs off. `false` in production until Task
+// 17, so opening it here is the only way to exercise the refusing branch.
+vi.mock('../../src/ops/quality-capability.js', () => ({ qualityRuntimeEnabled: vi.fn(() => false) }))
+import { qualityRuntimeEnabled } from '../../src/ops/quality-capability.js'
 
 const NOW = new Date('2026-07-26T10:36:00.000Z')
 const clock = () => NOW
@@ -57,6 +66,30 @@ describe('runStart', () => {
     expect(state.goal).toBe('Rename submit label')
     expect(runDirName(state)).toBe('2026-07-26-001--adhoc--edit')
     expect((await fs.stat(runDirPath(project.dir, state))).isDirectory()).toBe(true)
+  })
+
+  it('persists a halted marker when the run directory cannot be created', async () => {
+    const realMkdir = fs.mkdir.bind(fs)
+    const spy = vi.spyOn(fs, 'mkdir').mockImplementation(async (target: any, options: any) => {
+      if (String(target).endsWith('2026-07-26-001--adhoc--edit')) {
+        const error = Object.assign(new Error('run directory denied'), { code: 'EACCES' })
+        throw error
+      }
+      return realMkdir(target, options)
+    })
+
+    try {
+      await expect(runStart(project.dir, { track: 'edit', goal: 'Rename submit label' }, clock)).rejects.toThrow(
+        /integrity/i,
+      )
+      expect(await new StateStore(project.dir).get()).toMatchObject({
+        status: 'halted',
+        quality_policy_version: 1,
+        halt_reason: expect.stringMatching(/run directory denied/),
+      })
+    } finally {
+      spy.mockRestore()
+    }
   })
 
   it('names the run directory after the story when there is one', async () => {
@@ -956,7 +989,9 @@ describe('the run skill manifest', () => {
     expect(await manifestExists(state)).toBe(false)
     // Not merely "no manifest": the directory holds exactly what it held
     // before this story existed, and nothing else.
-    expect((await fs.readdir(runDirPath(project.dir, state))).sort()).toEqual(['verify-pinned.json'])
+    expect((await fs.readdir(runDirPath(project.dir, state))).sort()).toEqual([
+      'quality-ledger.json', 'quality-policy.json', 'verify-pinned.json',
+    ])
   })
 
   it('pins nothing when the named feature does not exist', async () => {
@@ -1863,5 +1898,164 @@ describe('deduplicating the carried findings', () => {
     const person = await fs.readFile(path.join(runDirPath(project.dir, byPerson), 'HALT.md'), 'utf8')
 
     expect(openFindings(person)).toBe(openFindings(guard))
+  })
+})
+
+/* ── the quality closure gate ─────────────────────────────────────────────── */
+
+describe('quality evidence and the terminal transition', () => {
+  let quality: TmpProject
+
+  beforeEach(async () => {
+    quality = await makeTmpProject()
+    await initLoop(quality.dir, clock)
+    const raw = await fs.readFile(path.join(quality.dir, '.mjloop', 'config.yaml'), 'utf8')
+    // Only an explicit mode pins `enforcement: active`; a legacy project pins
+    // `shadow` and must keep closing exactly as it does today.
+    await mutateConfig(quality.dir, {
+      revision: configRevision(raw),
+      changes: [{ kind: 'orchestration.quality.mode', value: 'strict' }],
+    })
+    await runStart(quality.dir, { track: 'build', goal: 'Speed up the checkout API' }, clock)
+  })
+  afterEach(async () => {
+    await quality.cleanup()
+    vi.mocked(qualityRuntimeEnabled).mockReturnValue(false)
+  })
+
+  const state = async (): Promise<State> => new StateStore(quality.dir).get()
+
+  /** Rewrite the run's ledger with a chosen status per dimension. */
+  async function seedLedger(dir: string, ledger: QualityLedger): Promise<void> {
+    await writeLedger(dir, await state(), ledger)
+  }
+
+  /** A ledger whose required dimensions all pass, with the named overrides applied. */
+  function ledgerWith(over: Partial<Record<QualityDimension, QualityVerdict>> = {}): QualityLedger {
+    const passing = {
+      applicability: 'required' as const,
+      status: 'pass' as const,
+      required_evidence: ['test' as const],
+      evidence_refs: ['cycle-01/verify/test.log'],
+      reason: 'The required check passed.',
+      inputs_fingerprint: 'a'.repeat(64),
+      worktree_digest: null,
+      recorded_cycle: 1,
+      checked_at: NOW.toISOString(),
+      invalidated_at: null,
+    }
+    const ledger: QualityLedger = {
+      version: 1,
+      cycle: 1,
+      dimensions: {
+        correctness: { ...passing },
+        security: { ...passing, required_evidence: ['command'] },
+        alignment: { ...passing, required_evidence: ['agent'] },
+        regression: { ...passing },
+        ui: {
+          ...passing,
+          applicability: 'not_applicable',
+          status: 'not_applicable',
+          required_evidence: [],
+          evidence_refs: [],
+          recorded_cycle: null,
+          checked_at: null,
+        },
+      },
+    }
+    for (const [dimension, status] of Object.entries(over)) {
+      ledger.dimensions[dimension as QualityDimension].status = status as QualityVerdict
+    }
+    return ledger
+  }
+
+  it('refuses cycle pass while any required dimension is pending or blocked', async () => {
+    vi.mocked(qualityRuntimeEnabled).mockReturnValue(true)
+    await seedLedger(quality.dir, ledgerWith({ security: 'blocked' }))
+    await expect(cycleAdvance(quality.dir, { agents: ['builder', 'verifier'], result: 'pass' }, clock)).rejects.toThrow(/security/)
+  })
+
+  it('leaves the run exactly where it was when it refuses the close', async () => {
+    vi.mocked(qualityRuntimeEnabled).mockReturnValue(true)
+    await seedLedger(quality.dir, ledgerWith({ correctness: 'pending' }))
+    await expect(cycleAdvance(quality.dir, { agents: ['builder'], result: 'pass' }, clock)).rejects.toThrow(/correctness/)
+
+    const current = await state()
+    expect(current.status).toBe('running')
+    expect(current.cycle).toBe(1)
+    expect(current.history).toEqual([])
+  })
+
+  it('closes the run once every required dimension carries current evidence', async () => {
+    vi.mocked(qualityRuntimeEnabled).mockReturnValue(true)
+    await seedLedger(quality.dir, ledgerWith())
+    const result = await cycleAdvance(quality.dir, { agents: ['builder', 'verifier'], result: 'pass' }, clock)
+    expect(result.state.status).toBe('done')
+  })
+
+  it('closes a shadow run on the caller\'s pass, whatever its ledger says', async () => {
+    // The gate stays closed here, which is production today: the ledger is
+    // still written and still incomplete, and closure is unchanged by it.
+    await seedLedger(quality.dir, ledgerWith({ security: 'blocked' }))
+    const result = await cycleAdvance(quality.dir, { agents: ['builder'], result: 'pass' }, clock)
+    expect(result.state.status).toBe('done')
+  })
+
+  it('closes a run pinned before quality policies existed', async () => {
+    vi.mocked(qualityRuntimeEnabled).mockReturnValue(true)
+    const current = await state()
+    await new StateStore(quality.dir, clock).update((draft) => { draft.quality_policy_version = null })
+    await fs.rm(path.join(runDirPath(quality.dir, current), 'quality-policy.json'))
+    const result = await cycleAdvance(quality.dir, { agents: ['builder'], result: 'pass' }, clock)
+    expect(result.state.status).toBe('done')
+  })
+
+  it('invalidates only the dimensions a failing cycle\'s own files reach', async () => {
+    await seedLedger(quality.dir, ledgerWith())
+    await runLog(quality.dir, {
+      agent: 'builder',
+      result: {
+        status: 'fail',
+        summary: 'The stylesheet still fails its snapshot.',
+        evidence: [{ kind: 'file', ref: 'src/Button.vue', excerpt: 'label renamed' }],
+        findings: [],
+        files_touched: ['src/Button.vue'],
+        next_hint: null,
+      },
+    }, clock)
+
+    await cycleAdvance(quality.dir, { agents: ['builder'], result: 'fail' }, clock)
+
+    const ledger = await readLedger(quality.dir, await state())
+    expect(ledger.dimensions.correctness.status).toBe('pending')
+    expect(ledger.dimensions.ui).toMatchObject({ applicability: 'required', status: 'pending' })
+    // No path in this cycle reaches an auth, route, schema or migration
+    // surface, so the security receipt keeps standing.
+    expect(ledger.dimensions.security.status).toBe('pass')
+  })
+
+  it('still invalidates when a cycle touched more files than one ledger reason can name', async () => {
+    // The ledger writes the paths into a 4 000-character `reason`. A rename
+    // across hundreds of files overflows it, and a rejected transition would
+    // leave stale evidence standing — the one direction this must never fail
+    // in.
+    await seedLedger(quality.dir, ledgerWith())
+    await runLog(quality.dir, {
+      agent: 'builder',
+      result: {
+        status: 'fail',
+        summary: 'The rename is half applied.',
+        evidence: [],
+        findings: [],
+        files_touched: Array.from({ length: 400 }, (_, index) => `src/generated/module-${index}/component.ts`),
+        next_hint: null,
+      },
+    }, clock)
+
+    await cycleAdvance(quality.dir, { agents: ['builder'], result: 'fail' }, clock)
+
+    const ledger = await readLedger(quality.dir, await state())
+    expect(ledger.dimensions.correctness.status).toBe('pending')
+    expect(ledger.dimensions.regression.status).toBe('pending')
   })
 })

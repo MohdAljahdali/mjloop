@@ -1,5 +1,14 @@
 import * as z from 'zod'
+import type { DestructiveRequest } from '../ops/destructive-risk.js'
 import type { StateSummary } from '../ops/summary.js'
+import type { QualityTelemetry } from '../ops/telemetry.js'
+import type {
+  QualityAmendment,
+  QualityBudget,
+  QualityDispatch,
+  QualityLedger,
+  QualityPolicy,
+} from '../schemas/quality.js'
 import type { WebCode } from './codes.js'
 import type { Revisions } from './revision.js'
 import { WriteSchema } from './writes.js'
@@ -78,6 +87,62 @@ export interface AgentsView {
   plugin: AgentView[]
   /** The plugin's own unreadable files are not reported here — see `readAgentsView`. */
   unreadable: { path: string }[]
+}
+
+/**
+ * One planned quality dispatch, as the browser draws it.
+ *
+ * Exactly the four fields that say *what was planned and why*. Everything the
+ * engine uses to charge and de-duplicate a dispatch — reservation keys, packet
+ * text, fingerprints — is deliberately not here: a page that could see the key
+ * would be a page one edit away from being able to name one.
+ */
+export type PublicQualityDispatch = Pick<QualityDispatch, 'agent' | 'instance' | 'dimensions' | 'reason'>
+
+/** One budget amendment, minus `version` — a record-format fact, not an operator's. */
+export type PublicQualityAmendment = Pick<
+  QualityAmendment,
+  'run' | 'field' | 'from' | 'to' | 'reason' | 'decided_at' | 'decided_by'
+>
+
+/**
+ * One run's quality records, read-only.
+ *
+ * `pendingRequest` carries the whole `DestructiveRequest`, **including its
+ * `fingerprint`**, and that is the deliberate part. The rule the design states
+ * is that a decision token must never reach an *agent's* context; it has to
+ * reach the operator's screen, because `quality.decision` (`web/writes.ts`)
+ * refuses any decision that does not name the operation currently shown. A view
+ * that redacted it would render an Approve button that cannot be pressed. The
+ * record holds no capability, no secret and no absolute path — its `targets`
+ * and `operation` are the proposal's own words, which are the thing being
+ * decided and so may not be abridged either.
+ */
+export interface QualityRunView {
+  policy: Omit<QualityPolicy, 'dispatches'> & { dispatches: PublicQualityDispatch[] }
+  ledger: QualityLedger
+  /** The newest `QUALITY_AMENDMENTS_MAX`; `effectiveBudget` still reflects them all. */
+  amendments: PublicQualityAmendment[]
+  /** The ceilings the run is actually working against — the pin plus every amendment on disk. */
+  effectiveBudget: QualityBudget
+  pendingRequest: DestructiveRequest | null
+  /**
+   * What this run has cost, in the units the engine can honestly produce.
+   *
+   * On this response rather than a route of its own, which is the deliberate
+   * widening Task 14 left open: every input `qualityTelemetry` takes is a
+   * record in the same run directory this view already opens — the effective
+   * budget's price record, the charge record beside it, and the decision
+   * timestamps `pendingRequest` is read from — so a second route would be a
+   * second read of the same four files, stamped by the same revision, for a
+   * screen that draws both halves in one block.
+   *
+   * Every field carries the kind of claim it is, and `unavailable` reaches the
+   * page as `unavailable`: the elapsed clocks come off the run `state.json`,
+   * which describes exactly one run, so an archived run reports no duration
+   * rather than a computed one.
+   */
+  telemetry: QualityTelemetry
 }
 
 export interface StoryView {

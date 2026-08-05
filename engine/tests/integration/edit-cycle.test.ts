@@ -5,9 +5,11 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { initLoop } from '../../src/ops/init.js'
 import { runLog } from '../../src/ops/log.js'
 import { rosterSet } from '../../src/ops/roster.js'
+import { QualityBudgetExhaustedError } from '../../src/ops/quality-control.js'
 import { cycleAdvance, runDirPath, runStart } from '../../src/ops/run.js'
 import { stateSummary } from '../../src/ops/summary.js'
 import { StateStore } from '../../src/store/state-store.js'
+import { pinInstantVerify, qualityEvidence } from '../helpers/quality-evidence.js'
 import { makeTmpProject, type TmpProject } from '../helpers/tmp-project.js'
 
 const NOW = new Date('2026-07-26T10:36:00.000Z')
@@ -42,6 +44,7 @@ describe('a full edit cycle', () => {
 
   it('runs init -> start -> roster -> log -> advance and lands on done', async () => {
     await initLoop(project.dir, clock)
+    await pinInstantVerify(project.dir)
     await runStart(project.dir, { track: 'edit', goal: 'Rename the submit label to Send' }, clock)
     await rosterSet(project.dir, { cycle: 1, selected: ['editor', 'verifier'], skipped: {} })
 
@@ -60,7 +63,13 @@ describe('a full edit cycle', () => {
       },
       clock,
     )
-    await runLog(project.dir, { agent: 'verifier', result: PASSING_VERIFIER }, clock)
+    // The claimed commands are replaced by receipts the engine produced: this
+    // project pins an explicit quality mode, and a claim closes nothing.
+    await runLog(
+      project.dir,
+      { agent: 'verifier', result: { ...PASSING_VERIFIER, evidence: await qualityEvidence(project.dir, clock) } },
+      clock,
+    )
 
     const { state, handoff, closing_agents } = await cycleAdvance(
       project.dir,
@@ -78,12 +87,15 @@ describe('a full edit cycle', () => {
     // `handoff.md` among them: `cycleAdvance` writes one on every close,
     // including the pass that ends a one-cycle track, where it is the run's
     // closing record rather than a brief for a cycle that will never open.
+    // `verify/` among them: the quality plan closes on receipts the engine
+    // produced, so this cycle really did run the two slots.
     expect((await fs.readdir(path.join(dir, 'cycle-01'))).sort()).toEqual([
       'editor.json',
       'findings.json',
       'handoff.md',
       'roster.json',
       'verifier.json',
+      'verify',
     ])
     // The path the leader is handed is the document on disk. A returned path
     // that resolved to nothing would be worse than the `null` a failed write
@@ -95,7 +107,16 @@ describe('a full edit cycle', () => {
     expect(summary.findings).toEqual({ high: 0, medium: 0, low: 0 })
   })
 
-  it('halts with a report when the single cycle fails', async () => {
+  /**
+   * The enforcing form of "the single cycle failed".
+   *
+   * Under an active quality policy the pinned `max_cycles` supersedes the
+   * track's own cycle-cap halt: the run is *suspended* rather than ended,
+   * because one explicit amendment can legitimately continue a run that a
+   * terminal halt could not. So there is no HALT.md — there is a resumable
+   * suspension, and the reason says how to lift it.
+   */
+  it('suspends for an amendment when the single cycle fails', async () => {
     await initLoop(project.dir, clock)
     await runStart(project.dir, { track: 'edit', goal: 'Rename the submit label to Send' }, clock)
     await rosterSet(project.dir, { cycle: 1, selected: ['editor', 'verifier'], skipped: {} })
@@ -132,12 +153,18 @@ describe('a full edit cycle', () => {
       clock,
     )
 
-    const { state } = await cycleAdvance(project.dir, { agents: ['editor', 'verifier'], result: 'fail' }, clock)
-    expect(state.status).toBe('halted')
+    await expect(cycleAdvance(project.dir, { agents: ['editor', 'verifier'], result: 'fail' }, clock))
+      .rejects.toThrow(QualityBudgetExhaustedError)
 
-    const report = await fs.readFile(path.join(runDirPath(project.dir, state), 'HALT.md'), 'utf8')
-    expect(report).toContain('cycle cap 1 reached for track edit')
-    expect(report).toContain('asserts the old label')
+    const state = await new StateStore(project.dir).get()
+    expect(state.status).toBe('budget_exhausted')
+    expect(state.halt_reason).toContain('quality budget max_cycles reached')
+    expect(state.halt_reason).toContain('Raise it with one explicit amendment to resume')
+
+    // The cycle's own findings are untouched by the suspension, so the operator
+    // deciding on the amendment can still read what went wrong.
+    const summary = await stateSummary(project.dir)
+    expect(summary.findings).toEqual({ high: 1, medium: 0, low: 0 })
   })
 
   it('blocks the escalation case without corrupting the run', async () => {

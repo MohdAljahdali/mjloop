@@ -6,6 +6,7 @@ import { ConfigSchema } from '../../src/schemas/config.js'
 import type { StateSummary } from '../../src/ops/summary.js'
 import type { Snapshot } from '../../src/web/protocol.js'
 import { emptySnapshot, readLocale } from './helpers/page.js'
+import { ledgerEntry, pendingRequest, qualityView } from './helpers/quality.js'
 
 /**
  * The Run panel — `panels/run.js`, `describe('run')` at `panels.test.ts:1835`,
@@ -89,6 +90,9 @@ async function boot(snapshot: Snapshot = emptySnapshot()) {
   const store = await import('../../src/web/app/stores/session.ts')
   store.connect({ token: 'tok', socketFactory: (url) => new FakeSocket(url) as unknown as WebSocket })
   const { default: Run } = await import('../../src/web/app/panels/Run.vue')
+  const { default: QualityDecisionDialog } = await import('../../src/web/app/components/QualityDecisionDialog.vue')
+  const { default: QualityBudgetDialog } = await import('../../src/web/app/components/QualityBudgetDialog.vue')
+  const { useQualityDialogs } = await import('../../src/web/app/composables/useQualityDialogs.ts')
   const { default: Banners } = await import('../../src/web/app/components/Banners.vue')
   const { default: Rail } = await import('../../src/web/app/components/Rail.vue')
   const { default: HaltDialog } = await import('../../src/web/app/components/HaltDialog.vue')
@@ -114,7 +118,24 @@ async function boot(snapshot: Snapshot = emptySnapshot()) {
       h('div', [h(Rail, { snapshot: props.snapshot }), h(HaltDialog, { open: halt.open.value, runId: props.runId, onClose: halt.closeHalt })]),
   })
 
-  return { store, Run, Banners, Rail, HaltDialog, HaltHost, halt, socket: FakeSocket.last as FakeSocket }
+  /**
+   * `Run.vue` and the two quality dialogs, wired through `useQualityDialogs.ts`
+   * exactly as `App.vue` wires them: the buttons live inside the kept-alive
+   * panel and the `<dialog>`s are siblings of `<main>`. Same shape, same fresh
+   * module graph, so a button pressed in the panel opens the dialog this host
+   * rendered — see `HaltHost` above for the pattern.
+   */
+  const dialogs = useQualityDialogs()
+  const QualityHost = defineComponent({
+    setup: () => () =>
+      h('div', [
+        h(Run),
+        h(QualityDecisionDialog, { state: dialogs.decision.value, onClose: dialogs.closeDecision }),
+        h(QualityBudgetDialog, { state: dialogs.budget.value, onClose: dialogs.closeBudget }),
+      ]),
+  })
+
+  return { store, Run, Banners, Rail, HaltDialog, HaltHost, QualityHost, halt, dialogs, socket: FakeSocket.last as FakeSocket }
 }
 
 const runningState = (patch: Partial<StateSummary> = {}): StateSummary => ({
@@ -136,6 +157,7 @@ const runningState = (patch: Partial<StateSummary> = {}): StateSummary => ({
   design_system: true,
   map: null,
   config_error: null,
+  quality: null,
   ...patch,
 })
 
@@ -566,6 +588,335 @@ describe('Run.vue', () => {
       await banner.get('button').trigger('click')
       expect(socket.sent).toEqual([{ type: 'nudge' }])
     })
+  })
+})
+
+/* ── the pinned quality policy and the operator's two doors ───────────────── */
+
+const QUALITY_RUN_DIR = '20260728T120000Z--P001-S02--build'
+const QUALITY_PATH = `/api/runs/${QUALITY_RUN_DIR}/quality`
+
+/** A run whose policy is pinned, so the panel has something to fetch. */
+function pinnedState(patch: Partial<StateSummary> = {}): StateSummary {
+  return runningState({
+    quality: { mode: 'strict', supervision: 'supervised', enforcement: 'active', dispatches: { used: 7, max: 20 }, waiting: null },
+    ...patch,
+  })
+}
+
+function pinnedSnapshot(state: StateSummary = pinnedState()): Snapshot {
+  const base = emptySnapshot({ state })
+  return { ...base, revisions: { ...base.revisions, quality: 'q1' } }
+}
+
+/**
+ * The brief's own `mountRun({ projectMode, pinnedMode })`: a project whose
+ * saved mode is one thing and whose open run pinned another.
+ */
+async function mountRun(options: { projectMode: 'economy' | 'adaptive' | 'strict'; pinnedMode: 'economy' | 'adaptive' | 'strict' }) {
+  const view = qualityView()
+  serve({
+    '/api/config': configView({ orchestration: { quality: { mode: options.projectMode } } }),
+    [QUALITY_PATH]: { ...view, policy: { ...view.policy, mode: options.pinnedMode } },
+  })
+  const { Run } = await boot(pinnedSnapshot())
+  const wrapper = mount(Run)
+  await vi.waitFor(() => expect(wrapper.find('#run-quality').exists()).toBe(true))
+  return wrapper
+}
+
+describe('the pinned quality policy (Run.vue)', () => {
+  it('renders the pinned mode and never substitutes a newly saved project mode', async () => {
+    const wrapper = await mountRun({ projectMode: 'economy', pinnedMode: 'strict' })
+    expect(wrapper.get('[data-quality-mode]').text()).toContain(english['quality.mode.strict'])
+    expect(wrapper.get('[data-quality-mode]').text()).toContain(english['quality.pinned'])
+    expect(wrapper.get('[data-quality-mode]').text()).not.toContain(english['quality.mode.economy'])
+  })
+
+  it('gives every verdict its own text label, and says when evidence was invalidated', async () => {
+    const view = qualityView()
+    serve({
+      [QUALITY_PATH]: {
+        ...view,
+        ledger: {
+          ...view.ledger,
+          dimensions: {
+            ...view.ledger.dimensions,
+            correctness: ledgerEntry('blocked'),
+            security: ledgerEntry('pass', { invalidated_at: '2026-07-28T11:30:00.000Z', reason: 'the worktree moved under it' }),
+          },
+        },
+      },
+    })
+    const { Run } = await boot(pinnedSnapshot())
+    const wrapper = mount(Run)
+    await vi.waitFor(() => expect(wrapper.find('#run-quality').exists()).toBe(true))
+
+    // A label, not a colour: every one of the five verdicts reads as words.
+    const verdict = (dimension: string) => wrapper.get(`[data-dimension="${dimension}"]`).text()
+    expect(verdict('correctness')).toContain(english['quality.verdict.blocked'])
+    expect(verdict('security')).toContain(english['quality.verdict.pass'])
+    expect(verdict('alignment')).toContain(english['quality.verdict.pending'])
+    expect(verdict('regression')).toContain(english['quality.verdict.fail'])
+    expect(verdict('ui')).toContain(english['quality.verdict.not_applicable'])
+
+    // The invalidation, with the record's own reason beside it.
+    expect(verdict('security')).toContain(english['quality.invalidated'])
+    expect(verdict('security')).toContain('the worktree moved under it')
+    expect(verdict('correctness')).not.toContain(english['quality.invalidated'])
+  })
+
+  it('shows the ceiling the run works against and the amendment that raised it', async () => {
+    const view = qualityView()
+    serve({
+      [QUALITY_PATH]: {
+        ...view,
+        effectiveBudget: { ...view.effectiveBudget, max_dispatches: 30 },
+        amendments: [
+          {
+            run: '2026-07-28-001',
+            field: 'max_dispatches',
+            from: 20,
+            to: 30,
+            reason: 'the repair pass needs two more agents',
+            decided_at: '2026-07-28T11:00:00.000Z',
+            decided_by: 'operator',
+          },
+        ],
+      },
+    })
+    const { Run } = await boot(pinnedSnapshot())
+    const wrapper = mount(Run)
+    await vi.waitFor(() => expect(wrapper.find('#run-quality').exists()).toBe(true))
+
+    expect(wrapper.get('[data-budget="max_dispatches"]').text()).toContain('30')
+    const amendment = wrapper.get('#run-quality-amendments .quality-amendment')
+    expect(amendment.text()).toContain(english['quality.budgetField.max_dispatches'])
+    expect(amendment.text()).toContain('20')
+    expect(amendment.text()).toContain('30')
+    expect(amendment.text()).toContain('the repair pass needs two more agents')
+  })
+
+  it('reads a shadow policy as informational, never as gating the run', async () => {
+    const view = qualityView()
+    serve({ [QUALITY_PATH]: { ...view, policy: { ...view.policy, enforcement: 'shadow', source: 'legacy' } } })
+    const { Run } = await boot(pinnedSnapshot())
+    const wrapper = mount(Run)
+    await vi.waitFor(() => expect(wrapper.find('#run-quality').exists()).toBe(true))
+
+    const enforcement = wrapper.get('#run-quality-enforcement')
+    expect(enforcement.attributes('data-enforcement')).toBe('shadow')
+    expect(enforcement.text()).toContain(english['quality.enforcement.shadow'])
+    expect(enforcement.text()).toContain(english['quality.source.legacy'])
+    expect(enforcement.text()).not.toContain(english['quality.enforcement.active'])
+  })
+
+  it('reports what it cannot measure as unavailable, and marks an estimate as an estimate', async () => {
+    const wrapper = await mountRun({ projectMode: 'strict', pinnedMode: 'strict' })
+
+    // No price record: a blank, never a number the page multiplied out itself.
+    expect(wrapper.get('[data-telemetry="cost"]').text()).toContain(english['quality.costUnavailable'])
+    expect(wrapper.get('[data-telemetry="outputTokens"]').text()).toContain(english['quality.tokensUnavailable'])
+    expect(wrapper.get('[data-telemetry="waitingTime"]').text()).toContain(english['quality.timeUnavailable'])
+    // Measured and estimated are told apart in words, not by styling alone.
+    expect(wrapper.get('[data-telemetry="inputTokens"]').attributes('data-kind')).toBe('estimated')
+    expect(wrapper.get('[data-telemetry="inputTokens"]').text()).toContain('4200')
+    expect(wrapper.get('[data-telemetry="inputTokens"]').text()).toContain((english['quality.estimatedValue'] ?? '').replace('{value}', '4200'))
+    expect(wrapper.get('[data-telemetry="activeTime"]').attributes('data-kind')).toBe('measured')
+    expect(wrapper.get('[data-telemetry="activeTime"]').text()).toContain('3m 12s')
+    expect(wrapper.get('[data-telemetry="dispatches"]').text()).toContain('7/20')
+  })
+
+  it('draws nothing at all for a run that pinned no policy, and nothing before the record arrives', async () => {
+    // No pin: the panel never asks, so there is no block and no request.
+    const { Run } = await boot(emptySnapshot({ state: runningState() }))
+    const bare = mount(Run)
+    await nextTick()
+    expect(bare.find('#run-quality').exists()).toBe(false)
+
+    // Pinned, but the route answers 404 — the block stays absent rather than
+    // rendering a half-empty policy nobody can act on.
+    serve({})
+    const { Run: Pinned } = await boot(pinnedSnapshot())
+    const missing = mount(Pinned)
+    await nextTick()
+    expect(missing.find('#run-quality').exists()).toBe(false)
+  })
+
+  it('compares what each mode would have cost before a run starts', async () => {
+    const preview = (mode: string, dispatches: number) => ({
+      policy: { mode, budget: { max_cycles: 5, max_dispatches: dispatches, max_context_tokens_per_dispatch: 8000, max_repair_attempts: 1, cost_estimate: null } },
+      forecast: {
+        inputTokens: { kind: 'estimated', value: 1000 },
+        outputTokens: { kind: 'unavailable', value: null },
+        cost: { kind: 'unavailable', currency: null, value: null },
+        elapsed: { kind: 'unavailable', valueMs: null },
+      },
+    })
+    serve({
+      '/api/config': configView(),
+      '/api/preflight/build': {
+        track: 'build',
+        max_cycles: 5,
+        roster: { required: ['builder'], available: [], forced: [], forbidden: [], closing: [] },
+        dispatches_per_cycle: 1,
+        ceiling: { cycles: 5, dispatches: 5 },
+        comparable: null,
+        quality: {
+          selected: preview('adaptive', 12),
+          comparisons: { economy: preview('economy', 6), adaptive: preview('adaptive', 12), strict: preview('strict', 24) },
+        },
+      },
+    })
+    const { Run } = await boot(emptySnapshot())
+    const wrapper = mount(Run)
+    await vi.waitFor(() => expect(wrapper.find('#preflight-quality').exists()).toBe(true))
+
+    const rows = wrapper.findAll('#preflight-quality [data-compare-mode]')
+    expect(rows.map((row) => row.attributes('data-compare-mode'))).toEqual(['economy', 'adaptive', 'strict'])
+    expect(rows[1]?.text()).toContain(english['quality.compareSelected'])
+    expect(rows[0]?.text()).not.toContain(english['quality.compareSelected'])
+    expect(rows[2]?.text()).toContain('24')
+    expect(rows[0]?.text()).toContain(english['quality.costUnavailable'])
+  })
+})
+
+describe('the operator dialogs (QualityDecisionDialog/QualityBudgetDialog)', () => {
+  async function openDecision(view = qualityView({ pendingRequest: pendingRequest() })) {
+    serve({ [QUALITY_PATH]: view })
+    const booted = await boot(pinnedSnapshot(pinnedState({ status: 'waiting_for_user' })))
+    const wrapper = mount(booted.QualityHost, { attachTo: document.body })
+    await vi.waitFor(() => expect(wrapper.find('#run-quality-decide').exists()).toBe(true))
+    await wrapper.get('#run-quality-decide').trigger('click')
+    await nextTick()
+    return { wrapper, socket: booted.socket }
+  }
+
+  it('discloses the operation, submits the fingerprint on screen, and resumes the terminal once', async () => {
+    const { wrapper, socket } = await openDecision()
+    const dialog = document.getElementById('quality-decision-dialog') as HTMLDialogElement
+    expect(dialog.open).toBe(true)
+
+    // The operation verbatim, its targets named, and what a rejection would
+    // mean given the edits already landed.
+    expect(dialog.textContent).toContain('DROP TABLE users')
+    expect(dialog.textContent).toContain('db/migrations/003_drop_users.sql')
+    expect(dialog.textContent).toContain(english['quality.decisionApplied'])
+    // Nothing typeable names the run or the operation: both are read-only text.
+    expect(wrapper.find('#quality-decision-dialog input[name="run"]').exists()).toBe(false)
+    expect(wrapper.find('#quality-decision-dialog input[name="fingerprint"]').exists()).toBe(false)
+
+    // A decision has to be chosen; nothing is preselected.
+    await wrapper.get('#quality-decision-form').trigger('submit')
+    expect(socket.sent).toEqual([])
+
+    await wrapper.get('#quality-decision-approve').setValue(true)
+    await wrapper.get('#quality-decision-note').setValue('checked the backup')
+    await wrapper.get('#quality-decision-form').trigger('submit')
+    await nextTick()
+
+    expect(socket.sent).toEqual([
+      {
+        type: 'write',
+        id: expect.any(String),
+        write: {
+          kind: 'quality.decision',
+          run: '2026-07-28-001',
+          fingerprint: 'b'.repeat(64),
+          decision: 'approve',
+          note: 'checked the backup',
+        },
+      },
+    ])
+
+    // The run resumes through the terminal that is already open, once, and
+    // only after the engine has accepted the decision.
+    const id = (socket.sent[0] as { id: string }).id
+    socket.deliver({ type: 'receipt', id, ok: true, code: 'write.ok.qualityDecision' })
+    await nextTick()
+    expect(socket.sent[1]).toEqual({ type: 'input', data: '/mjloop:resume\r' })
+    expect(socket.sent).toHaveLength(2)
+    wrapper.unmount()
+  })
+
+  it('sends nothing on cancel, and never resumes a run whose decision was refused', async () => {
+    const { wrapper, socket } = await openDecision()
+    await wrapper.get('#quality-decision-cancel').trigger('click')
+    expect(socket.sent).toEqual([])
+
+    await wrapper.get('#run-quality-decide').trigger('click')
+    await wrapper.get('#quality-decision-reject').setValue(true)
+    await wrapper.get('#quality-decision-form').trigger('submit')
+    await nextTick()
+    const id = (socket.sent[0] as { id: string }).id
+    // The pending request moved between render and submit: the server refuses
+    // it, and nothing is typed into the terminal.
+    socket.deliver({ type: 'receipt', id, ok: false, code: 'write.stale.qualityDecision' })
+    await nextTick()
+    expect(socket.sent).toHaveLength(1)
+    wrapper.unmount()
+  })
+
+  it('traps focus while open, closes on Escape, and gives focus back to the button that opened it', async () => {
+    const { wrapper } = await openDecision()
+    const dialog = document.getElementById('quality-decision-dialog') as HTMLDialogElement
+    const opener = document.getElementById('run-quality-decide')
+    // `showModal()`, not `show()`: the trap, the backdrop and the inertness of
+    // the rest of the page are the browser's, and only the modal call gets them.
+    expect(dialog.open).toBe(true)
+    expect(dialog.contains(document.activeElement)).toBe(true)
+
+    await dialog.dispatchEvent(new Event('cancel', { cancelable: true }))
+    await nextTick()
+    expect(dialog.open).toBe(false)
+    expect(document.activeElement).toBe(opener)
+    wrapper.unmount()
+  })
+
+  it('raises a ceiling upward only, and only with a reason', async () => {
+    serve({ [QUALITY_PATH]: qualityView() })
+    const booted = await boot(pinnedSnapshot(pinnedState({ status: 'budget_exhausted' })))
+    const wrapper = mount(booted.QualityHost, { attachTo: document.body })
+    await vi.waitFor(() => expect(wrapper.find('#run-quality-amend').exists()).toBe(true))
+    await wrapper.get('#run-quality-amend').trigger('click')
+    await nextTick()
+
+    // The current ceiling is shown, never typed, and the new value cannot be
+    // below it — the input itself refuses to offer a decrease.
+    const to = wrapper.get('#quality-budget-to')
+    await wrapper.get('#quality-budget-field').setValue('max_dispatches')
+    expect(wrapper.get('#quality-budget-from').text()).toContain('20')
+    expect(to.attributes('min')).toBe('21')
+
+    // A decrease and a blank reason are both refused before anything is sent.
+    await to.setValue('19')
+    await wrapper.get('#quality-budget-reason').setValue('lower it')
+    await wrapper.get('#quality-budget-form').trigger('submit')
+    expect(booted.socket.sent).toEqual([])
+
+    await to.setValue('30')
+    await wrapper.get('#quality-budget-reason').setValue('   ')
+    await wrapper.get('#quality-budget-form').trigger('submit')
+    expect(booted.socket.sent).toEqual([])
+
+    await wrapper.get('#quality-budget-reason').setValue('the repair pass needs two more agents')
+    await wrapper.get('#quality-budget-form').trigger('submit')
+    await nextTick()
+    expect(booted.socket.sent).toEqual([
+      {
+        type: 'write',
+        id: expect.any(String),
+        write: {
+          kind: 'quality.budget',
+          run: '20260728T120000Z',
+          field: 'max_dispatches',
+          from: 20,
+          to: 30,
+          reason: 'the repair pass needs two more agents',
+        },
+      },
+    ])
+    wrapper.unmount()
   })
 })
 

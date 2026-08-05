@@ -387,6 +387,25 @@ export const SkillSourceSchema = z.enum(['github', 'registry', 'web', 'skills-sh
 /** What happens when a skill this project uses has a newer version. */
 export const SkillUpdateModeSchema = z.enum(['auto', 'review', 'pinned'])
 
+/** The three closed policy levels that control a cycle's review rigor. */
+export const QualityModeSchema = z.enum(['economy', 'adaptive', 'strict'])
+
+const ExplicitQualitySchema = z.strictObject({ mode: QualityModeSchema })
+
+const LegacyQualitySchema = z.strictObject({
+  independent_plan_review: z.boolean().default(false),
+  independent_verification: z.boolean().default(false),
+})
+
+const QualityConfigSchema = z
+  .union([ExplicitQualitySchema, LegacyQualitySchema])
+  .transform((quality): { mode: z.infer<typeof QualityModeSchema> } => {
+    if ('mode' in quality) return quality
+    const count = Number(quality.independent_plan_review) + Number(quality.independent_verification)
+    return { mode: count === 0 ? 'economy' : count === 2 ? 'strict' : 'adaptive' }
+  })
+  .prefault({})
+
 /**
  * Project-scoped orchestration policy: how much this project wants the loop to
  * decide on its own, and how much it wants to be asked.
@@ -448,12 +467,7 @@ export const OrchestrationSchema = z.strictObject({
       repair_attempts: z.number().int().min(0).max(5).default(1),
     })
     .prefault({}),
-  quality: z
-    .strictObject({
-      independent_plan_review: z.boolean().default(false),
-      independent_verification: z.boolean().default(false),
-    })
-    .prefault({}),
+  quality: QualityConfigSchema,
   skills: z
     .strictObject({
       /**
@@ -670,6 +684,8 @@ export type UncertainConcurrency = z.infer<typeof UncertainConcurrencySchema>
 export type AfterPlanApproval = z.infer<typeof AfterPlanApprovalSchema>
 export type SkillSource = z.infer<typeof SkillSourceSchema>
 export type SkillUpdateMode = z.infer<typeof SkillUpdateModeSchema>
+export type QualityMode = z.infer<typeof QualityModeSchema>
+export type QualityConfigSource = 'explicit' | 'legacy' | 'default-existing'
 /** The parsed block — every key present — not the sparse thing a hand-edited
  * `config.yaml` may contain. Later stories read policy from this type. */
 export type Orchestration = z.infer<typeof OrchestrationSchema>
@@ -911,5 +927,10 @@ export const DEFAULT_TRACKS: Record<string, Track> = {
 }
 
 export function defaultConfig(verify: Verify): Config {
-  return ConfigSchema.parse({ version: 1, verify, tracks: DEFAULT_TRACKS })
+  return ConfigSchema.parse({
+    version: 1,
+    verify,
+    tracks: DEFAULT_TRACKS,
+    orchestration: { quality: { mode: 'adaptive' } },
+  })
 }

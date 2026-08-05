@@ -7,6 +7,7 @@ import { cycleAdvance, runStart } from '../../src/ops/run.js'
 import { stateSummary } from '../../src/ops/summary.js'
 import { loadConfig, writeConfig } from '../../src/store/config-store.js'
 import { resolveLoopPaths } from '../../src/store/paths.js'
+import { pinInstantVerify, qualityEvidence } from '../helpers/quality-evidence.js'
 import { makeTmpProject, type TmpProject } from '../helpers/tmp-project.js'
 
 const NOW = new Date('2026-07-27T09:00:00.000Z')
@@ -35,6 +36,9 @@ const NO_UI = {
 beforeEach(async () => {
   project = await makeTmpProject()
   await initLoop(project.dir, clock)
+  // Before `runStart`, which pins the verify block: a fresh project enforces
+  // its quality plan, so the cycle that closes below needs engine receipts.
+  await pinInstantVerify(project.dir)
   await runStart(project.dir, { track: 'build', goal: 'Add the Send button' }, clock)
 })
 afterEach(async () => { await project.cleanup() })
@@ -167,6 +171,29 @@ describe('never holds', () => {
     })
     expect(file).toContain('roster.json')
 
+    // `verifier` is ordered after `builder`, and this roster drafted both.
+    await runLog(project.dir, {
+      agent: 'builder',
+      result: {
+        status: 'pass',
+        summary: 'Added the Send button.',
+        evidence: [{ kind: 'file', ref: 'src/button.js', excerpt: "return 'Send'" }],
+        findings: [],
+        files_touched: [],
+        next_hint: null,
+      },
+    }, clock)
+    await runLog(project.dir, {
+      agent: 'verifier',
+      result: {
+        status: 'pass',
+        summary: 'The suite and the linter both exit 0.',
+        evidence: await qualityEvidence(project.dir, clock),
+        findings: [],
+        files_touched: [],
+        next_hint: null,
+      },
+    }, clock)
     const closed = await cycleAdvance(project.dir, { agents: ['builder', 'verifier'], result: 'pass' }, clock)
     expect(closed.state.status).toBe('done')
   })

@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { initLoop } from '../../src/ops/init.js'
+import { runLog } from '../../src/ops/log.js'
 import { memoryAdd, memoryGet, memorySearch } from '../../src/ops/memory.js'
 import { cycleAdvance, runStart } from '../../src/ops/run.js'
 import { stateSummary } from '../../src/ops/summary.js'
+import { pinInstantVerify, qualityEvidence } from '../helpers/quality-evidence.js'
 import { makeTmpProject, type TmpProject } from '../helpers/tmp-project.js'
 
 const NOW = new Date('2026-07-27T15:00:00.000Z')
@@ -18,7 +20,21 @@ afterEach(async () => { await project.cleanup() })
 
 describe('a run that remembers', () => {
   it('records a decision and finds it while composing the next run', async () => {
+    // A fresh project pins an explicit quality mode, so its cycle closes only
+    // on evidence the engine itself produced.
+    await pinInstantVerify(project.dir)
     const first = await runStart(project.dir, { track: 'build', goal: 'Add session handling' }, clock)
+    await runLog(project.dir, {
+      agent: 'verifier',
+      result: {
+        status: 'pass',
+        summary: 'The suite and the linter both exit 0.',
+        evidence: await qualityEvidence(project.dir, clock),
+        findings: [],
+        files_touched: [],
+        next_hint: null,
+      },
+    }, clock)
     await cycleAdvance(project.dir, { agents: ['builder', 'verifier'], result: 'pass' }, clock)
 
     await memoryAdd(

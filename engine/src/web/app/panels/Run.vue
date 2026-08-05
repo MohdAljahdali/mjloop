@@ -25,8 +25,17 @@ import { snapshot } from '../stores/session.js'
 import { useI18n } from '../composables/useI18n.js'
 import { useFeed } from '../composables/useFeed.js'
 import { preflightFacts, preflightPast, runDirName } from '../composables/useRun.js'
+import {
+  qualityBudgetRows,
+  qualityComparisons,
+  qualityDoors,
+  qualityLedgerRows,
+  qualityTelemetryRows,
+  qualityViewFor,
+} from '../composables/useQuality.js'
+import { useQualityDialogs } from '../composables/useQualityDialogs.js'
 import { stamp } from '../lib/fmt.js'
-import type { ConfigView, Preflight, RunDetail, SkillManifest, Snapshot, StateView } from '../types/protocol.js'
+import type { ConfigView, Preflight, QualityRunView, RunDetail, SkillManifest, Snapshot, StateView } from '../types/protocol.js'
 import Bdi from '../components/Bdi.vue'
 import Tx from '../components/Tx.vue'
 import FactRow from '../components/FactRow.vue'
@@ -36,6 +45,7 @@ import CycleErrorChip from '../components/CycleErrorChip.vue'
 import FindingRow from '../components/FindingRow.vue'
 import CycleRow from '../components/CycleRow.vue'
 import ManifestSelection from '../components/ManifestSelection.vue'
+import QualityLedgerRow from '../components/QualityLedgerRow.vue'
 
 const { t, tn } = useI18n()
 
@@ -158,6 +168,78 @@ const rosterRows = computed(() => {
   return current.selected.map((agent) => ({ agent, landed: landed.has(agent) }))
 })
 
+/**
+ * The pinned quality policy, its ledger, its ceilings and the operation — if
+ * any — this run is stopped waiting for a person to answer.
+ *
+ * Asked for only while this panel is mounted, which is what `useFeed` already
+ * guarantees: it stops its effect on `onDeactivated`, so a reader on another
+ * tab costs no request. Gated on `state.quality`, so a run that pinned no
+ * policy — every run before this milestone — never asks at all.
+ *
+ * Follows `revisions.state` beside `revisions.quality`: the quality documents
+ * stamp the pin, the ledger and the amendments, while the telemetry riding the
+ * same response is measured from the run's own state transitions. A suspension
+ * moves the state and not one quality file, and a screen that missed it would
+ * show a working run that has been waiting for an hour.
+ */
+const qualityFeed = useFeed<QualityRunView>({
+  dep: (snap) => (snap.state.quality === null || snap.state.run_id === null ? null : `${snap.state.run_id}:${snap.revisions.quality}:${snap.revisions.state}`),
+  path: (snap) => `/api/runs/${encodeURIComponent(runDirName(snap.state))}/quality`,
+})
+const quality = computed(() => qualityViewFor(qualityFeed.value.value, qualityFeed.error.value))
+const ledgerRows = computed(() => (quality.value === null ? [] : qualityLedgerRows(quality.value.ledger)))
+const telemetryRows = computed(() => (quality.value === null ? [] : qualityTelemetryRows(quality.value.telemetry)))
+const budgetRows = computed(() => (quality.value === null ? [] : qualityBudgetRows(quality.value.effectiveBudget)))
+const doors = computed(() => qualityDoors(summary.value, quality.value))
+// `quality` is checked rather than assumed: a preflight served by a server
+// older than this milestone carries every other field and not this one.
+const comparisons = computed(() => {
+  const preview = estimate.value?.quality
+  return preview === undefined || preview === null ? [] : qualityComparisons(preview)
+})
+
+const { askDecision, askBudget } = useQualityDialogs()
+
+/**
+ * Both dialogs are opened with a *copy* of what is on screen right now, taken
+ * at the moment of the click — see `useQualityDialogs.ts` for why a reference
+ * to the live feed's own object would not do.
+ */
+function openDecision(event: MouseEvent): void {
+  focusOpener(event)
+  const request = quality.value?.pendingRequest
+  if (request === undefined || request === null) return
+  askDecision({
+    run: request.run,
+    fingerprint: request.fingerprint,
+    kind: request.candidate.kind,
+    targets: request.candidate.targets,
+    operation: request.candidate.operation,
+    rollback: request.candidate.rollback,
+    applied: request.applied,
+  })
+}
+
+/**
+ * The dialogs give focus back to whatever held it when they opened, and a
+ * pointer click does not reliably focus a `<button>` — Safari famously does
+ * not. Focusing it here is what makes "focus returns to the button you pressed"
+ * true for a mouse as well as for a keyboard, where it already was.
+ */
+function focusOpener(event: MouseEvent): void {
+  const target = event.currentTarget
+  if (target instanceof HTMLElement) target.focus()
+}
+
+function openBudget(event: MouseEvent): void {
+  focusOpener(event)
+  const view = quality.value
+  const run = summary.value?.run_id ?? null
+  if (view === null || run === null) return
+  askBudget({ run, budget: view.effectiveBudget })
+}
+
 const guards = computed(() => snapshot.value?.guards ?? null)
 const strikesText = computed(() => `${guards.value?.strikes ?? 0}/${guards.value?.strikesAllowed ?? '?'}`)
 
@@ -196,6 +278,26 @@ const lastCycle = computed(() => summary.value?.last_cycle ?? null)
       <dl id="preflight-past" class="facts">
         <FactRow v-for="fact in preflightPastRows" :key="fact.key" :label="fact.key" :value="fact.value" />
       </dl>
+
+      <!-- What each mode would cost for this same run. Three peers, in the
+           schema's own order — least review first — with the project's own
+           mode marked rather than moved: the comparison is the point, and a
+           reordered list is a recommendation wearing a table's clothes. -->
+      <section v-if="comparisons.length > 0" id="preflight-quality" class="block">
+        <h3>{{ t('quality.compareTitle') }}</h3>
+        <div class="quality-compare">
+          <div v-for="row in comparisons" :key="row.mode" class="quality-compare-mode" :data-compare-mode="row.mode">
+            <span class="quality-card-name">{{ t(`quality.mode.${row.mode}`) }}</span>
+            <span v-if="row.selected" class="tag recommended">{{ t('quality.compareSelected') }}</span>
+            <span><Tx key-name="quality.compareCeiling" :params="{ dispatches: row.dispatches, cycles: row.cycles }" /></span>
+            <span class="hint">
+              <template v-if="row.cost.value === null">{{ t(row.cost.unavailable) }}</template>
+              <Tx v-else-if="row.cost.kind === 'estimated'" key-name="quality.estimatedValue" :params="{ value: row.cost.value }" />
+              <Bdi v-else :value="row.cost.value" />
+            </span>
+          </div>
+        </div>
+      </section>
     </section>
 
     <!-- What the run *is* down the main column; what is happening to it
@@ -273,6 +375,64 @@ const lastCycle = computed(() => summary.value?.last_cycle ?? null)
         <section v-if="haltReport !== null" id="run-haltreport" class="block">
           <h2>{{ t('run.haltReport') }}</h2>
           <pre id="run-halt-report" class="excerpt"><Bdi :value="haltReport" /></pre>
+        </section>
+
+        <!-- The policy this run is pinned to. Drawn from the run's own record
+             and never from the project's saved mode: a mode saved while a run
+             is in flight is the *next* run's mode, and showing it here would
+             describe a run that never existed. -->
+        <section v-if="quality !== null" id="run-quality" class="block">
+          <h2>{{ t('quality.title') }}</h2>
+          <p id="run-quality-mode" :data-quality-mode="quality.policy.mode">
+            <span class="quality-card-name">{{ t(`quality.mode.${quality.policy.mode}`) }}</span>
+            <span class="tag">{{ t('quality.pinned') }}</span>
+          </p>
+          <!-- Shadow is not gating. A run whose policy was inferred rather than
+               chosen reads as a report about what would have happened, which is
+               what `enforcement: shadow` means. -->
+          <p id="run-quality-enforcement" class="hint" :data-enforcement="quality.policy.enforcement">
+            {{ t(`quality.enforcement.${quality.policy.enforcement}`) }} — {{ t(`quality.source.${quality.policy.source}`) }}
+          </p>
+
+          <div v-if="doors.decision || doors.budget" id="run-quality-doors" class="dialog-actions">
+            <button v-if="doors.decision" id="run-quality-decide" type="button" class="danger" @click="openDecision($event)">
+              {{ t('quality.decisionOpen') }}
+            </button>
+            <button v-if="doors.budget" id="run-quality-amend" type="button" @click="openBudget($event)">
+              {{ t('quality.budgetOpen') }}
+            </button>
+          </div>
+
+          <dl id="run-quality-telemetry" class="facts">
+            <div v-for="row in telemetryRows" :key="row.key" class="fact" :data-telemetry="row.key" :data-kind="row.kind">
+              <dt>{{ t(row.label) }}</dt>
+              <dd>
+                <template v-if="row.value === null">{{ t(row.unavailable) }}</template>
+                <Tx v-else-if="row.kind === 'estimated'" key-name="quality.estimatedValue" :params="{ value: row.value }" />
+                <Bdi v-else :value="row.value" />
+              </dd>
+            </div>
+          </dl>
+
+          <dl id="run-quality-budget" class="facts">
+            <div v-for="row in budgetRows" :key="row.field" class="fact" :data-budget="row.field">
+              <dt>{{ t(`quality.budgetField.${row.field}`) }}</dt>
+              <dd><Bdi :value="row.value" /></dd>
+            </div>
+          </dl>
+
+          <div v-if="quality.amendments.length > 0" id="run-quality-amendments">
+            <h3>{{ t('quality.amendments') }}</h3>
+            <p v-for="(amendment, index) in quality.amendments" :key="index" class="quality-amendment">
+              <span>{{ t(`quality.budgetField.${amendment.field}`) }}</span>
+              <Tx key-name="quality.amendmentChange" :params="{ from: amendment.from, to: amendment.to }" />
+              <span class="hint"><Bdi :value="amendment.reason" /></span>
+            </p>
+          </div>
+
+          <ul id="run-quality-ledger" class="quality-ledger">
+            <QualityLedgerRow v-for="row in ledgerRows" :key="row.dimension" :dimension="row.dimension" :entry="row.entry" />
+          </ul>
         </section>
 
         <!-- What this run was actually routed by, pinned before dispatch and

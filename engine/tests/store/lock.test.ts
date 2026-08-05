@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { LockTimeoutError, withLock } from '../../src/store/lock.js'
+import { LockOwnershipLostError, LockTimeoutError, withLock } from '../../src/store/lock.js'
 import { makeTmpProject, type TmpProject } from '../helpers/tmp-project.js'
 
 let project: TmpProject
@@ -169,5 +169,56 @@ describe('withLock', () => {
     const impostorStatAfter = await fs.stat(lockDir)
     expect(impostorStatAfter.ino).toBe(impostorStatBefore.ino)
     expect(impostorStatAfter.dev).toBe(impostorStatBefore.dev)
+  })
+
+  it('fences a final publish after this owner was stale-reclaimed', async () => {
+    let signalEntered!: () => void
+    const entered = new Promise<void>((resolve) => { signalEntered = resolve })
+    let resume!: () => void
+    const resumed = new Promise<void>((resolve) => { resume = resolve })
+    let published = false
+
+    const original = withLock(lockDir, async (ownership) => {
+      signalEntered()
+      await resumed
+      await ownership.runIfOwned(async () => { published = true })
+    }, { staleMs: 50, pollMs: 5, timeoutMs: 2000 })
+
+    await entered
+    const past = new Date(Date.now() - 10_000)
+    await fs.utimes(lockDir, past, past)
+    await withLock(lockDir, async () => undefined, { staleMs: 50, pollMs: 5, timeoutMs: 2000 })
+
+    resume()
+    await expect(original).rejects.toBeInstanceOf(LockOwnershipLostError)
+    expect(published).toBe(false)
+  })
+
+  it('cannot publish from owned staging after reclaim wins during the guarded write', async () => {
+    const publishedFile = path.join(project.dir, 'published.txt')
+    let signalStaged!: () => void
+    const staged = new Promise<void>((resolve) => { signalStaged = resolve })
+    let resume!: () => void
+    const resumed = new Promise<void>((resolve) => { resume = resolve })
+
+    const original = withLock(lockDir, async (ownership) => {
+      await ownership.runIfOwned(async (stagingDir) => {
+        const stagedFile = path.join(stagingDir, 'old-owner.tmp')
+        await fs.writeFile(stagedFile, 'stale')
+        signalStaged()
+        await resumed
+        await fs.rename(stagedFile, publishedFile)
+      })
+    }, { staleMs: 50, pollMs: 5, timeoutMs: 2000 })
+
+    await staged
+    const past = new Date(Date.now() - 10_000)
+    await fs.utimes(lockDir, past, past)
+    await fs.utimes(`${lockDir}.reclaiming`, past, past)
+    await withLock(lockDir, async () => undefined, { staleMs: 50, pollMs: 5, timeoutMs: 2000 })
+
+    resume()
+    await expect(original).rejects.toBeInstanceOf(LockOwnershipLostError)
+    await expect(fs.access(publishedFile)).rejects.toThrow()
   })
 })

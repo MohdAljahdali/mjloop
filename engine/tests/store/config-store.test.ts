@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { ConfigMissingError, loadConfig, writeConfig } from '../../src/store/config-store.js'
+import { ConfigMissingError, loadConfig, loadConfigRecord, writeConfig } from '../../src/store/config-store.js'
 import { defaultConfig } from '../../src/schemas/config.js'
 import { resolveLoopPaths } from '../../src/store/paths.js'
 import { makeTmpProject, type TmpProject } from '../helpers/tmp-project.js'
@@ -8,6 +8,12 @@ import { makeTmpProject, type TmpProject } from '../helpers/tmp-project.js'
 let project: TmpProject
 beforeEach(async () => { project = await makeTmpProject() })
 afterEach(async () => { await project.cleanup() })
+
+async function writeRaw(projectDir: string, raw: string): Promise<void> {
+  const paths = resolveLoopPaths(projectDir)
+  await fs.mkdir(paths.root, { recursive: true })
+  await fs.writeFile(paths.config, raw, 'utf8')
+}
 
 describe('writeConfig / loadConfig', () => {
   it('round-trips a config through YAML', async () => {
@@ -41,6 +47,20 @@ describe('writeConfig / loadConfig', () => {
     const loaded = await loadConfig(project.dir)
     expect(loaded.orchestration.discovery.mode).toBe('off')
     expect(loaded.orchestration).toEqual(config.orchestration)
+  })
+
+  it.each([
+    ['orchestration:\n  quality:\n    mode: strict\n', 'explicit'],
+    ['orchestration:\n  quality:\n    independent_plan_review: true\n', 'legacy'],
+    ['', 'default-existing'],
+  ] as const)('reports %s quality configuration source', async (quality, qualitySource) => {
+    await writeRaw(
+      project.dir,
+      `version: 1\ntracks:\n  edit:\n    required: [editor]\n    max_cycles: 1\n${quality}`,
+    )
+
+    const loaded = await loadConfigRecord(project.dir)
+    expect(loaded.qualitySource).toBe(qualitySource)
   })
 
   it('throws ConfigMissingError when .mjloop is not provisioned', async () => {

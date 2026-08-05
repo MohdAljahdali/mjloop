@@ -1,6 +1,6 @@
+import crypto from 'node:crypto'
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { initLoop } from '../../src/ops/init.js'
 import { preflightEstimate } from '../../src/ops/preflight.js'
@@ -28,6 +28,20 @@ beforeEach(async () => {
 afterEach(async () => {
   await project.cleanup()
 })
+
+/** Every file under `.mjloop/`, hashed — the shape `tests/web/read.test.ts` uses for the same property. */
+async function hashTree(dir: string): Promise<Map<string, string>> {
+  const out = new Map<string, string>()
+  const walk = async (at: string): Promise<void> => {
+    for (const entry of await fs.readdir(at, { withFileTypes: true })) {
+      const full = path.join(at, entry.name)
+      if (entry.isDirectory()) await walk(full)
+      else out.set(full, crypto.createHash('sha256').update(await fs.readFile(full)).digest('hex'))
+    }
+  }
+  await walk(path.join(dir, '.mjloop'))
+  return out
+}
 
 function cycleDir(run: string, cycle: number): string {
   return path.join(project.dir, '.mjloop', 'runs', run, `cycle-${String(cycle).padStart(2, '0')}`)
@@ -261,28 +275,24 @@ describe('preflightEstimate', () => {
     expect(preflight.comparable?.minutes).toEqual({ median: 21.5, min: 21.5, max: 21.5 })
   })
 
-  it('names no price and no model', async () => {
-    const source = await fs.readFile(fileURLToPath(new URL('../../src/ops/preflight.ts', import.meta.url)), 'utf8')
+  it('previews all modes, selects the configured one, and does not create a run pin', async () => {
+    const before = await hashTree(project.dir)
+    const preflight = await preflightEstimate(project.dir, { track: 'build' })
 
-    // Comments count. The reason this file names no currency figure is that the
-    // engine cannot see what an agent runs on — it is frontmatter in a
-    // directory the engine has never read — so any number here would be a guess
-    // wearing an estimate's clothes, and wrong within a quarter as rates move.
-    // A future reader adding one should have to argue with that sentence.
-    for (const pattern of [
-      /[$£€¥₿]/,
-      /\busd\b/i,
-      /\bprice\b/i,
-      /\bcost\b/i,
-      /\bclaude\b/i,
-      /\bopus\b/i,
-      /\bsonnet\b/i,
-      /\bhaiku\b/i,
-      /\bgpt\b/i,
-      /\bmodel\b/i,
-      /\btokens?\b/i,
-    ]) {
-      expect(source, String(pattern)).not.toMatch(pattern)
+    expect(Object.keys(preflight.quality.comparisons).sort()).toEqual(['adaptive', 'economy', 'strict'])
+    expect(preflight.quality.selected).toEqual(preflight.quality.comparisons.adaptive)
+    expect(preflight.quality.comparisons.economy.policy.mode).toBe('economy')
+    expect(preflight.quality.comparisons.strict.policy.mode).toBe('strict')
+    for (const preview of Object.values(preflight.quality.comparisons)) {
+      expect(preview.forecast.inputTokens.kind).toMatch(/^(measured|estimated|unavailable)$/)
+      expect(preview.forecast.outputTokens.kind).toMatch(/^(measured|estimated|unavailable)$/)
+      expect(preview.forecast.cost).toEqual({ kind: 'unavailable', currency: null, value: null })
+      expect(preview.forecast.elapsed).toEqual({ kind: 'unavailable', valueMs: null })
     }
+    expect((await fs.readdir(path.join(project.dir, '.mjloop', 'runs')))).toEqual([])
+    // Not only "no run": a preview that pinned a policy, opened a ledger,
+    // recorded an amendment or composed a roster would leave one of these
+    // files behind, and comparing three modes is a question, not an action.
+    expect(await hashTree(project.dir)).toEqual(before)
   })
 })

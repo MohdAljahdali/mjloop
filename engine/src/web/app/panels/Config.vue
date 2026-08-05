@@ -33,14 +33,18 @@ import {
   commandRows,
   orchestrationProblem,
   policyRows,
+  QUALITY_MODES,
+  RECOMMENDED_QUALITY_MODE,
   seedFormValues,
   type ConfigFormValues,
+  type QualityMode,
 } from '../lib/config.js'
 import type { Config, ConfigView, Telemetry } from '../types/protocol.js'
 import Bdi from '../components/Bdi.vue'
 import Tx from '../components/Tx.vue'
 import ConfigFactRow from '../components/ConfigFactRow.vue'
 import ConfigTelemetryRow from '../components/ConfigTelemetryRow.vue'
+import QualityModeCard from '../components/QualityModeCard.vue'
 
 const { t, tn, locale } = useI18n()
 
@@ -67,8 +71,7 @@ const BLANK_FORM: ConfigFormValues = {
   orchExecutionAfterPlanApproval: 'manual',
   orchExecutionUncertainConcurrency: 'sequential',
   orchExecutionRepairAttempts: 1,
-  orchQualityIndependentPlanReview: false,
-  orchQualityIndependentVerification: false,
+  orchQualityMode: 'adaptive',
   orchSkillsSourceGithub: false,
   orchSkillsSourceRegistry: false,
   orchSkillsSourceWeb: false,
@@ -139,6 +142,17 @@ watch(
 function markDirty(): void {
   if (!enabled.value) return
   dirty.value = true
+}
+
+/**
+ * The one control on this page that reports its choice as a typed event rather
+ * than through `v-model`, so it marks the draft dirty itself instead of leaning
+ * on the form's own `@change` bubbling up. It still writes to `form` and
+ * nothing else — this panel's invariant is unchanged.
+ */
+function chooseQualityMode(mode: QualityMode): void {
+  form.value.orchQualityMode = mode
+  markDirty()
 }
 
 const problem = computed(() => (enabled.value ? orchestrationProblem(form.value) : null))
@@ -331,14 +345,6 @@ const flaggedKey = computed(() => (locale.value, pluralKey('telemetry.flagged', 
             <input id="config-repair-attempts-input" v-model.number="form.orchExecutionRepairAttempts" name="orch_execution_repair_attempts" type="number" min="0" max="5" step="1" required :aria-label="t('config.repairAttempts')" :disabled="!enabled" />
           </label>
           <label class="check-field">
-            <input id="config-plan-review-input" v-model="form.orchQualityIndependentPlanReview" name="orch_quality_independent_plan_review" type="checkbox" :aria-label="t('config.independentPlanReview')" :disabled="!enabled" />
-            <span>{{ t('config.independentPlanReview') }}</span>
-          </label>
-          <label class="check-field">
-            <input id="config-independent-verify-input" v-model="form.orchQualityIndependentVerification" name="orch_quality_independent_verification" type="checkbox" :aria-label="t('config.independentVerification')" :disabled="!enabled" />
-            <span>{{ t('config.independentVerification') }}</span>
-          </label>
-          <label class="check-field">
             <input id="config-source-github-input" v-model="form.orchSkillsSourceGithub" name="orch_skills_sources_github" type="checkbox" :aria-label="t('config.skillSource.github')" :disabled="!enabled" />
             <span>{{ t('config.skillSource.github') }}</span>
           </label>
@@ -366,6 +372,26 @@ const flaggedKey = computed(() => (locale.value, pluralKey('telemetry.flagged', 
           </label>
         </div>
         <p class="hint">{{ t('config.trustedRegistriesHelp') }}</p>
+      </fieldset>
+
+      <!-- Its own fieldset, not a control inside `config.orchestration`: the
+           three modes are one single choice, and a `<legend>` is what names
+           that choice to a screen reader without a second ARIA grouping. -->
+      <fieldset :disabled="!enabled">
+        <legend>{{ t('config.qualityMode') }}</legend>
+        <p class="hint">{{ t('config.qualityModeWhy') }}</p>
+        <div id="config-quality-modes" class="quality-modes">
+          <QualityModeCard
+            v-for="mode in QUALITY_MODES"
+            :key="mode"
+            :mode="mode"
+            name="orch_quality_mode"
+            :checked="form.orchQualityMode === mode"
+            :recommended="mode === RECOMMENDED_QUALITY_MODE"
+            :disabled="!enabled"
+            @select="chooseQualityMode"
+          />
+        </div>
       </fieldset>
 
       <fieldset :disabled="!enabled">

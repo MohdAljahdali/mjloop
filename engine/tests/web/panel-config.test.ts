@@ -354,6 +354,108 @@ describe('Config.vue', () => {
     })
   })
 
+  describe('the quality mode selector', () => {
+    /** The panel seeded from a project that has pinned one quality mode. */
+    async function mountConfig(quality: { mode: 'economy' | 'adaptive' | 'strict' }, locale = english) {
+      serve({ '/api/config': configView({ orchestration: { quality } }) })
+      const freshI18n = await import('../../src/web/app/lib/i18n.ts')
+      const { Config, socket } = await boot()
+      freshI18n.installForTest({ code: locale === english ? 'en' : 'ar', strings: locale })
+      const wrapper = mount(Config)
+      await vi.waitFor(() => expect(control(wrapper, 'config-max-parallel-input').disabled).toBe(false))
+      return Object.assign(wrapper, { socket })
+    }
+    const sentWrites = (wrapper: { socket: FakeSocket }) => wrapper.socket.sent as { write: { changes: unknown[] } }[]
+    const radio = (wrapper: ReturnType<typeof mount>, mode: string) =>
+      wrapper.get(`[data-quality-mode="${mode}"]`).element as HTMLInputElement
+
+    it('emits exactly one typed mode change only after Save', async () => {
+      const wrapper = await mountConfig({ mode: 'economy' })
+      await wrapper.get('[data-quality-mode="strict"]').trigger('click')
+      expect(sentWrites(wrapper)).toEqual([])
+      // happy-dom does not perform implicit form submission on a button click,
+      // so Save is reached the way this file already reaches it.
+      await wrapper.get('#config-editor').trigger('submit')
+      expect(sentWrites(wrapper)[0]?.write.changes).toEqual([
+        { kind: 'orchestration.quality.mode', value: 'strict' },
+      ])
+    })
+
+    it('draws three native radios in one group, checks the pinned mode, and names adaptive as recommended in words', async () => {
+      const wrapper = await mountConfig({ mode: 'strict' })
+
+      const modes = ['economy', 'adaptive', 'strict']
+      // One `name` across three `type="radio"` inputs is what gives the group
+      // arrow-key selection, its single tab stop and its roving focus — the
+      // browser's own behaviour, which is why this is a native input and not
+      // an ARIA-only widget.
+      for (const mode of modes) {
+        expect(radio(wrapper, mode).type).toBe('radio')
+        expect(radio(wrapper, mode).name).toBe('orch_quality_mode')
+      }
+      expect(modes.map((mode) => radio(wrapper, mode).checked)).toEqual([false, false, true])
+      expect(radio(wrapper, 'adaptive').getAttribute('aria-label')).toBe(
+        english['config.qualityRecommendedFor']?.replace('{mode}', english['config.qualityValue.adaptive'] ?? ''),
+      )
+      expect(radio(wrapper, 'economy').getAttribute('aria-label')).toBe(english['config.qualityValue.economy'])
+      // Not colour alone: the recommendation is a word on the card, and each
+      // card describes its own trade-off.
+      expect(wrapper.get('[data-quality-card="adaptive"]').text()).toContain(english['config.qualityRecommended'])
+      expect(wrapper.get('[data-quality-card="economy"]').text()).toContain(english['config.qualityHelp.economy'])
+      expect(radio(wrapper, 'economy').getAttribute('aria-describedby')).toBe('config-quality-help-economy')
+    })
+
+    it('carries neither legacy boolean control', async () => {
+      const wrapper = await mountConfig({ mode: 'adaptive' })
+      expect(wrapper.find('#config-plan-review-input').exists()).toBe(false)
+      expect(wrapper.find('#config-independent-verify-input').exists()).toBe(false)
+      expect(wrapper.findAll('#config-quality-modes [data-quality-card]')).toHaveLength(3)
+    })
+
+    it('labels the modes in arabic', async () => {
+      const arabic = await readLocale('ar')
+      const wrapper = await mountConfig({ mode: 'economy' }, arabic)
+      expect(wrapper.get('[data-quality-card="adaptive"]').text()).toContain(arabic['config.qualityRecommended'])
+      expect(wrapper.get('[data-quality-card="economy"]').text()).toContain(arabic['config.qualityHelp.economy'])
+    })
+
+    it('drops the pending choice on Reset, and refuses to save against a revision that moved', async () => {
+      let served: unknown = configView({ orchestration: { quality: { mode: 'economy' } } })
+      vi.stubGlobal('fetch', (url: string) => {
+        const isConfig = url.startsWith('/api/config')
+        return Promise.resolve(
+          new Response(JSON.stringify(isConfig ? served : { error: { code: 'error.notFound' } }), { status: isConfig ? 200 : 404 }),
+        )
+      })
+      const { Config, socket } = await boot()
+      const wrapper = mount(Config)
+      await vi.waitFor(() => expect(control(wrapper, 'config-max-parallel-input').disabled).toBe(false))
+
+      await wrapper.get('[data-quality-mode="strict"]').trigger('click')
+      expect(control(wrapper, 'config-save').disabled).toBe(false)
+
+      served = {
+        ...(configView({ orchestration: { quality: { mode: 'adaptive' } } }) as object),
+        revision: 'b'.repeat(64),
+      }
+      socket.deliver({
+        type: 'snapshot',
+        snapshot: emptySnapshot({ revisions: { ...emptySnapshot().revisions, config: 'moved' } }),
+      })
+      await vi.waitFor(() => expect(wrapper.get('#config-editor-state').text()).toBe(english['config.editorChanged']))
+
+      expect(control(wrapper, 'config-save').disabled).toBe(true)
+      expect(radio(wrapper, 'strict').checked).toBe(true)
+
+      await wrapper.get('#config-reset').trigger('click')
+      // Reset re-seeds from the document that actually landed, not from the
+      // recommended mode.
+      expect(radio(wrapper, 'adaptive').checked).toBe(true)
+      expect(control(wrapper, 'config-save').disabled).toBe(true)
+      expect(socket.sent).toEqual([])
+    })
+  })
+
   describe('structural assertions — 60-panels.css', () => {
     it('carries the panel root, the editor card, and the telemetry grid at the classes the stylesheet selects', async () => {
       serve({

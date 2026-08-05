@@ -55,11 +55,41 @@ Each `config set` changes exactly one setting. The keys, and what each accepts:
 | `orchestration.execution.after_plan_approval` | `auto` / `manual` |
 | `orchestration.execution.uncertain_concurrency` | `sequential` / `ask` / `parallel` |
 | `orchestration.execution.repair_attempts` | whole number, 0–5 |
-| `orchestration.quality.independent_plan_review` | `true` / `false` |
-| `orchestration.quality.independent_verification` | `true` / `false` |
+| `orchestration.quality.mode` | `economy` / `adaptive` / `strict` |
 | `orchestration.skills.sources` | comma-separated subset of `github,registry,web` |
 | `orchestration.skills.trusted_registries` | comma-separated `https://` URLs |
 | `orchestration.skills.update_mode` | `auto` / `review` / `pinned` |
+
+### The quality mode
+
+`orchestration.quality.mode` is the one setting that decides how much review a run pays
+for. The three values are closed and there is no fourth:
+
+- **`economy`** — the deterministic checks first, the track's own agents, and one
+  specialist only where deterministic evidence cannot close an applicable dimension.
+- **`adaptive`** — `economy`, plus an independent review where the run's own risk signals
+  ask for one. This is what `/mjloop:init` writes into a new project.
+- **`strict`** — an independent review of the plan and an independent verification after
+  the work, plus a specialist for every applicable dimension.
+
+The mode changes how the evidence is reached, never what counts as done: all three close
+the same required dimensions, and none of them may declare success on thinner evidence.
+Which dimensions those are is decided by the change itself — `ui` is `not_applicable` on a
+run with no user-visible surface, and it is the same answer in all three modes.
+
+Two consequences are worth stating before anybody changes it:
+
+- **A change never reaches an open run.** Each run pins its own policy at `run_start` and
+  works against the pin for its whole life. Set the mode for the next run, not for the one
+  on screen.
+- **A project that has never named a mode is not gated by this.** Its runs pin
+  `enforcement: shadow` and behave exactly as they did before the setting existed. Writing
+  the mode through this command is the opt-in, and it is the only one.
+
+Unattended operation is **not** here, and that is deliberate: it is asked for per run, for
+the rare run that wants it, and never becomes a project's standing setting. There is also
+no setting that makes a merge or a deploy happen on its own — both stay outside this
+cycle's authority and under the controls they already have.
 
 A comma-separated key takes the **empty string** for the empty list —
 `config set orchestration.skills.sources ''` is how a project says no skill may be

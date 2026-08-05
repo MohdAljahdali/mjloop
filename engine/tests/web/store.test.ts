@@ -208,6 +208,20 @@ describe('writes', () => {
   })
 })
 
+describe('announceClient', () => {
+  it('says a client-side refusal through the same door a receipt uses', () => {
+    // The one case a component discovers for itself: the write landed, and the
+    // socket was gone by the time the run was told to resume. Announcing it
+    // through the installed announcer is what keeps the toast and the durable
+    // notice log from disagreeing — a component reaching for `useToasts()`
+    // directly would toast it and log nothing.
+    const announced: unknown[] = []
+    store.installAnnouncer((message) => announced.push(message))
+    store.announceClient({ code: 'write.offline' })
+    expect(announced).toEqual([{ code: 'write.offline' }])
+  })
+})
+
 describe('connect', () => {
   it('is idempotent: a second call does not open a second socket', () => {
     const first = FakeSocket.last

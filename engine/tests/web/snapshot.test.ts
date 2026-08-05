@@ -175,6 +175,25 @@ describe('revisions', () => {
     expect(before.revisions.cycle).not.toBe(after.revisions.cycle)
   })
 
+  it('move when a quality record does, and are blind to everything else in the run', async () => {
+    await initLoop(project.dir, clock)
+    await runStart(project.dir, { track: 'edit', goal: 'Rename the submit label' }, clock)
+    const runDir = path.join(project.dir, '.mjloop', 'runs', (await buildSnapshot(project.dir)).runs[0] ?? '')
+
+    const before = (await buildSnapshot(project.dir)).revisions.quality
+    // A cycle's own files land in the same run directory once a second while a
+    // run is live. This key is built from three named documents, so none of
+    // that moves it — `revisions.cycle` is what the Evidence tab watches.
+    await fs.mkdir(path.join(runDir, 'cycle-01'), { recursive: true })
+    await fs.writeFile(path.join(runDir, 'cycle-01', 'editor.json'), '{}')
+    expect((await buildSnapshot(project.dir)).revisions.quality).toBe(before)
+
+    // …and an amendment appended beside the pin does, which is what makes a
+    // raised ceiling visible to the page that raised it.
+    await fs.appendFile(path.join(runDir, 'quality-amendments.jsonl'), '{"version":1}\n')
+    expect((await buildSnapshot(project.dir)).revisions.quality).not.toBe(before)
+  })
+
   it('move when a feature brief does, which is what makes an approval visible', async () => {
     await initLoop(project.dir, clock)
 

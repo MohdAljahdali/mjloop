@@ -5,6 +5,7 @@ import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import * as z from 'zod'
+import { classifyDestructiveTool, guardDestructiveCommand } from '../ops/destructive-risk.js'
 import { renderSummaryLine, stateSummary, type StateSummary } from '../ops/summary.js'
 import { discoverCandidates, SkillSourceDisabledError } from '../ops/skill-discovery.js'
 import { computePackageDigest, inspectCandidate } from '../ops/skill-import.js'
@@ -213,12 +214,9 @@ function asList(raw: string): ParsedValue {
  * unknown-key message and `config get`'s output all read off it, so a key can
  * never be settable but unprintable, or offered but unsettable.
  *
- * `orchestration.quality.*` is the one place where two dotted keys collapse
- * into a single change kind carrying a `key`, because that is the shape
- * `config-mutation.ts` gives that section. The mapping is stated here rather
- * than derived from the dots for exactly that reason: the dotted key is what a
- * person types, and the change kind is what the wire schema discriminates on,
- * and they are not obliged to agree.
+ * A setting's dotted key and wire kind normally agree, including quality mode.
+ * This table remains explicit because the key is the human-facing CLI surface
+ * while the change is the closed mutation contract.
  */
 const SETTINGS: Record<string, ConfigSetting> = {
   'orchestration.profile.auto_accept': {
@@ -256,15 +254,10 @@ const SETTINGS: Record<string, ConfigSetting> = {
     parse: asInteger,
     change: (value) => ({ kind: 'orchestration.execution.repair_attempts', value }),
   },
-  'orchestration.quality.independent_plan_review': {
-    read: (orchestration) => orchestration.quality.independent_plan_review,
-    parse: asBoolean,
-    change: (value) => ({ kind: 'orchestration.quality', key: 'independent_plan_review', value }),
-  },
-  'orchestration.quality.independent_verification': {
-    read: (orchestration) => orchestration.quality.independent_verification,
-    parse: asBoolean,
-    change: (value) => ({ kind: 'orchestration.quality', key: 'independent_verification', value }),
+  'orchestration.quality.mode': {
+    read: (orchestration) => orchestration.quality.mode,
+    parse: asWord,
+    change: (value) => ({ kind: 'orchestration.quality.mode', value }),
   },
   'orchestration.skills.sources': {
     read: (orchestration) => orchestration.skills.sources,
@@ -1787,14 +1780,37 @@ async function stateGuardCommand(stdin: string): Promise<CliResult> {
   } catch {
     return { stdout: '', exitCode: 0 }
   }
-  const verdict = evaluateStateGuard(input)
-  if (!verdict.deny) return { stdout: '', exitCode: 0 }
+  return stateGuardCommandForTest(readCwd(stdin), input)
+}
 
+/**
+ * The PreToolUse decision, with the project directory injected rather than read
+ * back out of the hook payload — the one seam a test can drive against a
+ * throwaway project.
+ *
+ * Two rules, in the order their costs justify. The protected-path rule is a
+ * string comparison and reads nothing; the destructive rule reads this run's
+ * pinned policy, so it is only reached for a call the first rule allowed and a
+ * classifier already recognised. A project with no run, or a run whose policy
+ * does not enforce, reaches neither record.
+ */
+export async function stateGuardCommandForTest(projectDir: string, input: unknown): Promise<CliResult> {
+  const verdict = evaluateStateGuard(input)
+  if (verdict.deny) return denial(verdict.reason)
+
+  const candidate = classifyDestructiveTool(input)
+  if (candidate === null) return { stdout: '', exitCode: 0 }
+
+  const outcome = await guardDestructiveCommand(projectDir, candidate)
+  return outcome.allowed ? { stdout: '', exitCode: 0 } : denial(outcome.reason)
+}
+
+function denial(reason: string): CliResult {
   const payload = {
     hookSpecificOutput: {
       hookEventName: 'PreToolUse',
       permissionDecision: 'deny',
-      permissionDecisionReason: verdict.reason,
+      permissionDecisionReason: reason,
     },
   }
   return { stdout: `${JSON.stringify(payload)}\n`, exitCode: 0 }

@@ -10,9 +10,10 @@ import {
   type SkillManifest,
   type SkillSelection,
 } from '../schemas/skill-selection.js'
+import type { Supervision } from '../schemas/quality.js'
 import type { Finding, Result, Severity, State } from '../schemas/state.js'
 import { LedgerSchema, PinnedVerifySchema, type LedgerEntry } from '../schemas/verify.js'
-import { loadConfig } from '../store/config-store.js'
+import { loadConfig, loadConfigRecord } from '../store/config-store.js'
 import { readFeatureBrief } from '../store/feature-store.js'
 import { resolveLoopPaths } from '../store/paths.js'
 import { readStory } from '../store/plan-store.js'
@@ -22,6 +23,20 @@ import { StateStore, type Clock } from '../store/state-store.js'
 import { cycleFingerprint, distinctFindings, errorFingerprint } from './fingerprint.js'
 import { readAcceptedProjectSkills } from './skill-library.js'
 import { analyseConcurrency, selectSkills } from './skill-selection.js'
+import {
+  QualityPolicyIntegrityError,
+  buildProjectQualityPolicy,
+  createInitialQualityLedger,
+} from './quality-policy.js'
+import { qualityRuntimeEnabled } from './quality-capability.js'
+import {
+  QualityBudgetExhaustedError,
+  enforcesQualityBudget,
+  nextCycleRefusal,
+  suspendDraft,
+} from './quality-control.js'
+import { assertQualityCloseable, invalidateQualityEvidence } from './quality-ledger.js'
+import { readLedger, readPolicy, writeLedger, writePolicyOnce } from '../store/quality-store.js'
 
 export class UnknownTrackError extends Error {
   constructor(track: string, known: string[]) {
@@ -64,6 +79,7 @@ function cycleDirName(cycle: number): string {
 export interface RunStartInput {
   track: string
   goal: string
+  supervision?: Supervision
   story?: string | null
   plan?: string | null
   /**
@@ -76,27 +92,36 @@ export interface RunStartInput {
 }
 
 export async function runStart(projectDir: string, input: RunStartInput, now: Clock = () => new Date()): Promise<State> {
-  const config = await loadConfig(projectDir)
-  if (findTrack(config, input.track) === undefined) {
-    throw new UnknownTrackError(input.track, Object.keys(config.tracks))
-  }
-
   // A run named after a story that does not exist would produce a run
   // directory traceable to nothing. readStory throws StoryNotFoundError.
   if (input.story !== undefined && input.story !== null) await readStory(projectDir, input.story)
 
-  // Resolved here, beside `readStory` and for the same reason, rather than
-  // beside the write it feeds below: both of the ways this can throw — a
-  // malformed feature id, and a profile that moved out from under the brief —
-  // are facts about the caller's input, and a caller told its run failed must
-  // be able to fix the input and call again. After the update below there is
-  // no "again": `state.json` already says `running` under a fresh `run_id`
-  // nothing will ever close, and the retry allocates the next id over the top
-  // of the orphan. `resolveSkillManifest` reads and validates; it writes
-  // nothing, so a throw here leaves exactly the nothing an unknown story does.
-  const manifest = await resolveSkillManifest(projectDir, config, input.feature, now)
-
+  const initialization: { value: { config: Config; manifest: SkillManifest | null } | null } = { value: null }
+  let integrityError: QualityPolicyIntegrityError | null = null
   const state = await new StateStore(projectDir, now).update(async (draft) => {
+    // This is the authoritative run-boundary snapshot. It is read under the
+    // same project lock that publishes the marker, so a config mutation either
+    // completes before this read and is pinned, or waits until the complete
+    // policy and ledger are visible. There is no third, stale interleaving.
+    const { config, qualitySource } = await loadConfigRecord(projectDir)
+    const track = findTrack(config, input.track)
+    if (track === undefined) throw new UnknownTrackError(input.track, Object.keys(config.tracks))
+
+    // Both resolutions are read-only and happen before the draft is changed.
+    // A malformed feature/profile or invalid policy input therefore aborts the
+    // StateStore transaction without publishing a half-started run.
+    const manifest = await resolveSkillManifest(projectDir, config, input.feature, now)
+    const qualityPolicy = await buildProjectQualityPolicy(projectDir, {
+      config,
+      qualitySource,
+      track,
+      goal: input.goal,
+      story: input.story,
+      feature: input.feature,
+      supervision: input.supervision ?? 'supervised',
+    }, now)
+    initialization.value = { config, manifest }
+
     // Computed inside the locked update so two overlapping runStart calls
     // cannot observe the same sequence number. The previous run's id (still
     // on the draft at this point) covers the window where that run's
@@ -136,12 +161,33 @@ export async function runStart(projectDir: string, input: RunStartInput, now: Cl
     // A new run has proven nothing. Carrying a previous run's reproduction
     // would open this run's gate for a defect nobody demonstrated here.
     draft.reproduction = null
+    // Marker-first by design: after this state lands, both protected records
+    // are mandatory. A crash or write failure can therefore never downgrade
+    // the run to live config; integrity classification halts it instead.
+    draft.quality_policy_version = 1
     draft.halt_reason = null
+
+    // Required run records are initialized before StateStore publishes the
+    // marker. A guarded observer uses this same lock and therefore cannot see
+    // marker=1 until both schema-valid files exist. mkdir belongs to the same
+    // integrity boundary: failure must publish a halted marker, never running.
+    try {
+      await fs.mkdir(runDirPath(projectDir, draft), { recursive: true })
+      await writePolicyOnce(projectDir, draft, qualityPolicy)
+      await writeLedger(projectDir, draft, createInitialQualityLedger(qualityPolicy, now))
+    } catch (error) {
+      integrityError = new QualityPolicyIntegrityError(`new run could not write both records: ${errorMessage(error)}`)
+      draft.status = 'halted'
+      draft.current.stage = 'halted'
+      draft.halt_reason = integrityError.message
+    }
   })
 
-  await fs.mkdir(runDirPath(projectDir, state), { recursive: true })
-  await pinVerifyBlock(projectDir, state, config, now)
-  await writeSkillManifest(projectDir, state, manifest)
+  if (integrityError !== null) throw integrityError
+  const initialized = initialization.value
+  if (initialized === null) throw new Error('run initialization completed without an authoritative config snapshot')
+  await pinVerifyBlock(projectDir, state, initialized.config, now)
+  await writeSkillManifest(projectDir, state, initialized.manifest)
   return state
 }
 
@@ -443,6 +489,36 @@ export interface CycleAdvanceResult {
 }
 
 /**
+ * Refuse a terminal `pass` this run's quality evidence does not support.
+ *
+ * Deliberately takes no lock and reads only records: it is called from *inside*
+ * `cycleAdvance`'s locked update, against that update's own draft, which is the
+ * only way the cycle it judges against is the cycle the run is actually
+ * closing. `StateStore.update` and `updateLedger` share one lock and it is not
+ * reentrant, so anything here that took a lock would deadlock the transition it
+ * exists to guard.
+ *
+ * The rollout gate lives here rather than at the call site so there is one
+ * answer to "may quality refuse this run", and it is the same pair of
+ * conditions `cycleRosterSet` uses: the release capability is open *and* this
+ * run's own pinned policy opted in. A shadow run — every run that never named a
+ * quality mode — closes exactly as it does today while the ledger behind it is
+ * still written.
+ */
+export async function assertRunCanPass(projectDir: string, state: State): Promise<void> {
+  // The marker, not the file: a run pinned before quality policies existed has
+  // no policy to enforce, and `readPolicy` would turn that into a corruption.
+  // Once the marker is 1 both records are mandatory, so an unreadable one is an
+  // integrity failure and must surface rather than wave the run through.
+  if (state.quality_policy_version !== 1) return
+
+  const policy = await readPolicy(projectDir, state)
+  if (!qualityRuntimeEnabled() || policy.enforcement !== 'active') return
+
+  assertQualityCloseable(policy, await readLedger(projectDir, state), state.cycle)
+}
+
+/**
  * Close the current cycle. `pass` finishes the run; anything else opens the
  * next cycle unless the track's cap is reached, in which case the run halts.
  */
@@ -474,15 +550,33 @@ export async function cycleAdvance(
   // step per guard, and parsing the sentence back apart would couple the
   // report to the wording.
   let cause: HaltCause = 'manual'
+  // The suspension reason, carried out of the update for the same reason
+  // `cause` is: `StateStore.update` rolls its whole transaction back on a throw,
+  // so a suspension that threw from inside it would never be written down.
+  let exhausted: string | null = null
+
+  // Before the lock, because `invalidateQualityEvidence` takes the same one and
+  // `withLock` is not reentrant. It is safe there: the transition below has not
+  // happened yet, and `updateLedger`'s own drift check compares the state this
+  // read saw against the state it finds under the lock — so an advance that
+  // raced this one aborts rather than invalidating against the wrong cycle.
+  if (input.result !== 'pass') await invalidateClosedCycleEvidence(projectDir, now)
 
   // Status and cap are evaluated against the draft inside the locked update,
   // not a pre-lock snapshot: two racing advances (or an advance racing a
   // halt) must each judge the state the other one left behind, or a run can
   // step past its cycle cap.
-  const after = await store.update((draft) => {
+  const after = await store.update(async (draft) => {
     if (draft.status !== 'running' || draft.track === null) throw new NoActiveRunError()
     const track = findTrack(config, draft.track)
     if (track === undefined) throw new UnknownTrackError(draft.track, Object.keys(config.tracks))
+
+    // The state this update started from, kept so the budget suspension below
+    // can leave the run exactly where it found it rather than half-advanced.
+    // Cheap: `StateStore.update` already clones once, and the alternative is a
+    // suspended run whose resume would file a second history entry for a cycle
+    // it never closed.
+    const opening = structuredClone(draft)
 
     carried = distinctFindings(draft.findings)
     // Sorted because `runLog` appends each agent's signatures as that agent
@@ -506,6 +600,13 @@ export async function cycleAdvance(
     })
 
     if (input.result === 'pass') {
+      // Re-read under this lock and against this draft, never against a
+      // pre-lock snapshot: the caller's `pass` is a claim about a cycle, and a
+      // ledger read before the lock could describe a cycle that has since been
+      // closed or a run that has since been replaced. Throwing here aborts the
+      // whole transaction — the history entry pushed above included — so a
+      // refused close leaves the run exactly where it was.
+      await assertRunCanPass(projectDir, draft)
       draft.status = 'done'
       draft.current.stage = 'done'
       closing = [...track.closing]
@@ -546,7 +647,39 @@ export async function cycleAdvance(
       cause = 'stagnation'
       return
     }
-    if (draft.cycle >= track.max_cycles) {
+    // Here rather than above the two guards, and that position is the whole
+    // difference between two kinds of answer. Stagnation and the repeated-error
+    // guard report a loop that more cycles cannot help; a resumable "raise the
+    // ceiling and continue" is the opposite advice, so both keep the right to
+    // end the run first.
+    //
+    // It then *supersedes* the cycle cap below for a run that enforces a
+    // quality budget, deliberately: the pinned `max_cycles` starts as this
+    // track's own cap, and the whole point of pinning it is that the run is
+    // measured against the number it started with plus whatever an operator
+    // explicitly amended — not against a live config value that may have moved,
+    // and not terminally when an amendment could legitimately continue the run.
+    // The `cycle-cap` halt below therefore ends only the runs that enforce no
+    // budget — every pre-milestone run and every run pinned `shadow` — and
+    // stands aside for the rest, whose ceiling this refusal already is.
+    const refusal = await nextCycleRefusal(projectDir, draft)
+    if (refusal !== null) {
+      // Rolled back to where this update began, so the advance the suspension
+      // refused left nothing behind — no history entry, no stagnation strike —
+      // and the same `cycleAdvance` call can simply be made again once the
+      // ceiling is raised. The failing cycle's evidence invalidation ran before
+      // the lock and stays: it describes the work that cycle did, not the
+      // advance this refused.
+      Object.assign(draft, opening)
+      suspendDraft(draft, refusal)
+      exhausted = refusal
+      return
+    }
+
+    // The enforcement check is made only at the boundary, where its answer can
+    // change the outcome: below the cap the halt cannot fire anyway, and the
+    // check costs a policy and amendment read.
+    if (draft.cycle >= track.max_cycles && !(await enforcesQualityBudget(projectDir, draft))) {
       draft.status = 'halted'
       draft.current.stage = 'halted'
       draft.halt_reason = `cycle cap ${track.max_cycles} reached for track ${draft.track}`
@@ -565,6 +698,11 @@ export async function cycleAdvance(
     draft.cycle += 1
     draft.current.stage = 'compose'
   })
+
+  // Immediately after the write that recorded it, and before every artefact
+  // below: a suspended cycle produced no archive, no handoff and no next cycle,
+  // and it will produce all three when it is resumed and closed for real.
+  if (exhausted !== null) throw new QualityBudgetExhaustedError('max_cycles', exhausted)
 
   await archiveFindings(projectDir, after, closedCycle, carried)
   // Never fatal, and never inside the lock. The state transition has already
@@ -590,6 +728,67 @@ export async function cycleAdvance(
     handoff,
     closing_agents: closing,
   }
+}
+
+/**
+ * Age out the evidence a failing cycle's own work invalidated, and only that.
+ *
+ * The files come from the results the cycle actually logged, so a cycle that
+ * touched one stylesheet does not cost the database review its receipt —
+ * `invalidateQualityEvidence` decides which dimensions a path reaches, and
+ * every unrelated passing entry survives. `criteriaChanged` is `false` because
+ * nothing at this seam knows the goal or the acceptance criteria moved; a
+ * change to either arrives through the run-start path that pins them.
+ *
+ * Never fatal. The state transition it precedes is what actually closes the
+ * cycle, and a ledger write that could not land must not stop a run advancing —
+ * the same rule the handoff and the run map follow. It can only cost freshness
+ * on a run whose evidence the *next* dispatch re-records anyway.
+ */
+async function invalidateClosedCycleEvidence(projectDir: string, now: Clock): Promise<void> {
+  try {
+    const state = await new StateStore(projectDir, now).get()
+    if (state.status !== 'running' || state.run_id === null || state.quality_policy_version !== 1) return
+    const reports = await readAgentReports(cycleDirPath(projectDir, state))
+    const files = [...new Set(reports.flatMap((report) => report.result.files_touched))].sort()
+    for (const batch of invalidationBatches(files)) {
+      await invalidateQualityEvidence(projectDir, state, { files: batch, criteriaChanged: false }, now)
+    }
+  } catch (error) {
+    process.stderr.write(`mjloop: quality evidence was not invalidated: ${String(error)}\n`)
+  }
+}
+
+/**
+ * The ledger writes the paths it invalidated into each entry's `reason`, which
+ * is prose and bounded at 4 000 characters. A wide cycle — a rename across two
+ * hundred files, a generated directory — overflows that, and the *whole*
+ * transition is then rejected by the schema: the loosening direction, since
+ * evidence that should have aged out keeps standing.
+ *
+ * So the list is split rather than truncated. Every batch is a complete call,
+ * the union of the batches names exactly the files the cycle touched, and the
+ * dimensions each batch reaches are decided by the ledger's own rules — no
+ * copy of them here. Ordinary cycles produce one batch and one call. The
+ * budget sits under the ceiling with room for the sentence around the list.
+ */
+const INVALIDATION_REASON_BUDGET = 3_500
+
+function invalidationBatches(files: string[]): string[][] {
+  const batches: string[][] = []
+  let batch: string[] = []
+  let width = 0
+  for (const file of files) {
+    if (batch.length > 0 && width + file.length + 2 > INVALIDATION_REASON_BUDGET) {
+      batches.push(batch)
+      batch = []
+      width = 0
+    }
+    batch.push(file)
+    width += file.length + 2
+  }
+  if (batch.length > 0) batches.push(batch)
+  return batches
 }
 
 /** The command from a `<ref> :: <headline>` signature. */
@@ -961,6 +1160,10 @@ function oneLine(text: string): string {
 
 function truncate(text: string, max: number): string {
   return text.length <= max ? text : `${text.slice(0, max - 1)}…`
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
 }
 
 export async function halt(

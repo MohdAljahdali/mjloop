@@ -13,6 +13,7 @@ import {
   NoRunToVerifyError,
   PinnedVerifyInvalidError,
   PinnedVerifyMissingError,
+  completedVerifyReceipts,
   readVerifyLedger,
   verifyRun,
 } from '../../src/ops/verify.js'
@@ -1393,5 +1394,62 @@ describe('verifyRun cache', () => {
     } finally {
       process.env.PATH = realPath
     }
+  })
+})
+
+/* ── the receipts a quality dimension may cite ────────────────────────────── */
+
+describe('completedVerifyReceipts', () => {
+  let cycleDir: string
+
+  beforeEach(async () => {
+    cycleDir = path.join(project.dir, 'cycle-02')
+    await fs.mkdir(path.join(cycleDir, 'verify'), { recursive: true })
+  })
+
+  async function writeLedger(entries: Record<string, unknown>[]): Promise<void> {
+    await fs.writeFile(path.join(cycleDir, 'verify', 'index.json'), `${JSON.stringify(entries, null, 2)}\n`, 'utf8')
+  }
+
+  function entry(over: Record<string, unknown> = {}): Record<string, unknown> {
+    return {
+      slot: 'test', command: 'npm test', source: 'pinned', live_command: null, log: 'test.log',
+      phase: 'complete', exit_code: 0, timed_out: false, fingerprint: null, cached_from_cycle: null,
+      duration_ms: 1, at: NOW.toISOString(), ...over,
+    }
+  }
+
+  it('names a bare log under the cycle it was written in, and splits kind by slot', async () => {
+    await writeLedger([entry(), entry({ slot: 'lint', command: 'npm run lint', log: 'lint.log', exit_code: 1 })])
+    expect(await completedVerifyReceipts(cycleDir, 2)).toEqual([
+      { ref: 'cycle-02/verify/test.log', kind: 'test', slot: 'test', command: 'npm test', passed: true },
+      { ref: 'cycle-02/verify/lint.log', kind: 'command', slot: 'lint', command: 'npm run lint', passed: false },
+    ])
+  })
+
+  it('omits a queued or running entry, which proved nothing either way', async () => {
+    await writeLedger([
+      entry({ phase: 'queued', exit_code: null }),
+      entry({ phase: 'running', exit_code: null, log: 'test--two.log' }),
+    ])
+    expect(await completedVerifyReceipts(cycleDir, 2)).toEqual([])
+  })
+
+  it('reports a command killed at the ceiling as completed and not passing', async () => {
+    await writeLedger([entry({ exit_code: null, timed_out: true })])
+    expect(await completedVerifyReceipts(cycleDir, 2)).toEqual([
+      { ref: 'cycle-02/verify/test.log', kind: 'test', slot: 'test', command: 'npm test', passed: false },
+    ])
+  })
+
+  it('cites a cache hit under the cycle whose log it actually points at', async () => {
+    await writeLedger([entry({ log: 'cycle-01/verify/test.log', cached_from_cycle: 1 })])
+    expect(await completedVerifyReceipts(cycleDir, 2)).toEqual([
+      { ref: 'cycle-01/verify/test.log', kind: 'test', slot: 'test', command: 'npm test', passed: true },
+    ])
+  })
+
+  it('is empty for a cycle the engine never ran a command in', async () => {
+    expect(await completedVerifyReceipts(cycleDir, 2)).toEqual([])
   })
 })

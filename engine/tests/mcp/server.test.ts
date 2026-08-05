@@ -10,7 +10,10 @@ import type { SkillPackage } from '../../src/schemas/skill-library.js'
 import { loadConfig, writeConfig } from '../../src/store/config-store.js'
 import { readFeatureRevision } from '../../src/store/feature-store.js'
 import { acceptProfile } from '../../src/store/project-profile-store.js'
+import { readPolicy } from '../../src/store/quality-store.js'
 import { writePackage } from '../../src/store/skill-library-store.js'
+import { StateStore } from '../../src/store/state-store.js'
+import { pinInstantVerify, qualityEvidence } from '../helpers/quality-evidence.js'
 import { makeTmpProject, type TmpProject } from '../helpers/tmp-project.js'
 
 let project: TmpProject
@@ -40,6 +43,9 @@ function isError(result: unknown): boolean {
 /** A passing `build` cycle, which is the only precondition of a closing pass. */
 async function passingBuildRun(): Promise<{ runId: string; closingAgents: string[] }> {
   await client.callTool({ name: 'mjloop_init', arguments: { project_dir: project.dir } })
+  // Between init and start, because `runStart` pins the verify block: a fresh
+  // project pins an explicit quality mode and closes only on engine receipts.
+  await pinInstantVerify(project.dir)
   await client.callTool({
     name: 'mjloop_run_start',
     arguments: { project_dir: project.dir, track: 'build', goal: 'Add the export button' },
@@ -60,6 +66,21 @@ async function passingBuildRun(): Promise<{ runId: string; closingAgents: string
       },
     },
   })
+  // `verifier` is ordered after `builder` on the build track.
+  await client.callTool({
+    name: 'mjloop_run_log',
+    arguments: {
+      project_dir: project.dir,
+      agent: 'builder',
+      result: {
+        status: 'pass',
+        summary: 'Added the export button.',
+        evidence: [{ kind: 'file', ref: 'src/Export.tsx', excerpt: 'export button' }],
+        findings: [],
+        files_touched: ['src/Export.tsx'],
+      },
+    },
+  })
   await client.callTool({
     name: 'mjloop_run_log',
     arguments: {
@@ -68,7 +89,7 @@ async function passingBuildRun(): Promise<{ runId: string; closingAgents: string
       result: {
         status: 'pass',
         summary: 'The suite is green with the button in place.',
-        evidence: [{ kind: 'command', ref: 'npm test', excerpt: '12 passed' }],
+        evidence: await qualityEvidence(project.dir),
         findings: [],
         files_touched: ['src/Export.tsx'],
       },
@@ -270,6 +291,22 @@ describe('MCP surface', () => {
     expect(verify?.description).toMatch(/nothing ran/)
     expect(verify?.description).toMatch(/lock/)
   })
+
+  it('declares supervision on run start and defaults it to supervised', async () => {
+    const { tools } = await client.listTools()
+    const start = tools.find((tool) => tool.name === 'mjloop_run_start')
+    expect(Object.keys(properties(start?.inputSchema))).toContain('supervision')
+    expect(start?.inputSchema.required ?? []).not.toContain('supervision')
+
+    await client.callTool({ name: 'mjloop_init', arguments: { project_dir: project.dir } })
+    const result = await client.callTool({
+      name: 'mjloop_run_start',
+      arguments: { project_dir: project.dir, track: 'edit', goal: 'Rename submit label' },
+    })
+    expect(isError(result)).toBe(false)
+    const state = await new StateStore(project.dir).get()
+    expect((await readPolicy(project.dir, state)).supervision).toBe('supervised')
+  })
 })
 
 describe('tool behaviour', () => {
@@ -283,6 +320,7 @@ describe('tool behaviour', () => {
 
   it('drives a full passing edit cycle', async () => {
     await client.callTool({ name: 'mjloop_init', arguments: { project_dir: project.dir } })
+    await pinInstantVerify(project.dir)
     await client.callTool({
       name: 'mjloop_run_start',
       arguments: { project_dir: project.dir, track: 'edit', goal: 'Rename submit label' },
@@ -291,7 +329,23 @@ describe('tool behaviour', () => {
       name: 'mjloop_roster_set',
       arguments: { project_dir: project.dir, cycle: 1, selected: ['editor', 'verifier'], skipped: {} },
     })
+    // `verifier` is ordered after `editor` on the edit track, and this roster
+    // drafted both — so `editor` logs first or the verifier result is refused.
     await client.callTool({
+      name: 'mjloop_run_log',
+      arguments: {
+        project_dir: project.dir,
+        agent: 'editor',
+        result: {
+          status: 'pass',
+          summary: 'Renamed the submit label.',
+          evidence: [{ kind: 'file', ref: 'src/Button.tsx', excerpt: "return 'Send'" }],
+          findings: [],
+          files_touched: ['src/Button.tsx'],
+        },
+      },
+    })
+    const logged = await client.callTool({
       name: 'mjloop_run_log',
       arguments: {
         project_dir: project.dir,
@@ -299,17 +353,48 @@ describe('tool behaviour', () => {
         result: {
           status: 'pass',
           summary: 'All tests pass after the rename.',
-          evidence: [{ kind: 'command', ref: 'npm test', excerpt: '12 passed' }],
+          evidence: await qualityEvidence(project.dir),
           findings: [],
           files_touched: ['src/Button.tsx'],
         },
       },
     })
+    expect(isError(logged)).toBe(false)
+
     const advanced = await client.callTool({
       name: 'mjloop_cycle_advance',
       arguments: { project_dir: project.dir, agents: ['editor', 'verifier'], result: 'pass' },
     })
     expect(JSON.parse(textOf(advanced)).state.status).toBe('done')
+  })
+
+  // Review finding 4: `quality_dispatches`' full context packet — up to the
+  // mode's own token ceiling per entry — must never cross the wire, since
+  // nothing on the leader's side consumes it yet.
+  it('summarizes quality_dispatches on the wire instead of shipping each context packet\'s full text', async () => {
+    await client.callTool({ name: 'mjloop_init', arguments: { project_dir: project.dir } })
+    await pinInstantVerify(project.dir)
+    await client.callTool({
+      name: 'mjloop_run_start',
+      arguments: { project_dir: project.dir, track: 'edit', goal: 'Rename submit label' },
+    })
+    const roster = await client.callTool({
+      name: 'mjloop_roster_set',
+      arguments: { project_dir: project.dir, cycle: 1, selected: ['editor', 'verifier'], skipped: {} },
+    })
+    const payload = JSON.parse(textOf(roster))
+    expect(payload.quality_dispatches.length).toBeGreaterThan(0)
+    for (const dispatch of payload.quality_dispatches) {
+      expect(dispatch).not.toHaveProperty('context')
+      expect(dispatch).toMatchObject({
+        agent: expect.any(String),
+        dimensions: expect.any(Array),
+        inputFingerprint: expect.stringMatching(/^[a-f0-9]{64}$/),
+        tokens: expect.objectContaining({ kind: expect.any(String) }),
+      })
+    }
+    // The whole point: no context packet text anywhere in the reply.
+    expect(textOf(roster)).not.toContain('Output contract:')
   })
 
   it('declares the closing pass and records the agent that ran it', async () => {
@@ -1486,7 +1571,9 @@ describe('feature briefs', () => {
 
     const state = JSON.parse(textOf(started))
     const dir = path.join(project.dir, '.mjloop', 'runs', `${state.run_id}--adhoc--edit`)
-    expect((await fs.readdir(dir)).sort()).toEqual(['skill-selection.json', 'verify-pinned.json'])
+    expect((await fs.readdir(dir)).sort()).toEqual([
+      'quality-ledger.json', 'quality-policy.json', 'skill-selection.json', 'verify-pinned.json',
+    ])
     const manifest = JSON.parse(await fs.readFile(path.join(dir, 'skill-selection.json'), 'utf8'))
     expect(manifest.sourceBrief).toEqual({ id, revision: 1 })
   })

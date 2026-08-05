@@ -13,6 +13,13 @@ export class StateCorruptedError extends Error {
 export interface WriteOptions {
   /** Copy the existing file to `<file>.bak` first. Default true. */
   backup?: boolean
+  /**
+   * Stage rename sources inside a lock directory owned by the caller. The
+   * directory is deliberately never created here: stale-lock reclamation must
+   * make a delayed old writer's final rename fail, not let it recreate its
+   * former lock and publish.
+   */
+  stagingDir?: string
 }
 
 /**
@@ -23,31 +30,44 @@ export interface WriteOptions {
  * this function only guarantees backup + indivisible landing.
  */
 export async function writeTextAtomic(file: string, text: string, options: WriteOptions = {}): Promise<void> {
-  const { backup = true } = options
+  const { backup = true, stagingDir } = options
   await fs.mkdir(path.dirname(file), { recursive: true })
+  const stage = stagingDir ?? path.dirname(file)
+  const nonce = `${process.pid}.${randomUUID()}`
+  const temp = path.join(stage, `${path.basename(file)}.${nonce}.tmp`)
+  const backupTemp = path.join(stage, `${path.basename(file)}.${nonce}.bak.tmp`)
+  let hasBackup = false
   if (backup) {
     try {
-      await fs.copyFile(file, `${file}.bak`)
+      await fs.copyFile(file, backupTemp)
+      hasBackup = true
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
     }
   }
-  const temp = `${file}.${process.pid}.${randomUUID()}.tmp`
   try {
     await fs.writeFile(temp, text, 'utf8')
+    if (hasBackup) await fs.rename(backupTemp, `${file}.bak`)
     await fs.rename(temp, file)
   } catch (error) {
     await fs.rm(temp, { force: true }).catch(() => undefined)
+    await fs.rm(backupTemp, { force: true }).catch(() => undefined)
     throw error
   }
 }
 
 export async function writeJsonAtomic(file: string, data: unknown, options: WriteOptions = {}): Promise<void> {
-  const { backup = true } = options
+  const { backup = true, stagingDir } = options
   await fs.mkdir(path.dirname(file), { recursive: true })
+  const stage = stagingDir ?? path.dirname(file)
+  const nonce = `${process.pid}.${randomUUID()}`
+  const temp = path.join(stage, `${path.basename(file)}.${nonce}.tmp`)
+  const backupTemp = path.join(stage, `${path.basename(file)}.${nonce}.bak.tmp`)
+  let hasBackup = false
   if (backup) {
     try {
-      await fs.copyFile(file, `${file}.bak`)
+      await fs.copyFile(file, backupTemp)
+      hasBackup = true
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
     }
@@ -56,9 +76,15 @@ export async function writeJsonAtomic(file: string, data: unknown, options: Writ
   // would share one temp path, and the loser's rename would fail (or land
   // late and clobber the winner). The uuid makes every write's temp file
   // its own.
-  const temp = `${file}.${process.pid}.${randomUUID()}.tmp`
-  await fs.writeFile(temp, `${JSON.stringify(data, null, 2)}\n`, 'utf8')
-  await fs.rename(temp, file)
+  try {
+    await fs.writeFile(temp, `${JSON.stringify(data, null, 2)}\n`, 'utf8')
+    if (hasBackup) await fs.rename(backupTemp, `${file}.bak`)
+    await fs.rename(temp, file)
+  } catch (error) {
+    await fs.rm(temp, { force: true }).catch(() => undefined)
+    await fs.rm(backupTemp, { force: true }).catch(() => undefined)
+    throw error
+  }
 }
 
 export interface ReadResult<T> {

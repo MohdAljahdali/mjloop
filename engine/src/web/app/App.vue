@@ -52,6 +52,9 @@ import { useHalt } from './composables/useHalt.js'
 import { useFeatureApprove } from './composables/useFeatureApprove.js'
 import { useAgentEditor } from './composables/useAgentEditor.js'
 import { useAgentDelete } from './composables/useAgentDelete.js'
+import { useQualityDialogs } from './composables/useQualityDialogs.js'
+import QualityDecisionDialog from './components/QualityDecisionDialog.vue'
+import QualityBudgetDialog from './components/QualityBudgetDialog.vue'
 
 const { t, tn } = useI18n()
 const { tabs, active, show } = useTabs()
@@ -70,6 +73,10 @@ const { open: featureApproveOpen, closeApprove } = useFeatureApprove()
 // `open`/`subject` pair.
 const { state: agentEditorState, closeEditor } = useAgentEditor()
 const { state: agentDeleteState, closeDelete } = useAgentDelete()
+// And once more for the two operator quality doors, opened from buttons inside
+// the kept-alive Run panel — see `useQualityDialogs.ts`. These are the two this
+// placement matters most for: one of them approves an irreversible operation.
+const { decision: qualityDecisionState, closeDecision, budget: qualityBudgetState, closeBudget } = useQualityDialogs()
 // Applies the pane mode already read from storage, but only once the
 // terminal underneath it has mounted into a laid-out box — a child's
 // `onMounted` fires before its parent's, so calling this from here rather
@@ -226,4 +233,7 @@ const highCount = computed(() => snapshot.value?.state.findings.high ?? 0)
   <!-- Same reason again — see `useAgentEditor.ts`/`useAgentDelete.ts`. -->
   <AgentEditor :state="agentEditorState" @close="closeEditor()" />
   <AgentDeleteDialog :state="agentDeleteState" @close="closeDelete()" />
+  <!-- And again — see `useQualityDialogs.ts`. -->
+  <QualityDecisionDialog :state="qualityDecisionState" @close="closeDecision()" />
+  <QualityBudgetDialog :state="qualityBudgetState" @close="closeBudget()" />
 </template>

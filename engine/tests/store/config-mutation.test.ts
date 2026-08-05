@@ -1,7 +1,11 @@
 import fs from 'node:fs/promises'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as YAML from 'yaml'
+import { runStart } from '../../src/ops/run.js'
 import { defaultConfig, type Config } from '../../src/schemas/config.js'
+import { initialState } from '../../src/schemas/state.js'
+import { writeJsonAtomic } from '../../src/store/atomic.js'
+import { LockOwnershipLostError } from '../../src/store/lock.js'
 import {
   ConfigMutationError,
   ConfigPatchSchema,
@@ -10,7 +14,9 @@ import {
   type ConfigChange,
 } from '../../src/store/config-mutation.js'
 import { writeConfig } from '../../src/store/config-store.js'
+import { readPolicy } from '../../src/store/quality-store.js'
 import { resolveLoopPaths } from '../../src/store/paths.js'
+import { StateStore } from '../../src/store/state-store.js'
 import { makeTmpProject, type TmpProject } from '../helpers/tmp-project.js'
 
 let project: TmpProject
@@ -23,14 +29,182 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  vi.restoreAllMocks()
   await project.cleanup()
 })
+
+const NOW = new Date('2026-08-04T10:36:00.000Z')
+const clock = (): Date => NOW
+
+function deferred(): { promise: Promise<void>; resolve: () => void } {
+  let resolve!: () => void
+  const promise = new Promise<void>((done) => { resolve = done })
+  return { promise, resolve }
+}
+
+async function seedIdleState(): Promise<void> {
+  await writeJsonAtomic(resolveLoopPaths(project.dir).state, initialState(NOW))
+}
 
 async function raw(): Promise<string> {
   return fs.readFile(file, 'utf8')
 }
 
+async function seedLegacyQuality(projectDir: string, independentPlanReview: boolean, independentVerification: boolean): Promise<void> {
+  const config = resolveLoopPaths(projectDir).config
+  const source = await fs.readFile(config, 'utf8')
+  const legacy = source.replace(
+    'quality:\n    mode: adaptive',
+    `quality:\n    independent_plan_review: ${independentPlanReview}\n    independent_verification: ${independentVerification}`,
+  )
+  await fs.writeFile(config, legacy, 'utf8')
+}
+
 describe('mutateConfig', () => {
+  it('lets a mutation that wins before the start lock define the pinned mode', async () => {
+    await seedIdleState()
+    const before = await raw()
+    const firstLockEntered = deferred()
+    const releaseFirstLock = deferred()
+    const paths = resolveLoopPaths(project.dir)
+    const realMkdir = fs.mkdir.bind(fs)
+    let lockAttempts = 0
+    const spy = vi.spyOn(fs, 'mkdir').mockImplementation(async (target: any, options: any) => {
+      if (String(target) === paths.lock) {
+        lockAttempts += 1
+        if (lockAttempts === 1) {
+          firstLockEntered.resolve()
+          await releaseFirstLock.promise
+        }
+      }
+      return realMkdir(target, options)
+    })
+
+    const started = runStart(project.dir, { track: 'edit', goal: 'Rename safely' }, clock)
+    try {
+      await firstLockEntered.promise
+      await mutateConfig(project.dir, {
+        revision: configRevision(before),
+        changes: [{ kind: 'orchestration.quality.mode', value: 'strict' }],
+      })
+      releaseFirstLock.resolve()
+
+      const state = await started
+      expect((await readPolicy(project.dir, state)).mode).toBe('strict')
+    } finally {
+      releaseFirstLock.resolve()
+      await started.catch(() => undefined)
+      spy.mockRestore()
+    }
+  })
+
+  it('does not publish the marker while a guarded mutation waits for policy initialization', async () => {
+    await seedIdleState()
+    const before = await raw()
+    const paths = resolveLoopPaths(project.dir)
+    const policyWriteEntered = deferred()
+    const releasePolicyWrite = deferred()
+    const secondLockAttempt = deferred()
+    const realWriteFile = fs.writeFile.bind(fs)
+    const realMkdir = fs.mkdir.bind(fs)
+    let heldPolicyWrite = false
+    let lockAttempts = 0
+    const writeSpy = vi.spyOn(fs, 'writeFile').mockImplementation(async (target: any, data: any, options: any) => {
+      if (!heldPolicyWrite && String(target).endsWith('quality-policy.json')) {
+        heldPolicyWrite = true
+        policyWriteEntered.resolve()
+        await releasePolicyWrite.promise
+      }
+      return realWriteFile(target, data, options)
+    })
+    const mkdirSpy = vi.spyOn(fs, 'mkdir').mockImplementation(async (target: any, options: any) => {
+      if (String(target) === paths.lock) {
+        lockAttempts += 1
+        if (lockAttempts === 2) secondLockAttempt.resolve()
+      }
+      return realMkdir(target, options)
+    })
+
+    const started = runStart(project.dir, { track: 'edit', goal: 'Rename safely' }, clock)
+    let mutation: Promise<unknown> | null = null
+    try {
+      await policyWriteEntered.promise
+      mutation = mutateConfig(project.dir, {
+        revision: configRevision(before),
+        changes: [{ kind: 'orchestration.quality.mode', value: 'strict' }],
+      })
+      await secondLockAttempt.promise
+
+      expect(await new StateStore(project.dir).get()).toMatchObject({
+        status: 'idle',
+        quality_policy_version: null,
+      })
+      releasePolicyWrite.resolve()
+
+      const [state] = await Promise.all([started, mutation])
+      expect((await readPolicy(project.dir, state)).mode).toBe('adaptive')
+      expect(YAML.parse(await raw()).orchestration.quality.mode).toBe('strict')
+      expect((await new StateStore(project.dir).get()).status).toBe('running')
+    } finally {
+      releasePolicyWrite.resolve()
+      await Promise.allSettled([started, ...(mutation === null ? [] : [mutation])])
+      writeSpy.mockRestore()
+      mkdirSpy.mockRestore()
+    }
+  })
+
+  it('does not let a stale-reclaimed run publish its old policy or state', async () => {
+    await seedIdleState()
+    const before = await raw()
+    const paths = resolveLoopPaths(project.dir)
+    const statePublishEntered = deferred()
+    const releaseStatePublish = deferred()
+    const realRename = fs.rename.bind(fs)
+    let heldStatePublish = false
+    const renameSpy = vi.spyOn(fs, 'rename').mockImplementation(async (source: any, target: any) => {
+      if (!heldStatePublish && String(target) === paths.state) {
+        heldStatePublish = true
+        statePublishEntered.resolve()
+        await releaseStatePublish.promise
+      }
+      return realRename(source, target)
+    })
+
+    const staleStart = runStart(project.dir, { track: 'edit', goal: 'Use the old adaptive policy' }, clock)
+    try {
+      // The policy and ledger now exist, and StateStore has staged its final
+      // atomic state rename *inside the owned lock directory*. Pause at that
+      // last syscall so the test also covers reclaim after the ownership
+      // identity check, not only reclaim before it.
+      await statePublishEntered.promise
+      const past = new Date(Date.now() - 60_000)
+      await fs.utimes(paths.lock, past, past)
+      await fs.utimes(`${paths.lock}.reclaiming`, past, past)
+
+      await mutateConfig(project.dir, {
+        revision: configRevision(before),
+        changes: [{ kind: 'orchestration.quality.mode', value: 'strict' }],
+      })
+      expect(YAML.parse(await raw()).orchestration.quality.mode).toBe('strict')
+
+      releaseStatePublish.resolve()
+      await expect(staleStart).rejects.toBeInstanceOf(LockOwnershipLostError)
+      expect(await new StateStore(project.dir).get()).toMatchObject({
+        status: 'idle',
+        run_id: null,
+        quality_policy_version: null,
+      })
+
+      const current = await runStart(project.dir, { track: 'edit', goal: 'Use current strict policy' }, clock)
+      expect(current.status).toBe('running')
+      expect((await readPolicy(project.dir, current)).mode).toBe('strict')
+    } finally {
+      releaseStatePublish.resolve()
+      await staleStart.catch(() => undefined)
+      renameSpy.mockRestore()
+    }
+  })
+
   it('changes an allowlisted value without losing comments or inert legacy keys', async () => {
     const source = (await raw())
       .replace('version: 1', '# project policy\nversion: 1')
@@ -200,14 +374,9 @@ const ORCHESTRATION_CHANGES: { change: ConfigChange; at: string[]; expected: unk
     expected: 0,
   },
   {
-    change: { kind: 'orchestration.quality', key: 'independent_plan_review', value: true },
-    at: ['orchestration', 'quality', 'independent_plan_review'],
-    expected: true,
-  },
-  {
-    change: { kind: 'orchestration.quality', key: 'independent_verification', value: true },
-    at: ['orchestration', 'quality', 'independent_verification'],
-    expected: true,
+    change: { kind: 'orchestration.quality.mode', value: 'strict' },
+    at: ['orchestration', 'quality', 'mode'],
+    expected: 'strict',
   },
   {
     change: { kind: 'orchestration.skills.sources', value: ['web'] },
@@ -278,6 +447,21 @@ describe('mutateConfig on the orchestration block', () => {
     expect(readIn(written, ['orchestration', 'discovery', 'question_budget'])).toBeUndefined()
   })
 
+  it('replaces both legacy quality booleans with one mode in the same CAS write', async () => {
+    await seedLegacyQuality(project.dir, true, false)
+    const source = await raw()
+
+    await mutateConfig(project.dir, {
+      revision: configRevision(source),
+      changes: [{ kind: 'orchestration.quality.mode', value: 'strict' }],
+    })
+
+    const written = await raw()
+    expect(written).toContain('mode: strict')
+    expect(written).not.toContain('independent_plan_review')
+    expect(written).not.toContain('independent_verification')
+  })
+
   it('refuses a whole-document contradiction the wire schema cannot see', async () => {
     // `completion: auto-plan` and `mode: off` are each individually legal
     // values, so only the post-apply re-parse of the whole document catches
@@ -337,7 +521,7 @@ describe('ConfigPatchSchema', () => {
       { kind: 'orchestration.skills.sources', value: ['pastebin'] },
       { kind: 'orchestration.skills.trusted_registries', value: ['http://skills.example.com'] },
       { kind: 'orchestration.discovery.mode', value: false },
-      { kind: 'orchestration.quality', key: 'independent_plan_review', value: 'yes' },
+      { kind: 'orchestration.quality.mode', value: 'fast' },
     ]) {
       expect(
         ConfigPatchSchema.safeParse({ revision: 'a'.repeat(64), changes: [change] }).success,

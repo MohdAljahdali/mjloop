@@ -373,8 +373,7 @@ orchestration:
     uncertain_concurrency: sequential
     repair_attempts: 1
   quality:
-    independent_plan_review: false
-    independent_verification: false
+    mode: adaptive
   skills:
     sources: [github]
     trusted_registries: []
@@ -390,8 +389,7 @@ orchestration:
 | `execution.after_plan_approval` | `manual` | `auto` / `manual` — هل تبدأ الخطّة المُوافَق عليها البناء وحدها |
 | `execution.uncertain_concurrency` | `sequential` | `sequential` / `ask` / `parallel` — ما العمل بقصصٍ لا يُثبَت استقلالها |
 | `execution.repair_attempts` | `1` | عدد صحيح بين 0 و5؛ و`0` إعدادٌ حقيقيّ معناه ألّا يُعاد إصلاح شيء |
-| `quality.independent_plan_review` | `false` | `true` / `false` |
-| `quality.independent_verification` | `false` | `true` / `false` |
+| `quality.mode` | `adaptive` في المشروع الجديد | `economy` / `adaptive` / `strict` — مقدار المراجعة التي يدفع ثمنها التشغيل |
 | `skills.sources` | `[github]` | أيّ مجموعة جزئيّة من `github` و`registry` و`web` و`skills-sh`؛ والقائمة الفارغة تعني ألّا يُكتشَف شيء من خارج المشروع |
 | `skills.trusted_registries` | `[]` | روابط `https://` — و`http://` المجرّد مرفوض في المخطّط نفسه |
 | `skills.update_mode` | `review` | `auto` / `review` / `pinned` |
@@ -399,6 +397,17 @@ orchestration:
 **‏`discovery.mode`‏ قيمته `off` عن قصد.** هو الإعداد الذي يُبقي `/mjloop:plan` يتصرّف تمامًا
 كما كان قبل وجود هذه الكتلة. وأيُّ افتراضٍ آخر كان سيُغيّر ما يفعله الأمر في كلّ مشروع
 مُهيَّأ سلفًا لحظةَ ترقية المحرّك — وهذا قرارٌ يتّخذه المشروع لنفسه، مرّةً، كتابةً.
+
+**‏`quality.mode`‏ هو الإعداد الوحيد خلف دورة الجودة، والمشروع القائم ليس محكومًا به حتى
+يُسمّي وضعًا.** يكتب `/mjloop:init` القيمة `adaptive` في المشروع الجديد. أمّا `config.yaml`
+الذي لم يُسمِّ وضعًا قطّ — بما فيه ما زال يحمل المفتاحين القديمين اللذين حلّ هذا المفتاح
+محلّهما، وهما يُقرآن ويُطبَّعان في الذاكرة دون إعادة كتابة الملفّ — فيبقى على سلوكه تمامًا:
+تُثبّت تشغيلاته سياسةً وتُسجّل ما كانت ستقرّره دون أن تفرض منه شيئًا. وكتابة الوضع عبر
+`/mjloop:config` هي الانضمام الصريح.
+
+ويُثبّت كلُّ تشغيل الوضعَ الذي بدأ به، فالتغيير هنا يبلغ التشغيل التالي لا التشغيل المفتوح.
+والتشغيل دون إشراف ليس إعدادًا أصلًا: يُطلب لكلّ تشغيل على حدة، ولا تجعل أيُّ قيمة لهذا
+المفتاح دمجًا أو نشرًا يحدث من تلقاء نفسه.
 
 والقيمتان `always` و`ask` هما ما يُشغّل الحوار، و«اكتشاف الميزة» أعلاه هو ما تُشغّلانه — بما
 فيه ما يمتنع عنه الحوار، وهو ما لا يقوله جدولُ القيم المقبولة.
@@ -433,7 +442,7 @@ mjloop-cli config set <key> <value> [--dir <path>]
 ```
 
 و`set` يُغيّر إعدادًا واحدًا يُسمّيه بمفتاحه المنقوط كاملًا — `orchestration.discovery.mode`
-و`orchestration.quality.independent_verification` وأمثالهما. والإعدادان اللذان يقبلان قائمة
+و`orchestration.quality.mode` وأمثالهما. والإعدادان اللذان يقبلان قائمة
 يأخذان قيمة مفصولة بفواصل، والسلسلة الفارغة هي القائمة الفارغة:
 ‏`mjloop-cli config set orchestration.skills.sources ''`‏ هي الطريقة التي يقول بها مشروعٌ إنّه
 لا يجوز اكتشاف أيّ مهارة من خارجه البتّة.

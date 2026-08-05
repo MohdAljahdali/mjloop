@@ -45,8 +45,14 @@ export async function buildSnapshot(projectDir: string, cache: SnapshotCache = e
 
   const [state, guards] = await Promise.all([stateSummary(projectDir), readGuards(projectDir)])
   const running = state.status === 'running'
+  // The open run, however it is currently stopped: a run suspended for a budget
+  // or a destructive decision is not `running`, and is exactly the one whose
+  // quality records are about to move.
+  const openRun = state.run_id === null || state.track === null
+    ? null
+    : runDirName(state.run_id, state.story, state.track)
 
-  const revisions = await readRevisions(projectDir, cache.tick, running)
+  const revisions = await readRevisions(projectDir, cache.tick, running, openRun)
 
   // Paid for in cash: `manifest.json` used to be read twice per plan per tick,
   // and every plan was re-read on every tick whether or not anything had moved.
@@ -60,9 +66,7 @@ export async function buildSnapshot(projectDir: string, cache: SnapshotCache = e
 
   const [runs, roster] = await Promise.all([
     listRuns(projectDir),
-    running && state.run_id !== null && state.track !== null
-      ? readRosterProgress(projectDir, runDirName(state.run_id, state.story, state.track), state.cycle)
-      : Promise.resolve(null),
+    running && openRun !== null ? readRosterProgress(projectDir, openRun, state.cycle) : Promise.resolve(null),
   ])
 
   return { project: projectDir, state, plans: cache.plans, runs, guards, roster, revisions }

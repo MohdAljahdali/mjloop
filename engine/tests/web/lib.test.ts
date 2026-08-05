@@ -768,8 +768,7 @@ describe('lib/config', () => {
       form.orchExecutionAfterPlanApproval = 'auto'
       form.orchExecutionUncertainConcurrency = 'parallel'
       form.orchExecutionRepairAttempts = 3
-      form.orchQualityIndependentPlanReview = true
-      form.orchQualityIndependentVerification = true
+      form.orchQualityMode = 'strict'
       form.orchSkillsSourceRegistry = true
       form.orchSkillsTrustedRegistries = 'https://skills.example.com\n\n'
       form.orchSkillsUpdateMode = 'pinned'
@@ -783,8 +782,7 @@ describe('lib/config', () => {
         { kind: 'orchestration.execution.after_plan_approval', value: 'auto' },
         { kind: 'orchestration.execution.uncertain_concurrency', value: 'parallel' },
         { kind: 'orchestration.execution.repair_attempts', value: 3 },
-        { kind: 'orchestration.quality', key: 'independent_plan_review', value: true },
-        { kind: 'orchestration.quality', key: 'independent_verification', value: true },
+        { kind: 'orchestration.quality.mode', value: 'strict' },
         { kind: 'orchestration.skills.sources', value: ['github', 'registry'] },
         { kind: 'orchestration.skills.trusted_registries', value: ['https://skills.example.com'] },
         { kind: 'orchestration.skills.update_mode', value: 'pinned' },
@@ -794,6 +792,20 @@ describe('lib/config', () => {
       for (const change of changes) {
         expect(ConfigChangeSchema.safeParse(change).success, JSON.stringify(change)).toBe(true)
       }
+    })
+
+    it('seeds the quality mode the project has pinned, and never substitutes the recommended one', () => {
+      // The recommendation is a label this page draws, not a value it writes:
+      // only `/mjloop:init` picks `adaptive`, and only for a new project.
+      const config = baseline({ orchestration: { quality: { mode: 'strict' } } })
+      const form = seedFormValues(config)
+      expect(form.orchQualityMode).toBe('strict')
+      expect(collectSettingsChanges(form, config)).toEqual([])
+
+      form.orchQualityMode = 'economy'
+      expect(collectSettingsChanges(form, config)).toEqual([
+        { kind: 'orchestration.quality.mode', value: 'economy' },
+      ])
     })
 
     it('compares skill sources as a set, never rewriting the order a document already holds', () => {

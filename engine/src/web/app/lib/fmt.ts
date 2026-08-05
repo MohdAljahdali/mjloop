@@ -60,8 +60,17 @@ export function duration(from: string | null | undefined, to: string | null | un
   const start = new Date(from).getTime()
   const end = to === null || to === undefined ? Date.now() : new Date(to).getTime()
   if (Number.isNaN(start) || Number.isNaN(end) || end < start) return ''
+  return elapsed(end - start)
+}
 
-  const seconds = Math.floor((end - start) / 1000)
+/**
+ * The same `1h 04m` / `3m 12s` / `9s`, for a span the engine already measured
+ * in milliseconds rather than one this page derives from two timestamps —
+ * `QualityTelemetry`'s active and waiting clocks, which are computed from
+ * persisted transitions and never from a reader's own clock.
+ */
+export function elapsed(ms: number): string {
+  const seconds = Math.floor(ms / 1000)
   const hours = Math.floor(seconds / 3600)
   const minutes = Math.floor((seconds % 3600) / 60)
   if (hours > 0) return `${hours}h ${String(minutes).padStart(2, '0')}m`
