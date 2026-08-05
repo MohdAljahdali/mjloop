@@ -15,6 +15,28 @@ Call `mjloop_state_get` and report it in a compact form:
   `.mjloop/config.yaml` needs the edit before the next run: every op that loads config
   fails until it parses, and nothing else reports it.
 
+- `quality` when it is not null, in one line: the **pinned** mode and supervision — not
+  whatever `.mjloop/config.yaml` says now — whether the pin is `active` or `shadow`, and
+  the dispatches used out of the run's ceiling. A `shadow` pin is worth naming as such: the
+  policy is being recorded and is not gating anything, which is what an existing project
+  that never opted in should see.
+- `quality.waiting` when it is set. This is the most useful line status prints, because it
+  is the only one with an action attached. Say which of the two suspensions it is and what
+  lifts it:
+  - `budget` — the run is `budget_exhausted`. It needs one explicit budget amendment for
+    this run, made in the cockpit (`/mjloop:web`).
+  - `decision` — the run is `waiting_for_user` on a destructive operation. It needs an
+    operator's approval or rejection, made in the cockpit, on that exact operation.
+
+  Then name `/mjloop:resume` as what continues the run once the decision is recorded, and
+  print the engine's `reason` as it stands. Neither suspension is spending anything while
+  it waits, so there is no hurry to invent one.
+
+Any token, cost or time number you report keeps the label the engine gave it —
+`measured`, `estimated`, or `unavailable`. Do not turn an `estimated` count into a figure,
+and do not convert an `unavailable` cost into one at all: this project may have no pricing
+table, and a number nobody measured is worse than the absence it replaced.
+
 If the run is halted, also read `HALT.md` from the run directory and summarise the
 recommended next step. If the project has no `.mjloop/`, say so, offer `/mjloop:init`, and
 stop there.

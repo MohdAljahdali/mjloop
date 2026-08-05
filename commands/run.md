@@ -22,6 +22,19 @@ without change: the roster comes from the track's own `required`, `available` an
 `closing` sets, and the gate and the order graph are the track's, not this command's.
 This command adds no rules of its own — that is the whole point of it.
 
+## 2a. Supervision is per run
+
+`mjloop_run_start` takes `supervision`, and it defaults to `supervised` — the human review
+points this project already has stay where they are. Pass `unattended` **only** when the
+user asked for this run to go without them, in words, in this request. It is a decision
+about one rare run: it is never inferred from a previous run, and there is no setting that
+makes it a project's default.
+
+Either way the run's quality policy is pinned at start — the mode, the supervision, the
+budget — and the run works against that pin rather than against the config file, which may
+move under it. `unattended` does not remove the destructive gate: a protected operation still
+suspends the run and waits for a person, and `/mjloop:resume` says what happens then.
+
 ## 3. Report
 
 Say which track ran, how many cycles it took, and what the verifier said.

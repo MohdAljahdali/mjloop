@@ -410,8 +410,7 @@ orchestration:
     uncertain_concurrency: sequential
     repair_attempts: 1
   quality:
-    independent_plan_review: false
-    independent_verification: false
+    mode: adaptive
   skills:
     sources: [github]
     trusted_registries: []
@@ -427,8 +426,7 @@ orchestration:
 | `execution.after_plan_approval` | `manual` | `auto` / `manual` — does an approved plan start building on its own |
 | `execution.uncertain_concurrency` | `sequential` | `sequential` / `ask` / `parallel` — what to do with stories whose independence cannot be proven |
 | `execution.repair_attempts` | `1` | a whole number, 0–5; `0` is a real setting and means never repair |
-| `quality.independent_plan_review` | `false` | `true` / `false` |
-| `quality.independent_verification` | `false` | `true` / `false` |
+| `quality.mode` | `adaptive` in a new project | `economy` / `adaptive` / `strict` — how much review a run pays for |
 | `skills.sources` | `[github]` | any subset of `github`, `registry`, `web`, `skills-sh`; the empty list means nothing may be discovered from outside this project |
 | `skills.trusted_registries` | `[]` | `https://` URLs — plain `http://` is refused at the schema |
 | `skills.update_mode` | `review` | `auto` / `review` / `pinned` |
@@ -437,6 +435,17 @@ orchestration:
 behaving exactly as it did before this block existed. Any other default would change what
 the command does in every already-provisioned project the moment the engine is upgraded —
 and that is a decision a project makes for itself, once, in writing.
+
+**`quality.mode` is the one setting behind the quality cycle, and an existing project is
+not gated by it until it names one.** `/mjloop:init` writes `adaptive` into a new project.
+A `config.yaml` that has never named a mode — including one still carrying the two booleans
+this key replaced, which are read and normalised without the file being rewritten — keeps
+behaving exactly as it did: its runs pin a policy and record what it would have decided
+without enforcing any of it. Writing the mode through `/mjloop:config` is the opt-in.
+
+A run pins the mode it started under, so a change here reaches the next run and never the
+one that is open. Unattended operation is not a setting at all: it is asked for per run,
+and no value of this key makes a merge or a deploy happen on its own.
 
 `always` and `ask` are the two values that turn the interview on, and **Feature discovery**
 above is what they turn on — including what it refuses to do, which a table of accepted
@@ -472,7 +481,7 @@ mjloop-cli config set <key> <value> [--dir <path>]
 ```
 
 `set` changes one setting, named by its full dotted key — `orchestration.discovery.mode`,
-`orchestration.quality.independent_verification`, and so on. The two list settings take a
+`orchestration.quality.mode`, and so on. The two list settings take a
 comma-separated value, and the empty string is the empty list:
 `mjloop-cli config set orchestration.skills.sources ''` is how a project says no skill may
 be discovered from outside it at all.

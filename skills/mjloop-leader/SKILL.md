@@ -92,6 +92,45 @@ Never edit `manifest.json` or `INDEX.md`. Both are derived from the story files;
 `PreToolUse` hook denies writes to the manifest, and a hand-edited index is overwritten
 by the next render.
 
+### 2d. The run's quality policy
+
+`mjloop_run_start` pins this run's quality policy before you compose anything, and
+`mjloop_state_get` reports the compact form of it under `quality`: the mode
+(`economy`, `adaptive` or `strict`), the supervision, whether the pin is `active` or
+`shadow`, the dispatches used out of the run's ceiling, and what the run is waiting on.
+
+Read the pin, not the config. `.mjloop/config.yaml` may be edited mid-run and the pin never
+moves — a run that consulted the live file would change its own rules halfway through the
+work it is being judged on. The mode is not yours to choose either: it is the project's
+setting, and `unattended` supervision is the user's explicit request for this one run.
+
+Four rules follow from the pin, and all four are the engine's:
+
+- **Dispatch exactly the `{agent, instance}` set the policy declares.** Each entry names a
+  role the track already grants — or `verifier` under a dimension-named instance — and
+  every dispatch is charged against the run's ceiling by that exact pair. There is no
+  quality agent to invent: a dimension that needs a specialist is routed to the specialist
+  the track already has, under the reason the policy recorded.
+- **Reuse the evidence already logged.** A dimension the ledger closed on evidence the
+  change did not touch is closed; re-dispatching for it spends a reservation to learn what
+  the run already knows. Invalidation is the engine's job and it is selective — a UI change
+  does not invalidate an untouched database dimension.
+- **Stop cleanly on either resumable status.** If a call comes back with the run in
+  `budget_exhausted` or `waiting_for_user`, the run is suspended at the stage it reached
+  and there is nothing further to dispatch. Report which one, quote the engine's reason,
+  and name what lifts it: one recorded budget amendment, or an operator's decision on the
+  exact operation — both made in the cockpit — and then `/mjloop:resume`. Do not poll, do
+  not summarise on a timer, and do not send an agent to look: a suspended run spends no
+  dispatch and no token, and that is the property that makes it safe to leave open.
+- **Never decide a destructive request.** The gate stops a protected operation *before* it
+  happens, and the answer is an operator's, taken in the cockpit's control plane and bound
+  to that operation's fingerprint. No MCP tool in your context opens it, and the fact that
+  a run is unattended does not make it yours.
+
+A `shadow` pin gates nothing — an existing project that never named a mode behaves exactly
+as it did before. Say so if you report the mode at all, rather than describing a policy
+that is being recorded as one that is being enforced.
+
 ### 3. Compose the roster
 
 Read `.mjloop/config.yaml` for the track's `required`, `available` and `closing` sets.
@@ -548,6 +587,12 @@ If the run halts, say so plainly and stop.
   manifest does not name. The manifest is the validated selection; a skill you add yourself,
   however well it seems to fit, is the free-form claim skill selection exists to refuse, and
   there is no tool that lets you shortcut the selection the engine already made.
+- Never start a new run to clear a suspension. `budget_exhausted` and `waiting_for_user`
+  are decisions waiting to be made, and a fresh run discards the pinned policy, the ledger
+  and the completed work the suspension was protecting.
+- Never merge or deploy anything, and never describe a run as having done so. A passing run
+  commits its own verified work and stops there; both of those are separate decisions under
+  their own controls, and no mode or supervision setting changes that.
 - Never create a per-technology agent — no `flutter-builder`, no `nextjs-builder`, no
   technology-named variant of any existing role. The roles are fixed; only the guidance a
   role receives for one task changes, and that guidance comes from the pinned manifest you
