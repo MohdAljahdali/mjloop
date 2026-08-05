@@ -9,7 +9,9 @@ import { FeatureDiscoveryModeSchema, QualityModeSchema, SkillUpdateModeSchema } 
 import {
   DestructiveRequestSchema,
   QualityBudgetFieldSchema,
+  QualityConfigSourceSchema,
   QualityDimensionSchema,
+  QualityEnforcementSchema,
   QualityVerdictSchema,
 } from '../../src/schemas/quality.js'
 import { SkillPackageSchema } from '../../src/schemas/skill-library.js'
@@ -319,6 +321,12 @@ describe('locales', () => {
     expect(family('quality.verdict.')).toEqual([...QualityVerdictSchema.options].sort())
     expect(family('quality.dimension.')).toEqual([...QualityDimensionSchema.options].sort())
     expect(family('quality.budgetField.')).toEqual([...QualityBudgetFieldSchema.options].sort())
+    // The two that say whether a policy is actually gating the run. Both have
+    // two members today, which is exactly why they are easy to leave out of a
+    // guard — and a missing key here would put a raw identifier where "not
+    // gated by it" belongs, which is the one distinction a shadow run has.
+    expect(family('quality.enforcement.')).toEqual([...QualityEnforcementSchema.options].sort())
+    expect(family('quality.source.')).toEqual([...QualityConfigSourceSchema.options].sort())
     // The kinds a destructive request can carry — `schemas/quality.ts`'s copy
     // of the closed list `ops/destructive-risk.ts` writes into the record.
     expect(family('quality.decisionKind.')).toEqual([...DestructiveRequestSchema.shape.kind.options].sort())

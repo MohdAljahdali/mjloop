@@ -20,7 +20,7 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from '../composables/useI18n.js'
 import { submit } from '../stores/session.js'
-import { QUALITY_BUDGET_FIELDS } from '../composables/useRun.js'
+import { QUALITY_BUDGET_FIELDS } from '../composables/useQuality.js'
 import { resumeRun, type BudgetState, type BudgetSubject } from '../composables/useQualityDialogs.js'
 import Bdi from './Bdi.vue'
 import type { QualityBudgetField } from '../types/protocol.js'

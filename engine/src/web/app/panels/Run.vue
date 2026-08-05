@@ -24,17 +24,15 @@ import { computed, ref, watch } from 'vue'
 import { snapshot } from '../stores/session.js'
 import { useI18n } from '../composables/useI18n.js'
 import { useFeed } from '../composables/useFeed.js'
+import { preflightFacts, preflightPast, runDirName } from '../composables/useRun.js'
 import {
-  preflightFacts,
-  preflightPast,
   qualityBudgetRows,
   qualityComparisons,
   qualityDoors,
   qualityLedgerRows,
   qualityTelemetryRows,
   qualityViewFor,
-  runDirName,
-} from '../composables/useRun.js'
+} from '../composables/useQuality.js'
 import { useQualityDialogs } from '../composables/useQualityDialogs.js'
 import { stamp } from '../lib/fmt.js'
 import type { ConfigView, Preflight, QualityRunView, RunDetail, SkillManifest, Snapshot, StateView } from '../types/protocol.js'
