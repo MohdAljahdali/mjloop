@@ -919,6 +919,25 @@ describe('the rich graph card', () => {
   // the one currently running.
   const TRACK2 = { required: ['builder', 'verifier'], available: [], closing: [], order: [], max_cycles: 5 }
 
+  /**
+   * The canvas is sized to its content, never fitted to a fixed box — these
+   * flows mount hidden inside `<KeepAlive>`, where Vue Flow's own fit runs
+   * against a zero-sized viewport and clamps to scale 1 (`TrackGraph.vue`'s
+   * own `canvas` comment carries the measurements). The pane scale is not
+   * observable here — happy-dom lays nothing out — but the derived height is,
+   * because it is a plain inline style. One assertion, the only one that
+   * actually distinguishes a derived height from the old fixed one: a track
+   * whose waves stack deeper gets a taller canvas.
+   */
+  it('gives a deeper track a taller canvas than a shallow one', async () => {
+    const deep = { ...TRACK2, order: [{ agent: 'verifier', after: ['builder'] }] }
+    const flat = mount(TrackGraph, { props: { track: TRACK2, name: 'build', agents: AGENTS } })
+    const tall = mount(TrackGraph, { props: { track: deep, name: 'fix', agents: AGENTS } })
+    await flushPromises()
+    const heightOf = (w: typeof flat): number => Number(/block-size:\s*([\d.]+)px/.exec(w.find('.track-graph').attributes('style') ?? '')?.[1] ?? NaN)
+    expect(heightOf(tall)).toBeGreaterThan(heightOf(flat))
+  })
+
   it('pulses the running agent and marks the landed one, and nothing without a live map', async () => {
     const live = { builder: 'running', verifier: 'landed' } as const
     const wrapper = mount(TrackGraph, { props: { track: TRACK2, name: 'build', agents: AGENTS, live } })

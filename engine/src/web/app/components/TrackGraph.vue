@@ -22,6 +22,15 @@
  * `wouldCycle` needs to check against — rather than a second, independent
  * copy of that check living here.
  *
+ * The canvas is sized to its content, not the content scaled to the canvas:
+ * `canvas` below derives the box this track's waves need from the same
+ * `layer`/`index` the coordinates come from, and nothing here calls
+ * `fitView`. That is a deliberate reversal — these flows mount inside a
+ * hidden, zero-sized `<KeepAlive>`d panel, where Vue Flow's own fit is
+ * degenerate and clamps to scale `1` forever. `canvas`'s own comment carries
+ * the measurements; a derived size is view geometry, so it stays as unstored
+ * as the coordinates are.
+ *
  * `:agents` feeds `cardInfo` (`lib/agentcard.ts`) so every node can draw a
  * rich card — description, tools, model, role badge — instead of a bare
  * name box. `cardInfo` never throws and answers a name no definition file
@@ -41,7 +50,7 @@
  */
 import { computed } from 'vue'
 import { Background } from '@vue-flow/background'
-import { Handle, Position, useVueFlow, VueFlow, type Connection, type EdgeChange, type NodeChange } from '@vue-flow/core'
+import { Handle, Position, VueFlow, type Connection, type EdgeChange, type NodeChange } from '@vue-flow/core'
 import { Controls } from '@vue-flow/controls'
 import { useI18n } from '../composables/useI18n.js'
 import { cardInfo, type LiveStatus } from '../lib/agentcard.js'
@@ -78,49 +87,71 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
-// A store instance scoped to this component's own flow, not the module-wide
-// default `useVueFlow()` would otherwise inject or create — `Tracks.vue`
-// renders one `TrackGraph` per track (`graphEntries`, that file's own
-// `v-for`), so a shared instance id would fit each track's nodes against
-// every other track's bounding box, not its own. `props.name` is a track
-// name (`trackNames`, `lib/config.ts`) and stable for this component
-// instance's whole lifetime — `Tracks.vue`'s own `:key="entry.name"` on the
-// `v-for` already guarantees a fresh component, not a reused one, whenever
-// the name would change — so capturing it once here, outside a computed, is
-// enough; `:id="flowId"` on the `VueFlow` element below is what actually
-// binds this store instance to that one DOM tree.
-const flowId = `track-graph-${props.name}`
-const { onNodesInitialized, fitView } = useVueFlow(flowId)
-
-// `fit-view-on-init` (on the `VueFlow` element below) runs at store
-// initialisation, before a custom node like `.graph-node` has been measured
-// — every node still reports zero width/height at that point, so the
-// bounding box it fits against is meaningless and it settles on scale `1`
-// instead of shrinking to fit. A fix round measured this directly: all four
-// of this project's default tracks fitted at exactly `1` regardless of
-// `.track-graph`'s own `block-size`, and `build` (five waves, ~1230px of
-// content) had its top and bottom waves clipped by the 800px box as a
-// result — neither the earlier stride fix nor the earlier min-zoom/
-// container-height fix touched this, because neither addressed a fit that
-// was not running at all. `onNodesInitialized` fires once real dimensions
-// are known (`@vue-flow/core`'s own `useNodesInitialized` composable), so
-// calling `fitView()` from it re-fits against the true content size. Kept
-// alongside `fit-view-on-init` rather than replacing it: `fitViewOnInit`
-// also drives the transformation pane's own hidden-until-fitted opacity
-// (`@vue-flow/core`'s `Transform` component checks the same
-// `fitViewOnInitDone` flag), which is what keeps a reader from seeing an
-// unfitted flash of content before this handler's own, correctly-timed fit
-// lands — removing the prop would trade that flash back in for nothing this
-// handler needs.
-onNodesInitialized(() => {
-  void fitView()
-})
-
 const geometry = computed(() => layout(props.track))
 
-// This task's own coordinates: `index * 260`, `layer * 260` — a vertical
-// wave flow, each layer a row rather than a column, wide enough for the
-// rich card `70-graph.css`'s `.graph-node` now draws instead of the old
+// The one set of numbers every piece of this component's geometry is cut
+// from. `STRIDE` is the step between two waves and between two cards inside
+// one wave (`nodes` below); `CARD_INLINE`/`CARD_BLOCK` are the width and the
+// *maximum* height `70-graph.css`'s own `.graph-node` pins the card to; and
+// `MARGIN` is the gap the canvas keeps around its content on every side,
+// spent as the `:default-viewport` offset below (top/start) and as slack in
+// `canvas` (end/bottom).
+//
+// `CARD_BLOCK` is the card's max height rather than its measured height on
+// purpose: this component never measures anything, and a card that renders
+// shorter than its cap only leaves the canvas roomier than it strictly needs
+// to be. Sizing against the cap is what makes the result safe without a
+// measurement pass — see `canvas` below for why there is no measurement pass
+// to lean on.
+const STRIDE = 260
+const CARD_INLINE = 240
+const CARD_BLOCK = 220
+const MARGIN = 24
+
+/**
+ * The canvas size this track's own content needs, derived from the same
+ * `layer`/`index` the node positions are derived from and stored nowhere —
+ * `lib/trackgraph.ts`'s "positions are derived, never stored" rule reaches
+ * the container's size too, not only the coordinates inside it.
+ *
+ * **Why the canvas is sized to its content instead of the content being
+ * scaled to fit the canvas.** `Tracks.vue` is not the panel the dashboard
+ * opens on and `App.vue` keeps every panel inside `<KeepAlive>`, so all four
+ * of these flows mount while their panel is hidden, against a zero-sized
+ * container. Vue Flow reads its viewport dimensions from that container, and
+ * a fit computed against a zero-sized viewport is degenerate: it clamps to
+ * `maxZoom` (`1`) and never shrinks. A fix round measured that directly —
+ * every default track sat at pane scale exactly `1` no matter what
+ * `.track-graph`'s own height or `:min-zoom` said, and clicking the controls'
+ * own fit-view button long after mount left it at `1` as well, which is what
+ * rules out a later, better-timed `fitView()` call as the answer. So the fit
+ * is gone entirely, and this takes its place: at scale `1` every card is
+ * inside the box because the box was cut to hold them.
+ *
+ * This ties the three numbers above into one knot on purpose. Raising the
+ * stride, or raising `.graph-node`'s own `max-block-size`, moves what a wave
+ * occupies — and this is what turns that into the room it needs, so all of
+ * them must move together. The height is the load-bearing half (a track's
+ * waves stack downward, and `build`'s five waves are what clipped); the
+ * width matters for the same reason one wave over, `build`'s first wave
+ * being five cards wide.
+ */
+const canvas = computed(() => {
+  const maxLayer = Math.max(0, ...geometry.value.nodes.map((node) => node.layer))
+  const maxIndex = Math.max(0, ...geometry.value.nodes.map((node) => node.index))
+  return {
+    blockSize: `${MARGIN * 2 + maxLayer * STRIDE + CARD_BLOCK}px`,
+    // Read by `70-graph.css`'s own `.track-graph > .vue-flow` rule rather
+    // than set on the flow element here: `.vue-flow`'s vendor stylesheet
+    // pins `width: 100%`, so the override has to be a rule of this project's
+    // own, and a custom property is how a derived number reaches one.
+    '--graph-inline-size': `${MARGIN * 2 + maxIndex * STRIDE + CARD_INLINE}px`,
+  }
+})
+
+// This task's own coordinates: `index * STRIDE`, `layer * STRIDE` — a
+// vertical wave flow, each layer a row rather than a column, wide enough for
+// the rich card `70-graph.css`'s `.graph-node` now draws instead of the old
 // single-line name box. Positions are derived every render, never stored —
 // see `lib/trackgraph.ts`'s own header for why a coordinates field never
 // reaches `config.yaml`.
@@ -133,12 +164,14 @@ const geometry = computed(() => layout(props.track))
 // stacked waves (`edges` below, `label:` on each edge). Raising the card's
 // own max height without raising this stride (or the reverse) reopens the
 // exact overlap a fix round found on the default `build` track: a 170px
-// stride against a card that actually rendered 193px tall.
+// stride against a card that actually rendered 193px tall. `canvas` above is
+// the third party to that same bargain — it turns these strides into the
+// canvas size that holds them.
 const nodes = computed(() =>
   geometry.value.nodes.map((node) => ({
     id: node.id,
     type: 'agent',
-    position: { x: node.index * 260, y: node.layer * 260 },
+    position: { x: node.index * STRIDE, y: node.layer * STRIDE },
     data: {
       agent: node.agent,
       list: node.list,
@@ -199,7 +232,12 @@ function onNodesChange(changes: NodeChange[]): void {
 </script>
 
 <template>
-  <div class="track-graph" :data-track-graph="props.name">
+  <!-- The canvas takes the size its own content needs (`canvas` above, and
+       that computed's own comment for why a fit cannot be trusted to do this
+       instead). Inline because it is derived per track and per render, the
+       same way the node coordinates below are; `70-graph.css` keeps only the
+       floor a one-wave track falls back to. -->
+  <div class="track-graph" :style="canvas" :data-track-graph="props.name">
     <!-- `:nodes-draggable="false"`: `lib/trackgraph.ts` derives `{ x, y }`
          from `layer`/`index` on every render and nothing here ever writes a
          moved position back — the same "positions are derived, never
@@ -210,26 +248,37 @@ function onNodesChange(changes: NodeChange[]): void {
          coordinates). Turning dragging off makes that contract visible
          instead of surprising.
 
-         `:min-zoom="0.2"`: three numbers now decide whether an N-wave track
-         is fully visible on mount — this stride (`nodes` above, `layer *
-         260`), `.track-graph`'s own `block-size` (`70-graph.css`), and this
-         floor. Vue Flow's own default `minZoom` is `0.5`, and `fitView`
-         will not zoom out past whatever floor is set here even when the
-         content is taller than the box — so once the `onNodesInitialized`
-         handler above makes `fitView` actually run against real content
-         (see that handler's own comment for why it did not before), a track
-         deep enough to need a smaller scale still needs room to reach it.
-         `70-graph.css`'s own `block-size` comment is the readability half —
-         raising the container so a *typical* track lands at a legible scale
-         well above this floor, which stays a pure backstop for a track
-         deeper than that. -->
+         No `fit-view-on-init`, and no `fitView()` call anywhere: nothing
+         here scales the content to the box, because `canvas` above sizes the
+         box to the content instead — see that computed's own comment for the
+         measured reason a fit cannot do this job in a `<KeepAlive>`d panel.
+         Dropping the prop costs nothing that was worth keeping. It does
+         gate the transformation pane's hidden-until-fitted opacity
+         (`@vue-flow/core`'s `Transform` component: `isHidden` is
+         `fitViewOnInit && !fitViewOnInitDone` —
+         `node_modules/@vue-flow/core/dist/vue-flow-core.mjs:8397-8404`,
+         read directly rather than assumed), but that opacity exists to hide
+         the gap between an initial transform and the fitted one. With no fit
+         running, the initial viewport IS the final viewport, so there is no
+         unfitted frame left for it to hide.
+
+         `:default-viewport` is that initial viewport: the identity transform
+         Vue Flow would otherwise use puts the first wave's first card flush
+         against the top-left corner, so the content starts shifted by the
+         same `MARGIN` `canvas` above already reserved for it.
+
+         `:min-zoom="0.2"`: purely the floor for the zoom-out button in the
+         controls bar below, now that nothing zooms programmatically. Vue
+         Flow's own default is `0.5`, which stops a reader well before a deep
+         track fits on one screen; `0.2` lets them keep going. It no longer
+         decides whether anything is *visible* on mount — that is `canvas`'s
+         job alone. -->
     <VueFlow
-      :id="flowId"
       :nodes="nodes"
       :edges="edges"
       :nodes-draggable="false"
       :min-zoom="0.2"
-      fit-view-on-init
+      :default-viewport="{ x: MARGIN, y: MARGIN, zoom: 1 }"
       @connect="onConnect"
       @edges-change="onEdgesChange"
       @nodes-change="onNodesChange"

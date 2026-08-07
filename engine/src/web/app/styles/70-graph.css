@@ -34,31 +34,46 @@
  * stylesheet directly rather than assuming parity with `.terminal` — a
  * second escape hatch here would be redundant, not merely unnecessary. */
 
+/* The height and the width of a track's canvas are *not* set here — both are
+ * derived per track by `TrackGraph.vue`'s own `canvas` computed and arrive
+ * inline, as `block-size` and as the `--graph-inline-size` custom property
+ * the rule below reads. That file's comment carries the measured reason the
+ * canvas is sized to its content rather than the content being fitted into a
+ * fixed canvas; the short version is that these flows mount hidden inside
+ * `<KeepAlive>`, so Vue Flow's own fit runs against a zero-sized viewport and
+ * clamps to scale 1 forever.
+ *
+ * What is left here is the floor for the degenerate case: a track with a
+ * single wave derives barely more than one card's height, which would read
+ * as a strip rather than a canvas. 320px is a canvas a one-wave track still
+ * looks at home on, and every deeper track overrides it from the inline
+ * value. */
 .track-graph {
   position: relative;
-  /* Raised from 360px in the horizontal layout, then again here — a wave is
-   * now a row of rich cards, not a column of one-line boxes, so a track
-   * with more than two or three waves needs the extra vertical room to
-   * stay legible once `fitView` scales it to fit.
-   *
-   * This number is the readability half of a pair with `TrackGraph.vue`'s
-   * own `:min-zoom="0.2"` (that file's own comment on the `VueFlow` element
-   * names this rule back): the min-zoom floor only stops `fitView` from
-   * *clipping* a deep track, it says nothing about the scale it lands on.
-   * The default `build` track is five waves deep — `(waves - 1) * 260`
-   * stride `+` one card's own `220px` height (`.graph-node`'s own
-   * `max-block-size` above) — roughly 1230px of content. `800px` here fits
-   * that at a `~0.65` scale, comfortably above both the old `0.5` clamp
-   * that caused the clipping and the new `0.2` floor, which stays a pure
-   * backstop for a track deeper than any of this project's four default
-   * ones. Raising the wave stride or the card's max height again moves the
-   * 1230px figure this comment assumes — recompute the fit before assuming
-   * `800px` still lands a typical track at a legible scale. */
-  block-size: 800px;
+  min-block-size: 320px;
+  /* A wave wider than the column it sits in scrolls inside this box instead
+   * of pushing the panel's own layout sideways — `build`'s first wave is
+   * five cards, ~1330px, wider than this column on most windows.
+   * `overflow-y` stays `hidden` because the inline `block-size` above
+   * already makes the box tall enough for its content: nothing is ever
+   * hidden vertically, and letting it scroll would only add a second bar. */
+  overflow-x: auto;
+  overflow-y: hidden;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--panel-2);
   margin-block-end: 16px;
+}
+
+/* `@vue-flow/core`'s own stylesheet pins `.vue-flow { width: 100% }`, which
+ * would shrink the flow back to the scroll container's width and clip the
+ * wave that overflows it. The derived width has to win here, and
+ * `min-inline-size: 100%` keeps the flow filling the box on the far more
+ * common case of a track narrower than its column. */
+.track-graph > .vue-flow {
+  block-size: 100%;
+  inline-size: var(--graph-inline-size, 100%);
+  min-inline-size: 100%;
 }
 
 .track-graphs {
@@ -194,7 +209,10 @@
  * the default `build` track, so the card below overlapped the one above
  * right at its header. 220px keeps a card under the 260px stride with
  * ~40px to spare for the edge label between two stacked waves; raising this
- * number without raising that stride reopens the same overlap. The card
+ * number without raising that stride reopens the same overlap. It is also
+ * the height `TrackGraph.vue`'s own `canvas` computed budgets for the last
+ * wave — a card allowed past this cap would hang off the bottom of a canvas
+ * cut to hold exactly this much. The card
  * cannot simply grow taller to fit more content — `.graph-node-tools`'s own
  * `max-block-size`/`overflow: hidden` below is what actually holds this
  * bound: a track whose agent lists many tools clips the tool chips, never
