@@ -173,10 +173,24 @@
  * rows — but now carries the head's background too, never the only cue:
  * the role badge's own text already says which list, so colour remains
  * decoration on top of a reachable fact, not the fact itself. */
+/* `max-block-size: 220px` is not a free-standing number — it is the other
+ * half of `TrackGraph.vue`'s own `y: node.layer * 260` stride (that file's
+ * own comment on `nodes` names this rule back). A fix round found the two
+ * out of step: `170px` against a card that actually rendered 193px tall on
+ * the default `build` track, so the card below overlapped the one above
+ * right at its header. 220px keeps a card under the 260px stride with
+ * ~40px to spare for the edge label between two stacked waves; raising this
+ * number without raising that stride reopens the same overlap. The card
+ * cannot simply grow taller to fit more content — `.graph-node-tools`'s own
+ * `max-block-size`/`overflow: hidden` below is what actually holds this
+ * bound: a track whose agent lists many tools clips the tool chips, never
+ * the header, description or role badge, and never pushes the card past
+ * this height in the first place. */
 .graph-node {
   display: flex;
   flex-direction: column;
   inline-size: 240px;
+  max-block-size: 220px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--line);
   background: var(--raise);
@@ -240,10 +254,19 @@
   color: var(--dim);
 }
 
+/* Bounded to roughly two wrapped rows and clipped past that — the row an
+ * agent's own tool count is allowed to grow, never the card's overall
+ * height (`.graph-node`'s own `max-block-size` comment above). An agent
+ * with many tools loses its tail of chips off the bottom edge rather than
+ * pushing the header, description or role badge out of the stride the wave
+ * below sits at; the tool list is the least load-bearing row on the card,
+ * so it is the one allowed to give. */
 .graph-node-tools {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
+  max-block-size: 42px;
+  overflow: hidden;
 }
 
 .graph-node-tool {

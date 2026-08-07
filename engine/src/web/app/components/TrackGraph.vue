@@ -8,7 +8,7 @@
  *
  * Purely presentational, and purely an emitter: it takes `:track`, `:name`
  * and `:agents`, turns `layout(track)` into Vue Flow's own node/edge shape
- * at the fixed coordinates `{ x: index * 260, y: layer * 170 }` — a wave is
+ * at the fixed coordinates `{ x: index * 260, y: layer * 260 }` — a wave is
  * a *row* now, growing downward as the track's layers advance, and a
  * layer's own agents spread left-to-right across it by `index` — and
  * reports every drag, edge deletion, node deletion and node/pane click
@@ -80,17 +80,27 @@ const { t } = useI18n()
 
 const geometry = computed(() => layout(props.track))
 
-// This task's own coordinates: `index * 260`, `layer * 170` — a vertical
-// wave flow, each layer a row rather than a column, wide enough
-// (`260`/`170`) for the rich card `70-graph.css`'s `.graph-node` now draws
-// instead of the old single-line name box. Positions are derived every
-// render, never stored — see `lib/trackgraph.ts`'s own header for why a
-// coordinates field never reaches `config.yaml`.
+// This task's own coordinates: `index * 260`, `layer * 260` — a vertical
+// wave flow, each layer a row rather than a column, wide enough for the
+// rich card `70-graph.css`'s `.graph-node` now draws instead of the old
+// single-line name box. Positions are derived every render, never stored —
+// see `lib/trackgraph.ts`'s own header for why a coordinates field never
+// reaches `config.yaml`.
+//
+// The vertical stride and the card's own height are coupled and must stay
+// that way on purpose: a card taller than this stride draws into the row
+// below it. `70-graph.css`'s `.graph-node` carries a `max-block-size: 220px`
+// specifically to hold up its end of that bargain — 220px leaves ~40px of
+// clearance under `260` for the order/gate edge label that sits between two
+// stacked waves (`edges` below, `label:` on each edge). Raising the card's
+// own max height without raising this stride (or the reverse) reopens the
+// exact overlap a fix round found on the default `build` track: a 170px
+// stride against a card that actually rendered 193px tall.
 const nodes = computed(() =>
   geometry.value.nodes.map((node) => ({
     id: node.id,
     type: 'agent',
-    position: { x: node.index * 260, y: node.layer * 170 },
+    position: { x: node.index * 260, y: node.layer * 260 },
     data: {
       agent: node.agent,
       list: node.list,
