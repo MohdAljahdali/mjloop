@@ -8,6 +8,11 @@ node_modules/
 *.tsbuildinfo
 .worktrees/
 
+# Scratch belonging to the superpowers skills: brainstorming mockups and the
+# subagent-driven-development ledger, briefs and review packages. Working
+# notes for a session, never project content.
+.superpowers/
+
 # Declaration output of `engine/tsconfig.protocol.json`, the composite build
 # that lets `tsconfig.web.json` resolve `Snapshot`/`ClientMessage`/`Write`
 # through project references instead of Node-touching source. Rebuilt by
