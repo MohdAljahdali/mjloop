@@ -170,11 +170,29 @@ function onNodesChange(changes: NodeChange[]): void {
          then have it silently snap back the next time `draft` changes
          (any other edit re-renders this component with the same layout
          coordinates). Turning dragging off makes that contract visible
-         instead of surprising. -->
+         instead of surprising.
+
+         `:min-zoom="0.2"`: three numbers now decide whether an N-wave track
+         is fully visible on mount — this stride (`nodes` above, `layer *
+         260`), `.track-graph`'s own `block-size` (`70-graph.css`), and this
+         floor. Vue Flow's own default `minZoom` is `0.5`; `fit-view-on-init`
+         will not zoom out past whatever floor is set here even when the
+         content is taller than the box, so a track deep enough to need a
+         smaller scale was clamped and clipped instead of shrunk — a fix
+         round found the default `build` track (5 waves, ~1230px of content)
+         fitted into the box at exactly `0.5`, its top and bottom waves
+         sliced off with the role badge and agent name the first things lost.
+         Lowering the floor to `0.2` is the correctness half of that fix:
+         it lets `fitView` actually reach whatever scale a track's true depth
+         needs. `70-graph.css`'s own `block-size` comment is the readability
+         half — raising the container so a *typical* track lands at a
+         legible scale well above this floor, which is only the backstop for
+         a track deeper than that. -->
     <VueFlow
       :nodes="nodes"
       :edges="edges"
       :nodes-draggable="false"
+      :min-zoom="0.2"
       fit-view-on-init
       @connect="onConnect"
       @edges-change="onEdgesChange"

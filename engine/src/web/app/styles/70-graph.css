@@ -36,11 +36,25 @@
 
 .track-graph {
   position: relative;
-  /* Raised from 360px in the horizontal layout: a wave is now a row of
-   * rich cards, not a column of one-line boxes, so a track with more than
-   * two or three waves needs the extra vertical room to keep them from
-   * overlapping the fit-to-view Vue Flow computes on mount. */
-  block-size: 520px;
+  /* Raised from 360px in the horizontal layout, then again here — a wave is
+   * now a row of rich cards, not a column of one-line boxes, so a track
+   * with more than two or three waves needs the extra vertical room to
+   * stay legible once `fitView` scales it to fit.
+   *
+   * This number is the readability half of a pair with `TrackGraph.vue`'s
+   * own `:min-zoom="0.2"` (that file's own comment on the `VueFlow` element
+   * names this rule back): the min-zoom floor only stops `fitView` from
+   * *clipping* a deep track, it says nothing about the scale it lands on.
+   * The default `build` track is five waves deep — `(waves - 1) * 260`
+   * stride `+` one card's own `220px` height (`.graph-node`'s own
+   * `max-block-size` above) — roughly 1230px of content. `800px` here fits
+   * that at a `~0.65` scale, comfortably above both the old `0.5` clamp
+   * that caused the clipping and the new `0.2` floor, which stays a pure
+   * backstop for a track deeper than any of this project's four default
+   * ones. Raising the wave stride or the card's max height again moves the
+   * 1230px figure this comment assumes — recompute the fit before assuming
+   * `800px` still lands a typical track at a legible scale. */
+  block-size: 800px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--panel-2);
