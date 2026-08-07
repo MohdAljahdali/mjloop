@@ -21,18 +21,27 @@
 @import '@vue-flow/core/dist/theme-default.css';
 @import '@vue-flow/controls/dist/style.css';
 
-/* No `.terminal`-style `direction: ltr`/`overflow: hidden` escape hatch is
- * added here for `.track-graph`, its own wrapper — `@vue-flow/core`'s own
- * `style.css` already pins both on `.vue-flow`, the root class Vue Flow
- * renders inside this wrapper: `.vue-flow { overflow: hidden; direction:
- * ltr; }` (`node_modules/@vue-flow/core/dist/style.css:1-8`, imported two
- * lines up). That is the same fix `.terminal` (`app.css`) carries by hand
- * for xterm, applied at the source for the same reason: Vue Flow's own pane,
- * zoom controls and edge paths are positioned in absolute pixel/transform
- * math that assumes left-to-right, physical-left coordinates, unrelated to
- * this project's own `dir="rtl"`. Confirmed by reading the vendor
- * stylesheet directly rather than assuming parity with `.terminal` — a
- * second escape hatch here would be redundant, not merely unnecessary. */
+/* `@vue-flow/core`'s own `style.css` already pins `.vue-flow { overflow:
+ * hidden; direction: ltr; }` (`node_modules/@vue-flow/core/dist/style.css:1-8`,
+ * imported two lines up) on the root class Vue Flow renders inside
+ * `.track-graph`. That is the same fix `.terminal` (`app.css`) carries by
+ * hand for xterm, applied at the source for the same reason: Vue Flow's own
+ * pane, zoom controls and edge paths are positioned in absolute
+ * pixel/transform math that assumes left-to-right, physical-left
+ * coordinates, unrelated to this project's own `dir="rtl"`.
+ *
+ * The wrapper needs `direction: ltr` of its own all the same, and only
+ * because it is now a scroll container (`overflow-x` below). A scroll
+ * container's *resting* position is its start edge, and `dir="rtl"` puts
+ * that edge on the right — so an `rtl` wrapper around `ltr` content opens
+ * scrolled to the far end, with the first column already out of view before
+ * the reader has touched anything. Measured in an `ar` locale before this
+ * line existed: `build` and `fix` both rested at their right edge and hid
+ * every column-0 card 122px off the left. The wrapper's direction has to
+ * match the coordinate space it scrolls over, and Vue Flow fixed that space
+ * as `ltr` two rules down. Nothing of this project's own text lives in this
+ * element — it holds `.vue-flow` and nothing else — so there is no Arabic
+ * run here for the override to mis-order. */
 
 /* The height and the width of a track's canvas are *not* set here — both are
  * derived per track by `TrackGraph.vue`'s own `canvas` computed and arrive
@@ -50,6 +59,10 @@
  * value. */
 .track-graph {
   position: relative;
+  /* See this file's own header block: the wrapper scrolls, so its direction
+   * decides which edge it rests at, and it has to be the same `ltr` Vue Flow
+   * pins on the content inside it. */
+  direction: ltr;
   min-block-size: 320px;
   /* A wave wider than the column it sits in scrolls inside this box instead
    * of pushing the panel's own layout sideways — `build`'s first wave is
