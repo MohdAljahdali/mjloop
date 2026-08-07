@@ -2,8 +2,16 @@
  * The read side of the transport.
  *
  * The socket pushes keys — small facts the poller already parsed. Anything with
- * a body is fetched from here, conditionally, and the `ETag` turns almost every
- * one of those into a 304 with an empty body over a loopback socket.
+ * a body is fetched from here, and only when the revision it rides has actually
+ * moved (`feed()` below) — that gating is the whole economy of this transport,
+ * because every fetch it does issue comes back in full. There is no
+ * revalidation to lean on: `get()` sends no `if-none-match`, and the api
+ * answers `cache-control: no-store` (`web/api.ts`), so the browser has no
+ * stored response to revalidate either. The server does compute an `ETag` and
+ * does honour `if-none-match` when a client sends one (`web/api.ts`'s own 304
+ * branch) — this client never sends one, so no request from this file is ever
+ * answered `304`. `revision.ts`'s own `plans` comment turns on this same fact;
+ * the two must not drift.
  *
  * There is no subscription protocol: a panel declares which revision it depends
  * on, and the open tab *is* the subscription. Nothing to leak when a socket
@@ -18,7 +26,8 @@ export function installToken(value: string): void {
 }
 
 /**
- * A conditional GET against the read api.
+ * A GET against the read api. Plain, not HTTP-conditional — see this file's
+ * own header: no `if-none-match` goes out, so a full body always comes back.
  *
  * Errors come back as `{ ok: false, code }` and never as a sentence: the server
  * sends `{ error: { code } }` with no parameters at all, because a `params`

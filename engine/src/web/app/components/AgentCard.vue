@@ -30,13 +30,19 @@
  * feed `Skills.vue` reads, fetched again here rather than lifted to
  * `Agents.vue` and passed down as a prop. Nothing dedups the two — each
  * `useFeed` call builds its own `feed()` (`lib/api.ts`) over its own state,
- * and `get()` there is a bare conditional `fetch` with no cache — so a bump
- * in `revisions.skills` fetches once per card on screen. What makes that
- * acceptable is the answer's size, not an absent cache: every one of those
- * is a conditional GET the `ETag` turns into a `304` with an empty body over
- * a loopback socket. In exchange the card stays self-contained, the same way
- * `usage(config, ...)` already reads `config` straight off its own prop
- * rather than a value `Agents.vue` would otherwise have to derive twice.
+ * and `get()` there is a bare `fetch` with no cache — so a bump in
+ * `revisions.skills` fetches once per card on screen, and every one of those
+ * is a full `200` with a full body: this transport has no working
+ * revalidation to shrink them (`lib/api.ts`'s own header). What keeps that
+ * affordable is the rate rather than anything trimming the answer: `feed()`
+ * refetches only when its `dep` moves, and `revisions.skills` moves when a
+ * skill record on disk changes — a rare, reader-caused event, not a
+ * broadcast tick, so N cards cost N reads on that event alone. In exchange
+ * the card stays self-contained, the same way `usage(config, ...)` already
+ * reads `config` straight off its own prop rather than a value `Agents.vue`
+ * would otherwise have to derive twice. That trade is worth re-checking if
+ * this list ever grows unbounded: `plandoc.ts` is the case where an
+ * open-ended consumer count tipped it the other way and the feed was lifted.
  * Only *active* acceptances get a row: a disabled one already routes to
  * nobody, and offering a checkbox for it would let this card change `agents`
  * on a record `mjloop-cli skills disable` has deliberately taken out of

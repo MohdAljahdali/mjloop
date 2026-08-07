@@ -55,12 +55,25 @@ const enabled = computed(() => parsed.value !== null && view.value?.revision != 
 // why the two directories ride one feed rather than two) — read again here,
 // not lifted and passed down from a shared ancestor. Nothing dedups the two:
 // `useFeed` builds a fresh `feed()` per call site, each holding its own
-// state, and `lib/api.ts`'s `get()` is a bare conditional `fetch` with no
-// cache and no in-flight coalescing, so with both panels kept alive a bump
-// in `revisions.agents` really does issue two requests. The cost is the
-// reason it is allowed rather than avoided: the second is a conditional GET
-// answered `304` with an empty body over a loopback socket, which is less
-// than the ancestor state a lift would add. `AgentCard.vue` makes the same
+// state, and `lib/api.ts`'s `get()` is a bare `fetch` with no cache and no
+// in-flight coalescing, so with both panels kept alive a bump in
+// `revisions.agents` really does issue two requests — and both come back as
+// full `200`s carrying the whole agents view, every definition's body
+// included. Nothing trims the second one: the transport has no working
+// revalidation at all (`lib/api.ts`'s own header, and `revision.ts`'s `plans`
+// comment on the same fact).
+//
+// What makes that affordable is how rarely it happens, not how small it is:
+// `feed()` refetches only when the `dep` string it holds actually moves (its
+// own `started && next === seen` guard), and `revisions.agents` is a stamp of
+// this project's `.claude/agents/` tree (`revision.ts`'s `stampTree`), so it
+// moves when a reader adds or edits an agent — not on a broadcast tick, and
+// not on a tab switch. So the duplicate is a second
+// loopback read on an event a reader causes by hand, weighed against threading
+// this view through a shared ancestor for exactly two consumers. `plandoc.ts`
+// is where the other answer was right and the feed *was* lifted — note what is
+// different there: its consumers are the plan detail, the story list and every
+// open story tab, a count with no ceiling. `AgentCard.vue` makes this same
 // call for `/api/skills`. `TrackGraph`'s own
 // `cardInfo` call is what actually needs this; this panel only carries it
 // through as a prop, the same read-only pass-through `Tracks.vue` already is
