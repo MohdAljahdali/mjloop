@@ -53,9 +53,15 @@ const enabled = computed(() => parsed.value !== null && view.value?.revision != 
 
 // The same `/api/agents` feed `Agents.vue` reads (that panel's own header on
 // why the two directories ride one feed rather than two) — read again here,
-// not lifted and passed down from a shared ancestor, because `useFeed`
-// already dedups a repeated subscription to one path (`AgentCard.vue`'s own
-// comment makes the identical call for `/api/skills`). `TrackGraph`'s own
+// not lifted and passed down from a shared ancestor. Nothing dedups the two:
+// `useFeed` builds a fresh `feed()` per call site, each holding its own
+// state, and `lib/api.ts`'s `get()` is a bare conditional `fetch` with no
+// cache and no in-flight coalescing, so with both panels kept alive a bump
+// in `revisions.agents` really does issue two requests. The cost is the
+// reason it is allowed rather than avoided: the second is a conditional GET
+// answered `304` with an empty body over a loopback socket, which is less
+// than the ancestor state a lift would add. `AgentCard.vue` makes the same
+// call for `/api/skills`. `TrackGraph`'s own
 // `cardInfo` call is what actually needs this; this panel only carries it
 // through as a prop, the same read-only pass-through `Tracks.vue` already is
 // for `draft` itself.

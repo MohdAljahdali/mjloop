@@ -28,11 +28,15 @@
  *
  * The skills block below rides `/api/skills` (`revisions.skills`) — the same
  * feed `Skills.vue` reads, fetched again here rather than lifted to
- * `Agents.vue` and passed down as a prop: `lib/api.ts`'s `feed()` already
- * dedups a repeated subscription to one path, so a second `useFeed` costs
- * nothing a shared one would not, and it keeps this card self-contained the
- * same way `usage(config, ...)` already reads `config` straight off its own
- * prop rather than a value `Agents.vue` would otherwise have to derive twice.
+ * `Agents.vue` and passed down as a prop. Nothing dedups the two — each
+ * `useFeed` call builds its own `feed()` (`lib/api.ts`) over its own state,
+ * and `get()` there is a bare conditional `fetch` with no cache — so a bump
+ * in `revisions.skills` fetches once per card on screen. What makes that
+ * acceptable is the answer's size, not an absent cache: every one of those
+ * is a conditional GET the `ETag` turns into a `304` with an empty body over
+ * a loopback socket. In exchange the card stays self-contained, the same way
+ * `usage(config, ...)` already reads `config` straight off its own prop
+ * rather than a value `Agents.vue` would otherwise have to derive twice.
  * Only *active* acceptances get a row: a disabled one already routes to
  * nobody, and offering a checkbox for it would let this card change `agents`
  * on a record `mjloop-cli skills disable` has deliberately taken out of

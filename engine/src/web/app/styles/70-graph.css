@@ -48,9 +48,10 @@
  * inline, as `block-size` and as the `--graph-inline-size` custom property
  * the rule below reads. That file's comment carries the measured reason the
  * canvas is sized to its content rather than the content being fitted into a
- * fixed canvas; the short version is that these flows mount hidden inside
- * `<KeepAlive>`, so Vue Flow's own fit runs against a zero-sized viewport and
- * clamps to scale 1 forever.
+ * fixed canvas; the short version is that the fit never moved the pane at
+ * all — every track was measured sitting at the store's initial scale 1,
+ * before and long after mount — so the box is cut to hold the content
+ * instead.
  *
  * What is left here is the floor for the degenerate case: a track with a
  * single wave derives barely more than one card's height, which would read
@@ -87,6 +88,50 @@
   block-size: 100%;
   inline-size: var(--graph-inline-size, 100%);
   min-inline-size: 100%;
+  /* `clip`, not the vendor's own `hidden`, and the difference is the whole
+   * point: a `hidden` box is a scroll container (scrollable, just not by the
+   * reader), and `position: sticky` resolves against the *nearest* scroll
+   * container — which would be this full-content-width box, where sticking
+   * means standing still. `clip` clips exactly as `hidden` did but is not a
+   * scroll container, so `.graph-controls-dock` below sticks to
+   * `.track-graph` instead, the box that actually scrolls. */
+  overflow: clip;
+}
+
+/* The zoom/fit bar's home — see `TrackGraph.vue`'s own comment on the dock
+ * for why the bar cannot stay where `.vue-flow__panel` puts it. A full-height
+ * block that sticks to the scroll container's end edge: `inset-inline-end: 0`
+ * shifts it back into view by exactly as much as the reader has yet to
+ * scroll, so the bar rides the visible right edge from rest to full scroll.
+ * `inset-block-start: 0` is the vertical half of the same constraint and
+ * never shifts anything (nothing scrolls vertically here — `.track-graph`'s
+ * own `overflow-y: hidden`); the bar's vertical place is `align-items: end`,
+ * not an inset.
+ *
+ * `pointer-events: none` because this dock covers the canvas's full height:
+ * left clickable it would swallow every pane click and drag over that
+ * column, including the one `TrackGraph.vue`'s `@pane-click` reads to clear
+ * the side panel's selection. The bar itself takes them back. */
+.graph-controls-dock {
+  position: sticky;
+  inset-block-start: 0;
+  inset-inline-end: 0;
+  /* Only as wide as the bar, pushed to the content's own end edge — that is
+   * the resting place the sticky constraint above pulls back from. */
+  inline-size: fit-content;
+  margin-inline-start: auto;
+  block-size: 100%;
+  display: flex;
+  align-items: end;
+  padding: 15px;
+  z-index: 5;
+  pointer-events: none;
+}
+
+.graph-controls-dock .vue-flow__controls {
+  position: static;
+  margin: 0;
+  pointer-events: auto;
 }
 
 .track-graphs {
@@ -270,8 +315,27 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  /* A flex item's automatic minimum size is its min-content width, which for
+   * a `nowrap` run is the whole name — so without this the three properties
+   * above are inert: the box never gets to be narrower than its text, the
+   * ellipsis never fires, and a long user-defined agent name pushes the role
+   * badge beside it out of the card's pinned 240px instead. */
+  min-inline-size: 0;
 }
 
+/* The three role badges, in the colours the design spec draws them: required
+ * green with a solid edge, available blue with a dashed one, closing orange.
+ * `TrackGraph.vue` binds `role-<list>` on this element; these are the rules
+ * it binds to. The dashed edge is the point of the middle one — it is the
+ * second, non-colour cue that separates "available" from "required" for a
+ * reader who cannot tell green from blue, on top of the badge's own word.
+ *
+ * These are the palette's own tokens, not new literals, and they are not the
+ * same three the card head's background tint uses above: the head washes the
+ * card in the list's identity colour, while the badge says which of the
+ * three *states* it is, and the spec assigns those the ordinary
+ * good/neutral/warn reading (`--ok`/`--accent`/`--warn`) every other status
+ * chip in this app already carries. */
 .graph-node-role {
   flex-shrink: 0;
   font-size: 10px;
@@ -279,6 +343,23 @@
   border-radius: var(--radius-pill);
   color: var(--dim);
   border: 1px solid var(--line);
+}
+
+.graph-node-role.role-required {
+  color: var(--ok);
+  border-color: var(--ok);
+  border-style: solid;
+}
+
+.graph-node-role.role-available {
+  color: var(--accent);
+  border-color: var(--accent);
+  border-style: dashed;
+}
+
+.graph-node-role.role-closing {
+  color: var(--warn);
+  border-color: var(--warn);
 }
 
 .graph-node-body {

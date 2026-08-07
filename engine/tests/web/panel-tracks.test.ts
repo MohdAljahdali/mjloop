@@ -2,6 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
+import { VueFlow } from '@vue-flow/core'
 import type { AgentsView, Snapshot } from '../../src/web/protocol.js'
 import { ConfigSchema } from '../../src/schemas/config.js'
 import type { Track } from '../../src/schemas/config.js'
@@ -920,10 +921,11 @@ describe('the rich graph card', () => {
   const TRACK2 = { required: ['builder', 'verifier'], available: [], closing: [], order: [], max_cycles: 5 }
 
   /**
-   * The canvas is sized to its content, never fitted to a fixed box — these
-   * flows mount hidden inside `<KeepAlive>`, where Vue Flow's own fit runs
-   * against a zero-sized viewport and clamps to scale 1 (`TrackGraph.vue`'s
-   * own `canvas` comment carries the measurements). The pane scale is not
+   * The canvas is sized to its content, never fitted to a fixed box — the
+   * fit it replaced was measured never moving the pane off the store's
+   * initial scale 1 at all, before or long after mount (`TrackGraph.vue`'s
+   * own `canvas` comment carries what was measured and why `fitView` returns
+   * without a transform). The pane scale is not
    * observable here — happy-dom lays nothing out — but the derived height is,
    * because it is a plain inline style. One assertion, the only one that
    * actually distinguishes a derived height from the old fixed one: a track
@@ -947,6 +949,29 @@ describe('the rich graph card', () => {
     const off = mount(TrackGraph, { props: { track: TRACK2, name: 'build', agents: AGENTS, live: null } })
     await flushPromises()
     expect(off.find('[data-graph-node="builder"]').classes()).not.toContain('node-live-running')
+  })
+
+  /**
+   * The two refusals the whole design rests on, neither of which any other
+   * test would notice going missing — both are a single token in
+   * `TrackGraph.vue`. A draggable node would let a reader move a card and
+   * watch it snap back on the next draft change, because positions are
+   * derived from `layer`/`index` every render and nothing ever writes one
+   * back (`lib/trackgraph.ts`'s own header). A selectable gate edge would put
+   * "blocks after proven_by" on the same Delete key that removes an ordinary
+   * order edge — two refusals the schema applies under different conditions,
+   * conflated into one gesture. Read off the props `VueFlow` is actually
+   * handed rather than off a class, because that is where both decisions
+   * live.
+   */
+  it('refuses to drag a node and refuses to select the gate edge', async () => {
+    const gated = { ...TRACK2, gate: { proven_by: 'builder', blocks: ['verifier'] } }
+    const wrapper = mount(TrackGraph, { props: { track: gated, name: 'build', agents: AGENTS } })
+    await flushPromises()
+    const flow = wrapper.findComponent(VueFlow)
+    expect(flow.props('nodesDraggable')).toBe(false)
+    const gate = (flow.props('edges') as { id: string; selectable?: boolean }[]).find((edge) => edge.id.startsWith('gate:'))
+    expect(gate?.selectable).toBe(false)
   })
 })
 

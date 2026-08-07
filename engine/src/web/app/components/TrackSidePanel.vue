@@ -1,12 +1,16 @@
 <script setup lang="ts">
 /**
  * TrackSidePanel — the control surface beside each `TrackGraph.vue` canvas
- * (Task 4). Three blocks when nothing is selected — track settings (with the
- * run form), and the agents not yet on this track — replaced by a fourth,
- * the selected card's own detail, the moment a node (or this panel's own "+"
- * button) puts a name into `props.selected`. `Tracks.vue` owns which state
- * that is (`selectedByTrack`); this component only reads it and asks to
- * clear it back to `null` through `clear-selection`.
+ * (Task 4). Two blocks when nothing is selected — track settings (with the
+ * run form), and the agents not yet on this track — replaced by a third, the
+ * selected card's own detail, the moment a name reaches `props.selected`.
+ * Only a click on a card puts one there: `Tracks.vue` owns that state
+ * (`selectedByTrack`) and `TrackGraph.vue`'s `select` event is its one
+ * writer. This panel's own "+" button is not a second one — `add()` below
+ * pushes the name into the track's `available` and stops there, so the panel
+ * stays on these two blocks with the added agent simply gone from the
+ * Add-agent list. This component only reads the selection and asks to clear
+ * it back to `null` through `clear-selection`.
  *
  * Per the approved design spec (`docs/superpowers/specs/2026-08-07-track-
  * graph-redesign-design.md`), this panel is meant to carry "كل ما في نموذج
@@ -44,7 +48,7 @@
 import { computed } from 'vue'
 import { useI18n } from '../composables/useI18n.js'
 import { cardInfo } from '../lib/agentcard.js'
-import { removeFromBuckets, type Draft } from '../lib/config.js'
+import { edgeAfter, removeFromBuckets, type Draft } from '../lib/config.js'
 import type { AgentsView, Track } from '../types/protocol.js'
 import Bdi from './Bdi.vue'
 import TrackRunForm from './TrackRunForm.vue'
@@ -66,6 +70,17 @@ const emit = defineEmits<{ 'clear-selection': [] }>()
 const { t } = useI18n()
 
 const card = computed(() => cardInfo(props.selected ?? '', props.agents))
+
+/**
+ * The selected agent's own "runs after" constraints — the seventh of the
+ * seven facts the design spec asks this detail view for, read through
+ * `edgeAfter` (`lib/config.ts`) rather than by walking `track.order` here, so
+ * the "every edge that names this agent, not just the first" rule has one
+ * implementation. Display only: an order edge is added and removed on the
+ * canvas (`TrackGraph.vue`'s drag, `Tracks.vue`'s `onGraphConnect`), the same
+ * way the gate above is shown here but edited in the list view.
+ */
+const after = computed(() => (props.selected === null ? [] : edgeAfter(props.track.order ?? [], props.selected)))
 
 /** Every agent this track already names, across all three buckets — the set `unused` below is drawn against. */
 const known = computed(() => new Set([...props.track.required, ...props.track.available, ...props.track.closing]))
@@ -104,7 +119,12 @@ function onRole(event: Event): void {
   if (agentName === null) return
   props.mutate((model) => {
     const entry = model.tracks[props.name]
-    if (entry === undefined) return false
+    // The same `Array.isArray` guard `add()` above and `removeFromBuckets`
+    // (`lib/config.ts`) both apply to these buckets, for the same reason:
+    // `Draft` is seeded from a parsed document, and a hand-edited
+    // `config.yaml` can put anything under `required:`/`available:`/
+    // `closing:`. All three writers of these three lists agree on it.
+    if (entry === undefined || !Array.isArray(entry[next])) return false
     removeFromBuckets(entry, agentName)
     entry[next].push(agentName)
   })
@@ -197,6 +217,17 @@ function remove(): void {
         <span v-for="tool in card.tools" :key="tool" class="graph-node-tool"><Bdi :value="tool" /></span>
       </div>
       <p class="hint" v-if="card.model !== null">{{ t('config.side.model') }}: <Bdi :value="card.model" /></p>
+      <!-- Which directory this definition came from. Only drawn when there
+           is one: `cardInfo` answers `null` for an agent no definition file
+           provides, and the "no definition file" line above already says so —
+           a "Source: —" row under it would be a second way of saying the
+           same absence. -->
+      <p class="hint" v-if="card.source !== null">{{ t('config.side.source') }}: {{ t(`config.side.source.${card.source}`) }}</p>
+      <!-- The order constraints this agent waits on, isolated as one Latin
+           run the same way the gate's own `blocks` list above is — these are
+           agent ids inside otherwise-Arabic copy in the `ar` locale. -->
+      <p class="hint" v-if="after.length > 0">{{ t('config.side.after') }}: <Bdi :value="after.join(', ')" /></p>
+      <p class="hint" v-else>{{ t('config.side.afterNone') }}</p>
       <label>
         {{ t('config.side.role') }}
         <select :value="roleOf(selected)" :disabled="!enabled" @change="onRole">

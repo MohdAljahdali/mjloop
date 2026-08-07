@@ -17,7 +17,7 @@
  * and holds no draft of its own — `Tracks.vue` remains the sole owner of
  * `mutate`, exactly as it does for every list control on this panel
  * (`Tracks.vue`'s own header), and is the only listener wired to these
- * three events. A connect is therefore refused or applied by `Tracks.vue`
+ * four events. A connect is therefore refused or applied by `Tracks.vue`
  * itself — the one place that already holds both `mutate` and the draft
  * `wouldCycle` needs to check against — rather than a second, independent
  * copy of that check living here.
@@ -25,11 +25,10 @@
  * The canvas is sized to its content, not the content scaled to the canvas:
  * `canvas` below derives the box this track's waves need from the same
  * `layer`/`index` the coordinates come from, and nothing here calls
- * `fitView`. That is a deliberate reversal — these flows mount inside a
- * hidden, zero-sized `<KeepAlive>`d panel, where Vue Flow's own fit is
- * degenerate and clamps to scale `1` forever. `canvas`'s own comment carries
- * the measurements; a derived size is view geometry, so it stays as unstored
- * as the coordinates are.
+ * `fitView`. That is a deliberate reversal — the fit never applied a
+ * transform at all, so there was nothing to keep. `canvas`'s own comment
+ * carries what was measured; a derived size is view geometry, so it stays as
+ * unstored as the coordinates are.
  *
  * `:agents` feeds `cardInfo` (`lib/agentcard.ts`) so every node can draw a
  * rich card — description, tools, model, role badge — instead of a bare
@@ -115,18 +114,22 @@ const MARGIN = 24
  * the container's size too, not only the coordinates inside it.
  *
  * **Why the canvas is sized to its content instead of the content being
- * scaled to fit the canvas.** `Tracks.vue` is not the panel the dashboard
- * opens on and `App.vue` keeps every panel inside `<KeepAlive>`, so all four
- * of these flows mount while their panel is hidden, against a zero-sized
- * container. Vue Flow reads its viewport dimensions from that container, and
- * a fit computed against a zero-sized viewport is degenerate: it clamps to
- * `maxZoom` (`1`) and never shrinks. A fix round measured that directly —
- * every default track sat at pane scale exactly `1` no matter what
- * `.track-graph`'s own height or `:min-zoom` said, and clicking the controls'
- * own fit-view button long after mount left it at `1` as well, which is what
- * rules out a later, better-timed `fitView()` call as the answer. So the fit
- * is gone entirely, and this takes its place: at scale `1` every card is
- * inside the box because the box was cut to hold them.
+ * scaled to fit the canvas.** The fit rounds that came before this one never
+ * changed the pane at all. A fix round measured it directly: every default
+ * track sat at pane scale exactly `1` no matter what `.track-graph`'s own
+ * height or `:min-zoom` said, and clicking the controls' own fit-view button
+ * long after mount left it at `1` too — which is what rules out a later,
+ * better-timed `fitView()` call as the answer. Scale `1` is not a clamped
+ * fit, it is *no* fit: `1` is the zoom the store is initialised with
+ * (`vue-flow-core.mjs:6152`), and `fitView` leaves it there whenever it finds
+ * no node to fit — it only collects nodes whose `dimensions.width` and
+ * `dimensions.height` are both non-zero, and returns `Promise.resolve(false)`
+ * without touching the viewport when that list comes up empty
+ * (`vue-flow-core.mjs:5680-5707`, read directly). A clamp would not have
+ * produced `1` in any case: Vue Flow's own bounds are `minZoom: 0.5`/
+ * `maxZoom: 2` (`vue-flow-core.mjs:6156-6157`). So the fit is gone entirely,
+ * and this takes its place: at scale `1` every card is inside the box because
+ * the box was cut to hold them.
  *
  * This ties the three numbers above into one knot on purpose. Raising the
  * stride, or raising `.graph-node`'s own `max-block-size`, moves what a wave
@@ -250,8 +253,8 @@ function onNodesChange(changes: NodeChange[]): void {
 
          No `fit-view-on-init`, and no `fitView()` call anywhere: nothing
          here scales the content to the box, because `canvas` above sizes the
-         box to the content instead — see that computed's own comment for the
-         measured reason a fit cannot do this job in a `<KeepAlive>`d panel.
+         box to the content instead — see that computed's own comment for
+         what the fit was measured to actually do, which was nothing.
          Dropping the prop costs nothing that was worth keeping. It does
          gate the transformation pane's hidden-until-fitted opacity
          (`@vue-flow/core`'s `Transform` component: `isHidden` is
@@ -293,7 +296,24 @@ function onNodesChange(changes: NodeChange[]): void {
            (`:nodes-draggable="false"` above), so a control that toggles that
            off would offer a choice this view never honours. -->
       <Background :gap="16" :size="1" pattern-color="var(--line)" />
-      <Controls :show-interactive="false" position="bottom-right" />
+      <!-- The control bar is docked rather than left where
+           `@vue-flow/core`'s own `.vue-flow__panel` puts it. That rule is
+           `position: absolute; bottom: 0; right: 0` against `.vue-flow`,
+           and `.vue-flow` is now as wide as this track's derived content
+           (`canvas` above) while `.track-graph` is the box that actually
+           scrolls — so on a track wider than its column the bar sat off the
+           right edge of the visible area, reachable only after scrolling to
+           the end. That is precisely the discoverability problem a visible
+           zoom/fit bar exists to solve. `.graph-controls-dock`
+           (`70-graph.css`) sticks to the scroll container instead, so the
+           bar stays in the corner the reader can see at every scroll
+           position. No `position` prop on `Controls` itself: the dock
+           neutralises `.vue-flow__panel`'s own absolute placement outright
+           (`position: static` there), so a corner named here would decide
+           nothing — the dock's own alignment is what places the bar. -->
+      <div class="graph-controls-dock">
+        <Controls :show-interactive="false" />
+      </div>
       <template #node-agent="nodeProps">
         <div
           class="graph-node"
@@ -334,9 +354,14 @@ function onNodesChange(changes: NodeChange[]): void {
                  missing-agent message is translated UI copy, not
                  model-authored text, so it is the one string here left
                  outside `Bdi` — same split `AgentCard.vue` draws between its
-                 own `t(...)` labels and the `Bdi`-wrapped facts beside them. -->
+                 own `t(...)` labels and the `Bdi`-wrapped facts beside them.
+                 It still needs `dir="auto"` of its own, for the reason
+                 `Bdi` does not cover: `70-graph.css` pins `.track-graph
+                 { direction: ltr }` (that file's own header on why), so
+                 without it the Arabic copy is laid out under an LTR base
+                 direction and aligns to the physical left of the card. -->
             <p v-if="nodeProps.data.card.description !== null" class="graph-node-desc" dir="auto"><Bdi :value="nodeProps.data.card.description" /></p>
-            <p v-else-if="nodeProps.data.card.source === null" class="graph-node-desc">{{ t('config.graph.missingAgent') }}</p>
+            <p v-else-if="nodeProps.data.card.source === null" class="graph-node-desc" dir="auto">{{ t('config.graph.missingAgent') }}</p>
             <div v-if="nodeProps.data.card.tools.length > 0" class="graph-node-tools">
               <span v-for="tool in nodeProps.data.card.tools" :key="tool" class="graph-node-tool"><Bdi :value="tool" /></span>
             </div>
