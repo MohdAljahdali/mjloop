@@ -5,11 +5,21 @@
  * `style.css` is the pairing Vue Flow's own docs use; neither ships a font
  * or an image (`tests/web/assets.test.ts` is what actually proves that, not
  * this comment), so `assetsInlineLimit: Infinity` has nothing to inline
- * here beyond text. What follows is only the part that is this project's
- * own: the four list colours, the cyclic-node warning, and the gate edge's
- * own look. */
+ * here beyond text. Task 3 adds a third: `@vue-flow/controls`'s own
+ * `style.css`, the zoom/fit button bar's base layout (size, border, hover) —
+ * checked directly against `node_modules/@vue-flow/controls/dist/style.css`,
+ * it is plain rules and an `svg` selector, again no font or image to inline.
+ * `@vue-flow/background`, the dotted-pane plugin this task also adds, ships
+ * no stylesheet at all — its dot pattern is an inline SVG the component
+ * itself renders, styled entirely through the `pattern-color` prop
+ * `TrackGraph.vue` passes, so there is nothing to `@import` for it here.
+ * What follows this block is only the part that is this project's own: the
+ * four list colours, the cyclic-node warning, the gate edge's own look, the
+ * edge-label text, and a recolour of the controls bar's default white/grey
+ * to this project's own panel and line colours. */
 @import '@vue-flow/core/dist/style.css';
 @import '@vue-flow/core/dist/theme-default.css';
+@import '@vue-flow/controls/dist/style.css';
 
 /* No `.terminal`-style `direction: ltr`/`overflow: hidden` escape hatch is
  * added here for `.track-graph`, its own wrapper — `@vue-flow/core`'s own
@@ -232,4 +242,50 @@
 .vue-flow__edge.edge-gate .vue-flow__edge-path {
   stroke: var(--accent-2);
   stroke-dasharray: 4 3;
+}
+
+/* The `label` each edge now carries (`TrackGraph.vue`'s own `edges`
+ * computed) — Vue Flow draws it as SVG text on the edge itself, not DOM
+ * content this project's own `Bdi`/`Tx` isolation rule applies to (that rule
+ * covers markup this app renders into the document, not text a vendor
+ * component places inside its own `<svg>`). Small and dim by default, so a
+ * label reads as an annotation next to the line rather than competing with
+ * the card text above it. */
+.vue-flow__edge-text {
+  font-size: 10px;
+  fill: var(--dim);
+}
+
+/* The gate edge's own label takes the same orange the dashed line above
+ * already uses, so "gate · proven by X" reads as part of that same
+ * distinct-from-an-order-edge look rather than a second, unrelated colour. */
+.vue-flow__edge.edge-gate .vue-flow__edge-text {
+  fill: var(--accent-2);
+}
+
+/* `@vue-flow/controls/dist/style.css` (imported above) ships its buttons in
+ * a hardcoded white/grey that belongs to no theme this project has — it
+ * would sit on the dotted canvas as a foreign rectangle. Recoloured here
+ * with the same panel/line variables `.track-graph` itself is built from, so
+ * the bar reads as this app's own chrome rather than unstyled vendor
+ * default. */
+.vue-flow__controls {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  box-shadow: none;
+  overflow: hidden;
+}
+
+.vue-flow__controls-button {
+  background: var(--panel-2);
+  border: 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.vue-flow__controls-button:hover {
+  background: var(--raise);
+}
+
+.vue-flow__controls-button svg {
+  fill: var(--dim);
 }

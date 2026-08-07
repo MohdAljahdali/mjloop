@@ -30,7 +30,9 @@
  * this view is allowed to hide.
  */
 import { computed } from 'vue'
+import { Background } from '@vue-flow/background'
 import { Handle, Position, VueFlow, type Connection, type EdgeChange, type NodeChange } from '@vue-flow/core'
+import { Controls } from '@vue-flow/controls'
 import { useI18n } from '../composables/useI18n.js'
 import { cardInfo } from '../lib/agentcard.js'
 import { layout } from '../lib/trackgraph.js'
@@ -78,8 +80,12 @@ const edges = computed(() =>
         // delete "blocks after proven_by" the same way they delete an
         // ordinary wait — two refusals the schema applies under different
         // conditions (`TrackSchema`'s gate checks vs. its order-cycle check).
-        { id: edge.id, source: edge.source, target: edge.target, animated: false, selectable: false, class: 'edge-gate' }
-      : { id: edge.id, source: edge.source, target: edge.target, animated: false, class: 'edge-order' },
+        // The label repeats that same distinction in words, not only in the
+        // dashed/orange line style below (`70-graph.css`'s `.edge-gate`): a
+        // reader who cannot tell the two strokes apart still reads "gate ·
+        // proven by X" instead of an ordinary "after X".
+        { id: edge.id, source: edge.source, target: edge.target, animated: false, selectable: false, class: 'edge-gate', label: t('config.graph.gateEdge', { agent: edge.source }) }
+      : { id: edge.id, source: edge.source, target: edge.target, animated: false, class: 'edge-order', label: t('config.graph.orderEdge', { agent: edge.source }) },
   ),
 )
 
@@ -120,6 +126,15 @@ function onNodesChange(changes: NodeChange[]): void {
          coordinates). Turning dragging off makes that contract visible
          instead of surprising. -->
     <VueFlow :nodes="nodes" :edges="edges" :nodes-draggable="false" fit-view-on-init @connect="onConnect" @edges-change="onEdgesChange" @nodes-change="onNodesChange">
+      <!-- Chrome, not content: a dotted pane so the canvas reads as an
+           editor surface rather than empty white space, and a zoom/fit
+           control bar in the corner a reader can find without hunting for
+           scroll-wheel zoom. `:show-interactive="false"` drops Vue Flow's own
+           lock-toggle button — nothing here is draggable in the first place
+           (`:nodes-draggable="false"` above), so a control that toggles that
+           off would offer a choice this view never honours. -->
+      <Background :gap="16" :size="1" pattern-color="var(--line)" />
+      <Controls :show-interactive="false" position="bottom-right" />
       <template #node-agent="nodeProps">
         <div
           class="graph-node"

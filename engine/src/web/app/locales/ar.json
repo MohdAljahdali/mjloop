@@ -691,6 +691,8 @@
   "config.graph.role.closing": "ختامي",
   "config.graph.missingAgent": "لا يوجد ملف تعريف لهذا الوكيل",
   "config.graph.sourceProject": "project",
+  "config.graph.orderEdge": "بعد {agent}",
+  "config.graph.gateEdge": "بوابة · تفتحها {agent}",
   "config.run.goalLabel": "الهدف لمسار {track}",
   "config.run.goalPlaceholder": "ما الذي ينبغي أن يفعله هذا التشغيل؟",
   "config.run.button": "شغّل",

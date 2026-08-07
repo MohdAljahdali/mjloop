@@ -667,6 +667,8 @@
   "config.graph.role.closing": "Closing",
   "config.graph.missingAgent": "No agent definition found",
   "config.graph.sourceProject": "project",
+  "config.graph.orderEdge": "after {agent}",
+  "config.graph.gateEdge": "gate · proven by {agent}",
   "config.run.goalLabel": "Goal for {track}",
   "config.run.goalPlaceholder": "What should this run do?",
   "config.run.button": "Run",
