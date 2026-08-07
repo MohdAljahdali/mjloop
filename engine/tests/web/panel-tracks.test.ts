@@ -2,9 +2,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
-import type { Snapshot } from '../../src/web/protocol.js'
+import type { AgentsView, Snapshot } from '../../src/web/protocol.js'
 import { ConfigSchema } from '../../src/schemas/config.js'
 import { emptySnapshot, readLocale } from './helpers/page.js'
+import TrackGraph from '../../src/web/app/components/TrackGraph.vue'
 
 /**
  * The Tracks panel — the structured `specialists:`/`tracks:` half of
@@ -843,5 +844,60 @@ describe('Tracks.vue', () => {
       await page.find('[data-track="build"] .track-run').trigger('submit')
       expect(sent).toEqual([])
     })
+  })
+})
+
+/**
+ * The rich graph card (Task 2) — `TrackGraph.vue` mounted directly rather
+ * than through `Tracks.vue`'s own boot/feed machinery above, because this
+ * describe block is only about what one card renders for a given `agents`
+ * prop, not about the panel's draft/save lifecycle every other describe
+ * block in this file exercises. `cardInfo` (`lib/agentcard.ts`) is Task 1's
+ * own tested unit — these two `it`s only prove `TrackGraph.vue` actually
+ * calls it and renders what it returns, including the one case a card must
+ * never silently drop: an agent a track names but no definition file
+ * provides.
+ */
+const TRACK = { required: ['builder'], available: [], closing: [], order: [], max_cycles: 5 }
+const AGENTS: AgentsView = {
+  project: [],
+  plugin: [{ name: 'builder', description: 'Writes the code and the tests.', tools: 'Read, Edit, Bash', model: 'sonnet', source: 'plugin', extra: {}, body: '', digest: '' }],
+  unreadable: [],
+}
+
+describe('the rich graph card', () => {
+  // Vue Flow only places a node into `.vue-flow__nodes` once it has resolved
+  // a dimension for it, which it does through a `ResizeObserver` it wires up
+  // itself — absent in happy-dom, same as `pane-surface.test.ts`'s own xterm
+  // pane needs one polyfilled for its own fit-on-mount to run. Without this,
+  // `mount()` returns a `TrackGraph` whose `.vue-flow__nodes` stays the empty
+  // comment node the earlier `console.log` capture showed, not a missing
+  // card — so `find('[data-graph-node=...]')` would come up empty for every
+  // agent, not only `ghost`, and these two `it`s would prove nothing about
+  // `cardInfo`.
+  beforeEach(() => {
+    ;(globalThis as unknown as { ResizeObserver: unknown }).ResizeObserver = class {
+      observe(): void {}
+      unobserve(): void {}
+      disconnect(): void {}
+    }
+  })
+
+  it('shows the agent description, tools and model on the card, and a role badge', async () => {
+    const wrapper = mount(TrackGraph, { props: { track: TRACK, name: 'build', agents: AGENTS } })
+    await flushPromises()
+    const card = wrapper.find('[data-graph-node="builder"]')
+    expect(card.text()).toContain('Writes the code and the tests.')
+    expect(card.text()).toContain('Bash')
+    expect(card.text()).toContain('sonnet')
+    expect(card.find('.graph-node-role').exists()).toBe(true)
+  })
+
+  it('draws an agent with no definition as a warning card, never hides it', async () => {
+    const wrapper = mount(TrackGraph, { props: { track: { ...TRACK, required: ['ghost'] }, name: 'build', agents: AGENTS } })
+    await flushPromises()
+    const card = wrapper.find('[data-graph-node="ghost"]')
+    expect(card.exists()).toBe(true)
+    expect(card.classes()).toContain('node-missing')
   })
 })

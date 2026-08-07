@@ -6,27 +6,41 @@
  * beside the list, never in place of it — see that file's own comment on
  * `view` for why the list stays reachable.
  *
- * Purely presentational, and purely an emitter: it takes `:track` and
- * `:name`, turns `layout(track)` into Vue Flow's own node/edge shape at the
- * fixed coordinates `{ x: layer * 220, y: index * 90 }`, and reports every
- * drag, edge deletion and node deletion upward as `connect`/`disconnect`/
- * `remove`. It never imports `mutate` or `submit` and holds no draft of its
- * own — `Tracks.vue` remains the sole owner of `mutate`, exactly as it does
- * for every list control on this panel (`Tracks.vue`'s own header), and is
- * the only listener wired to these three events. A connect is therefore
- * refused or applied by `Tracks.vue` itself — the one place that already
- * holds both `mutate` and the draft `wouldCycle` needs to check against —
- * rather than a second, independent copy of that check living here.
+ * Purely presentational, and purely an emitter: it takes `:track`, `:name`
+ * and `:agents`, turns `layout(track)` into Vue Flow's own node/edge shape
+ * at the fixed coordinates `{ x: index * 260, y: layer * 170 }` — a wave is
+ * a *row* now, growing downward as the track's layers advance, and a
+ * layer's own agents spread left-to-right across it by `index` — and
+ * reports every drag, edge deletion and node deletion upward as
+ * `connect`/`disconnect`/`remove`. It never imports `mutate` or `submit`
+ * and holds no draft of its own — `Tracks.vue` remains the sole owner of
+ * `mutate`, exactly as it does for every list control on this panel
+ * (`Tracks.vue`'s own header), and is the only listener wired to these
+ * three events. A connect is therefore refused or applied by `Tracks.vue`
+ * itself — the one place that already holds both `mutate` and the draft
+ * `wouldCycle` needs to check against — rather than a second, independent
+ * copy of that check living here.
+ *
+ * `:agents` feeds `cardInfo` (`lib/agentcard.ts`) so every node can draw a
+ * rich card — description, tools, model, role badge — instead of a bare
+ * name box. `cardInfo` never throws and answers a name no definition file
+ * provides with an all-empty card whose `source` is `null`; that card is
+ * still drawn, as `.node-missing`, because a track that names an agent with
+ * no definition is exactly the state a reader most needs to see, not one
+ * this view is allowed to hide.
  */
 import { computed } from 'vue'
 import { Handle, Position, VueFlow, type Connection, type EdgeChange, type NodeChange } from '@vue-flow/core'
 import { useI18n } from '../composables/useI18n.js'
+import { cardInfo } from '../lib/agentcard.js'
 import { layout } from '../lib/trackgraph.js'
-import type { Track } from '../types/protocol.js'
+import type { AgentsView, Track } from '../types/protocol.js'
+import Bdi from './Bdi.vue'
 
 const props = defineProps<{
   track: Track
   name: string
+  agents: AgentsView | null
 }>()
 
 const emit = defineEmits<{
@@ -39,15 +53,18 @@ const { t } = useI18n()
 
 const geometry = computed(() => layout(props.track))
 
-// The brief's own coordinates: `layer * 220`, `index * 90`. Positions are
-// derived every render, never stored — see `lib/trackgraph.ts`'s own header
-// for why a coordinates field never reaches `config.yaml`.
+// This task's own coordinates: `index * 260`, `layer * 170` — a vertical
+// wave flow, each layer a row rather than a column, wide enough
+// (`260`/`170`) for the rich card `70-graph.css`'s `.graph-node` now draws
+// instead of the old single-line name box. Positions are derived every
+// render, never stored — see `lib/trackgraph.ts`'s own header for why a
+// coordinates field never reaches `config.yaml`.
 const nodes = computed(() =>
   geometry.value.nodes.map((node) => ({
     id: node.id,
     type: 'agent',
-    position: { x: node.layer * 220, y: node.index * 90 },
-    data: { agent: node.agent, list: node.list, cyclic: node.cyclic },
+    position: { x: node.index * 260, y: node.layer * 170 },
+    data: { agent: node.agent, list: node.list, cyclic: node.cyclic, card: cardInfo(node.agent, props.agents) },
   })),
 )
 
@@ -104,14 +121,51 @@ function onNodesChange(changes: NodeChange[]): void {
          instead of surprising. -->
     <VueFlow :nodes="nodes" :edges="edges" :nodes-draggable="false" fit-view-on-init @connect="onConnect" @edges-change="onEdgesChange" @nodes-change="onNodesChange">
       <template #node-agent="nodeProps">
-        <div class="graph-node" :class="[`node-${nodeProps.data.list}`, { 'node-cyclic': nodeProps.data.cyclic }]" :data-graph-node="nodeProps.id">
-          <Handle type="target" :position="Position.Left" />
-          <span class="graph-node-name">{{ nodeProps.data.agent }}</span>
+        <div
+          class="graph-node"
+          :class="[`node-${nodeProps.data.list}`, { 'node-cyclic': nodeProps.data.cyclic, 'node-missing': nodeProps.data.card.source === null }]"
+          :data-graph-node="nodeProps.id"
+        >
+          <!-- Handles flip with the layout: a wave flows downward now, not
+               rightward, so a predecessor's edge enters the top and a
+               successor's edge leaves the bottom, matching the `y` a node's
+               own `layer` produces above. -->
+          <Handle type="target" :position="Position.Top" />
+          <div class="graph-node-head">
+            <!-- The name is a Latin agent id inside an otherwise-Arabic
+                 card in the `ar` locale — the same isolation `AgentCard.vue`
+                 already applies to this exact string (`agent.name`) and
+                 `Tracks.vue` applies to `graphRefusal`'s `{from}`/`{to}`
+                 holes, so a Latin run here does not drag the punctuation
+                 around it to the wrong end of the line. -->
+            <span class="graph-node-name"><Bdi :value="nodeProps.data.agent" /></span>
+            <span class="graph-node-role" :class="`role-${nodeProps.data.list}`">{{ t(`config.graph.role.${nodeProps.data.list}`) }}</span>
+          </div>
+          <div class="graph-node-body">
+            <!-- `cardInfo`'s own two `null`s are two different facts, drawn
+                 two different ways: an agent that defines itself with no
+                 description text still gets no `<p>` at all, but an agent
+                 this track names with no definition file *must* say so —
+                 `.node-missing`'s own text, not a silently empty card. The
+                 missing-agent message is translated UI copy, not
+                 model-authored text, so it is the one string here left
+                 outside `Bdi` — same split `AgentCard.vue` draws between its
+                 own `t(...)` labels and the `Bdi`-wrapped facts beside them. -->
+            <p v-if="nodeProps.data.card.description !== null" class="graph-node-desc" dir="auto"><Bdi :value="nodeProps.data.card.description" /></p>
+            <p v-else-if="nodeProps.data.card.source === null" class="graph-node-desc">{{ t('config.graph.missingAgent') }}</p>
+            <div v-if="nodeProps.data.card.tools.length > 0" class="graph-node-tools">
+              <span v-for="tool in nodeProps.data.card.tools" :key="tool" class="graph-node-tool"><Bdi :value="tool" /></span>
+            </div>
+            <div class="graph-node-meta">
+              <span v-if="nodeProps.data.card.model !== null" class="graph-node-model"><Bdi :value="nodeProps.data.card.model" /></span>
+              <span v-if="nodeProps.data.card.source === 'project'" class="graph-node-source">{{ t('config.graph.sourceProject') }}</span>
+            </div>
+          </div>
           <!-- The picture-that-lies defect `GraphNode.cyclic` exists to
                prevent: a starved node is never drawn as though it were
                merely "last" — its own visible badge says why. -->
           <span v-if="nodeProps.data.cyclic" class="graph-node-cyclic-badge">{{ t('config.graph.cyclic') }}</span>
-          <Handle type="source" :position="Position.Right" />
+          <Handle type="source" :position="Position.Bottom" />
         </div>
       </template>
     </VueFlow>

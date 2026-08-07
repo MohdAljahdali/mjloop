@@ -26,7 +26,11 @@
 
 .track-graph {
   position: relative;
-  block-size: 360px;
+  /* Raised from 360px in the horizontal layout: a wave is now a row of
+   * rich cards, not a column of one-line boxes, so a track with more than
+   * two or three waves needs the extra vertical room to keep them from
+   * overlapping the fit-to-view Vue Flow computes on mount. */
+  block-size: 520px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--panel-2);
@@ -91,33 +95,116 @@
   border-block-end-color: transparent;
 }
 
-/* One node per agent. The colour names the list it is drawn from — the same
- * three a reader already knows from the list editor's own three chip rows —
- * never the only cue: the label text beside it already says the agent's
- * name, so colour is decoration on top of a reachable fact, not the fact
- * itself. */
+/* One rich card per agent — a fixed width so a wave's cards line up into a
+ * row instead of each claiming whatever its own text needs, matching the
+ * fixed `260px` horizontal step `TrackGraph.vue`'s own `nodes` computed
+ * lays waves out on. The colour still names the list it is drawn from — the
+ * same three a reader already knows from the list editor's own three chip
+ * rows — but now carries the head's background too, never the only cue:
+ * the role badge's own text already says which list, so colour remains
+ * decoration on top of a reachable fact, not the fact itself. */
 .graph-node {
   display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
+  flex-direction: column;
+  inline-size: 240px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--line);
   background: var(--raise);
   font-size: 13px;
+  overflow: hidden;
+}
+
+.graph-node-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 6px 10px;
+  border-block-end: 1px solid var(--line);
+  /* A faint tint of the list's own colour, not the solid border the old
+   * single-line box carried — a whole card head reads as "coloured" far
+   * more loudly than a 1px edge did, so the head trades border-colour for a
+   * quiet background wash instead of stacking both. */
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.graph-node.node-available .graph-node-head {
+  background: color-mix(in srgb, var(--accent-3) 12%, transparent);
+}
+
+.graph-node.node-closing .graph-node-head {
+  background: color-mix(in srgb, var(--accent-2) 12%, transparent);
+}
+
+.graph-node-name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.graph-node.node-required {
-  border-color: var(--accent);
+.graph-node-role {
+  flex-shrink: 0;
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: var(--radius-pill);
+  color: var(--dim);
+  border: 1px solid var(--line);
 }
 
-.graph-node.node-available {
-  border-color: var(--accent-3);
+.graph-node-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
 }
 
-.graph-node.node-closing {
-  border-color: var(--accent-2);
+/* Two lines, then an ellipsis — a card is a summary a reader expands
+ * through the side panel (Task 4), not the full agent doc `AgentCard.vue`
+ * already shows in the Agents panel. */
+.graph-node-desc {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  color: var(--dim);
+}
+
+.graph-node-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.graph-node-tool {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  color: var(--dim);
+}
+
+.graph-node-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--dim);
+}
+
+/* An agent the track names but no definition file provides — never hidden,
+ * `cardInfo`'s own contract (`lib/agentcard.ts`). Grey and dashed, the same
+ * warning shape `.node-cyclic` below already uses for "this is broken", but
+ * without `--bad`'s red: a missing definition is a project's own state a
+ * reader fixes by adding a file, not a schema-level defect the way a cycle
+ * is. */
+.graph-node.node-missing {
+  border-style: dashed;
+  border-color: var(--dim);
+}
+
+.graph-node.node-missing .graph-node-head {
+  background: none;
 }
 
 /* A starved node — `GraphNode.cyclic` — is never drawn as an ordinary node
@@ -131,6 +218,7 @@
 .graph-node-cyclic-badge {
   font-size: 11px;
   color: var(--bad);
+  padding: 4px 10px;
 }
 
 .vue-flow__edge.edge-order .vue-flow__edge-path {

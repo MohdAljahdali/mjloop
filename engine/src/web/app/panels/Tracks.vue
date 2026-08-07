@@ -36,7 +36,7 @@ import { useFeed } from '../composables/useFeed.js'
 import { submit } from '../stores/session.js'
 import { addOrderEdge, broken, collectTrackChanges, knownAgents, removeOrderEdge, seedDraft, trackNames, type Draft } from '../lib/config.js'
 import { wouldCycle } from '../lib/trackgraph.js'
-import type { Config, ConfigView } from '../types/protocol.js'
+import type { AgentsView, Config, ConfigView } from '../types/protocol.js'
 import SpecialistEditor from '../components/SpecialistEditor.vue'
 import Tx from '../components/Tx.vue'
 import TrackEditors from '../components/TrackEditors.vue'
@@ -48,6 +48,17 @@ const configFeed = useFeed<ConfigView>({ dep: (state) => state.revisions.config,
 const view = computed(() => configFeed.value.value)
 const parsed = computed(() => view.value?.parsed ?? null)
 const enabled = computed(() => parsed.value !== null && view.value?.revision != null)
+
+// The same `/api/agents` feed `Agents.vue` reads (that panel's own header on
+// why the two directories ride one feed rather than two) — read again here,
+// not lifted and passed down from a shared ancestor, because `useFeed`
+// already dedups a repeated subscription to one path (`AgentCard.vue`'s own
+// comment makes the identical call for `/api/skills`). `TrackGraph`'s own
+// `cardInfo` call is what actually needs this; this panel only carries it
+// through as a prop, the same read-only pass-through `Tracks.vue` already is
+// for `draft` itself.
+const agentsFeed = useFeed<AgentsView>({ dep: (state) => state.revisions.agents, path: () => '/api/agents' })
+const agentsView = computed(() => agentsFeed.value.value)
 
 /** The document this editor was last seeded from, and its own revision hash. */
 const baseline = ref<Config | null>(null)
@@ -415,6 +426,7 @@ function reset(): void {
           :key="entry.name"
           :track="entry.track"
           :name="entry.name"
+          :agents="agentsView"
           @connect="(params) => onGraphConnect(entry.name, params)"
           @disconnect="(params) => onGraphDisconnect(entry.name, params)"
           @remove="(params) => onGraphRemove(entry.name, params)"
