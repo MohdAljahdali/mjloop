@@ -41,6 +41,7 @@ import SpecialistEditor from '../components/SpecialistEditor.vue'
 import Tx from '../components/Tx.vue'
 import TrackEditors from '../components/TrackEditors.vue'
 import TrackGraph from '../components/TrackGraph.vue'
+import TrackSidePanel from '../components/TrackSidePanel.vue'
 
 const { t } = useI18n()
 
@@ -210,6 +211,15 @@ const graphEntries = computed(() => {
 })
 
 /**
+ * Task 4: which card, if any, each track's own `TrackSidePanel.vue` is
+ * showing the detail view for — one entry per track name, so switching the
+ * selection on one track's canvas never touches another's. `TrackGraph`'s
+ * own `select` event (its own header) is the only writer; `clear-selection`
+ * from the panel and a fresh removal both write `null` back the same way.
+ */
+const selectedByTrack = ref<Record<string, string | null>>({})
+
+/**
  * Why the last drag on the graph was refused, or `null` once the graph is
  * clean again — a key and its params, not a rendered string:
  * `lib/i18n.ts`'s own `t()` docstring is explicit that `t()` is for
@@ -280,6 +290,12 @@ function onGraphRemove(name: string, params: { agent: string }): void {
     }
     return false
   })
+  // A dragged-off node the side panel is currently showing the detail view
+  // for no longer exists on this track — same reason `TrackSidePanel.vue`'s
+  // own `remove()` clears the selection after its own removal, applied here
+  // for the canvas's own removal path (a node dragged off, not the panel's
+  // button).
+  if (selectedByTrack.value[name] === params.agent) selectedByTrack.value[name] = null
 }
 
 /** Why the editor banner is showing — unavailable/invalid first, then a conflicting revision, mirroring `Config.vue`'s own `stateKey` priority minus the orchestration refusals, which are that panel's own half. */
@@ -421,16 +437,32 @@ function reset(): void {
         <p v-if="graphRefusal !== null" id="tracks-graph-refusal" class="banner warn">
           <Tx :key-name="graphRefusal.key" :params="graphRefusal.params" />
         </p>
-        <TrackGraph
-          v-for="entry in graphEntries"
-          :key="entry.name"
-          :track="entry.track"
-          :name="entry.name"
-          :agents="agentsView"
-          @connect="(params) => onGraphConnect(entry.name, params)"
-          @disconnect="(params) => onGraphDisconnect(entry.name, params)"
-          @remove="(params) => onGraphRemove(entry.name, params)"
-        />
+        <!-- Task 4: canvas and side panel side by side, one row per track —
+             `.track-canvas-row` is the pairing `70-graph.css`'s own comment
+             on the class lays out; `TrackSidePanel` reads `mutate` straight
+             from this panel (this file's own header — the one function
+             allowed to touch `draft`) the same way `SpecialistEditor` above
+             already does, and never a draft of its own. -->
+        <div v-for="entry in graphEntries" :key="entry.name" class="track-canvas-row">
+          <TrackSidePanel
+            :track="entry.track"
+            :name="entry.name"
+            :agents="agentsView"
+            :selected="selectedByTrack[entry.name] ?? null"
+            :enabled="enabled"
+            :mutate="mutate"
+            @clear-selection="selectedByTrack[entry.name] = null"
+          />
+          <TrackGraph
+            :track="entry.track"
+            :name="entry.name"
+            :agents="agentsView"
+            @select="(params) => (selectedByTrack[entry.name] = params.agent)"
+            @connect="(params) => onGraphConnect(entry.name, params)"
+            @disconnect="(params) => onGraphDisconnect(entry.name, params)"
+            @remove="(params) => onGraphRemove(entry.name, params)"
+          />
+        </div>
       </section>
 
       <datalist id="config-agent-names">

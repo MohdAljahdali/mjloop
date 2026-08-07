@@ -11,8 +11,9 @@
  * at the fixed coordinates `{ x: index * 260, y: layer * 170 }` — a wave is
  * a *row* now, growing downward as the track's layers advance, and a
  * layer's own agents spread left-to-right across it by `index` — and
- * reports every drag, edge deletion and node deletion upward as
- * `connect`/`disconnect`/`remove`. It never imports `mutate` or `submit`
+ * reports every drag, edge deletion, node deletion and node/pane click
+ * upward as `connect`/`disconnect`/`remove`/`select` (Task 4). It never
+ * imports `mutate` or `submit`
  * and holds no draft of its own — `Tracks.vue` remains the sole owner of
  * `mutate`, exactly as it does for every list control on this panel
  * (`Tracks.vue`'s own header), and is the only listener wired to these
@@ -49,6 +50,13 @@ const emit = defineEmits<{
   connect: [{ source: string; target: string }]
   disconnect: [{ source: string; target: string }]
   remove: [{ agent: string }]
+  // Task 4: which card the reader last clicked, for `TrackSidePanel.vue`'s
+  // own detail view — `agent` is the node id (`onNodesChange`'s own
+  // `change.id` above draws from the same id), and `null` is a click on the
+  // empty canvas itself, the side panel's own cue to fall back to its
+  // settings/add-agent view rather than staying pinned to a card that lost
+  // focus.
+  select: [{ agent: string | null }]
 }>()
 
 const { t } = useI18n()
@@ -125,7 +133,17 @@ function onNodesChange(changes: NodeChange[]): void {
          (any other edit re-renders this component with the same layout
          coordinates). Turning dragging off makes that contract visible
          instead of surprising. -->
-    <VueFlow :nodes="nodes" :edges="edges" :nodes-draggable="false" fit-view-on-init @connect="onConnect" @edges-change="onEdgesChange" @nodes-change="onNodesChange">
+    <VueFlow
+      :nodes="nodes"
+      :edges="edges"
+      :nodes-draggable="false"
+      fit-view-on-init
+      @connect="onConnect"
+      @edges-change="onEdgesChange"
+      @nodes-change="onNodesChange"
+      @node-click="(e) => emit('select', { agent: e.node.id })"
+      @pane-click="emit('select', { agent: null })"
+    >
       <!-- Chrome, not content: a dotted pane so the canvas reads as an
            editor surface rather than empty white space, and a zoom/fit
            control bar in the corner a reader can find without hunting for

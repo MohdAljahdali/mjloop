@@ -4,8 +4,11 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import type { AgentsView, Snapshot } from '../../src/web/protocol.js'
 import { ConfigSchema } from '../../src/schemas/config.js'
+import type { Track } from '../../src/schemas/config.js'
+import type { Draft } from '../../src/web/app/lib/config.js'
 import { emptySnapshot, readLocale } from './helpers/page.js'
 import TrackGraph from '../../src/web/app/components/TrackGraph.vue'
+import TrackSidePanel from '../../src/web/app/components/TrackSidePanel.vue'
 
 /**
  * The Tracks panel — the structured `specialists:`/`tracks:` half of
@@ -861,7 +864,13 @@ describe('Tracks.vue', () => {
 const TRACK = { required: ['builder'], available: [], closing: [], order: [], max_cycles: 5 }
 const AGENTS: AgentsView = {
   project: [],
-  plugin: [{ name: 'builder', description: 'Writes the code and the tests.', tools: 'Read, Edit, Bash', model: 'sonnet', source: 'plugin', extra: {}, body: '', digest: '' }],
+  plugin: [
+    { name: 'builder', description: 'Writes the code and the tests.', tools: 'Read, Edit, Bash', model: 'sonnet', source: 'plugin', extra: {}, body: '', digest: '' },
+    // Task 4: not named on any track built below, so the side panel's own
+    // "not yet on this track" list (`unused` in `TrackSidePanel.vue`) has
+    // something to offer.
+    { name: 'verifier', description: 'Checks the work.', tools: 'Read, Bash', model: 'sonnet', source: 'plugin', extra: {}, body: '', digest: '' },
+  ],
   unreadable: [],
 }
 
@@ -899,5 +908,56 @@ describe('the rich graph card', () => {
     const card = wrapper.find('[data-graph-node="ghost"]')
     expect(card.exists()).toBe(true)
     expect(card.classes()).toContain('node-missing')
+  })
+})
+
+/**
+ * Task 4: `TrackSidePanel.vue` mounted directly, the same way the rich graph
+ * card describe block above mounts `TrackGraph.vue` — this is about what the
+ * panel does with a given `track`/`agents`/`selected`/`mutate`, not about
+ * `Tracks.vue`'s own draft lifecycle every other describe block in this file
+ * exercises. `mutate` here is a minimal stand-in for `Tracks.vue`'s own
+ * function (that file's header): it applies the change straight to a bare
+ * `{ specialists, tracks }` object, exactly as `Tracks.vue`'s real `mutate`
+ * applies it to `draft.value` — close enough for these three guard tests to
+ * prove the panel writes through the prop and nowhere else.
+ *
+ * Three tests, the brief's own economy ceiling for this component: adding an
+ * unused agent touches only `available`, moving a selected agent's role
+ * leaves it in exactly one bucket, and the settings block never grows a gate
+ * editor (`config.side.gate` is display-only text, not a control).
+ */
+function draftWith(track: Track) {
+  return { specialists: [], tracks: { build: track } } as unknown as Draft
+}
+
+describe('the track side panel', () => {
+  const BASE = { required: ['builder'], available: [], closing: [], order: [], max_cycles: 5 }
+
+  it('adds an unused agent to available through mutate, and only available', async () => {
+    const model = draftWith({ ...BASE, required: [...BASE.required] })
+    const mutate = (change: (draft: Draft) => boolean | void) => void change(model)
+    const wrapper = mount(TrackSidePanel, { props: { track: model.tracks['build']!, name: 'build', agents: AGENTS, selected: null, mutate } })
+    await wrapper.find('.side-add').trigger('click')
+    expect(model.tracks['build']!.available).toContain('verifier')
+    expect(model.tracks['build']!.required).toEqual(['builder'])
+    expect(model.tracks['build']!.closing).toEqual([])
+  })
+
+  it('moves a selected agent between roles through mutate, out of every other bucket', async () => {
+    const model = draftWith({ ...BASE, required: [...BASE.required] })
+    const mutate = (change: (draft: Draft) => boolean | void) => void change(model)
+    const wrapper = mount(TrackSidePanel, { props: { track: model.tracks['build']!, name: 'build', agents: AGENTS, selected: 'builder', mutate } })
+    await wrapper.find('select').setValue('available')
+    expect(model.tracks['build']!.available).toContain('builder')
+    expect(model.tracks['build']!.required).not.toContain('builder')
+  })
+
+  it('never renders a gate editor — the gate is display-only on this panel', () => {
+    const gated = { ...BASE, gate: { proven_by: 'builder', blocks: ['verifier'] } }
+    const wrapper = mount(TrackSidePanel, { props: { track: gated, name: 'build', agents: AGENTS, selected: null, mutate: () => {} } })
+    expect(wrapper.text()).toContain('builder')
+    // The only input in the settings block is max_cycles — no gate fields.
+    expect(wrapper.findAll('input').length).toBe(1)
   })
 })

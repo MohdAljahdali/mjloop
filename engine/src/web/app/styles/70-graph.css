@@ -53,6 +53,66 @@
   gap: 12px;
 }
 
+/* Task 4: one row per track, the side panel and its canvas laid side by
+ * side — `TrackSidePanel.vue` first in source order (a reader reaches
+ * settings/add-agent/detail before the canvas on a Tab press, the same
+ * "controls before the thing they control" order `Tracks.vue`'s own
+ * tablist already keeps), the canvas taking whatever width is left. */
+.track-canvas-row {
+  display: flex;
+  gap: 12px;
+  align-items: stretch;
+}
+
+.track-canvas-row .track-graph {
+  flex: 1;
+  min-inline-size: 0;
+}
+
+.track-side {
+  inline-size: 220px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+}
+
+/* Card chrome matching `.graph-node` beside it: same panel background, same
+ * line and radius tokens, so the side panel reads as part of the same
+ * canvas surface rather than a foreign sidebar bolted on. */
+.side-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel-2);
+  font-size: 13px;
+}
+
+.side-block h3 {
+  margin: 0;
+  font-size: 13px;
+}
+
+.side-add {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px;
+  text-align: start;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--raise);
+  padding: 6px 8px;
+}
+
+.side-detail .graph-node-tools {
+  padding: 0;
+}
+
 /* A tab strip, not two buttons that happen to sit together: a shared rule
  * under the row, and the selected tab breaking it. That shape is what a
  * reader recognises as "two views of one thing" without reading either
