@@ -297,20 +297,40 @@
  * `TrackGraph.vue`'s own `nodeProps.data.status !== 'idle'` guard), so this
  * pair only ever appears while a run is actually going.
  *
- * Colour is not the only carrier: `--accent`'s border on the running card is
- * doubled by the pulse (a reader who cannot tell it from the landed
- * card's green still sees one animate and the other hold still), and the
- * landed card's own solid border is a different style — solid green versus
- * a pulsing accent-coloured one — not a same-shape swap of hue alone. */
-.graph-node.node-live-running {
+ * Colour is not the only carrier, and not only via the pulse either — fix
+ * round 1: under `prefers-reduced-motion: reduce` the animation drops away,
+ * and a reader who also cannot separate `--accent` from `--ok` by hue would
+ * then have nothing left to tell "running" from "landed" at all. `solid`
+ * versus `double` is a shape difference that survives with every colour
+ * assumption removed, so it is set unconditionally here — not only inside
+ * the reduced-motion query below — because a distinction that exists in only
+ * one media state is a second thing to reason about, and it costs nothing to
+ * keep it on screen while the pulse is also running. `double` needs a wider
+ * border to actually render as two lines rather than collapsing back to a
+ * single one, hence `landed`'s own `border-width: 4px` against `running`'s
+ * `2px`.
+ *
+ * `:not(.node-missing)` on both: `.node-missing` (above) and a live class
+ * have equal specificity on `border-color`, so without this the
+ * later-declared live rule would win and silently erase the missing-agent
+ * warning from exactly the card a reader most needs to see it on — one the
+ * running cycle actually drafted, whose definition file still does not
+ * exist. The missing state outranks the live state everywhere here, not
+ * only on colour: a missing definition is a standing config defect that
+ * outlives this cycle, where "running"/"landed" are transient — a warning
+ * that flickered off for the duration of a run would be worse than one that
+ * never mentioned live status at all. */
+.graph-node.node-live-running:not(.node-missing) {
   border-color: var(--accent);
+  border-style: solid;
   border-width: 2px;
   animation: graph-node-pulse 1.6s ease-in-out infinite;
 }
 
-.graph-node.node-live-landed {
+.graph-node.node-live-landed:not(.node-missing) {
   border-color: var(--ok);
-  border-width: 2px;
+  border-style: double;
+  border-width: 4px;
 }
 
 @keyframes graph-node-pulse {
@@ -323,12 +343,13 @@
   }
 }
 
-/* The colour cue survives; the motion does not. A reader who has asked the
- * system to reduce motion still sees which card is running (the accent
- * border) and which has landed (green) — they just do not see either one
- * breathe. */
+/* Only the motion drops here — the colour and the `solid`/`double` shape
+ * difference above are both unconditional, so a reader who has asked the
+ * system to reduce motion can still tell "running" from "landed" (the
+ * border shape) and, colour permitting, still know which is which (the
+ * border colour) — they just do not see either one breathe. */
 @media (prefers-reduced-motion: reduce) {
-  .graph-node.node-live-running {
+  .graph-node.node-live-running:not(.node-missing) {
     animation: none;
   }
 }
