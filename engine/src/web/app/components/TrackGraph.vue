@@ -29,13 +29,22 @@
  * still drawn, as `.node-missing`, because a track that names an agent with
  * no definition is exactly the state a reader most needs to see, not one
  * this view is allowed to hide.
+ *
+ * `:live` (Task 5) is the same kind of pass-through as `:agents`: a plain
+ * `Record<agent, LiveStatus>` (or `null`) this component only reads, never
+ * computes. It cannot compute it itself — that would need the `snapshot`
+ * store, and this component's own "purely an emitter" promise above is
+ * specifically that it never imports `submit`, `feed` or `snapshot` — so
+ * `Tracks.vue` derives the map once per track and hands it down exactly as
+ * it does `agents`. `idle` (`liveStatus`'s own default) draws no class at
+ * all; only `running`/`landed` reach `.graph-node` as `node-live-<status>`.
  */
 import { computed } from 'vue'
 import { Background } from '@vue-flow/background'
 import { Handle, Position, VueFlow, type Connection, type EdgeChange, type NodeChange } from '@vue-flow/core'
 import { Controls } from '@vue-flow/controls'
 import { useI18n } from '../composables/useI18n.js'
-import { cardInfo } from '../lib/agentcard.js'
+import { cardInfo, type LiveStatus } from '../lib/agentcard.js'
 import { layout } from '../lib/trackgraph.js'
 import type { AgentsView, Track } from '../types/protocol.js'
 import Bdi from './Bdi.vue'
@@ -44,6 +53,14 @@ const props = defineProps<{
   track: Track
   name: string
   agents: AgentsView | null
+  // Task 5: read-only display, computed and owned entirely by `Tracks.vue`
+  // (its own `liveByTrack` comment says why) — this component only turns a
+  // status this map already decided into a class, exactly the way `:agents`
+  // above only turns `cardInfo`'s own verdict into card content. `null`
+  // covers both "no run is going" and "a run is going, but on a different
+  // track", the same two cases `liveStatus` itself already collapses into
+  // `'idle'` for a track that is not the one running.
+  live?: Record<string, LiveStatus> | null
 }>()
 
 const emit = defineEmits<{
@@ -74,7 +91,18 @@ const nodes = computed(() =>
     id: node.id,
     type: 'agent',
     position: { x: node.index * 260, y: node.layer * 170 },
-    data: { agent: node.agent, list: node.list, cyclic: node.cyclic, card: cardInfo(node.agent, props.agents) },
+    data: {
+      agent: node.agent,
+      list: node.list,
+      cyclic: node.cyclic,
+      card: cardInfo(node.agent, props.agents),
+      // `?? 'idle'`, not a bare lookup: `props.live` is `null` outside a run
+      // on this track, and an agent this track names may still be absent
+      // from the map's own keys the moment a run *does* start elsewhere —
+      // both read the same as `liveStatus`'s own `'idle'` for "nothing to
+      // show", never as a missing card.
+      status: props.live?.[node.agent] ?? 'idle',
+    },
   })),
 )
 
@@ -156,7 +184,17 @@ function onNodesChange(changes: NodeChange[]): void {
       <template #node-agent="nodeProps">
         <div
           class="graph-node"
-          :class="[`node-${nodeProps.data.list}`, { 'node-cyclic': nodeProps.data.cyclic, 'node-missing': nodeProps.data.card.source === null }]"
+          :class="[
+            `node-${nodeProps.data.list}`,
+            {
+              'node-cyclic': nodeProps.data.cyclic,
+              'node-missing': nodeProps.data.card.source === null,
+              // `idle` draws nothing extra — the card already looks exactly
+              // as it did before this task the moment no run touches it,
+              // which is most of the time this panel is open.
+              [`node-live-${nodeProps.data.status}`]: nodeProps.data.status !== 'idle',
+            },
+          ]"
           :data-graph-node="nodeProps.id"
         >
           <!-- Handles flip with the layout: a wave flows downward now, not

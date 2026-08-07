@@ -291,6 +291,48 @@
   padding: 4px 10px;
 }
 
+/* Task 5: a run in progress, drawn on the same cards a static view already
+ * shows — a card an agent has not yet been drafted for this cycle stays
+ * exactly as it looked before this task (`idle` adds no class at all,
+ * `TrackGraph.vue`'s own `nodeProps.data.status !== 'idle'` guard), so this
+ * pair only ever appears while a run is actually going.
+ *
+ * Colour is not the only carrier: `--accent`'s border on the running card is
+ * doubled by the pulse (a reader who cannot tell it from the landed
+ * card's green still sees one animate and the other hold still), and the
+ * landed card's own solid border is a different style — solid green versus
+ * a pulsing accent-coloured one — not a same-shape swap of hue alone. */
+.graph-node.node-live-running {
+  border-color: var(--accent);
+  border-width: 2px;
+  animation: graph-node-pulse 1.6s ease-in-out infinite;
+}
+
+.graph-node.node-live-landed {
+  border-color: var(--ok);
+  border-width: 2px;
+}
+
+@keyframes graph-node-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 45%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 0%, transparent);
+  }
+}
+
+/* The colour cue survives; the motion does not. A reader who has asked the
+ * system to reduce motion still sees which card is running (the accent
+ * border) and which has landed (green) — they just do not see either one
+ * breathe. */
+@media (prefers-reduced-motion: reduce) {
+  .graph-node.node-live-running {
+    animation: none;
+  }
+}
+
 .vue-flow__edge.edge-order .vue-flow__edge-path {
   stroke: var(--dim);
 }

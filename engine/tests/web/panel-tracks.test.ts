@@ -909,6 +909,26 @@ describe('the rich graph card', () => {
     expect(card.exists()).toBe(true)
     expect(card.classes()).toContain('node-missing')
   })
+
+  // Task 5: `liveStatus` (`lib/agentcard.ts`, Task 1) is Tracks.vue's own
+  // derivation to make, not this component's — see that panel's own
+  // `liveByTrack` comment for why. This card only has to prove it renders
+  // whatever map it is handed, at the classes `70-graph.css` selects, and
+  // draws nothing extra when `live` is `null` — the state before a run's
+  // first snapshot even lands, or a card belonging to a track that is not
+  // the one currently running.
+  const TRACK2 = { required: ['builder', 'verifier'], available: [], closing: [], order: [], max_cycles: 5 }
+
+  it('pulses the running agent and marks the landed one, and nothing without a live map', async () => {
+    const live = { builder: 'running', verifier: 'landed' } as const
+    const wrapper = mount(TrackGraph, { props: { track: TRACK2, name: 'build', agents: AGENTS, live } })
+    await flushPromises()
+    expect(wrapper.find('[data-graph-node="builder"]').classes()).toContain('node-live-running')
+    expect(wrapper.find('[data-graph-node="verifier"]').classes()).toContain('node-live-landed')
+    const off = mount(TrackGraph, { props: { track: TRACK2, name: 'build', agents: AGENTS, live: null } })
+    await flushPromises()
+    expect(off.find('[data-graph-node="builder"]').classes()).not.toContain('node-live-running')
+  })
 })
 
 /**

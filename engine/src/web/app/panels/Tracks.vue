@@ -33,8 +33,9 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from '../composables/useI18n.js'
 import { useFeed } from '../composables/useFeed.js'
-import { submit } from '../stores/session.js'
+import { snapshot, submit } from '../stores/session.js'
 import { addOrderEdge, broken, collectTrackChanges, knownAgents, removeFromBuckets, removeOrderEdge, seedDraft, trackNames, type Draft } from '../lib/config.js'
+import { liveStatus, type LiveStatus } from '../lib/agentcard.js'
 import { wouldCycle } from '../lib/trackgraph.js'
 import type { AgentsView, Config, ConfigView } from '../types/protocol.js'
 import SpecialistEditor from '../components/SpecialistEditor.vue'
@@ -208,6 +209,44 @@ const graphEntries = computed(() => {
   return trackNames(model)
     .map((name) => ({ name, track: model.tracks[name] }))
     .filter((entry): entry is { name: string; track: NonNullable<(typeof entry)['track']> } => entry.track !== undefined)
+})
+
+/**
+ * Task 5: one live map per track, for `TrackGraph.vue`'s own `live` prop.
+ *
+ * Derived here rather than in the graph component, for the same reason
+ * `cardInfo` is only *called* by `TrackGraph.vue` but `mutate` is only
+ * *called* by this panel: `TrackGraph.vue`'s own header says it never
+ * imports `submit`, `feed` or the `snapshot` store, and computing this map
+ * requires exactly that store — so the derivation has to live wherever the
+ * store import is allowed to live, which is here, and reach the graph the
+ * same way `agents` already does, as a plain prop.
+ *
+ * The status itself comes from `roster`'s own selected/landed diff
+ * (`liveStatus`, `lib/agentcard.ts`) rather than a per-stage field, because
+ * `liveStatus`'s own comment is explicit about why: `StateSchema` allows
+ * stages `execute`/`judge`, but the engine never actually writes them, so a
+ * UI built on a stage field would be showing a state that never occurs. The
+ * roster diff is the one intra-cycle signal that is real.
+ *
+ * `snapshot.value` is `null` before the socket's first message lands
+ * (`stores/session.ts`'s own `held` starts there) — the guard below is that
+ * real gap, not defensive padding, and every track answers `{}` for it, the
+ * same "nothing to show yet" `liveStatus` itself answers with `'idle'` once
+ * a snapshot does exist but names no run on this track.
+ */
+const liveByTrack = computed(() => {
+  const snap = snapshot.value
+  if (snap === null) return {}
+  const out: Record<string, Record<string, LiveStatus>> = {}
+  for (const entry of graphEntries.value) {
+    const map: Record<string, LiveStatus> = {}
+    for (const agent of [...entry.track.required, ...entry.track.available, ...entry.track.closing]) {
+      map[agent] = liveStatus(agent, entry.name, snap.state, snap.roster)
+    }
+    out[entry.name] = map
+  }
+  return out
 })
 
 /**
@@ -450,6 +489,7 @@ function reset(): void {
             :track="entry.track"
             :name="entry.name"
             :agents="agentsView"
+            :live="liveByTrack[entry.name] ?? null"
             @select="(params) => (selectedByTrack[entry.name] = params.agent)"
             @connect="(params) => onGraphConnect(entry.name, params)"
             @disconnect="(params) => onGraphDisconnect(entry.name, params)"
