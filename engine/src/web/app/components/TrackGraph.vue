@@ -41,7 +41,7 @@
  */
 import { computed } from 'vue'
 import { Background } from '@vue-flow/background'
-import { Handle, Position, VueFlow, type Connection, type EdgeChange, type NodeChange } from '@vue-flow/core'
+import { Handle, Position, useVueFlow, VueFlow, type Connection, type EdgeChange, type NodeChange } from '@vue-flow/core'
 import { Controls } from '@vue-flow/controls'
 import { useI18n } from '../composables/useI18n.js'
 import { cardInfo, type LiveStatus } from '../lib/agentcard.js'
@@ -77,6 +77,44 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+
+// A store instance scoped to this component's own flow, not the module-wide
+// default `useVueFlow()` would otherwise inject or create — `Tracks.vue`
+// renders one `TrackGraph` per track (`graphEntries`, that file's own
+// `v-for`), so a shared instance id would fit each track's nodes against
+// every other track's bounding box, not its own. `props.name` is a track
+// name (`trackNames`, `lib/config.ts`) and stable for this component
+// instance's whole lifetime — `Tracks.vue`'s own `:key="entry.name"` on the
+// `v-for` already guarantees a fresh component, not a reused one, whenever
+// the name would change — so capturing it once here, outside a computed, is
+// enough; `:id="flowId"` on the `VueFlow` element below is what actually
+// binds this store instance to that one DOM tree.
+const flowId = `track-graph-${props.name}`
+const { onNodesInitialized, fitView } = useVueFlow(flowId)
+
+// `fit-view-on-init` (on the `VueFlow` element below) runs at store
+// initialisation, before a custom node like `.graph-node` has been measured
+// — every node still reports zero width/height at that point, so the
+// bounding box it fits against is meaningless and it settles on scale `1`
+// instead of shrinking to fit. A fix round measured this directly: all four
+// of this project's default tracks fitted at exactly `1` regardless of
+// `.track-graph`'s own `block-size`, and `build` (five waves, ~1230px of
+// content) had its top and bottom waves clipped by the 800px box as a
+// result — neither the earlier stride fix nor the earlier min-zoom/
+// container-height fix touched this, because neither addressed a fit that
+// was not running at all. `onNodesInitialized` fires once real dimensions
+// are known (`@vue-flow/core`'s own `useNodesInitialized` composable), so
+// calling `fitView()` from it re-fits against the true content size. Kept
+// alongside `fit-view-on-init` rather than replacing it: `fitViewOnInit`
+// also drives the transformation pane's own hidden-until-fitted opacity
+// (`@vue-flow/core`'s `Transform` component checks the same
+// `fitViewOnInitDone` flag), which is what keeps a reader from seeing an
+// unfitted flash of content before this handler's own, correctly-timed fit
+// lands — removing the prop would trade that flash back in for nothing this
+// handler needs.
+onNodesInitialized(() => {
+  void fitView()
+})
 
 const geometry = computed(() => layout(props.track))
 
@@ -175,20 +213,18 @@ function onNodesChange(changes: NodeChange[]): void {
          `:min-zoom="0.2"`: three numbers now decide whether an N-wave track
          is fully visible on mount — this stride (`nodes` above, `layer *
          260`), `.track-graph`'s own `block-size` (`70-graph.css`), and this
-         floor. Vue Flow's own default `minZoom` is `0.5`; `fit-view-on-init`
+         floor. Vue Flow's own default `minZoom` is `0.5`, and `fitView`
          will not zoom out past whatever floor is set here even when the
-         content is taller than the box, so a track deep enough to need a
-         smaller scale was clamped and clipped instead of shrunk — a fix
-         round found the default `build` track (5 waves, ~1230px of content)
-         fitted into the box at exactly `0.5`, its top and bottom waves
-         sliced off with the role badge and agent name the first things lost.
-         Lowering the floor to `0.2` is the correctness half of that fix:
-         it lets `fitView` actually reach whatever scale a track's true depth
-         needs. `70-graph.css`'s own `block-size` comment is the readability
-         half — raising the container so a *typical* track lands at a
-         legible scale well above this floor, which is only the backstop for
-         a track deeper than that. -->
+         content is taller than the box — so once the `onNodesInitialized`
+         handler above makes `fitView` actually run against real content
+         (see that handler's own comment for why it did not before), a track
+         deep enough to need a smaller scale still needs room to reach it.
+         `70-graph.css`'s own `block-size` comment is the readability half —
+         raising the container so a *typical* track lands at a legible scale
+         well above this floor, which stays a pure backstop for a track
+         deeper than that. -->
     <VueFlow
+      :id="flowId"
       :nodes="nodes"
       :edges="edges"
       :nodes-draggable="false"
