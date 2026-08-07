@@ -956,8 +956,16 @@ describe('the track side panel', () => {
   it('never renders a gate editor — the gate is display-only on this panel', () => {
     const gated = { ...BASE, gate: { proven_by: 'builder', blocks: ['verifier'] } }
     const wrapper = mount(TrackSidePanel, { props: { track: gated, name: 'build', agents: AGENTS, selected: null, mutate: () => {} } })
+    // The gate's own state is visible as text ...
     expect(wrapper.text()).toContain('builder')
-    // The only input in the settings block is max_cycles — no gate fields.
-    expect(wrapper.findAll('input').length).toBe(1)
+    // ... but neither of `TrackEditor.vue`'s own gate-editing controls is
+    // present: its toggle checkbox and the `.track-gate` body it opens
+    // (`TrackEditor.vue:288`/`:291`). Scoped to those two markers rather
+    // than a raw count of every input on the panel, so this stays true as
+    // the settings block gains legitimate controls of its own — the run
+    // form's goal box among them — without this guard mistaking one of
+    // those for a gate field.
+    expect(wrapper.find('[data-field="gate-enabled"]').exists()).toBe(false)
+    expect(wrapper.find('.track-gate').exists()).toBe(false)
   })
 })

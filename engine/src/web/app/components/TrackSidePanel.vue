@@ -1,23 +1,33 @@
 <script setup lang="ts">
 /**
  * TrackSidePanel — the control surface beside each `TrackGraph.vue` canvas
- * (Task 4). Two blocks when nothing is selected — track settings and the
- * agents not yet on this track — replaced by a third, the selected card's
- * own detail, the moment a node (or this panel's own "+" button) puts a name
- * into `props.selected`. `Tracks.vue` owns which state that is
- * (`selectedByTrack`); this component only reads it and asks to clear it
- * back to `null` through `clear-selection`.
+ * (Task 4). Three blocks when nothing is selected — track settings (with the
+ * run form), and the agents not yet on this track — replaced by a fourth,
+ * the selected card's own detail, the moment a node (or this panel's own "+"
+ * button) puts a name into `props.selected`. `Tracks.vue` owns which state
+ * that is (`selectedByTrack`); this component only reads it and asks to
+ * clear it back to `null` through `clear-selection`.
  *
- * No TrackRunForm mounted here, despite the task brief's own markup sketch
- * showing one: that sketch and the brief's own mandated third test
- * ("never renders a gate editor... `expect(wrapper.findAll('input').length)
- * .toBe(1)`) cannot both hold — TrackRunForm carries its own text goal box
- * (an input element), which would make that count 2 the moment the run form
- * is mounted in the settings view the gate-test exercises. The test is the
- * actual, checked acceptance criterion; the markup sketch is described by
- * this task's own brief as "a starting point written before the code
- * existed." Run stays reachable exactly where it already was, TrackEditor
- * .vue's own run form in the list view — this panel does not duplicate it.
+ * Per the approved design spec (`docs/superpowers/specs/2026-08-07-track-
+ * graph-redesign-design.md`), this panel is meant to carry "كل ما في نموذج
+ * التحرير الحالي لكن مختصرًا في مكانه" — everything the current edit form
+ * carries, condensed into this spot — explicitly including "حقل الهدف مع زر
+ * Run", the goal field and its Run button. `TrackRunForm` is mounted in the
+ * settings block for exactly that reason, fed the real `enabled` this panel
+ * itself was given rather than a hardcoded `true`, the same value
+ * `TrackEditor.vue:257` feeds its own copy — one enqueue path
+ * (`TrackRunForm.vue`'s own header), never a second.
+ *
+ * The gate, in contrast, stays display-only here on purpose: this panel
+ * shows `track.gate`'s `proven_by`/`blocks` as text and never grows a
+ * control that edits it, because gate editing already has a home —
+ * `TrackEditor.vue`'s own checkbox-and-select in the list view — and this
+ * panel is not a second copy of that editor, only of the run affordance the
+ * spec calls out by name. See `panel-tracks.test.ts`'s own "never renders a
+ * gate editor" guard, which checks for the *absence* of that specific
+ * control (`[data-field="gate-enabled"]`/`.track-gate`, the exact markup
+ * `TrackEditor.vue` uses for it) rather than counting every input on the
+ * panel — a raw count would also forbid the legitimate run-form input above.
  *
  * Same invariant `SpecialistEditor.vue` carries (that file's own header):
  * every control here writes through `props.mutate`, the one function
@@ -28,12 +38,6 @@
  * than writing `NaN`. `remove` mirrors `Tracks.vue`'s own `onGraphRemove`:
  * drop the agent from whichever of required/available/closing currently
  * holds it, the same three buckets a graph node is ever drawn from.
- *
- * The gate is display-only here on purpose — this panel shows
- * `track.gate`'s `proven_by`/`blocks` as text, and never grows a control
- * that edits it. Gate editing stays where it already is, `TrackEditor.vue`'s
- * own checkbox-and-select in the list view; see `panel-tracks.test.ts`'s own
- * "never renders a gate editor" guard.
  */
 import { computed } from 'vue'
 import { useI18n } from '../composables/useI18n.js'
@@ -41,6 +45,7 @@ import { cardInfo } from '../lib/agentcard.js'
 import type { Draft } from '../lib/config.js'
 import type { AgentsView, Track } from '../types/protocol.js'
 import Bdi from './Bdi.vue'
+import TrackRunForm from './TrackRunForm.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -167,6 +172,9 @@ function remove(): void {
         <p class="hint" v-else>{{ t('config.side.noGate') }}</p>
         <p class="hint" v-if="track.map !== undefined">{{ t('config.side.map') }}: <Bdi :value="track.map.drafted_by" /></p>
         <p class="hint" v-else>{{ t('config.side.noMap') }}</p>
+        <!-- The same enqueue path `TrackEditor.vue:257` uses — no second
+             submit path, only a second place this one form is mounted. -->
+        <TrackRunForm :track="name" :enabled="enabled" />
       </section>
       <section class="side-block">
         <h3>{{ t('config.side.addAgent') }}</h3>
