@@ -33,16 +33,18 @@
  * every control here writes through `props.mutate`, the one function
  * `Tracks.vue` hands down that is allowed to touch the draft, and this
  * component never imports `submit` or `feed` and holds no draft of its own.
- * `onCycles` below mirrors `TrackEditor.vue`'s own `onCyclesChange` bound —
- * an empty or non-integer box leaves the draft at its last good value rather
- * than writing `NaN`. `remove` mirrors `Tracks.vue`'s own `onGraphRemove`:
- * drop the agent from whichever of required/available/closing currently
- * holds it, the same three buckets a graph node is ever drawn from.
+ * `onCycles` below mirrors `TrackEditor.vue`'s own `onCyclesChange` bound for
+ * bound, including its `@input`/`@change` pair — an empty or non-integer box
+ * leaves the draft at its last good value rather than writing `NaN`, on
+ * every keystroke, not only on blur. `onRole` and `remove` both drop an
+ * agent from whichever of required/available/closing currently holds it
+ * through `removeFromBuckets` (`lib/config.ts`) — the same shared helper
+ * `Tracks.vue`'s own `onGraphRemove` calls, not a third copy of that loop.
  */
 import { computed } from 'vue'
 import { useI18n } from '../composables/useI18n.js'
 import { cardInfo } from '../lib/agentcard.js'
-import type { Draft } from '../lib/config.js'
+import { removeFromBuckets, type Draft } from '../lib/config.js'
 import type { AgentsView, Track } from '../types/protocol.js'
 import Bdi from './Bdi.vue'
 import TrackRunForm from './TrackRunForm.vue'
@@ -95,7 +97,7 @@ function roleOf(agentName: string): 'required' | 'available' | 'closing' {
   return 'available'
 }
 
-/** The selected card's role, moved to whichever bucket the role select now names — spliced out of every bucket first, so an agent is never left in two at once. */
+/** The selected card's role, moved to whichever bucket the role select now names — spliced out of every bucket first (`removeFromBuckets`), so an agent is never left in two at once. */
 function onRole(event: Event): void {
   const next = (event.target as HTMLSelectElement).value as 'required' | 'available' | 'closing'
   const agentName = props.selected
@@ -103,12 +105,7 @@ function onRole(event: Event): void {
   props.mutate((model) => {
     const entry = model.tracks[props.name]
     if (entry === undefined) return false
-    for (const list of ['required', 'available', 'closing'] as const) {
-      const bucket = entry[list]
-      if (!Array.isArray(bucket)) continue
-      const at = bucket.indexOf(agentName)
-      if (at >= 0) bucket.splice(at, 1)
-    }
+    removeFromBuckets(entry, agentName)
     entry[next].push(agentName)
   })
 }
@@ -131,10 +128,10 @@ function onCycles(event: Event): void {
 
 /**
  * The same removal `Tracks.vue`'s own `onGraphRemove` performs for a node
- * dragged off the canvas — dropped from whichever of
- * required/available/closing currently holds it, the only three a graph
- * node is ever drawn from. Selection is cleared afterward: the card this
- * detail view was showing no longer exists on the track.
+ * dragged off the canvas — `removeFromBuckets` again, not a third copy of
+ * that loop. Selection is cleared afterward regardless of whether the agent
+ * was actually found in a bucket: the card this detail view was showing is
+ * gone from the track either way.
  */
 function remove(): void {
   const agentName = props.selected
@@ -142,16 +139,7 @@ function remove(): void {
   props.mutate((model) => {
     const entry = model.tracks[props.name]
     if (entry === undefined) return false
-    for (const list of ['required', 'available', 'closing'] as const) {
-      const bucket = entry[list]
-      if (!Array.isArray(bucket)) continue
-      const at = bucket.indexOf(agentName)
-      if (at >= 0) {
-        bucket.splice(at, 1)
-        return
-      }
-    }
-    return false
+    return removeFromBuckets(entry, agentName)
   })
   emit('clear-selection')
 }
@@ -164,7 +152,17 @@ function remove(): void {
         <h3>{{ t('config.side.settings') }}</h3>
         <label class="track-cycles">
           <span>{{ t('config.maxCycles') }}</span>
-          <input type="number" min="1" step="1" required :value="track.max_cycles" :disabled="!enabled" :aria-label="t('config.maxCycles')" @change="onCycles" />
+          <input
+            type="number"
+            min="1"
+            step="1"
+            required
+            :value="track.max_cycles"
+            :disabled="!enabled"
+            :aria-label="t('config.maxCycles')"
+            @input="onCycles"
+            @change="onCycles"
+          />
         </label>
         <p class="hint" v-if="track.gate !== undefined">
           {{ t('config.side.gate') }}: <Bdi :value="track.gate.proven_by" /> → <Bdi :value="track.gate.blocks.join(', ')" />

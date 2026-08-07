@@ -34,7 +34,7 @@ import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from '../composables/useI18n.js'
 import { useFeed } from '../composables/useFeed.js'
 import { submit } from '../stores/session.js'
-import { addOrderEdge, broken, collectTrackChanges, knownAgents, removeOrderEdge, seedDraft, trackNames, type Draft } from '../lib/config.js'
+import { addOrderEdge, broken, collectTrackChanges, knownAgents, removeFromBuckets, removeOrderEdge, seedDraft, trackNames, type Draft } from '../lib/config.js'
 import { wouldCycle } from '../lib/trackgraph.js'
 import type { AgentsView, Config, ConfigView } from '../types/protocol.js'
 import SpecialistEditor from '../components/SpecialistEditor.vue'
@@ -273,22 +273,15 @@ function onGraphDisconnect(name: string, params: { source: string; target: strin
  * three: a graph node is never drawn for a gate's `blocks` entry on its own
  * (a gate is an edge over an existing node, not a second node), so there is
  * no fourth bucket to check here the way `TrackEditor.vue`'s `bucketOf` has
- * to.
+ * to. `removeFromBuckets` (`lib/config.ts`) is the one implementation of
+ * this rule — `TrackSidePanel.vue`'s own `onRole`/`remove` call the same
+ * function rather than a second copy of this loop.
  */
 function onGraphRemove(name: string, params: { agent: string }): void {
   mutate((model) => {
     const entry = model.tracks[name]
     if (entry === undefined) return false
-    for (const list of ['required', 'available', 'closing'] as const) {
-      const bucket = entry[list]
-      if (!Array.isArray(bucket)) continue
-      const at = bucket.indexOf(params.agent)
-      if (at >= 0) {
-        bucket.splice(at, 1)
-        return
-      }
-    }
-    return false
+    return removeFromBuckets(entry, params.agent)
   })
   // A dragged-off node the side panel is currently showing the detail view
   // for no longer exists on this track — same reason `TrackSidePanel.vue`'s

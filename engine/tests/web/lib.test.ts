@@ -32,6 +32,7 @@ import {
   orchestrationProblem,
   orderEdgeChanges,
   policyRows,
+  removeFromBuckets,
   seedDraft,
   seedFormValues,
   trackCommentLoss,
@@ -1038,6 +1039,28 @@ describe('lib/config', () => {
       ]
       expect(edgeAfter(order, 'alpha')).toEqual(['beta', 'gamma'])
       expect(edgeAfter(order, 'ghost')).toEqual([])
+    })
+  })
+
+  /**
+   * Task 4's fix round: pulled out of three near-identical call sites
+   * (`Tracks.vue`'s `onGraphRemove`, `TrackSidePanel.vue`'s `onRole` and
+   * `remove`) into one shared function — see its own header for why "every
+   * matching bucket" is the chosen contract. One guard: an agent present in
+   * one bucket is removed and the other buckets are untouched, and an
+   * absent agent returns `false` without touching anything.
+   */
+  describe('removeFromBuckets', () => {
+    it('removes a present agent from its own bucket only, and returns false for an absent one', () => {
+      const track = { required: ['alpha'], available: ['beta'], closing: ['gamma'], order: [], max_cycles: 1 } as Track
+      expect(removeFromBuckets(track, 'beta')).toBe(true)
+      expect(track.available).toEqual([])
+      expect(track.required).toEqual(['alpha'])
+      expect(track.closing).toEqual(['gamma'])
+
+      expect(removeFromBuckets(track, 'ghost')).toBe(false)
+      expect(track.required).toEqual(['alpha'])
+      expect(track.closing).toEqual(['gamma'])
     })
   })
 

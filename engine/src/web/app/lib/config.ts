@@ -535,6 +535,44 @@ export function removeOrderEdge(entry: Track, agent: string, pred: string): bool
   if (!removed) return false
 }
 
+/**
+ * Drop `agent` from every one of `required`/`available`/`closing` that
+ * currently holds it, in place — the one removal rule Task 4 needed three
+ * times over: `Tracks.vue`'s own `onGraphRemove` (a node dragged off the
+ * canvas), `TrackSidePanel.vue`'s `onRole` (a role change — remove from the
+ * old bucket before adding to the new one), and that same file's `remove`
+ * (the detail view's own button). Pulled out here, beside `addOrderEdge`/
+ * `removeOrderEdge`, once a code-review pass on Task 4 found the loop
+ * duplicated near-identically at all three call sites rather than shared.
+ *
+ * Removes from *every* matching bucket, not only the first: a track's own
+ * schema never puts one agent in two of these three lists at once (an agent
+ * name is either required, available or closing, not a combination), so for
+ * every state this method actually runs against, "first match" and "every
+ * match" remove the identical, single entry. Choosing "every match" is only
+ * about what happens if that invariant were ever violated — a stray earlier
+ * bug, a hand-edited `config.yaml` loaded into the draft — and there the
+ * safer contract is the one that cannot leave a duplicate agent in a second
+ * bucket, not the one that stops at the first list it happens to check.
+ *
+ * Returns whether anything actually moved, the same true/false-or-void shape
+ * `addOrderEdge`/`removeOrderEdge` already use — `mutate`'s own contract
+ * (`Tracks.vue`'s header) is that `false` alone skips `markDirty()`, so a
+ * removal that found nothing to remove must not mark the draft dirty.
+ */
+export function removeFromBuckets(entry: Track, agent: string): boolean {
+  let removed = false
+  for (const list of ['required', 'available', 'closing'] as const) {
+    const bucket = entry[list]
+    if (!Array.isArray(bucket)) continue
+    const at = bucket.indexOf(agent)
+    if (at < 0) continue
+    bucket.splice(at, 1)
+    removed = true
+  }
+  return removed
+}
+
 /** The first cycle a track's order graph contains, as the path that closes it, or `null`. A client-side mirror of `findOrderCycle` (`schemas/config.ts`). */
 export function findOrderCycle(order: { agent: string; after: string[] }[]): string[] | null {
   const successors = new Map<string, string[]>()
